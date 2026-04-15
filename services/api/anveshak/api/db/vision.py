@@ -1,0 +1,88 @@
+"""Vision repository — media_assets and vision_results SQL for the API gateway."""
+from __future__ import annotations
+
+from typing import Any, Optional
+
+import asyncpg
+
+# ---------------------------------------------------------------------------
+# SQL constants
+# ---------------------------------------------------------------------------
+
+SQL_INSERT_MEDIA_ASSET = """
+    INSERT INTO media_assets (
+        id, content_item_id, asset_type, storage_path, content_hash, labels
+    )
+    VALUES ($1, $2, $3, $4, $5,
+            '{"classification":"OPEN","domain":"vision","owner_org":"anveshak"}'::jsonb)
+    ON CONFLICT (content_hash) DO NOTHING
+    RETURNING id
+"""
+
+SQL_GET_MEDIA_ASSET_BY_HASH = "SELECT id FROM media_assets WHERE content_hash = $1"
+
+SQL_PHASH_REVERSE_SEARCH = """
+    SELECT ma.id, ma.content_item_id, ma.storage_path, ma.asset_type,
+           ma.content_hash,
+           ci.url, ci.topic_id,
+           BIT_COUNT(ma.phash # $1::bigint) AS hamming_distance
+    FROM media_assets ma
+    JOIN content_items ci ON ci.id = ma.content_item_id
+    WHERE ma.phash IS NOT NULL
+      AND BIT_COUNT(ma.phash # $1::bigint) <= $2
+    ORDER BY BIT_COUNT(ma.phash # $1::bigint)
+    LIMIT 20
+"""
+
+SQL_GET_VISION_RESULTS_FOR_CONTENT = """
+    SELECT vr.id, vr.media_asset_id, vr.yolo_detections, vr.clip_labels,
+           vr.deepfake_score, vr.deepfake_model, vr.synthetic_probability,
+           vr.processed_at,
+           ma.storage_path, ma.asset_type, ma.exif_data, ma.phash, ma.content_hash
+    FROM vision_results vr
+    JOIN media_assets ma ON ma.id = vr.media_asset_id
+    JOIN content_items ci ON ci.id = ma.content_item_id
+    WHERE ci.id = $1
+"""
+
+# ---------------------------------------------------------------------------
+# Repository functions
+# ---------------------------------------------------------------------------
+
+async def get_media_asset_by_hash(
+    conn: asyncpg.Connection, content_hash: str
+) -> dict[str, Any] | None:
+    row = await conn.fetchrow(SQL_GET_MEDIA_ASSET_BY_HASH, content_hash)
+    return dict(row) if row else None
+
+
+async def insert_media_asset(
+    conn: asyncpg.Connection,
+    asset_id: str,
+    content_item_id: Optional[str],
+    asset_type: str,
+    storage_path: str,
+    content_hash: str,
+) -> dict[str, Any] | None:
+    """Insert media asset with ON CONFLICT DO NOTHING. Returns row if inserted."""
+    row = await conn.fetchrow(
+        SQL_INSERT_MEDIA_ASSET,
+        asset_id, content_item_id, asset_type, storage_path, content_hash,
+    )
+    return dict(row) if row else None
+
+
+async def phash_reverse_search(
+    conn: asyncpg.Connection,
+    phash_int: int,
+    threshold: int,
+) -> list[dict[str, Any]]:
+    rows = await conn.fetch(SQL_PHASH_REVERSE_SEARCH, phash_int, threshold)
+    return [dict(r) for r in rows]
+
+
+async def get_vision_results_for_content(
+    conn: asyncpg.Connection, content_id: str
+) -> list[dict[str, Any]]:
+    rows = await conn.fetch(SQL_GET_VISION_RESULTS_FOR_CONTENT, content_id)
+    return [dict(r) for r in rows]

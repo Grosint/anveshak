@@ -1,0 +1,362 @@
+# =============================================================================
+# ANVESHAK — .gitignore
+# Python 3.12 + TypeScript/React + Docker + uv workspace
+# =============================================================================
+
+
+# =============================================================================
+# SECRETS & ENVIRONMENT — NEVER COMMIT
+# =============================================================================
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.jks
+secrets/
+*_secret*
+*_credentials*
+
+# Telegram session strings
+*.session
+session*.session
+telegram_session/
+
+
+# =============================================================================
+# PYTHON
+# =============================================================================
+
+# Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyo
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+.eggs/
+*.egg
+*.whl
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.Python
+
+# uv
+.uv/
+uv.lock.bak
+
+# Type checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyright/
+.pytype/
+
+# Linters / formatters
+.ruff_cache/
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+coverage.json
+htmlcov/
+.tox/
+nosetests.xml
+test-results/
+test-reports/
+junit*.xml
+*.test-results
+
+# Profiling
+*.prof
+*.lprof
+
+
+# =============================================================================
+# NODE / FRONTEND (React + Vite + TypeScript)
+# =============================================================================
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# Build artifacts
+*.tsbuildinfo
+frontend/tsconfig.tsbuildinfo
+
+# Package manager locks (keep package-lock.json / yarn.lock, ignore others)
+.pnp
+.pnp.js
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# Storybook
+storybook-static/
+.storybook/dist/
+
+
+# =============================================================================
+# ML MODELS — large binaries, managed via DVC or separate storage
+# =============================================================================
+
+# Model weights
+*.onnx
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.gguf
+*.ggml
+*.pkl
+*.pickle
+*.joblib
+*.h5
+*.hdf5
+*.pb
+*.tflite
+
+# Model dirs
+models/
+weights/
+checkpoints/
+.ollama/
+
+# spaCy
+en_core_web*/
+ru_core_news*/
+zh_core_web*/
+
+# Hugging Face cache
+.cache/huggingface/
+~/.cache/huggingface/
+
+
+# =============================================================================
+# INTELLIGENCE DATA — NEVER COMMIT RAW OSINT DATA
+# =============================================================================
+data/
+scraped/
+raw/
+media/
+exports/
+intel/
+corpus/
+
+
+# =============================================================================
+# GENERATED REPORTS & OUTPUTS
+# =============================================================================
+reports/output/
+reports/*.pdf
+reports/*.geojson
+output/
+generated/
+
+
+# =============================================================================
+# DATABASE
+# =============================================================================
+
+# PostgreSQL dumps / backups
+*.sql.gz
+*.dump
+*.backup
+db_backups/
+pgdata/
+
+# SQLite (used in tests sometimes)
+*.sqlite
+*.sqlite3
+*.db
+
+
+# =============================================================================
+# DOCKER & INFRA
+# =============================================================================
+
+# Override files (local dev tweaks, never shared)
+docker-compose.override.yml
+compose.override.yml
+compose.local.yml
+
+# Docker volumes mounted locally
+volumes/
+postgres_data/
+redis_data/
+grafana_data/
+prometheus_data/
+
+# k3s / kubernetes
+kubeconfig
+*.kubeconfig
+k3s.yaml
+*.kube
+
+
+# =============================================================================
+# LOGS
+# =============================================================================
+*.log
+*.log.*
+logs/
+log/
+*.out
+*.err
+
+
+# =============================================================================
+# TEMPORARY & SCRATCH FILES
+# =============================================================================
+/tmp/
+tmp/
+temp/
+scratch/
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+\#*\#
+.\#*
+
+
+# =============================================================================
+# JUPYTER
+# =============================================================================
+.ipynb_checkpoints/
+*.ipynb
+profile_default/
+ipython_config.py
+
+
+# =============================================================================
+# IDE & EDITOR
+# =============================================================================
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# JetBrains (PyCharm, WebStorm, etc.)
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# Vim / Neovim
+*.swp
+*.swo
+Session.vim
+.netrwhist
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+.elc
+auto-save-list
+tramp
+.\#*
+
+# Sublime Text
+*.tmlanguage.cache
+*.tmPreferences.cache
+*.stTheme.cache
+*.sublime-workspace
+*.sublime-project
+
+# Cursor
+.cursor/
+
+
+# =============================================================================
+# OS
+# =============================================================================
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+Icon
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+.directory
+
+
+# =============================================================================
+# ALEMBIC / MIGRATIONS
+# =============================================================================
+
+# Keep versions/ — ignore only compiled cache
+migrations/__pycache__/
+alembic/__pycache__/
+
+
+# =============================================================================
+# OBSERVABILITY & MONITORING
+# =============================================================================
+
+# Prometheus local data
+infra/prometheus_data/
+prometheus/data/
+
+# Grafana local data
+infra/grafana_data/
+grafana/data/
+
+# OpenTelemetry local exports
+otel-data/
+
+
+# =============================================================================
+# REDIS
+# =============================================================================
+dump.rdb
+*.rdb
+appendonly.aof
+
+
+# =============================================================================
+# SCRIPTS — generated output only, keep scripts themselves
+# =============================================================================
+scripts/__pycache__/
+scripts/output/
+scripts/*.log

@@ -1,0 +1,406 @@
+# ANVESHAK — HARDWARE UPGRADE MATRIX
+
+This file documents every hardware-constrained decision in the codebase.
+Before adding any ML component, add its entry here.
+The CLAUDE.md hardware independence rule requires all settings to be env-var driven.
+
+**Demo hardware recommendation:** RTX 3080 (10GB VRAM), 32GB RAM, NVMe SSD 1TB, 8-core CPU.
+This eliminates all hardware risks. Cost: ~₹1.5–2L. Negligible for a ₹25Cr grant application.
+
+---
+
+## NLP Models — `analyst` service
+
+**Current implementation:**
+- English: `en_core_web_md` (43MB, ~85-90% NER F1)
+- Russian: `ru_core_news_md` (91MB, ~82% NER F1)
+- Chinese: `zh_core_web_md` (74MB, ~80% NER F1)
+- Lazy-loaded per language (langdetect routes first)
+- Total RAM: ~210MB for all three models
+
+**Upgrade when available:**
+- English: `en_core_web_trf` (438MB, ~94% NER F1) — transformer-based
+- Russian: `ru_core_news_lg` (545MB, ~90% NER F1)
+- Chinese: `zh_core_web_trf` (416MB, ~93% NER F1)
+
+**Hardware needed:** 32GB RAM (no GPU required for NLP)
+
+**Config change:**
+```
+SPACY_EN_MODEL=en_core_web_md  →  SPACY_EN_MODEL=en_core_web_trf
+SPACY_RU_MODEL=ru_core_news_md →  SPACY_RU_MODEL=ru_core_news_lg
+SPACY_ZH_MODEL=zh_core_web_md  →  SPACY_ZH_MODEL=zh_core_web_trf
+```
+
+**Code change:** Zero. `analyst/settings.py` maps env vars to model names.
+Service loads model by config value, never hardcoded.
+
+---
+
+## LLM — Cluster Labelling — `analyst` service
+
+**Current implementation:**
+- Model: `llama3.2:3b` (2.3GB RAM, ~10-15s per label on CPU)
+- Used for: narrative cluster label generation, entity disambiguation
+
+**Upgrade when available:**
+- Model: `llama3.1:8b` (~5GB VRAM, ~2s per label on GPU)
+
+**Hardware needed:** RTX 3070+ (8GB VRAM)
+
+**Config change:**
+```
+OLLAMA_CLUSTER_MODEL=llama3.2:3b  →  OLLAMA_CLUSTER_MODEL=llama3.1:8b
+```
+
+**Code change:** Zero. Analyst service reads `settings.OLLAMA_CLUSTER_MODEL`.
+
+---
+
+## LLM — Report Generation — `reporter` service
+
+**Current implementation:**
+- Model: `mistral:7b` (4.7GB RAM, 3-5min per report on CPU)
+- Used for: intelligence_brief, research_summary, weekly_digest generation
+- Mitigation: runs as ARQ background job — UI shows progress while generating
+
+**Upgrade when available:**
+- Model: `llama3.1:70b` (~40GB VRAM, ~45s per report on GPU)
+- Significant quality improvement on structured intelligence analysis
+
+**Hardware needed:** RTX 4090 (24GB VRAM) for 70b — or dual A100 for best quality
+
+**Config change:**
+```
+OLLAMA_REPORT_MODEL=mistral:7b  →  OLLAMA_REPORT_MODEL=llama3.1:70b
+```
+
+**Code change:** Zero. Reporter reads `settings.OLLAMA_REPORT_MODEL`.
+
+---
+
+## Ollama Model Keep-Alive — all services using LLM
+
+**Current implementation:**
+- `OLLAMA_KEEP_ALIVE=5m` — model evicted from RAM after 5 minutes idle
+- Saves RAM on constrained hardware (16GB laptop)
+- Cold-start on first inference: 25-40s (mistral:7b from SSD)
+- Mitigation: pre-warm via dummy inference call in FastAPI lifespan startup
+
+**Upgrade when available:**
+- `OLLAMA_KEEP_ALIVE=-1` — model stays in VRAM permanently, zero cold-start
+
+**Hardware needed:** GPU with sufficient VRAM (8GB for mistral:7b, 40GB for 70b)
+
+**Config change:**
+```
+OLLAMA_KEEP_ALIVE=5m  →  OLLAMA_KEEP_ALIVE=-1
+```
+
+**Code change:** Zero. Env var passed directly to Ollama container in compose.yml.
+
+---
+
+## Deepfake Detection — Image/Face — `vision` service
+
+**Current implementation:**
+- Model: Facetorch ONNX (CPU)
+- Speed: ~8-12s per image on CPU
+- Accuracy: ~91% AUC on FaceForensics++ benchmark
+- Detects: face manipulation, face swap, neural rendering artifacts
+
+**Upgrade when available:**
+- Same Facetorch model with CUDA execution provider
+- Speed: ~0.3s per image on GPU
+
+**Hardware needed:** Any CUDA GPU (GTX 1080+)
+
+**Config change:**
+```
+VISION_DEVICE=cpu  →  VISION_DEVICE=cuda
+```
+
+**Code change:** Zero. Vision service passes device to ONNX `ExecutionProvider`:
+`CPUExecutionProvider` → `CUDAExecutionProvider`. Abstract `DeepfakeDetector` base class
+handles the switch transparently.
+
+---
+
+## Deepfake Detection — Non-Face/Video/Landscape — `vision` service
+
+**Current implementation:**
+- Model: EfficientNet-B0 proxy classifier (CPU, ONNX)
+- Speed: ~2s per frame on CPU
+- Accuracy: ~85% on GenImage synthetic detection benchmark
+- Limitation: less accurate than DIRE on landscape/construction content
+- Pre-caches demo video results for live demo scenario
+
+**Upgrade when available:**
+- Model: DIRE (Detecting AI-Generated Images via Reconstruction Error)
+- Speed: ~2s per frame on GPU (vs 90s on CPU — impractical without GPU)
+- Accuracy: ~94% on GenImage benchmark
+
+**Hardware needed:** RTX 3080+ (8GB VRAM — DIRE needs diffusion model in VRAM)
+
+**Config change:**
+```
+VISION_DEEPFAKE_VIDEO_MODEL=efficientnet  →  VISION_DEEPFAKE_VIDEO_MODEL=dire
+```
+
+**Code change:** Zero. Both implement `DeepfakeDetector` ABC with `.score(image_bytes) -> float`.
+Vision service instantiates by `settings.VISION_DEEPFAKE_VIDEO_MODEL`. No other changes.
+
+---
+
+## Object Detection — `vision` service
+
+**Current implementation:**
+- Model: YOLOv8n (nano, 6MB, CPU)
+- Speed: ~200ms per image on CPU
+- mAP50: 37.3 (good enough for prototype demo)
+- Detects: 80 COCO classes — weapons, vehicles, aircraft, persons, etc.
+
+**Upgrade when available:**
+- Model: YOLOv8x (extra-large, 131MB, GPU)
+- Speed: ~15ms per image on GPU
+- mAP50: 53.9 — significantly better recall on small objects and cluttered scenes
+
+**Hardware needed:** RTX 3080+ for meaningful speed improvement
+
+**Config change:**
+```
+YOLO_MODEL_SIZE=nano  →  YOLO_MODEL_SIZE=xlarge
+```
+
+**Code change:** Zero. `MODEL_MAP` in vision/settings.py maps size string to model file.
+
+---
+
+## Sentence Embeddings — `analyst` service
+
+**Current implementation:**
+- Model: `all-MiniLM-L6-v2` (22MB, 384 dimensions)
+- Speed: ~14ms per sentence on CPU
+- Quality: Good for semantic similarity; adequate for OSINT clustering
+
+**Upgrade when available:**
+- Model: `BAAI/bge-large-en-v1.5` (1.3GB, 1024 dimensions)
+- Speed: ~5ms per sentence on GPU
+- Quality: Significantly better semantic precision on technical/intelligence content
+- NOTE: Requires re-embedding entire corpus (migration V3 handles this)
+- NOTE: pgvector column dimension changes from 384 → 1024 (migration required)
+
+**Hardware needed:** 16GB RAM minimum; GPU for speed
+
+**Config change:**
+```
+EMBEDDING_MODEL=all-MiniLM-L6-v2       →  EMBEDDING_MODEL=BAAI/bge-large-en-v1.5
+EMBEDDING_DIMENSIONS=384               →  EMBEDDING_DIMENSIONS=1024
+```
+
+**Code change:** Run migration V3 to re-embed corpus and change vector column dimension.
+Application code reads dimension from settings — zero other changes.
+
+---
+
+## pgvector Index — PostgreSQL
+
+**Current implementation:**
+- Index type: IVFFlat (inverted file with flat quantisation)
+- Performance: Good for <100K vectors, moderate build time (~30s)
+- Recall: ~95% at lists=100
+
+**Upgrade when available:**
+- Index type: HNSW (Hierarchical Navigable Small World)
+- Performance: Significantly faster at 1M+ vectors, 50ms queries vs 8s
+- Recall: ~95% with much better latency at scale
+- Build time: ~5 minutes on 1M vectors (one-time cost)
+
+**Hardware needed:** 32GB RAM (HNSW graph lives in memory)
+
+**Config change:** No env var — migration-only change.
+Run `make migrate-hnsw` when hardware available (migration V2b).
+
+**Code change:** Zero in application code. Migration drops IVFFlat, creates HNSW.
+
+---
+
+## X/Twitter Adapter — `social` service
+
+**Current implementation:**
+- Mode: Pay-per-use polling (tweepy + Bearer Token)
+- Access: 7-day recent search only, polling every 15 minutes per topic
+- Cost: $0.005/read — budget cap enforced via X_MONTHLY_READ_CAP env var
+- Default cap: $200/month (40,000 reads) — adjustable
+- No filtered stream (real-time push not available on pay-per-use)
+
+**Upgrade when available:**
+- Mode: Filtered stream (real-time push — posts arrive instantly)
+- Access: Full-archive search (back to 2006) + real-time stream
+- Requirement: X Enterprise API — negotiate contract with X Corp post-award
+
+**Hardware needed:** None — contractual/budget requirement
+
+**Config change:**
+```
+X_ADAPTER_MODE=polling          →  X_ADAPTER_MODE=stream
+X_MONTHLY_READ_CAP=40000        →  X_MONTHLY_READ_CAP=unlimited
+X_BEARER_TOKEN=<same key>       →  X_BEARER_TOKEN=<enterprise token>
+```
+
+**Code change:** Zero. `XPollingAdapter` and `XStreamAdapter` both implement
+`SourceAdapterBase`. Social service loads by `settings.X_ADAPTER_MODE`.
+
+---
+
+## X/Twitter API Application — Approved Use Case
+
+See `docs/x_api_application.md` for the exact use case description to submit
+to developer.x.com when applying for API access.
+
+Steps to activate X adapter:
+1. Create X account with any email
+2. Go to developer.x.com → sign up → fill use case form (use docs/x_api_application.md)
+3. Instant approval for pay-per-use
+4. Set X_ADAPTER_ENABLED=true and X_BEARER_TOKEN in .env
+5. Set X_MONTHLY_READ_CAP to desired budget limit
+
+---
+
+## CLIP Semantic Classification — `vision` service
+
+**Current implementation:**
+- Model: `openai/clip-vit-base-patch32` (CPU, ~1.5GB RAM, ~800ms/image)
+- Used for: analyst-defined category classification of ingested images
+- Categories: user-defined at topic creation (`topic.clip_categories`)
+
+**Upgrade when available:**
+- Model: `openai/clip-vit-large-patch14` (GPU, ~6GB VRAM, ~50ms/image)
+- Significantly better zero-shot accuracy on domain-specific categories
+
+**Hardware needed:** Any CUDA GPU (GTX 1080+) for meaningful speed improvement
+
+**Config change:**
+```
+CLIP_MODEL_NAME=openai/clip-vit-base-patch32  →  CLIP_MODEL_NAME=openai/clip-vit-large-patch14
+```
+
+**Code change:** Zero. `CLIPClassifier` reads `settings.clip_model_name`. No other changes.
+
+---
+
+## EfficientNet-B0 Deepfake (non-face/video) — `vision` service
+
+**Current implementation:**
+- Model: EfficientNet-B0 ONNX proxy classifier (CPU)
+- Speed: ~2s per frame on CPU
+- Accuracy: ~85% on GenImage synthetic detection benchmark
+- Used for: landscape, architecture, and non-face AI-generation detection
+
+**Upgrade when available:**
+- Model: DIRE (Detecting AI-Generated Images via Reconstruction Error)
+- Set `VISION_DEEPFAKE_VIDEO_MODEL=dire` and `VISION_DEVICE=cuda`
+- Speed: ~2s per frame on GPU (vs 90s on CPU — impractical without GPU)
+- Accuracy: ~94% on GenImage benchmark
+
+**Hardware needed:** RTX 3080+ (8GB VRAM — DIRE uses diffusion model in VRAM)
+
+**Config change:**
+```
+VISION_DEEPFAKE_VIDEO_MODEL=efficientnet  →  VISION_DEEPFAKE_VIDEO_MODEL=dire
+VISION_DEVICE=cpu                         →  VISION_DEVICE=cuda
+```
+
+**Code change:** Zero. Both implement `DeepfakeDetector` ABC. Factory function in
+`detectors/__init__.py` instantiates by `settings.vision_deepfake_video_model`.
+
+---
+
+## pHash Perceptual Hashing — `vision` service
+
+**Current implementation:**
+- Library: `imagehash` (pure Python, <1ms/image)
+- Hash: 64-bit integer stored as BIGINT in `media_assets.phash`
+- Lookup: SQL `BIT_COUNT(phash # query_phash) <= threshold` (Hamming distance)
+- Default threshold: `PHASH_DUPLICATE_THRESHOLD=8` (near-duplicate)
+
+**Upgrade path:** None required — pHash is CPU-native, no GPU benefit.
+
+**Config change:**
+```
+PHASH_DUPLICATE_THRESHOLD=8  →  adjust threshold for precision/recall trade-off
+```
+
+**Code change:** Zero. Threshold read from `settings.phash_duplicate_threshold`.
+
+---
+
+## Offline Geocoding — `reporter` service
+
+**Current implementation:**
+- Library: `geonamescache` (bundled offline city/country data — ~5MB)
+- No network calls, no API key required
+- Coverage: ~50,000+ cities + all countries
+- Speed: <1ms per lookup (in-memory dict)
+
+**Upgrade path:** None required — geonamescache is hardware-agnostic.
+For higher-precision geocoding (street-level), switch to Nominatim (self-hosted
+OSM) by replacing `geocoder.py` logic. No settings.py change required.
+
+**Config change:** None required.
+
+**Code change:** Replace `geocoder.py` lookup logic only.
+
+---
+
+## PDF Rendering — `reporter` service
+
+**Current implementation:**
+- Library: WeasyPrint (HTML → PDF via Cairo + Pango rendering stack)
+- No hardware dependency — CPU-only, ~500ms per report PDF
+- Requires system libs: libcairo2, libpango, libgdk-pixbuf (in Dockerfile)
+
+**Upgrade path:** None required — WeasyPrint is hardware-agnostic.
+
+**Config change:** None required.
+
+**Code change:** None.
+
+---
+
+## Summary Upgrade Checklist
+
+When production hardware (RTX 3080+, 32GB RAM) is available, update these env vars in .env:
+
+```bash
+# NLP — upgrade to transformer models
+SPACY_EN_MODEL=en_core_web_trf
+SPACY_RU_MODEL=ru_core_news_lg
+SPACY_ZH_MODEL=zh_core_web_trf
+
+# LLM — upgrade to larger models
+OLLAMA_CLUSTER_MODEL=llama3.1:8b
+OLLAMA_REPORT_MODEL=llama3.1:70b
+OLLAMA_KEEP_ALIVE=-1
+
+# Vision — enable GPU + better models
+VISION_DEVICE=cuda
+YOLO_MODEL_SIZE=xlarge
+VISION_DEEPFAKE_VIDEO_MODEL=dire
+CLIP_MODEL_NAME=openai/clip-vit-large-patch14
+
+# Embeddings — upgrade (requires re-embedding migration)
+EMBEDDING_MODEL=BAAI/bge-large-en-v1.5
+EMBEDDING_DIMENSIONS=1024
+
+# pgvector — upgrade index (run: make migrate-hnsw)
+# No env var — run migration V2b
+```
+
+Pull Ollama models after hardware upgrade:
+```bash
+ollama pull llama3.1:8b
+ollama pull llama3.1:70b
+```
+
+Zero application code changes required for any of the above.

@@ -1,0 +1,258 @@
+import { useState, useRef } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { visionApi, VisionJob } from '../api/vision'
+import { DropZone } from '../components/vision/DropZone'
+import { DeepfakeMeter } from '../components/vision/DeepfakeMeter'
+import { YoloCanvas } from '../components/vision/YoloCanvas'
+import { ExifTable } from '../components/vision/ExifTable'
+import { Spinner } from '../components/ui/Spinner'
+import { Badge } from '../components/ui/Badge'
+
+type Tab = 'deepfake' | 'yolo' | 'exif' | 'reverse'
+
+export default function ImageAnalysis() {
+  const [jobId, setJobId]         = useState<string | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [uploading, setUploading]  = useState(false)
+  const [uploadErr, setUploadErr]  = useState('')
+  const [activeTab, setActiveTab]  = useState<Tab>('deepfake')
+  const [reverseHash, setReverseHash] = useState('')
+  const fileRef = useRef<File | null>(null)
+
+  // Poll job until complete
+  const { data: job } = useQuery<VisionJob>({
+    queryKey: ['vision-job', jobId],
+    queryFn: () => visionApi.pollJob(jobId!),
+    enabled: !!jobId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      if (!status || status === 'queued' || status === 'in_progress') return 2000
+      return false
+    },
+  })
+
+  // Reverse search
+  const { data: reverseResults = [], isFetching: isReversing } = useQuery({
+    queryKey: ['reverse-search', reverseHash],
+    queryFn: () => visionApi.reverseSearch(reverseHash),
+    enabled: reverseHash.length === 16,
+    staleTime: 60_000,
+  })
+
+  async function handleFile(file: File) {
+    setUploadErr('')
+    setJobId(null)
+    fileRef.current = file
+
+    // Preview
+    const url = URL.createObjectURL(file)
+    setPreviewUrl(url)
+
+    setUploading(true)
+    try {
+      const res = await visionApi.analyse(file)
+      setJobId(res.job_id)
+      setActiveTab('deepfake')
+    } catch {
+      setUploadErr('Upload failed. Is the vision service running?')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const result = job?.result
+  const isProcessing = job?.status === 'queued' || job?.status === 'in_progress'
+  const isDone = job?.status === 'complete'
+  const isFailed = job?.status === 'failed'
+
+  const TABS: { key: Tab; label: string }[] = [
+    { key: 'deepfake', label: 'Deepfake' },
+    { key: 'yolo',     label: `Objects${result?.yolo_detections?.length ? ` (${result.yolo_detections.length})` : ''}` },
+    { key: 'exif',     label: 'EXIF' },
+    { key: 'reverse',  label: 'Reverse search' },
+  ]
+
+  return (
+    <div className="h-full flex flex-col">
+      {/* Header */}
+      <div className="px-6 pt-6 pb-4 border-b border-anveshak-border">
+        <h1 className="text-xl font-semibold text-text-primary">Image Analysis</h1>
+        <p className="text-sm text-text-muted mt-0.5">
+          Deepfake detection · YOLO object detection · EXIF forensics
+        </p>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-2xl space-y-6">
+          {/* Drop zone */}
+          <DropZone onFile={handleFile} disabled={uploading} />
+
+          {uploadErr && (
+            <p role="alert" className="text-signal-high text-sm">{uploadErr}</p>
+          )}
+
+          {/* Upload / processing status */}
+          {uploading && (
+            <div className="flex items-center gap-3 text-sm text-text-secondary">
+              <Spinner size="sm" />
+              <span>Uploading and dispatching analysis job…</span>
+            </div>
+          )}
+
+          {jobId && !uploading && (
+            <div className="flex items-center gap-2 text-xs text-text-muted">
+              <span className="font-mono">job:{jobId.slice(0, 12)}…</span>
+              {isProcessing && <Badge variant="warning">Processing</Badge>}
+              {isDone      && <Badge variant="success">Complete</Badge>}
+              {isFailed    && <Badge variant="danger">Failed</Badge>}
+              {isProcessing && <Spinner size="sm" />}
+            </div>
+          )}
+
+          {/* Image preview + results */}
+          {previewUrl && (
+            <div className="space-y-4">
+              {/* Tabs */}
+              <div className="flex border-b border-anveshak-border" role="tablist">
+                {TABS.map((t) => (
+                  <button
+                    key={t.key}
+                    role="tab"
+                    aria-selected={activeTab === t.key}
+                    onClick={() => setActiveTab(t.key)}
+                    className={`px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none ${
+                      activeTab === t.key
+                        ? 'text-anveshak-accent border-b-2 border-anveshak-accent'
+                        : 'text-text-muted hover:text-text-primary'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              <div role="tabpanel">
+                {activeTab === 'deepfake' && (
+                  <div className="space-y-4">
+                    {isProcessing ? (
+                      <div className="flex justify-center py-8"><Spinner label="Analysing…" /></div>
+                    ) : result ? (
+                      <DeepfakeMeter score={result.deepfake_score} modelName={result.deepfake_model} />
+                    ) : (
+                      <p className="text-sm text-text-muted text-center py-8">
+                        Upload an image to see deepfake analysis.
+                      </p>
+                    )}
+                    {/* Image preview */}
+                    <div className="flex justify-center">
+                      <img
+                        src={previewUrl}
+                        alt="Uploaded image preview"
+                        className="max-w-full max-h-64 rounded border border-anveshak-border object-contain"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'yolo' && (
+                  <div className="space-y-3">
+                    {isProcessing ? (
+                      <div className="flex justify-center py-8"><Spinner label="Detecting objects…" /></div>
+                    ) : result?.yolo_detections ? (
+                      <>
+                        <YoloCanvas
+                          imgSrc={previewUrl}
+                          detections={result.yolo_detections}
+                          modelWidth={640}
+                          modelHeight={640}
+                        />
+                        <div className="space-y-1">
+                          {result.yolo_detections.map((det, i) => (
+                            <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-anveshak-border/50">
+                              <span className="text-text-primary font-medium">{det.label}</span>
+                              <span className="text-text-muted">{Math.round(det.confidence * 100)}% confidence</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-sm text-text-muted text-center py-8">
+                        No object detections yet.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === 'exif' && (
+                  <div>
+                    {isProcessing ? (
+                      <div className="flex justify-center py-8"><Spinner label="Extracting EXIF…" /></div>
+                    ) : result?.exif_data ? (
+                      <ExifTable exif={result.exif_data as Record<string, unknown>} />
+                    ) : (
+                      <p className="text-sm text-text-muted text-center py-8">No EXIF data extracted yet.</p>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === 'reverse' && (
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="phash-input" className="block text-xs font-medium text-text-secondary mb-1.5">
+                        pHash (16 hex chars)
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          id="phash-input"
+                          type="text"
+                          maxLength={16}
+                          placeholder={result?.phash ?? 'e.g. a1b2c3d4e5f60718'}
+                          value={reverseHash}
+                          onChange={(e) => setReverseHash(e.target.value.toLowerCase())}
+                          className="flex-1 bg-anveshak-card border border-anveshak-border rounded px-3 py-2 text-sm font-mono text-text-primary focus:outline-none focus:border-anveshak-accent"
+                        />
+                        {result?.phash && (
+                          <button
+                            onClick={() => setReverseHash(result.phash!.replace('0x', ''))}
+                            className="px-3 py-2 text-xs bg-anveshak-muted rounded border border-anveshak-border hover:border-anveshak-accent text-text-secondary"
+                          >
+                            Use current
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-text-muted mt-1">
+                        Finds near-duplicate images in the corpus using Hamming distance
+                      </p>
+                    </div>
+
+                    {isReversing && <div className="flex justify-center py-4"><Spinner size="sm" label="Searching…" /></div>}
+
+                    {reverseResults.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs text-text-muted">{reverseResults.length} near-duplicate(s) found</p>
+                        {reverseResults.map((r) => (
+                          <div key={r.media_asset_id} className="bg-anveshak-card border border-anveshak-border rounded p-3 text-xs space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-text-primary font-medium">{r.asset_type}</span>
+                              <span className="text-text-muted">Hamming: {r.hamming_distance}</span>
+                            </div>
+                            <a href={r.url} target="_blank" rel="noopener noreferrer"
+                              className="text-anveshak-accent hover:underline truncate block">
+                              {r.url}
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

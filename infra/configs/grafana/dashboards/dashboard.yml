@@ -1,0 +1,14 @@
+# Grafana dashboard provisioning config (8B.2)
+# Tells Grafana to load dashboards from the /etc/grafana/dashboards/ directory.
+apiVersion: 1
+
+providers:
+  - name: anveshak
+    orgId: 1
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/dashboards
+      foldersFromFilesStructure: false

@@ -1,0 +1,47 @@
+---
+# Anveshak — Drishti bridge override
+#
+# Enables the optional Drishti Sovereign Fusion Platform integration.
+# When active, the api service emits enrichment request envelopes to
+# Drishti's Redpanda cluster, and the analyst service consumes fused
+# entity updates from the same bus.
+#
+# Prerequisites:
+#   - Drishti platform must be reachable at DRISHTI_REDPANDA_BOOTSTRAP
+#   - Network connectivity between Anveshak and Drishti compose stacks
+#     (use an external Docker network or a reverse proxy)
+#
+# Usage:
+#   ANVESHAK_DRISHTI_BRIDGE=true \
+#   DRISHTI_REDPANDA_BOOTSTRAP=redpanda:9092 \
+#   docker compose \
+#     -f infra/compose.yml \
+#     -f infra/compose.bridge.yml up
+
+services:
+
+  api:
+    environment:
+      ANVESHAK_DRISHTI_BRIDGE: "true"
+      DRISHTI_REDPANDA_BOOTSTRAP: ${DRISHTI_REDPANDA_BOOTSTRAP}
+      # Topic Anveshak publishes enrichment requests to (Drishti side must exist)
+      DRISHTI_INGEST_TOPIC: ${DRISHTI_INGEST_TOPIC:-anveshak.enrichment_requests.v1}
+      # Schema Registry endpoint on the Drishti Redpanda cluster
+      DRISHTI_SCHEMA_REGISTRY_URL: ${DRISHTI_SCHEMA_REGISTRY_URL:-}
+      # Optional mTLS certs when Drishti Redpanda enforces client auth
+      DRISHTI_KAFKA_SSL_CERT_PATH: ${DRISHTI_KAFKA_SSL_CERT_PATH:-}
+      DRISHTI_KAFKA_SSL_KEY_PATH: ${DRISHTI_KAFKA_SSL_KEY_PATH:-}
+      DRISHTI_KAFKA_SSL_CA_PATH: ${DRISHTI_KAFKA_SSL_CA_PATH:-}
+
+  analyst:
+    environment:
+      ANVESHAK_DRISHTI_BRIDGE: "true"
+      DRISHTI_REDPANDA_BOOTSTRAP: ${DRISHTI_REDPANDA_BOOTSTRAP}
+      # Topic Anveshak consumes fused entity updates from (Drishti side publishes here)
+      DRISHTI_ENTITY_EVENTS_TOPIC: ${DRISHTI_ENTITY_EVENTS_TOPIC:-entities.updated.v1}
+      # Consumer group — isolated per Anveshak deployment to allow multiple instances
+      DRISHTI_CONSUMER_GROUP: ${DRISHTI_CONSUMER_GROUP:-anveshak-analyst-cg}
+      DRISHTI_SCHEMA_REGISTRY_URL: ${DRISHTI_SCHEMA_REGISTRY_URL:-}
+      DRISHTI_KAFKA_SSL_CERT_PATH: ${DRISHTI_KAFKA_SSL_CERT_PATH:-}
+      DRISHTI_KAFKA_SSL_KEY_PATH: ${DRISHTI_KAFKA_SSL_KEY_PATH:-}
+      DRISHTI_KAFKA_SSL_CA_PATH: ${DRISHTI_KAFKA_SSL_CA_PATH:-}

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "anveshak-tests"
+version = "1.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "anveshak-sdk",
+    "anveshak-scraper",
+    "anveshak-analyst",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+]
+
+[tool.hatch.build.targets.wheel]
+# Tests package has no distributable source — only test files.
+packages = []
+include = []
+
+[tool.uv.sources]
+anveshak-sdk = { workspace = true }
+anveshak-scraper = { workspace = true }
+anveshak-analyst = { workspace = true }

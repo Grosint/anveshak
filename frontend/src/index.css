@@ -1,0 +1,132 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Design tokens ─────────────────────────────────────────────────────────
+   All colour decisions live here. Tailwind picks them up via CSS variable
+   references in tailwind.config.js.  The .dark class on <html> (set by
+   ThemeContext) selects the dark overrides.
+   ────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* dark theme (default) */
+  --anveshak-bg:       #0f1117;
+  --anveshak-card:     #1a1f2e;
+  --anveshak-border:   #2d3748;
+  --anveshak-accent:   #3b82f6;
+  --anveshak-muted:    #374151;
+
+  --text-primary:      #f1f5f9;
+  --text-secondary:    #94a3b8;
+  --text-muted:        #64748b;
+
+  --signal-high:       #ef4444;
+  --signal-med:        #f59e0b;
+  --signal-low:        #10b981;
+
+  --credibility-high:  #10b981;
+  --credibility-mid:   #f59e0b;
+  --credibility-low:   #ef4444;
+
+  --scrollbar-track:   #1a1f2e;
+  --scrollbar-thumb:   #2d3748;
+}
+
+html.light {
+  --anveshak-bg:       #f1f5f9;
+  --anveshak-card:     #ffffff;
+  --anveshak-border:   #e2e8f0;
+  --anveshak-accent:   #2563eb;
+  --anveshak-muted:    #e2e8f0;
+
+  --text-primary:      #0f172a;
+  --text-secondary:    #475569;
+  --text-muted:        #94a3b8;
+
+  --signal-high:       #dc2626;
+  --signal-med:        #d97706;
+  --signal-low:        #059669;
+
+  --credibility-high:  #059669;
+  --credibility-mid:   #d97706;
+  --credibility-low:   #dc2626;
+
+  --scrollbar-track:   #e2e8f0;
+  --scrollbar-thumb:   #cbd5e1;
+}
+
+/* ─── Base ─────────────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  background: var(--anveshak-bg);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ─── Custom scrollbar ─────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--anveshak-accent); }
+
+/* ─── Focus ring ────────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--anveshak-accent);
+  outline-offset: 2px;
+}
+
+/* ─── Prose / markdown ─────────────────────────────────────────────────────── */
+.prose-anveshak {
+  color: var(--text-primary);
+  max-width: none;
+}
+.prose-anveshak h1, .prose-anveshak h2, .prose-anveshak h3 {
+  color: var(--text-primary);
+  font-weight: 600;
+  margin-top: 1.25em;
+  margin-bottom: 0.5em;
+}
+.prose-anveshak p { margin: 0.75em 0; }
+.prose-anveshak ul, .prose-anveshak ol { padding-left: 1.5em; margin: 0.75em 0; }
+.prose-anveshak li { margin: 0.25em 0; }
+.prose-anveshak strong { color: var(--text-primary); font-weight: 600; }
+.prose-anveshak em { color: var(--text-secondary); }
+.prose-anveshak code {
+  background: var(--anveshak-muted);
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+  font-size: 0.85em;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.prose-anveshak blockquote {
+  border-left: 3px solid var(--anveshak-accent);
+  padding-left: 1em;
+  color: var(--text-secondary);
+  margin: 0.75em 0;
+}
+
+/* ─── Animation utilities ─────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fadeIn 0.15s ease-out; }
+
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+  70%  { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+}
+.pulse-ring { animation: pulse-ring 2s infinite; }

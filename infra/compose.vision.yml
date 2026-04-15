@@ -1,0 +1,124 @@
+---
+# Anveshak — Vision service overlay
+# Adds vision FastAPI (port 8003) + vision ARQ worker.
+#
+# Usage (CPU):
+#   docker compose -f infra/compose.yml \
+#                  -f infra/compose.vision.yml up
+#
+# Usage (GPU — requires nvidia-container-toolkit):
+#   VISION_DEVICE=cuda docker compose \
+#     -f infra/compose.yml \
+#     -f infra/compose.vision.yml up
+
+x-common-env: &common-env
+  POSTGRES_URL: postgresql://anveshak:${POSTGRES_PASSWORD}@postgres:5432/anveshak
+  REDIS_URL: redis://redis:6379/0
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+x-vision-env: &vision-env
+  <<: *common-env
+  VISION_DEVICE: ${VISION_DEVICE:-cpu}
+  MODEL_DIR: /app/models
+  MEDIA_STORAGE_ROOT: /app/media
+  YOLO_MODEL_SIZE: ${YOLO_MODEL_SIZE:-nano}
+  CLIP_MODEL_NAME: ${CLIP_MODEL_NAME:-openai/clip-vit-base-patch32}
+  VISION_DEEPFAKE_IMAGE_MODEL: ${VISION_DEEPFAKE_IMAGE_MODEL:-facetorch}
+  VISION_DEEPFAKE_VIDEO_MODEL: ${VISION_DEEPFAKE_VIDEO_MODEL:-efficientnet}
+  VISION_BATCH_SIZE: ${VISION_BATCH_SIZE:-1}
+  PHASH_DUPLICATE_THRESHOLD: ${PHASH_DUPLICATE_THRESHOLD:-8}
+  VIDEO_KEYFRAME_INTERVAL_S: ${VIDEO_KEYFRAME_INTERVAL_S:-5}
+  VISION_MAX_VIDEO_SIZE_MB: ${VISION_MAX_VIDEO_SIZE_MB:-500}
+  EXIF_BACKEND: ${EXIF_BACKEND:-pillow}
+
+services:
+
+  vision:
+    build:
+      context: ../..
+      dockerfile: services/vision/Dockerfile
+    restart: unless-stopped
+    mem_limit: 4g
+    environment:
+      <<: *vision-env
+      PORT: 8003
+    volumes:
+      - vision_models:/app/models
+      - vision_media:/app/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # GPU resource reservation — only active when nvidia runtime is available.
+    # Omit entirely for CPU-only deployments.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${VISION_GPU_COUNT:-1}
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8003/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    networks:
+      - anveshak-net
+
+  # ARQ worker for vision analysis jobs (run_vision_analysis)
+  # Separate process from FastAPI so uploads don't block ML inference
+  vision-worker:
+    build:
+      context: ../..
+      dockerfile: services/vision/Dockerfile
+    restart: unless-stopped
+    mem_limit: 6g
+    environment:
+      <<: *vision-env
+    volumes:
+      - vision_models:/app/models
+      - vision_media:/app/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${VISION_GPU_COUNT:-1}
+              capabilities: [gpu]
+    networks:
+      - anveshak-net
+    command: ["python", "-m", "arq", "anveshak.vision.jobs.WorkerSettings"]
+
+  # Wire vision URL into api + scraper so they can store media and dispatch jobs
+  api:
+    environment:
+      VISION_SERVICE_URL: http://vision:8003
+
+  scraper:
+    environment:
+      MEDIA_STORAGE_ROOT: /app/media
+      MEDIA_MAX_SIZE_MB: ${MEDIA_MAX_SIZE_MB:-50}
+      MEDIA_DOWNLOAD_ENABLED: "true"
+    volumes:
+      - vision_media:/app/media
+
+  social:
+    environment:
+      MEDIA_STORAGE_ROOT: /app/media
+      MEDIA_MAX_SIZE_MB: ${MEDIA_MAX_SIZE_MB:-50}
+    volumes:
+      - vision_media:/app/media
+
+volumes:
+  vision_models:
+    driver: local
+  vision_media:
+    driver: local

@@ -1,0 +1,70 @@
+import api from './client'
+
+export interface YoloDetection {
+  label: string
+  confidence: number
+  bbox: [number, number, number, number] // [x1, y1, x2, y2] in model pixel space
+}
+
+export interface VisionResult {
+  vision_result_id: string
+  media_asset_id: string
+  yolo_detections: YoloDetection[] | null
+  clip_labels: Record<string, number> | null
+  deepfake_score: number // always float 0.0–1.0
+  deepfake_model: string | null
+  synthetic_probability: number | null
+  processed_at: string
+  asset_type: string
+  exif_data: Record<string, unknown> | null
+  phash: string | null
+  content_hash: string
+}
+
+export interface VisionJob {
+  job_id: string
+  media_asset_id?: string
+  asset_type?: string
+  status: 'queued' | 'in_progress' | 'complete' | 'failed' | 'unknown'
+  enqueue_time: string | null
+  start_time: string | null
+  finish_time: string | null
+  result: VisionResult | null
+}
+
+export interface ReverseSearchResult {
+  media_asset_id: string
+  content_item_id: string
+  asset_type: string
+  content_hash: string
+  url: string
+  topic_id: string
+  hamming_distance: number
+}
+
+export const visionApi = {
+  analyse: (file: File, contentItemId?: string) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api
+      .post<{ job_id: string; media_asset_id: string; asset_type: string; status: string }>(
+        '/api/v1/vision/analyse',
+        form,
+        {
+          params: contentItemId ? { content_item_id: contentItemId } : undefined,
+          headers: { 'Content-Type': 'multipart/form-data' },
+        },
+      )
+      .then((r) => r.data)
+  },
+
+  pollJob: (jobId: string) =>
+    api.get<VisionJob>(`/api/v1/vision/jobs/${jobId}`).then((r) => r.data),
+
+  reverseSearch: (phash: string, threshold?: number) =>
+    api
+      .get<ReverseSearchResult[]>('/api/v1/vision/reverse-search', {
+        params: { phash, ...(threshold !== undefined ? { threshold } : {}) },
+      })
+      .then((r) => r.data),
+}

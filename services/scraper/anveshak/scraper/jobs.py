@@ -1,0 +1,297 @@
+"""ARQ job definitions — Scraper service (criteria 1.1–1.10, 4.1).
+
+WorkerSettings is the entry point for `arq services.scraper.jobs.WorkerSettings`.
+"""
+from __future__ import annotations
+
+import asyncio
+import uuid
+from datetime import datetime, UTC
+from html.parser import HTMLParser
+from pathlib import Path
+from typing import Any, Optional
+from urllib.parse import urljoin, urlparse
+
+import arq
+import asyncpg
+import structlog
+from arq.connections import RedisSettings
+
+from anveshak.media.downloader import download_media_asset
+
+from .fetch import fetch_url
+from .metrics import scraper_items_fetched_total, scraper_fetch_errors_total, scraper_fetch_duration_seconds, arq_jobs_failed_total
+from .normalise import compute_content_hash
+from .settings import settings
+
+log = structlog.get_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# SQL — module-level constants (testable, consistent with patterns.md)
+# ---------------------------------------------------------------------------
+
+SQL_GET_TOPIC = "SELECT id FROM topics WHERE id = $1"
+
+SQL_GET_WEB_SOURCES = """
+    SELECT s.id, s.url_or_handle, s.credibility_score
+    FROM sources s
+    WHERE s.is_active = TRUE AND s.platform = 'web'
+"""
+
+SQL_INSERT_CONTENT = """
+    INSERT INTO content_items (
+        id, topic_id, source_id, raw_text, clean_text, language,
+        content_hash, url, captured_at, credibility_score_at_capture,
+        created_at, updated_at, labels
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    ON CONFLICT(content_hash) DO NOTHING
+    RETURNING id
+"""
+
+SQL_INSERT_MEDIA_ASSET = """
+    INSERT INTO media_assets (
+        id, content_item_id, asset_type, storage_path, content_hash, labels
+    )
+    VALUES ($1, $2, $3, $4, $5,
+            '{"classification":"OPEN","domain":"vision","owner_org":"anveshak"}'::jsonb)
+    ON CONFLICT (content_hash) DO NOTHING
+"""
+
+SQL_GET_MEDIA_ASSET_BY_HASH = "SELECT id FROM media_assets WHERE content_hash = $1"
+
+_LABELS_JSON = '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'
+
+
+# ---------------------------------------------------------------------------
+# Media URL extraction from HTML (stdlib html.parser — no extra deps)
+# ---------------------------------------------------------------------------
+
+class _MediaURLExtractor(HTMLParser):
+    """Extract absolute image and video source URLs from raw HTML."""
+
+    def __init__(self, base_url: str) -> None:
+        super().__init__()
+        self.base_url = base_url
+        self.urls: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list) -> None:
+        if tag not in {"img", "video", "source"}:
+            return
+        attrs_dict = dict(attrs)
+        raw = (
+            attrs_dict.get("src")
+            or attrs_dict.get("data-src")
+            or attrs_dict.get("data-lazy-src")
+        )
+        if not raw:
+            return
+        abs_url = urljoin(self.base_url, raw)
+        parsed = urlparse(abs_url)
+        if parsed.scheme in {"http", "https"} and parsed.netloc:
+            self.urls.append(abs_url)
+
+
+def _extract_media_urls(html: str, base_url: str) -> list[str]:
+    extractor = _MediaURLExtractor(base_url)
+    extractor.feed(html)
+    return extractor.urls[:20]  # cap at 20 media URLs per page
+
+
+# ---------------------------------------------------------------------------
+# ARQ job
+# ---------------------------------------------------------------------------
+
+async def scrape_topic(ctx: dict, topic_id: str) -> int:
+    """Scrape all active web sources for a topic.
+
+    Criteria 1.1: ARQ function exists.
+    Criteria 1.4–1.9: hash, dedup, credibility snapshot, timeout, concurrency,
+                       error isolation.
+    Criteria 4.1: images on scraped pages downloaded → media_assets rows created.
+    Returns the number of new content_items inserted (duplicates excluded).
+    """
+    db_pool: asyncpg.Pool = ctx["db_pool"]
+    redis = ctx["redis"]   # ARQ Redis pool — used to dispatch vision jobs
+
+    async with db_pool.acquire() as conn:
+        topic = await conn.fetchrow(SQL_GET_TOPIC, topic_id)
+        if not topic:
+            log.warning("scraper.topic_not_found", topic_id=topic_id)
+            return 0
+        sources = await conn.fetch(SQL_GET_WEB_SOURCES)
+
+    semaphore = asyncio.Semaphore(settings.scraper_concurrency)  # criteria 1.8
+    counter: dict[str, int] = {"inserted": 0}
+
+    async def _process(source: asyncpg.Record) -> None:
+        async with semaphore:
+            url: str = source["url_or_handle"]
+            try:
+                import time as _time
+                _t0 = _time.monotonic()
+                clean_text = await fetch_url(url)  # timeout respected inside fetch_url
+                scraper_fetch_duration_seconds.observe(_time.monotonic() - _t0)
+                if not clean_text:
+                    return
+
+                content_hash = compute_content_hash(clean_text)  # criteria 1.4
+                now = datetime.now(UTC)
+
+                async with db_pool.acquire() as conn:
+                    result = await conn.fetchrow(
+                        SQL_INSERT_CONTENT,
+                        str(uuid.uuid4()),
+                        topic_id,
+                        source["id"],
+                        clean_text,          # raw_text == clean_text for web
+                        clean_text,          # clean_text
+                        "en",               # language — updated by analyst NLP (criteria 1.29)
+                        content_hash,       # criteria 1.4, 1.5
+                        url,
+                        now,                # captured_at
+                        float(source["credibility_score"]),  # criteria 1.6 — snapshot
+                        now,                # created_at
+                        now,                # updated_at
+                        _LABELS_JSON,
+                    )
+
+                if result is not None:
+                    content_item_id: str = result["id"]
+                    counter["inserted"] += 1
+                    scraper_items_fetched_total.labels(
+                        topic_id=topic_id, source_platform="web"
+                    ).inc()
+
+                    # Phase 4: download images/videos from page (criteria 4.1)
+                    if settings.media_download_enabled:
+                        await _download_page_media(
+                            page_url=url,
+                            topic_id=topic_id,
+                            content_item_id=content_item_id,
+                            db_pool=db_pool,
+                            redis=redis,
+                        )
+
+            except Exception as exc:
+                # criteria 1.9: failures log url + error, do NOT crash the loop
+                scraper_fetch_errors_total.labels(
+                    error_type=type(exc).__name__
+                ).inc()
+                log.warning("scraper.source_failed", url=url, error=str(exc))
+
+    await asyncio.gather(*[_process(s) for s in sources])
+    log.info(
+        "scraper.job_done",
+        topic_id=topic_id,
+        total_sources=len(sources),
+        inserted=counter["inserted"],
+    )
+    return counter["inserted"]
+
+
+async def _download_page_media(
+    page_url: str,
+    topic_id: str,
+    content_item_id: str,
+    db_pool: asyncpg.Pool,
+    redis,
+) -> None:
+    """Download images/videos linked from a scraped page.
+
+    Criteria 4.1: images from scraped pages saved to media/{topic_id}/{date}/{hash}.ext
+    Criteria 4.3–4.4: media_assets rows created with content_hash of raw bytes.
+    Errors never propagate — media failure never aborts content ingestion.
+    """
+    try:
+        import httpx
+        async with httpx.AsyncClient(
+            timeout=settings.scraper_request_timeout_s,
+            follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; Anveshak/1.0)"},
+        ) as client:
+            resp = await client.get(page_url)
+            resp.raise_for_status()
+            html = resp.text
+    except Exception as exc:
+        log.debug("scraper.media_page_fetch_failed", url=page_url, error=str(exc))
+        return
+
+    media_urls = _extract_media_urls(html, page_url)
+    if not media_urls:
+        return
+
+    for media_url in media_urls:
+        try:
+            dl = await download_media_asset(
+                url=media_url,
+                topic_id=topic_id,
+                storage_root=settings.media_storage_root,
+                max_size_mb=settings.media_max_size_mb,
+                timeout_s=settings.scraper_request_timeout_s,
+            )
+            if dl is None:
+                continue
+
+            # Insert media_assets row — ON CONFLICT(content_hash) DO NOTHING (criteria 4.34)
+            async with db_pool.acquire() as conn:
+                await conn.execute(
+                    SQL_INSERT_MEDIA_ASSET,
+                    str(uuid.uuid4()),
+                    content_item_id,
+                    dl.asset_type,
+                    dl.storage_path,
+                    dl.content_hash,
+                )
+                row = await conn.fetchrow(SQL_GET_MEDIA_ASSET_BY_HASH, dl.content_hash)
+
+            if row:
+                await redis.enqueue_job("run_vision_analysis", row["id"])
+                log.debug(
+                    "scraper.vision_dispatched",
+                    media_asset_id=row["id"],
+                    asset_type=dl.asset_type,
+                )
+
+        except Exception as exc:
+            log.debug("scraper.media_download_failed", url=media_url, error=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# ARQ worker lifecycle
+# ---------------------------------------------------------------------------
+
+async def on_startup(ctx: dict) -> None:
+    ctx["db_pool"] = await asyncpg.create_pool(
+        settings.postgres_url, min_size=2, max_size=5
+    )
+    log.info("scraper_worker.ready", concurrency=settings.scraper_concurrency)
+
+
+async def on_shutdown(ctx: dict) -> None:
+    await ctx["db_pool"].close()
+    log.info("scraper_worker.stopped")
+
+
+async def on_job_result(ctx: dict, result) -> None:  # type: ignore[type-arg]
+    """8A.19 — increment failure counter when an ARQ job exhausts all retries."""
+    if getattr(result, "success", True) is False:
+        job_name = getattr(result, "function", "unknown")
+        arq_jobs_failed_total.labels(job_name=job_name).inc()
+        log.warning("scraper_worker.job_failed", job=job_name)
+
+
+class WorkerSettings:
+    """Entry point: arq services.scraper.jobs.WorkerSettings"""
+
+    functions = [
+        # 8C.5 — scrape_topic: ON CONFLICT DO NOTHING makes it safe to retry
+        arq.func(scrape_topic, max_tries=2),
+    ]
+    on_startup = on_startup
+    on_shutdown = on_shutdown
+    on_job_result = on_job_result
+    redis_settings = RedisSettings.from_dsn(settings.redis_url)
+    max_jobs = settings.scraper_concurrency
+    job_timeout = 120    # 8C.5 — 2 min total budget per scrape job
+    keep_result = 3600   # 8C.6 — keep results 1h

@@ -1,0 +1,125 @@
+# Anveshak — Prometheus alerting rules (8G)
+# Evaluated every 15s (global evaluation_interval).
+# Alertmanager integration is optional — alerts surface in Grafana and logs.
+
+groups:
+  - name: anveshak.service_health
+    rules:
+      # 8G.1 — Any Anveshak service disappears from scrape targets
+      - alert: AnveshakServiceDown
+        expr: up{job=~"anveshak.*"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          platform: anveshak
+        annotations:
+          summary: "Anveshak service {{ $labels.instance }} is DOWN"
+          description: >
+            Service {{ $labels.instance }} (job={{ $labels.job }}) has been
+            unreachable for more than 1 minute. Check Docker Compose logs.
+
+  - name: anveshak.content_ingestion
+    rules:
+      # 8G.2 — Scraper has fetched zero items in the last 10 minutes
+      - alert: ScraperIngestionStopped
+        expr: >
+          sum(increase(scraper_items_fetched_total[10m])) == 0
+        for: 10m
+        labels:
+          severity: warning
+          platform: anveshak
+        annotations:
+          summary: "Scraper ingestion has stopped"
+          description: >
+            No items have been fetched in the last 10 minutes.
+            Verify scraper topics are configured and crawl jobs are enqueued.
+
+  - name: anveshak.report_generation
+    rules:
+      # 8G.3 — Report generation p95 latency approaching ARQ 300s timeout
+      - alert: ReportGenerationSlow
+        expr: >
+          histogram_quantile(0.95,
+            rate(reporter_job_duration_seconds_bucket[30m])
+          ) > 270
+        for: 5m
+        labels:
+          severity: warning
+          platform: anveshak
+        annotations:
+          summary: "Report generation p95 latency exceeds 270 s"
+          description: >
+            The 95th-percentile report generation duration has been above 270 s
+            for 5 minutes. ARQ timeout is 300 s — jobs are at risk of failing.
+            Consider switching to a faster Ollama model or upgrading hardware.
+
+      # 8G.4 — ARQ job failures spiking across any worker
+      - alert: ArqJobFailureSpike
+        expr: >
+          sum(rate(arq_jobs_failed_total[5m])) by (job_name) * 60 > 5
+        for: 5m
+        labels:
+          severity: warning
+          platform: anveshak
+        annotations:
+          summary: "ARQ job {{ $labels.job_name }} failing at > 5/min"
+          description: >
+            ARQ job {{ $labels.job_name }} has been failing at more than
+            5 failures per minute for 5 consecutive minutes.
+            Check worker logs for root cause.
+
+  - name: anveshak.nlp_performance
+    rules:
+      # 8G.5 — NLP processing p95 latency too high
+      - alert: NlpLatencyHigh
+        expr: >
+          histogram_quantile(0.95,
+            rate(analyst_nlp_duration_seconds_bucket[5m])
+          ) > 10
+        for: 5m
+        labels:
+          severity: warning
+          platform: anveshak
+        annotations:
+          summary: "NLP processing p95 latency exceeds 10 s"
+          description: >
+            The analyst NLP pipeline p95 latency has been above 10 s for 5 minutes.
+            This may indicate the spaCy model or embedding model is under-resourced.
+
+  - name: anveshak.deepfake_volume
+    rules:
+      # 8G.6 — Unusually high volume of high-confidence deepfake detections
+      - alert: DeepfakeVolumeSpike
+        expr: >
+          increase(
+            vision_deepfake_score_bucket{le="1.0"}[1h]
+          ) - increase(
+            vision_deepfake_score_bucket{le="0.8"}[1h]
+          ) > 50
+        for: 0m
+        labels:
+          severity: warning
+          platform: anveshak
+        annotations:
+          summary: "High-confidence deepfake detections spiked (>50 in last hour)"
+          description: >
+            More than 50 media items scored above 0.8 deepfake probability
+            in the last hour. Review vision queue for adversarial content.
+
+  - name: anveshak.signals
+    rules:
+      # 8G.7 — No signals fired in 30 minutes while ingestion is active
+      - alert: SignalEngineSilent
+        expr: >
+          increase(analyst_signals_fired_total[30m]) == 0
+          and sum(increase(scraper_items_fetched_total[30m])) > 0
+        for: 30m
+        labels:
+          severity: info
+          platform: anveshak
+        annotations:
+          summary: "Signal engine has fired no signals in 30 minutes"
+          description: >
+            Content is being ingested but no intelligence signals have been
+            generated in the last 30 minutes. Verify signal thresholds and
+            clustering is running correctly.
