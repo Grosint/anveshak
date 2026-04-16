@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" role="img" aria-label="Anveshak icon">
+  <title>Anveshak</title>
+  <desc>Concentric amber rings with an upward-pointing triangle — the Investigator's Prism</desc>
+
+  <!--
+    ANVESHAK MARK — The Investigator's Prism
+    ─────────────────────────────────────────
+    Design language: same family as Drishti.
+    Drishti  (दृष्टि  = sight)   — downward triangle, receiving
+    Anveshak (अन्वेषक = seeker)  — upward triangle,  reaching out
+
+    Palette
+      #C47A0B  deep turmeric   outer orbit ring
+      #F5A623  saffron         inner ring · triangle stroke · dot · line
+      #FAF0E0  warm cream      triangle fill
+      #D4956A  muted amber     cardinal orbital markers
+  -->
+
+  <!-- Horizontal data-horizon accent line (tangent to outer circle top) -->
+  <line x1="-6" y1="12" x2="106" y2="12"
+        stroke="#F5A623" stroke-width="2.8" stroke-linecap="square"/>
+
+  <!-- Outer orbit ring — deep turmeric -->
+  <circle cx="50" cy="55" r="43" stroke="#C47A0B" stroke-width="2"/>
+
+  <!-- Inner focus ring — saffron -->
+  <circle cx="50" cy="55" r="29" stroke="#F5A623" stroke-width="2"/>
+
+  <!--
+    Upward triangle — inscribed at 85% of inner circle radius
+    Vertices: apex (50,30) · bottom-left (28,67) · bottom-right (72,67)
+    Centroid: (50, 54.7) ≈ circle centre
+  -->
+  <polygon points="50,30 28,67 72,67"
+           fill="#FAF0E0" stroke="#F5A623" stroke-width="1.6" stroke-linejoin="miter"/>
+
+  <!-- Centre focal dot — truth found -->
+  <circle cx="50" cy="55" r="4.8" fill="#F5A623"/>
+
+  <!-- Cardinal orbital markers (E · S · W · N-on-line) -->
+  <circle cx="93" cy="55" r="3"   fill="#D4956A"/>  <!-- East  -->
+  <circle cx="50" cy="98" r="3"   fill="#D4956A"/>  <!-- South -->
+  <circle cx="7"  cy="55" r="3"   fill="#D4956A"/>  <!-- West  -->
+  <circle cx="50" cy="12" r="3"   fill="#D4956A"/>  <!-- North (sits on horizon line) -->
+</svg>

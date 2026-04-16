@@ -21,6 +21,20 @@ SQL_LIST_SIGNALS = """
     LIMIT 50
 """
 
+SQL_LIST_SIGNALS_SINCE = """
+    SELECT s.id, s.topic_id, s.cluster_id, s.signal_type, s.description, s.evidence,
+           s.status, s.created_at,
+           nc.label AS cluster_label,
+           nc.independent_source_count
+    FROM signals s
+    LEFT JOIN narrative_clusters nc ON nc.id = s.cluster_id
+    WHERE s.status = $1
+      AND s.created_at >= $2
+      AND s.created_at <= $3
+    ORDER BY s.created_at DESC
+    LIMIT 200
+"""
+
 SQL_ACKNOWLEDGE = """
     UPDATE signals SET status = 'acknowledged', updated_at = $1
     WHERE id = $2 AND status = 'new'
@@ -50,6 +64,13 @@ async def list_signals(
     conn: asyncpg.Connection, status: str
 ) -> list[dict[str, Any]]:
     rows = await conn.fetch(SQL_LIST_SIGNALS, status)
+    return [dict(r) for r in rows]
+
+
+async def list_signals_filtered(
+    conn: asyncpg.Connection, status: str, since: Any, until: Any
+) -> list[dict[str, Any]]:
+    rows = await conn.fetch(SQL_LIST_SIGNALS_SINCE, status, since, until)
     return [dict(r) for r in rows]
 
 

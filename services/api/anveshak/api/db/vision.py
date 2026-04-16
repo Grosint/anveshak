@@ -1,6 +1,9 @@
 """Vision repository — media_assets and vision_results SQL for the API gateway."""
 from __future__ import annotations
 
+import hashlib
+import uuid
+from datetime import datetime, UTC
 from typing import Any, Optional
 
 import asyncpg
@@ -32,6 +35,28 @@ SQL_PHASH_REVERSE_SEARCH = """
       AND BIT_COUNT(ma.phash # $1::bigint) <= $2
     ORDER BY BIT_COUNT(ma.phash # $1::bigint)
     LIMIT 20
+"""
+
+_MANUAL_SOURCE_ID = "00000000-0000-0000-0000-000000000001"
+
+SQL_UPSERT_MANUAL_SOURCE = """
+    INSERT INTO sources (id, name, url_or_handle, platform, credibility_score,
+                         auto_score_enabled, labels)
+    VALUES ($1, 'Manual Upload', 'manual://upload', 'manual', 50.0, false,
+            '{"classification":"OPEN","domain":"vision","owner_org":"anveshak"}'::jsonb)
+    ON CONFLICT (id) DO NOTHING
+"""
+
+SQL_INSERT_STUB_CONTENT_ITEM = """
+    INSERT INTO content_items (id, source_id, raw_text, clean_text, content_hash, labels)
+    VALUES ($1, $2, $3, $3, $4,
+            '{"classification":"OPEN","domain":"vision","owner_org":"anveshak"}'::jsonb)
+    ON CONFLICT (content_hash) DO NOTHING
+    RETURNING id
+"""
+
+SQL_GET_STUB_CONTENT_ITEM_BY_HASH = """
+    SELECT id FROM content_items WHERE content_hash = $1
 """
 
 SQL_GET_VISION_RESULTS_FOR_CONTENT = """
@@ -86,3 +111,32 @@ async def get_vision_results_for_content(
 ) -> list[dict[str, Any]]:
     rows = await conn.fetch(SQL_GET_VISION_RESULTS_FOR_CONTENT, content_id)
     return [dict(r) for r in rows]
+
+
+async def get_or_create_stub_content_item(
+    conn: asyncpg.Connection,
+    content_hash: str,
+    filename: str,
+) -> str:
+    """Return content_item.id for an ad-hoc upload.
+
+    Creates a 'manual-upload' source stub and a minimal content_item so that
+    media_assets.content_item_id (NOT NULL FK) is always satisfied for standalone
+    vision analysis requests.
+    """
+    await conn.execute(SQL_UPSERT_MANUAL_SOURCE, _MANUAL_SOURCE_ID)
+
+    stub_text = f"[manual upload: {filename}]"
+    stub_hash = hashlib.sha256(f"manual:{content_hash}".encode()).hexdigest()
+    stub_id = str(uuid.uuid4())
+
+    row = await conn.fetchrow(
+        SQL_INSERT_STUB_CONTENT_ITEM,
+        stub_id, _MANUAL_SOURCE_ID, stub_text, stub_hash,
+    )
+    if row:
+        return str(row["id"])
+
+    # ON CONFLICT — fetch existing
+    existing = await conn.fetchrow(SQL_GET_STUB_CONTENT_ITEM_BY_HASH, stub_hash)
+    return str(existing["id"])

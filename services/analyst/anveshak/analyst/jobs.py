@@ -236,6 +236,8 @@ async def on_job_result(ctx: dict, result) -> None:  # type: ignore[type-arg]
 class WorkerSettings:
     """Entry point: arq services.analyst.jobs.WorkerSettings"""
 
+    queue_name = "arq:analyst"   # Isolated queue — avoids cross-worker job theft
+
     functions = [
         # 8C.1 — NLP: transient DB/embedding errors; ON CONFLICT DO NOTHING makes it safe to retry
         arq.func(analyse_content, max_tries=3),

@@ -49,7 +49,13 @@ RUN uv pip install --system /workspace/sdk/
 WORKDIR /workspace/services/vision
 COPY services/vision/pyproject.toml .
 COPY services/vision/anveshak/ anveshak/
-RUN uv pip install --system .
+# Install torch CPU-only FIRST so uv doesn't pull CUDA wheels (nvidia-cudnn-cu13).
+# On GPU machines, override via VISION_DEVICE=cuda and swap to onnxruntime-gpu at runtime —
+# no image rebuild needed since onnxruntime selects the EP at import time.
+RUN uv pip install --system \
+        torch \
+        --index-url https://download.pytorch.org/whl/cpu \
+    && uv pip install --system .
 
 # --------------------------------------------------------------------------
 # Pre-download YOLO nano model (avoids runtime internet access)

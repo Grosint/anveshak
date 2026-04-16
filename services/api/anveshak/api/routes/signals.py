@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, UTC
+from typing import Optional
 
 import asyncpg
 import structlog
@@ -115,10 +116,17 @@ async def signal_websocket(
 @router.get("")
 async def list_signals(
     status: str = Query(default="new", pattern="^(new|acknowledged|dismissed)$"),
+    since: Optional[datetime] = Query(default=None, description="ISO datetime — only return signals at or after this time"),
+    until: Optional[datetime] = Query(default=None, description="ISO datetime — only return signals at or before this time"),
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """List signals by status (criteria 2.14 status flow)."""
+    """List signals by status with optional time range (criteria 2.14 status flow)."""
+    if since is not None or until is not None:
+        # Default until to now if only since is provided, and vice versa
+        _since = since or datetime.min.replace(tzinfo=UTC)
+        _until = until or datetime.now(UTC)
+        return await signals_db.list_signals_filtered(db, status, _since, _until)
     return await signals_db.list_signals(db, status)
 
 

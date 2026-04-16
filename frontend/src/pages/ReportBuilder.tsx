@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import rehypeSanitize from 'rehype-sanitize'
@@ -9,6 +9,7 @@ import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Spinner } from '../components/ui/Spinner'
 import { EmptyState } from '../components/ui/EmptyState'
+import { Modal } from '../components/ui/Modal'
 import { format, formatDistanceToNow } from 'date-fns'
 
 // Lazy-load MapLibre so it only ships when the GIS tab opens (~700KB saved from initial bundle)
@@ -36,6 +37,7 @@ export default function ReportBuilder() {
   const [credMin, setCredMin]                 = useState(30)
   const [currentReportId, setCurrentReportId] = useState<string | null>(null)
   const [activeTab, setActiveTab]             = useState<Tab>('report')
+  const [errorDialog, setErrorDialog]         = useState<string | null>(null)
   const qc = useQueryClient()
 
   // Topics for selector
@@ -52,6 +54,16 @@ export default function ReportBuilder() {
       return false
     },
   })
+
+  // Open error dialog as soon as the poller sees generation_status === 'failed'
+  useEffect(() => {
+    if (report?.generation_status === 'failed') {
+      setErrorDialog(
+        report.generation_error ??
+          'Report generation failed. Check that Ollama is running and the configured model is loaded.'
+      )
+    }
+  }, [report?.generation_status, report?.generation_error])
 
   // Report history for selected topic
   const { data: history = [] } = useQuery({
@@ -98,6 +110,16 @@ export default function ReportBuilder() {
 
   return (
     <div className="h-full flex flex-col">
+      <Modal
+        open={errorDialog !== null}
+        onClose={() => setErrorDialog(null)}
+        title="Report generation failed"
+        footer={<Button onClick={() => setErrorDialog(null)}>Close</Button>}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-text-secondary">{errorDialog}</p>
+        </div>
+      </Modal>
       {/* Header */}
       <div className="px-6 pt-6 pb-4 border-b border-anveshak-border">
         <h1 className="text-xl font-semibold text-text-primary">Report Builder</h1>
@@ -250,10 +272,6 @@ export default function ReportBuilder() {
                         <ReactMarkdown rehypePlugins={[rehypeSanitize]}>
                           {report.content_md}
                         </ReactMarkdown>
-                      </div>
-                    ) : report?.generation_status === 'failed' ? (
-                      <div className="bg-signal-high/10 border border-signal-high/30 rounded-lg p-4 text-signal-high text-sm">
-                        Report generation failed. Check that Ollama is running and the model is loaded.
                       </div>
                     ) : null}
                   </div>

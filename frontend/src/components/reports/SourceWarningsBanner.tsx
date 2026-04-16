@@ -5,7 +5,15 @@ interface SourceWarningsBannerProps {
 }
 
 export function SourceWarningsBanner({ warnings }: SourceWarningsBannerProps) {
-  if (!warnings.length) return null
+  // Defensive: asyncpg may return json_agg columns as a JSON string if the
+  // connection pool has no JSON codec registered. Parse it if needed.
+  const list: SourceWarning[] = Array.isArray(warnings)
+    ? warnings
+    : typeof warnings === 'string'
+      ? (JSON.parse(warnings) as SourceWarning[])
+      : []
+
+  if (!list.length) return null
 
   return (
     <div
@@ -19,7 +27,7 @@ export function SourceWarningsBanner({ warnings }: SourceWarningsBannerProps) {
         <div>
           <p className="font-medium text-signal-med">Source credibility changed since report generation</p>
           <ul className="mt-1.5 space-y-1 text-xs text-text-secondary">
-            {warnings.map((w) => (
+            {list.map((w) => (
               <li key={w.id}>
                 <span className="font-medium">{w.source_name}</span>
                 {' '}credibility changed: {w.old_score.toFixed(0)} → {w.new_score.toFixed(0)}

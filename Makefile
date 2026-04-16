@@ -24,7 +24,7 @@ UV           := uv run
         init pull-models migrate migrate-hnsw seed-demo \
         fresh fresh-all \
         test unit integration test-unit test-integration test-e2e \
-        demo-check health lint format typecheck \
+        demo-check validate validate-vision health lint format typecheck \
         clean clean-volumes
 
 # -----------------------------------------------------------------------------
@@ -180,6 +180,14 @@ health:
 demo-check:
 	@echo "Running demo readiness verification..."
 	$(UV) python scripts/demo_check.py
+
+validate:
+	@echo "Running Anveshak pipeline validation (on-demand E2E check)..."
+	$(UV) python scripts/validate_pipeline.py
+
+validate-vision:
+	@echo "Running Anveshak vision pipeline validation (M4 deepfake E2E check)..."
+	$(UV) python scripts/validate_vision.py
 
 # Verify all Pydantic models have non-optional labels field
 verify-labels:

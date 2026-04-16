@@ -1,0 +1,99 @@
+# Anveshak — Loki log aggregation configuration
+# Single-binary mode: all components in one process (appropriate for a
+# single-machine sovereign IAF deployment).
+# Retention: 7 days (168 h) — tunable via LOKI_RETENTION_HOURS env var.
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  log_level: warn
+  # Graceful shutdown timeout
+  graceful_shutdown_timeout: 30s
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+# Schema v13 with TSDB index — best single-node performance
+schema_config:
+  configs:
+    - from: "2024-01-01"
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+# Query result caching — reduces repeated label-value scans
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 64
+
+# Ingester write-ahead log — prevents log loss on restart
+ingester:
+  wal:
+    enabled: true
+    dir: /loki/wal
+  lifecycler:
+    address: 127.0.0.1
+    ring:
+      kvstore:
+        store: inmemory
+      replication_factor: 1
+    final_sleep: 0s
+  chunk_idle_period: 5m
+  chunk_retain_period: 30s
+  max_transfer_retries: 0
+
+# Compactor: enforces retention and deduplicated chunk writes
+compactor:
+  working_directory: /loki/compactor
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  retention_delete_worker_count: 150
+  delete_request_cancel_period: 24h
+
+# Retention policy — 7 days by default; sovereign deployment keeps short window
+limits_config:
+  retention_period: 168h
+  # Prevent label cardinality explosion from high-cardinality fields like
+  # content_hash or url being promoted to Loki stream labels by Promtail.
+  max_label_names_per_series: 15
+  max_label_value_length: 2048
+  # Rate limits — single deployment, generous limits
+  ingestion_rate_mb: 16
+  ingestion_burst_size_mb: 32
+  per_stream_rate_limit: 8MB
+  per_stream_rate_limit_burst: 16MB
+
+# Ruler: optional alert routing (Alertmanager integration)
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /loki/rules
+  rule_path: /loki/rules-temp
+  alertmanager_url: http://localhost:9093
+  ring:
+    kvstore:
+      store: inmemory
+  enable_api: true
+
+# Disable tracing (no Jaeger in standalone deployment)
+tracing:
+  enabled: false

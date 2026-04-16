@@ -36,7 +36,12 @@ async def fetch_url(url: str) -> Optional[str]:
 
 async def _crawl4ai_fetch(url: str) -> Optional[str]:
     """Use Crawl4AI's headless browser to fetch the page."""
+    import os
     from crawl4ai import AsyncWebCrawler
+
+    # Ensure HOME is set — Chromium writes user-data-dir relative to HOME.
+    if not os.environ.get("HOME") or os.environ["HOME"] == "/nonexistent":
+        os.environ["HOME"] = "/tmp"
 
     proxy_kwargs: dict = {}
     if settings.tor_proxy_url:
@@ -46,7 +51,11 @@ async def _crawl4ai_fetch(url: str) -> Optional[str]:
     try:
         from crawl4ai import BrowserConfig, CrawlerRunConfig
 
-        browser_cfg = BrowserConfig(headless=True, **proxy_kwargs)
+        try:
+            browser_cfg = BrowserConfig(headless=True, enable_stealth=True, **proxy_kwargs)
+        except TypeError:
+            # Older Crawl4AI versions do not support enable_stealth — degrade silently.
+            browser_cfg = BrowserConfig(headless=True, **proxy_kwargs)
         run_cfg = CrawlerRunConfig(
             page_timeout=settings.scraper_request_timeout_s * 1000,
         )
@@ -73,16 +82,24 @@ async def _trafilatura_fetch(url: str) -> Optional[str]:
     """Download raw HTML via httpx then extract with trafilatura."""
     import httpx
 
-    proxies: dict = {}
+    client_kwargs: dict = {
+        "timeout": settings.scraper_request_timeout_s,
+        "follow_redirects": True,
+        "headers": {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"},
+    }
     if settings.tor_proxy_url:
-        proxies = {"all://": settings.tor_proxy_url}
+        # httpx ≥0.27 uses `proxy=` (single URL); older versions used `proxies=` dict.
+        try:
+            import inspect
+            sig = inspect.signature(httpx.AsyncClient.__init__)
+            if "proxy" in sig.parameters:
+                client_kwargs["proxy"] = settings.tor_proxy_url
+            else:
+                client_kwargs["proxies"] = {"all://": settings.tor_proxy_url}
+        except Exception:
+            client_kwargs["proxy"] = settings.tor_proxy_url
 
-    async with httpx.AsyncClient(
-        timeout=settings.scraper_request_timeout_s,
-        follow_redirects=True,
-        proxies=proxies if proxies else None,
-        headers={"User-Agent": "Mozilla/5.0 (compatible; Anveshak/1.0)"},
-    ) as client:
+    async with httpx.AsyncClient(**client_kwargs) as client:
         resp = await client.get(url)
         resp.raise_for_status()
         html = resp.text

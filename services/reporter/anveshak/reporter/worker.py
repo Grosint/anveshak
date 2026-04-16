@@ -20,7 +20,11 @@ from typing import Any
 
 import arq
 import structlog
+from arq.connections import RedisSettings
 from croniter import croniter
+from anveshak.logging import configure_logging
+
+configure_logging("reporter")
 
 from . import db as db
 from .geocoder import build_geojson, extract_locations_from_text, geocode_locations
@@ -38,7 +42,13 @@ log = structlog.get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 async def startup(ctx: dict) -> None:
-    """Create DB pool and attach settings to ARQ context."""
+    """Create DB pool, start Prometheus metrics server, attach settings to ARQ context."""
+    from prometheus_client import start_http_server
+    from .metrics import REGISTRY as REPORTER_REGISTRY
+
+    start_http_server(_default_settings.metrics_port, registry=REPORTER_REGISTRY)
+    log.info("reporter.metrics_server_started", port=_default_settings.metrics_port)
+
     ctx["settings"] = _default_settings
     ctx["db"] = await db.get_pool(_default_settings.postgres_url)
     log.info("reporter.worker_started")
@@ -80,7 +90,7 @@ async def generate_report(ctx: dict, report_id: str) -> None:
     topic = await db.fetch_topic(pool, topic_id)
     if topic is None:
         log.error("reporter.topic_not_found", topic_id=topic_id)
-        await db.update_job_status(pool, report_id, "failed", "topic not found")
+        await db.set_report_failed(pool, report_id, "Topic not found — it may have been deleted.")
         return
 
     topic_name: str = topic.get("name", "Unknown Topic")
@@ -102,7 +112,11 @@ async def generate_report(ctx: dict, report_id: str) -> None:
 
     if not chunks:
         log.warning("reporter.no_rag_chunks", report_id=report_id, topic_id=topic_id)
-        await db.update_job_status(pool, report_id, "failed", "no content chunks available")
+        await db.set_report_failed(
+            pool, report_id,
+            "No scraped content available for this topic yet. "
+            "Add sources to the topic and run a scrape job first, then generate the report."
+        )
         return
 
     # --- 4. Assemble context and render prompt ---
@@ -117,7 +131,11 @@ async def generate_report(ctx: dict, report_id: str) -> None:
         reporter_jobs_total.labels(status="failed").inc()
         reporter_job_duration_seconds.observe(_time.monotonic() - _t0)
         log.error("reporter.llm_failed", report_id=report_id)
-        await db.update_job_status(pool, report_id, "failed", "LLM returned no valid output")
+        await db.set_report_failed(
+            pool, report_id,
+            "LLM returned no valid output. Check that Ollama is running and the configured model is loaded "
+            f"(model: {s.ollama_model})."
+        )
         return
 
     # --- 6. Build source snapshot ---
@@ -306,6 +324,8 @@ async def on_job_result(ctx: dict, result) -> None:  # type: ignore[type-arg]
 
 
 class WorkerSettings:
+    queue_name = "arq:reporter"  # Isolated queue — avoids cross-worker job theft
+    redis_settings = RedisSettings.from_dsn(_default_settings.redis_url)
     functions = [
         # 8C.4 — generate_report: max_tries=2; retry safe via generated_at IS NULL guard (8C.7)
         arq.func(generate_report, max_tries=2),
@@ -317,5 +337,5 @@ class WorkerSettings:
     on_startup = startup
     on_shutdown = shutdown
     on_job_result = on_job_result
-    job_timeout = 300    # 8C.4 — Ollama report generation ceiling
+    job_timeout = 600    # 8C.4 — Ollama report generation ceiling (600s for CPU inference)
     keep_result = 3600   # 8C.6 — keep results 1h for UI polling

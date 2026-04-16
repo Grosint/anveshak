@@ -16,7 +16,8 @@ SQL_INSERT_SOURCE = """
 """
 
 SQL_LIST_SOURCES = """
-    SELECT id, name, platform, credibility_score, is_active, last_checked_at
+    SELECT id, name, url_or_handle, platform, credibility_score, is_active,
+           health_status, consecutive_failures, health_error, last_checked_at
     FROM sources ORDER BY credibility_score DESC
 """
 
@@ -52,11 +53,41 @@ SQL_GET_AUDIT_LOG = """
 """
 
 SQL_LIST_SOURCES_BELOW = """
-    SELECT id, name, platform, credibility_score, is_active, last_checked_at
+    SELECT id, name, url_or_handle, platform, credibility_score, is_active,
+           health_status, consecutive_failures, health_error, last_checked_at
     FROM sources
     WHERE credibility_score < $1
     ORDER BY credibility_score ASC
 """
+
+SQL_UPDATE_SOURCE_HEALTH = """
+    UPDATE sources
+    SET health_status        = $2,
+        consecutive_failures = $3,
+        health_error         = $4,
+        last_checked_at      = $5,
+        updated_at           = $5
+    WHERE id = $1
+"""
+
+SQL_GET_SOURCE_FOR_HEALTH = """
+    SELECT id, url_or_handle, platform, health_status, consecutive_failures
+    FROM sources WHERE id = $1
+"""
+
+SQL_UPDATE_SOURCE_FIELDS = """
+    UPDATE sources
+    SET name          = COALESCE($2, name),
+        url_or_handle = COALESCE($3, url_or_handle),
+        updated_at    = $4
+    WHERE id = $1
+"""
+
+SQL_DELETE_SOURCE = "DELETE FROM sources WHERE id = $1"
+
+SQL_COUNT_CONTENT_ITEMS_FOR_SOURCE = (
+    "SELECT COUNT(*) FROM content_items WHERE source_id = $1"
+)
 
 SQL_TOPIC_SOURCES = """
     SELECT
@@ -159,6 +190,50 @@ async def list_sources_below(
     """Return sources with credibility_score < threshold, ascending (worst first)."""
     rows = await conn.fetch(SQL_LIST_SOURCES_BELOW, threshold)
     return [dict(r) for r in rows]
+
+
+async def update_source_health(
+    conn: asyncpg.Connection,
+    source_id: str,
+    health_status: str,
+    consecutive_failures: int,
+    health_error: Optional[str],
+    now: Any,
+) -> None:
+    """Write health check result. Called by scraper worker and API check-health endpoint."""
+    await conn.execute(
+        SQL_UPDATE_SOURCE_HEALTH,
+        source_id, health_status, consecutive_failures, health_error, now,
+    )
+
+
+async def get_source_for_health(
+    conn: asyncpg.Connection, source_id: str
+) -> dict[str, Any] | None:
+    row = await conn.fetchrow(SQL_GET_SOURCE_FOR_HEALTH, source_id)
+    return dict(row) if row else None
+
+
+async def update_source_fields(
+    conn: asyncpg.Connection,
+    source_id: str,
+    name: str | None,
+    url_or_handle: str | None,
+    now: Any,
+) -> None:
+    """Patch name and/or url_or_handle — None values are left unchanged."""
+    await conn.execute(SQL_UPDATE_SOURCE_FIELDS, source_id, name, url_or_handle, now)
+
+
+async def delete_source(conn: asyncpg.Connection, source_id: str) -> None:
+    await conn.execute(SQL_DELETE_SOURCE, source_id)
+
+
+async def count_content_items_for_source(
+    conn: asyncpg.Connection, source_id: str
+) -> int:
+    result = await conn.fetchval(SQL_COUNT_CONTENT_ITEMS_FOR_SOURCE, source_id)
+    return int(result or 0)
 
 
 async def list_topic_sources(

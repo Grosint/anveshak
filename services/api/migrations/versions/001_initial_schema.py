@@ -195,7 +195,7 @@ def upgrade() -> None:
             labels                  JSONB       NOT NULL DEFAULT '{}'::jsonb
         )
     """)
-    op.execute("CREATE INDEX idx_vision_results_asset ON vision_results(media_asset_id)")
+    op.execute("CREATE UNIQUE INDEX idx_vision_results_asset ON vision_results(media_asset_id)")
     op.execute("CREATE INDEX idx_vision_results_deepfake ON vision_results(deepfake_score DESC) WHERE deepfake_score IS NOT NULL")
 
     # ------------------------------------------------------------------

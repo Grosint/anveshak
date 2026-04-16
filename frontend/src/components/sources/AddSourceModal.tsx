@@ -35,8 +35,9 @@ export function AddSourceModal({ open, onClose, onSubmit }: AddSourceModalProps)
       await onSubmit({ name: name.trim(), url_or_handle: handle.trim(), platform, credibility_score: credibility })
       setName(''); setHandle(''); setPlatform('web'); setCredibility(50)
       onClose()
-    } catch {
-      setError('Failed to add source.')
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail ?? 'Failed to add source.')
     } finally {
       setSubmitting(false)
     }

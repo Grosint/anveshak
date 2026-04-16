@@ -1,16 +1,29 @@
 """Source management endpoints."""
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict
-import asyncpg
+from __future__ import annotations
+
 import uuid
 from datetime import datetime, UTC
-from ..db.pool import get_db
-from ..db import sources as sources_db
+from typing import Optional
+
+import asyncpg
+import httpx
+import structlog
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, ConfigDict
+
 from ..auth.jwt import get_current_user
+from ..db import sources as sources_db
+from ..db.pool import get_db
 
 router = APIRouter(prefix="/api/v1/sources", tags=["sources"])
+log = structlog.get_logger(__name__)
 
 _LABELS_JSON = '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'
+_BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
+_PAYWALL_PATTERNS = {"subscribe", "paywall", "premium content", "sign in to read", "create an account"}
 
 
 class CreateSourceRequest(BaseModel):
@@ -21,19 +34,102 @@ class CreateSourceRequest(BaseModel):
     credibility_score: float = 50.0
 
 
+# ---------------------------------------------------------------------------
+# Lightweight health probe — used at registration and manual re-check
+# ---------------------------------------------------------------------------
+
+async def _probe_rss(url: str) -> tuple[bool, Optional[str]]:
+    """Returns (ok, error_message). Hard check — RSS must return 200 + XML."""
+    try:
+        async with httpx.AsyncClient(
+            timeout=15, follow_redirects=True,
+            headers={"User-Agent": _BROWSER_UA},
+        ) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            ct = resp.headers.get("content-type", "")
+            if not any(k in ct for k in ("xml", "rss", "atom")):
+                # Some feeds serve as text/plain — also accept non-empty body starting with XML
+                body = resp.text.lstrip()
+                if not body.startswith("<?xml") and not body.startswith("<rss") and not body.startswith("<feed"):
+                    return False, f"URL returned content-type '{ct}' — does not look like an RSS/Atom feed"
+            return True, None
+    except httpx.HTTPStatusError as exc:
+        return False, f"HTTP {exc.response.status_code}"
+    except Exception as exc:
+        return False, str(exc)
+
+
+async def _probe_web(url: str) -> tuple[str, Optional[str]]:
+    """Returns (health_status, error_message). Soft check — warns but never blocks."""
+    try:
+        async with httpx.AsyncClient(
+            timeout=15, follow_redirects=True,
+            headers={"User-Agent": _BROWSER_UA},
+        ) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            text = resp.text.lower()
+            if any(p in text for p in _PAYWALL_PATTERNS):
+                return "degraded", "Possible paywall detected — content may be incomplete"
+            if len(resp.text) < 200:
+                return "degraded", f"Response too short ({len(resp.text)} chars) — may be blocked"
+            return "healthy", None
+    except httpx.HTTPStatusError as exc:
+        return "degraded", f"HTTP {exc.response.status_code}"
+    except Exception as exc:
+        return "degraded", str(exc)
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_source(
     req: CreateSourceRequest,
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
+    initial_health = "unverified"
+    health_error: Optional[str] = None
+    warning: Optional[str] = None
+
+    if req.platform == "rss":
+        ok, err = await _probe_rss(req.url_or_handle)
+        if not ok:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"RSS feed not reachable: {err}",
+            )
+        initial_health = "healthy"
+
+    elif req.platform == "web":
+        health_status, err = await _probe_web(req.url_or_handle)
+        initial_health = health_status
+        if err:
+            health_error = err
+            warning = err
+
     source_id = str(uuid.uuid4())
     now = datetime.now(UTC)
     await sources_db.insert_source(
         db, source_id, req.name, req.url_or_handle, req.platform,
         req.credibility_score, now, _LABELS_JSON,
     )
-    return {"id": source_id, "name": req.name}
+    # Write initial health status
+    await sources_db.update_source_health(db, source_id, initial_health, 0, health_error, now)
+
+    log.info(
+        "sources.created",
+        source_id=source_id,
+        platform=req.platform,
+        health=initial_health,
+    )
+    result: dict = {"id": source_id, "name": req.name, "health_status": initial_health}
+    if warning:
+        result["warning"] = warning
+    return result
 
 
 @router.get("")
@@ -45,6 +141,55 @@ async def list_sources(
     if credibility_below is not None:
         return await sources_db.list_sources_below(db, credibility_below)
     return await sources_db.list_sources(db)
+
+
+@router.post("/{source_id}/check-health", status_code=status.HTTP_200_OK)
+async def check_source_health(
+    source_id: str,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Trigger an immediate health probe for one source. Updates health_status in DB."""
+    source = await sources_db.get_source_for_health(db, source_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="Source not found")
+
+    platform: str = source["platform"]
+    url: str = source["url_or_handle"]
+    prev_failures: int = source["consecutive_failures"]
+    now = datetime.now(UTC)
+
+    if platform == "rss":
+        ok, err = await _probe_rss(url)
+        if ok:
+            health_status, failures, health_error = "healthy", 0, None
+        else:
+            failures = prev_failures + 1
+            health_status = "down" if failures >= 3 else "degraded"
+            health_error = err
+
+    elif platform == "web":
+        health_status, err = await _probe_web(url)
+        if health_status == "healthy":
+            failures, health_error = 0, None
+        else:
+            failures = prev_failures + 1
+            health_status = "down" if failures >= 3 else "degraded"
+            health_error = err
+
+    else:
+        # telegram/x/reddit — not HTTP-probeable from API; mark as unverified
+        health_status, failures, health_error = "unverified", 0, None
+
+    await sources_db.update_source_health(db, source_id, health_status, failures, health_error, now)
+    log.info("sources.health_checked", source_id=source_id, status=health_status)
+    return {
+        "source_id": source_id,
+        "health_status": health_status,
+        "consecutive_failures": failures,
+        "health_error": health_error,
+        "checked_at": now.isoformat(),
+    }
 
 
 @router.patch("/{source_id}/credibility")
@@ -93,6 +238,50 @@ async def get_report_warnings_count(
         raise HTTPException(status_code=404, detail="Source not found")
     count = await sources_db.count_report_warnings(db, source_id)
     return {"source_id": source_id, "warning_count": count}
+
+
+class UpdateSourceRequest(BaseModel):
+    model_config = ConfigDict(strict=True)
+    name: Optional[str] = None
+    url_or_handle: Optional[str] = None
+
+
+@router.patch("/{source_id}")
+async def update_source(
+    source_id: str,
+    req: UpdateSourceRequest,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Update source name and/or URL. Both fields are optional (patch semantics)."""
+    if not await sources_db.source_exists(db, source_id):
+        raise HTTPException(status_code=404, detail="Source not found")
+    if req.name is None and req.url_or_handle is None:
+        raise HTTPException(status_code=422, detail="At least one field must be provided")
+    now = datetime.now(UTC)
+    await sources_db.update_source_fields(db, source_id, req.name, req.url_or_handle, now)
+    log.info("sources.updated", source_id=source_id)
+    return {"source_id": source_id, "name": req.name, "url_or_handle": req.url_or_handle}
+
+
+@router.delete("/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_source(
+    source_id: str,
+    force: bool = False,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Delete a source. Returns 409 if content items exist unless force=true."""
+    if not await sources_db.source_exists(db, source_id):
+        raise HTTPException(status_code=404, detail="Source not found")
+    content_count = await sources_db.count_content_items_for_source(db, source_id)
+    if content_count > 0 and not force:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Source has {content_count} content item(s). Use force=true to delete anyway.",
+        )
+    await sources_db.delete_source(db, source_id)
+    log.info("sources.deleted", source_id=source_id, content_items_removed=content_count)
 
 
 @router.get("/{source_id}/audit-log")

@@ -13,6 +13,7 @@ from typing import Any, Optional
 from urllib.parse import urljoin, urlparse
 
 import arq
+from arq import cron
 import asyncpg
 import structlog
 from arq.connections import RedisSettings
@@ -20,6 +21,8 @@ from arq.connections import RedisSettings
 from anveshak.media.downloader import download_media_asset
 
 from .fetch import fetch_url
+from .health import run_all_health_checks
+from .rss import fetch_rss_items
 from .metrics import scraper_items_fetched_total, scraper_fetch_errors_total, scraper_fetch_duration_seconds, arq_jobs_failed_total
 from .normalise import compute_content_hash
 from .settings import settings
@@ -36,6 +39,12 @@ SQL_GET_WEB_SOURCES = """
     SELECT s.id, s.url_or_handle, s.credibility_score
     FROM sources s
     WHERE s.is_active = TRUE AND s.platform = 'web'
+"""
+
+SQL_GET_RSS_SOURCES = """
+    SELECT s.id, s.url_or_handle, s.credibility_score
+    FROM sources s
+    WHERE s.is_active = TRUE AND s.platform = 'rss'
 """
 
 SQL_INSERT_CONTENT = """
@@ -190,6 +199,85 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
     return counter["inserted"]
 
 
+async def poll_rss_sources(ctx: dict, topic_id: str) -> int:
+    """Poll all active RSS sources and ingest new entries for a topic.
+
+    Each feed entry is deduplicated by content_hash (SHA-256 of normalised text).
+    Full article text is fetched when the feed summary is too short (< rss_full_text_min_chars).
+    Returns the number of new content_items inserted.
+    """
+    db_pool: asyncpg.Pool = ctx["db_pool"]
+
+    async with db_pool.acquire() as conn:
+        topic = await conn.fetchrow(SQL_GET_TOPIC, topic_id)
+        if not topic:
+            log.warning("rss.topic_not_found", topic_id=topic_id)
+            return 0
+        sources = await conn.fetch(SQL_GET_RSS_SOURCES)
+
+    if not sources:
+        log.debug("rss.no_sources", topic_id=topic_id)
+        return 0
+
+    semaphore = asyncio.Semaphore(settings.scraper_concurrency)
+    counter: dict[str, int] = {"inserted": 0}
+
+    async def _process_feed(source: asyncpg.Record) -> None:
+        async with semaphore:
+            feed_url: str = source["url_or_handle"]
+            try:
+                items = await fetch_rss_items(feed_url)
+                for item in items:
+                    try:
+                        content_hash = compute_content_hash(item.raw_text)
+                        now = datetime.now(UTC)
+
+                        async with db_pool.acquire() as conn:
+                            result = await conn.fetchrow(
+                                SQL_INSERT_CONTENT,
+                                str(uuid.uuid4()),
+                                topic_id,
+                                source["id"],
+                                item.raw_text,      # raw_text
+                                item.raw_text,      # clean_text
+                                "en",               # language — updated by analyst NLP
+                                content_hash,
+                                item.url,
+                                item.published_at,  # captured_at = article publish time
+                                float(source["credibility_score"]),
+                                now,                # created_at
+                                now,                # updated_at
+                                _LABELS_JSON,
+                            )
+
+                        if result is not None:
+                            counter["inserted"] += 1
+                            scraper_items_fetched_total.labels(
+                                topic_id=topic_id, source_platform="rss"
+                            ).inc()
+                            log.debug(
+                                "rss.item_inserted",
+                                topic_id=topic_id,
+                                url=item.url,
+                                title=item.title[:60],
+                            )
+                    except Exception as exc:
+                        log.warning("rss.item_failed", url=item.url, error=str(exc))
+
+            except Exception as exc:
+                scraper_fetch_errors_total.labels(error_type=type(exc).__name__).inc()
+                log.warning("rss.feed_failed", feed_url=feed_url, error=str(exc))
+
+    await asyncio.gather(*[_process_feed(s) for s in sources])
+    log.info(
+        "rss.job_done",
+        topic_id=topic_id,
+        total_feeds=len(sources),
+        inserted=counter["inserted"],
+    )
+    return counter["inserted"]
+
+
 async def _download_page_media(
     page_url: str,
     topic_id: str,
@@ -246,7 +334,7 @@ async def _download_page_media(
                 row = await conn.fetchrow(SQL_GET_MEDIA_ASSET_BY_HASH, dl.content_hash)
 
             if row:
-                await redis.enqueue_job("run_vision_analysis", row["id"])
+                await redis.enqueue_job("run_vision_analysis", row["id"], _queue_name="arq:vision")
                 log.debug(
                     "scraper.vision_dispatched",
                     media_asset_id=row["id"],
@@ -260,6 +348,19 @@ async def _download_page_media(
 # ---------------------------------------------------------------------------
 # ARQ worker lifecycle
 # ---------------------------------------------------------------------------
+
+async def check_all_source_health(ctx: dict) -> int:
+    """Daily health check for all active web and RSS sources.
+
+    Updates health_status, consecutive_failures, health_error, last_checked_at
+    for every active source. Staggered 1s between checks to avoid hammering.
+    Returns count of sources checked.
+    """
+    db_pool: asyncpg.Pool = ctx["db_pool"]
+    checked = await run_all_health_checks(db_pool)
+    log.info("health.daily_check_done", sources_checked=checked)
+    return checked
+
 
 async def on_startup(ctx: dict) -> None:
     ctx["db_pool"] = await asyncpg.create_pool(
@@ -284,9 +385,17 @@ async def on_job_result(ctx: dict, result) -> None:  # type: ignore[type-arg]
 class WorkerSettings:
     """Entry point: arq services.scraper.jobs.WorkerSettings"""
 
+    queue_name = "arq:scraper"   # Isolated queue — avoids cross-worker job theft
+
     functions = [
         # 8C.5 — scrape_topic: ON CONFLICT DO NOTHING makes it safe to retry
         arq.func(scrape_topic, max_tries=2),
+        arq.func(poll_rss_sources, max_tries=2),
+        arq.func(check_all_source_health, max_tries=1),
+    ]
+    cron_jobs = [
+        # Daily health check at 02:00 UTC — low traffic window
+        cron(check_all_source_health, hour=2, minute=0),
     ]
     on_startup = on_startup
     on_shutdown = on_shutdown

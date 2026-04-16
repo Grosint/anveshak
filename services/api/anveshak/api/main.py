@@ -3,6 +3,9 @@ import asyncio
 from contextlib import asynccontextmanager
 import structlog
 import httpx
+from anveshak.logging import configure_logging
+
+configure_logging("api")
 from arq import create_pool as arq_create_pool
 from arq.connections import RedisSettings
 from fastapi import FastAPI
@@ -10,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import make_asgi_app
 
 from .db.pool import create_pool, close_pool
+from .metrics import REGISTRY as API_REGISTRY
 from .middleware.rate_limit import RateLimitMiddleware
 from .middleware.security import SecurityHeadersMiddleware
 from .signal_delivery import signal_delivery_loop
@@ -17,6 +21,7 @@ from .settings import settings
 from .routes import health, topics, sources, signals, auth, content
 from .routes.vision import router as vision_router, content_vision_router
 from .routes.reports import router as reports_router
+from .routes.system import router as system_router
 
 log = structlog.get_logger(__name__)
 
@@ -97,7 +102,9 @@ app.include_router(content.router)
 app.include_router(vision_router)           # Phase 4: vision analysis + pHash search
 app.include_router(content_vision_router)   # Phase 4: GET /api/v1/content/{id}/vision
 app.include_router(reports_router)          # Phase 5: report generation + GeoJSON
+app.include_router(system_router)           # Pipeline health metrics for make validate
 
-# Prometheus metrics endpoint
-metrics_app = make_asgi_app()
+# Prometheus metrics endpoint — uses isolated registry (API_REGISTRY) so custom
+# api_* metrics are exposed alongside default process metrics.
+metrics_app = make_asgi_app(registry=API_REGISTRY)
 app.mount("/metrics", metrics_app)

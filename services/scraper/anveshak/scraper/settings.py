@@ -23,6 +23,10 @@ class ScraperSettings(BaseSettings):
     # Prometheus metrics HTTP server port (8A.17)
     metrics_port: int = 8001  # matches SCRAPER_PORT in compose.yml
 
+    # RSS feed settings
+    rss_max_items_per_fetch: int = 20       # cap items per feed per poll cycle
+    rss_full_text_min_chars: int = 200      # fetch full article if summary shorter than this
+
     log_level: str = "INFO"
     model_config = {"env_prefix": "", "case_sensitive": False}
 

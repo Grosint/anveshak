@@ -27,6 +27,7 @@ dependencies = [
     "structlog>=24.1",
     "prometheus-client>=0.20",
     "httpx>=0.27",
+    "python-multipart>=0.0.9",
 ]
 
 [tool.hatch.build.targets.wheel]

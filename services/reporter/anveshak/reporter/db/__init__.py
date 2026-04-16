@@ -96,6 +96,13 @@ SQL_UPDATE_JOB_STATUS = """
     WHERE id = $1
 """
 
+SQL_SET_REPORT_FAILED = """
+    UPDATE reports
+    SET generation_error = $2,
+        updated_at       = NOW()
+    WHERE id = $1
+"""
+
 SQL_LIST_TOPIC_REPORTS = """
     SELECT id, topic_id, report_type, generated_at, confidence_score,
            content_item_count, created_at
@@ -152,12 +159,14 @@ async def fetch_rag_chunks(
          AND credibility_score_at_capture >= $2
          ORDER BY embedding <-> $3 LIMIT $4
     """
+    # asyncpg does not natively encode Python lists as pgvector — must stringify.
+    vec_str = "[" + ",".join(str(v) for v in query_embedding) + "]"
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             SQL_FETCH_RAG_CHUNKS,
             topic_id,
             credibility_min,
-            query_embedding,
+            vec_str,
             top_k,
         )
     return [dict(r) for r in rows]
@@ -297,3 +306,14 @@ async def update_job_status(
     """Update analysis_jobs row status."""
     async with pool.acquire() as conn:
         await conn.execute(SQL_UPDATE_JOB_STATUS, job_id, status, error)
+
+
+async def set_report_failed(
+    pool: asyncpg.Pool,
+    report_id: str,
+    error_message: str,
+) -> None:
+    """Write a failure reason into reports.generation_error so the API can surface it immediately."""
+    async with pool.acquire() as conn:
+        await conn.execute(SQL_SET_REPORT_FAILED, report_id, error_message)
+    log.warning("reporter.report_failed", report_id=report_id, error=error_message)

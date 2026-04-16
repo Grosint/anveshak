@@ -2,6 +2,9 @@
 import asyncio
 import structlog
 import asyncpg
+from anveshak.logging import configure_logging
+
+configure_logging("analyst")
 from prometheus_client import start_http_server
 from .metrics import REGISTRY as ANALYST_REGISTRY
 from .clustering import run_clustering

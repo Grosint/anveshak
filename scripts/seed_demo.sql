@@ -19,7 +19,7 @@ INSERT INTO users (id, username, password_hash, role, created_at, updated_at, la
 VALUES (
     'a0000000-0000-0000-0000-000000000001',
     'demo@anveshak.local',
-    '$2b$12$BacqmsqsVUME4YeG01IpwOX7YvoBlMrPj8KP.iVFCe44lP3lf5jv6',
+    '$2b$12$exK0vBQZHOMCPjg37GTJZ.AtYqz1NI5SXwMLrWjnPvP2IqZMZKaei',
     'analyst',
     NOW(),
     NOW(),

@@ -47,7 +47,7 @@ async def create_topic(
     )
     try:
         redis = await arq_create_pool(RedisSettings.from_dsn(settings.redis_url))
-        await redis.enqueue_job("backfill_topic_job", topic_id)
+        await redis.enqueue_job("backfill_topic_job", topic_id, _queue_name="arq:analyst")
     except Exception as exc:
         import structlog
         structlog.get_logger(__name__).warning(

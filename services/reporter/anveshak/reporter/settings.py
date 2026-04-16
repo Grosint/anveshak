@@ -36,6 +36,7 @@ class ReporterSettings(BaseSettings):
     geocoder_fuzzy_threshold: int = 2
 
     port: int = 8005
+    metrics_port: int = 8006  # Prometheus HTTP server for the ARQ reporter worker
     log_level: str = "INFO"
     model_config = {"env_prefix": "", "case_sensitive": False}
 

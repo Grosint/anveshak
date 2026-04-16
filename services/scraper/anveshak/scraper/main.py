@@ -2,6 +2,9 @@
 import asyncio
 import structlog
 import asyncpg
+from anveshak.logging import configure_logging
+
+configure_logging("scraper")
 from arq import create_pool as arq_create_pool
 from arq.connections import RedisSettings
 from prometheus_client import start_http_server
@@ -36,14 +39,15 @@ async def main():
 
 
 async def _enqueue_active_topics(pool: asyncpg.Pool, redis) -> None:
-    """Enqueue a scrape_topic ARQ job for every active topic."""
+    """Enqueue scrape_topic and poll_rss_sources ARQ jobs for every active topic."""
     async with pool.acquire() as conn:
         topics = await conn.fetch(
             "SELECT id, name FROM topics WHERE status = 'active'"
         )
     log.info("scraper.enqueuing", count=len(topics))
     for topic in topics:
-        await redis.enqueue_job("scrape_topic", topic["id"])
+        await redis.enqueue_job("scrape_topic", topic["id"], _queue_name="arq:scraper")
+        await redis.enqueue_job("poll_rss_sources", topic["id"], _queue_name="arq:scraper")
         log.debug("scraper.enqueued", topic_id=topic["id"], name=topic["name"])
 
 

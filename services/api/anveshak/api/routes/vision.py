@@ -83,6 +83,12 @@ async def analyse_image(
     storage_path: str = storage_info["storage_path"]
     asset_type: str = storage_info["asset_type"]
 
+    # Resolve content_item_id — required FK on media_assets.
+    # For ad-hoc uploads (no existing content_item) create a stub so the FK is satisfied.
+    resolved_content_item_id = content_item_id or await vision_db.get_or_create_stub_content_item(
+        db, content_hash, file.filename or "upload",
+    )
+
     # Upsert media_assets row with ON CONFLICT(content_hash) DO NOTHING (criteria 4.34 dedup)
     existing = await vision_db.get_media_asset_by_hash(db, content_hash)
     if existing:
@@ -90,14 +96,14 @@ async def analyse_image(
     else:
         new_id = str(uuid.uuid4())
         row = await vision_db.insert_media_asset(
-            db, new_id, content_item_id, asset_type, storage_path, content_hash,
+            db, new_id, resolved_content_item_id, asset_type, storage_path, content_hash,
         )
         # RETURNING id → None if conflict (shouldn't happen, but guard anyway)
         media_asset_id = row["id"] if row else new_id
 
     # Dispatch ARQ vision job (CLAUDE.md rule 5: never call ML inline)
     arq_pool: ArqRedis = get_arq_pool(request)
-    job = await arq_pool.enqueue_job("run_vision_analysis", media_asset_id)
+    job = await arq_pool.enqueue_job("run_vision_analysis", media_asset_id, _queue_name="arq:vision")
 
     log.info(
         "vision_api.job_dispatched",
@@ -121,30 +127,42 @@ async def analyse_image(
 async def get_vision_job(
     job_id: str,
     request: Request,
-    db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
     """Poll vision job status. Returns results when complete.
 
     Criteria 4.29: returns job status + results when complete.
-    Queries analysis_jobs (PostgreSQL) as authoritative source.
+    Vision jobs are ARQ (Redis-backed); query via arq Job.result().
     Client should poll every 2–5s until status != 'queued'/'in_progress'.
     """
-    row = await db.fetchrow(
-        "SELECT id, job_type, status, result, error, created_at, updated_at "
-        "FROM analysis_jobs WHERE id = $1",
-        job_id,
-    )
-    if row is None:
+    from arq.jobs import Job, JobStatus
+
+    arq_pool: ArqRedis = get_arq_pool(request)
+    job = Job(job_id, arq_pool, _queue_name="arq:vision")
+
+    status = await job.status()
+    if status == JobStatus.not_found:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    result = None
+    error = None
+
+    if status == JobStatus.complete:
+        try:
+            info = await job.result_info()
+            if info:
+                if info.success:
+                    result = info.result
+                else:
+                    error = str(info.result)
+        except Exception:
+            pass
+
     return {
-        "job_id": str(row["id"]),
-        "status": row["status"],
-        "result": (json.loads(row["result"]) if isinstance(row["result"], str) else row["result"]) if row["result"] else None,
-        "error": row["error"],
-        "created_at": row["created_at"].isoformat() if row["created_at"] else None,
-        "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
+        "job_id": job_id,
+        "status": status.value,
+        "result": result,
+        "error": error,
     }
 
 

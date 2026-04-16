@@ -422,6 +422,7 @@ class WorkerSettings:
     on_shutdown = on_shutdown
     on_job_result = on_job_result
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
+    queue_name = "arq:vision"  # dedicated queue — avoids consuming scraper/social jobs
     max_jobs = 2     # vision is CPU-heavy — limit concurrency to avoid OOM
     job_timeout = 300  # 5 minutes max per job (handles slow CPU deepfake)
     keep_result = 3600  # 8C.6 — keep results 1h for UI polling

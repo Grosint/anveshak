@@ -1,10 +1,12 @@
-# Grafana datasource provisioning — Prometheus (8B.1)
+# Grafana datasource provisioning — Prometheus + Loki
 # Auto-provisioned on container startup — no manual configuration required.
 apiVersion: 1
 
 datasources:
+  # Primary metrics datasource — Prometheus time-series DB
   - name: Prometheus
     type: prometheus
+    uid: prometheus
     access: proxy
     url: http://prometheus:9090
     isDefault: true
@@ -12,3 +14,21 @@ datasources:
     jsonData:
       timeInterval: "15s"
       httpMethod: POST
+      exemplarTraceIdDestinations: []
+
+  # Log aggregation datasource — Loki via Promtail
+  - name: Loki
+    type: loki
+    uid: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: false
+    editable: false
+    jsonData:
+      maxLines: 1000
+      # Derived fields: link content_hash in logs to Prometheus metric labels
+      derivedFields:
+        - name: content_hash
+          matcherRegex: '"content_hash":"([a-f0-9]{64})"'
+          url: ""
+          urlDisplayLabel: "content_hash"

@@ -13,6 +13,9 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, UTC
 import structlog
+from anveshak.logging import configure_logging
+
+configure_logging("social")
 import asyncpg
 from arq import create_pool
 from arq.connections import RedisSettings

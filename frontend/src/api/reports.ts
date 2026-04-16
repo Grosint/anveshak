@@ -19,6 +19,7 @@ export interface Report {
   report_type: ReportType
   generated_at: string | null
   generation_status: ReportStatus
+  generation_error: string | null
   content_md: string | null
   confidence_score: number | null
   content_item_count: number | null

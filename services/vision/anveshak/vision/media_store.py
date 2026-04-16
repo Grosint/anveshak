@@ -59,8 +59,10 @@ def compute_phash(image_bytes: bytes) -> Optional[int]:
 
         img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         h = imagehash.phash(img)
-        # imagehash returns an ImageHash object; convert to Python int
-        return int(str(h), 16)
+        # imagehash returns an ImageHash object; convert to Python int.
+        # Cast to signed int64 so it fits PostgreSQL BIGINT (max 2^63-1).
+        unsigned = int(str(h), 16)
+        return unsigned - (1 << 64) if unsigned >= (1 << 63) else unsigned
     except Exception as exc:
         log.warning("vision.phash.failed", error=str(exc))
         return None

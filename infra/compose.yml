@@ -149,6 +149,37 @@ services:
     networks:
       - anveshak-net
 
+  # ARQ worker for scrape_topic, poll_rss_sources, check_all_source_health jobs
+  scraper-worker:
+    build:
+      context: ..
+      dockerfile: services/scraper/Dockerfile
+    restart: unless-stopped
+    mem_limit: 1g
+    environment:
+      <<: *common-env
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+      SCRAPER_CONCURRENCY: ${SCRAPER_CONCURRENCY:-4}
+      SCRAPER_REQUEST_TIMEOUT_S: ${SCRAPER_REQUEST_TIMEOUT_S:-30}
+      TOR_PROXY_URL: ${TOR_PROXY_URL:-}
+      HOME: /tmp
+    volumes:
+      - media_store:/app/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import arq; import anveshak.scraper.jobs'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - anveshak-net
+    command: ["python", "-m", "arq", "anveshak.scraper.jobs.WorkerSettings"]
+
   social:
     build:
       context: ..
@@ -236,6 +267,45 @@ services:
     networks:
       - anveshak-net
 
+  # ARQ worker for generate_report jobs — separate process from FastAPI
+  # Handles RAG retrieval, Ollama LLM calls, geocoding, and DB writes
+  reporter-worker:
+    build:
+      context: ..
+      dockerfile: services/reporter/Dockerfile
+    restart: unless-stopped
+    mem_limit: 1g
+    environment:
+      <<: *common-env
+      REPORT_OUTPUT_DIR: /app/reports
+      REPORT_TEMPLATE_DIR: /app/templates
+      HOME: /tmp
+      HF_HOME: /tmp/hf_cache
+      TRANSFORMERS_CACHE: /tmp/hf_cache
+      OLLAMA_REPORT_MODEL: ${OLLAMA_REPORT_MODEL:-llama3.2:3b}
+      OLLAMA_REPORT_TIMEOUT_S: ${OLLAMA_REPORT_TIMEOUT_S:-540}
+      METRICS_PORT: 8006
+    volumes:
+      - reporter_output:/app/reports
+    ports:
+      - "8006:8006"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import arq; import anveshak.reporter.worker'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - anveshak-net
+    command: ["python", "-m", "arq", "anveshak.reporter.worker.WorkerSettings"]
+
   # ---------------------------------------------------------------------------
   # Frontend
   # ---------------------------------------------------------------------------
@@ -264,6 +334,90 @@ services:
   # ---------------------------------------------------------------------------
   # Observability
   # ---------------------------------------------------------------------------
+
+  # ---------------------------------------------------------------------------
+  # Log aggregation: Loki (backend) + Promtail (shipper)
+  # ---------------------------------------------------------------------------
+
+  loki:
+    image: grafana/loki:3.0.0
+    restart: unless-stopped
+    mem_limit: 512m
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./configs/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3100/ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - anveshak-net
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    restart: unless-stopped
+    mem_limit: 128m
+    command: ["-config.file=/etc/promtail/promtail.yml"]
+    volumes:
+      - ./configs/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      # Read-only Docker socket — Promtail reads container logs, never writes
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Host log positions file (persists scrape offsets across restarts)
+      - promtail_positions:/tmp
+    depends_on:
+      loki:
+        condition: service_healthy
+    networks:
+      - anveshak-net
+
+  # ---------------------------------------------------------------------------
+  # Database/cache exporters for Prometheus
+  # ---------------------------------------------------------------------------
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    restart: unless-stopped
+    mem_limit: 64m
+    environment:
+      DATA_SOURCE_NAME: "postgresql://anveshak:${POSTGRES_PASSWORD}@postgres:5432/anveshak?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9187/metrics | head -1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - anveshak-net
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    restart: unless-stopped
+    mem_limit: 64m
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    ports:
+      - "9121:9121"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9121/metrics | head -1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - anveshak-net
 
   prometheus:
     image: prom/prometheus:latest
@@ -299,6 +453,11 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_INSTALL_PLUGINS: ${GRAFANA_PLUGINS:-}
+      # Enable unified alerting (Grafana managed alerts)
+      GF_ALERTING_ENABLED: "false"
+      GF_UNIFIED_ALERTING_ENABLED: "true"
+      # Feature toggles for Loki log panels
+      GF_FEATURE_TOGGLES_ENABLE: "lokiLive"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./configs/grafana/datasources:/etc/grafana/provisioning/datasources:ro
@@ -308,6 +467,8 @@ services:
       - "3001:3000"
     depends_on:
       prometheus:
+        condition: service_healthy
+      loki:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
@@ -344,4 +505,10 @@ volumes:
   prometheus_data:
     driver: local
   grafana_data:
+    driver: local
+  media_store:
+    driver: local
+  loki_data:
+    driver: local
+  promtail_positions:
     driver: local

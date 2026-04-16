@@ -12,7 +12,7 @@ from typing import Optional
 import asyncpg
 import structlog
 
-from .settings import settings
+from ..settings import settings
 
 log = structlog.get_logger(__name__)
 

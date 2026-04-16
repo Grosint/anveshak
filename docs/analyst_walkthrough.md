@@ -29,6 +29,7 @@ make seed-demo
 - You land on the **Topics Dashboard** (`/topics`)
 
 You'll see 3 pre-seeded topics from Operation Kargil Watch:
+
 1. *China-Pakistan Military Cooperation* (signal threshold: 3)
 2. *UAV Activity Near Northern Borders* (threshold: 2)
 3. *Disinformation: IAF Operations* (threshold: 2)

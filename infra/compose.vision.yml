@@ -35,7 +35,7 @@ services:
 
   vision:
     build:
-      context: ../..
+      context: ..
       dockerfile: services/vision/Dockerfile
     restart: unless-stopped
     mem_limit: 4g
@@ -50,15 +50,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    # GPU resource reservation — only active when nvidia runtime is available.
-    # Omit entirely for CPU-only deployments.
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: ${VISION_GPU_COUNT:-1}
-              capabilities: [gpu]
+    # GPU: use compose.vision.gpu.yml overlay (adds nvidia device reservation).
+    # CPU / macOS: no deploy block needed — onnxruntime auto-selects CPUExecutionProvider.
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8003/health || exit 1"]
       interval: 30s
@@ -72,7 +65,7 @@ services:
   # Separate process from FastAPI so uploads don't block ML inference
   vision-worker:
     build:
-      context: ../..
+      context: ..
       dockerfile: services/vision/Dockerfile
     restart: unless-stopped
     mem_limit: 6g
@@ -86,13 +79,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: ${VISION_GPU_COUNT:-1}
-              capabilities: [gpu]
+    # ARQ workers have no HTTP endpoint — check the process is alive instead
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import arq; import anveshak.vision.jobs'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - anveshak-net
     command: ["python", "-m", "arq", "anveshak.vision.jobs.WorkerSettings"]

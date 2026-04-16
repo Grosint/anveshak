@@ -7,24 +7,28 @@ import { YoloCanvas } from '../components/vision/YoloCanvas'
 import { ExifTable } from '../components/vision/ExifTable'
 import { Spinner } from '../components/ui/Spinner'
 import { Badge } from '../components/ui/Badge'
+import { Modal } from '../components/ui/Modal'
+import { Button } from '../components/ui/Button'
 
 type Tab = 'deepfake' | 'yolo' | 'exif' | 'reverse'
 
 export default function ImageAnalysis() {
-  const [jobId, setJobId]         = useState<string | null>(null)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [uploading, setUploading]  = useState(false)
-  const [uploadErr, setUploadErr]  = useState('')
-  const [activeTab, setActiveTab]  = useState<Tab>('deepfake')
+  const [jobId, setJobId]             = useState<string | null>(null)
+  const [previewUrl, setPreviewUrl]   = useState<string | null>(null)
+  const [uploading, setUploading]     = useState(false)
+  const [errorDialog, setErrorDialog] = useState<{ title: string; message: string } | null>(null)
+  const [activeTab, setActiveTab]     = useState<Tab>('deepfake')
   const [reverseHash, setReverseHash] = useState('')
   const fileRef = useRef<File | null>(null)
 
-  // Poll job until complete
+  // Poll job until complete or errored
   const { data: job } = useQuery<VisionJob>({
     queryKey: ['vision-job', jobId],
     queryFn: () => visionApi.pollJob(jobId!),
     enabled: !!jobId,
+    retry: false,  // don't retry on 404 — job simply doesn't exist
     refetchInterval: (query) => {
+      if (query.state.error) return false          // stop on any HTTP error (404, 503…)
       const status = query.state.data?.status
       if (!status || status === 'queued' || status === 'in_progress') return 2000
       return false
@@ -40,7 +44,7 @@ export default function ImageAnalysis() {
   })
 
   async function handleFile(file: File) {
-    setUploadErr('')
+    setErrorDialog(null)
     setJobId(null)
     fileRef.current = file
 
@@ -53,8 +57,23 @@ export default function ImageAnalysis() {
       const res = await visionApi.analyse(file)
       setJobId(res.job_id)
       setActiveTab('deepfake')
-    } catch {
-      setUploadErr('Upload failed. Is the vision service running?')
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number; data?: { detail?: string } } })?.response?.status
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+
+      let message: string
+      if (status === 413) {
+        message = 'The file is too large. Maximum upload size is 100 MB.'
+      } else if (status === 503) {
+        message = 'The vision service is unavailable. Ensure the vision container is running and healthy.'
+      } else if (status === 400) {
+        message = detail ?? 'Invalid upload — check that the file is a supported image or video format.'
+      } else if (!status) {
+        message = 'Network error — check your connection and that the API is reachable.'
+      } else {
+        message = detail ?? `Upload failed with status ${status}.`
+      }
+      setErrorDialog({ title: 'Upload failed', message })
     } finally {
       setUploading(false)
     }
@@ -74,6 +93,15 @@ export default function ImageAnalysis() {
 
   return (
     <div className="h-full flex flex-col">
+      <Modal
+        open={errorDialog !== null}
+        onClose={() => setErrorDialog(null)}
+        title={errorDialog?.title ?? 'Error'}
+        footer={<Button onClick={() => setErrorDialog(null)}>Close</Button>}
+      >
+        <p className="text-sm text-text-secondary">{errorDialog?.message}</p>
+      </Modal>
+
       {/* Header */}
       <div className="px-6 pt-6 pb-4 border-b border-anveshak-border">
         <h1 className="text-xl font-semibold text-text-primary">Image Analysis</h1>
@@ -86,10 +114,6 @@ export default function ImageAnalysis() {
         <div className="max-w-2xl space-y-6">
           {/* Drop zone */}
           <DropZone onFile={handleFile} disabled={uploading} />
-
-          {uploadErr && (
-            <p role="alert" className="text-signal-high text-sm">{uploadErr}</p>
-          )}
 
           {/* Upload / processing status */}
           {uploading && (

@@ -79,7 +79,7 @@ async def create_report(
     arq_job_id: Optional[str] = None
     try:
         arq_pool = await arq_create_pool(RedisSettings.from_dsn(settings.redis_url))
-        job = await arq_pool.enqueue_job("generate_report", report_id)
+        job = await arq_pool.enqueue_job("generate_report", report_id, _queue_name="arq:reporter")
         arq_job_id = job.job_id if job else None
         await arq_pool.close()
     except Exception as exc:
@@ -112,7 +112,12 @@ async def get_report(
     row = await reports_db.fetch_report(db, report_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Report not found")
-    row["generation_status"] = "complete" if row.get("generated_at") else "queued"
+    if row.get("generated_at"):
+        row["generation_status"] = "complete"
+    elif row.get("generation_error"):
+        row["generation_status"] = "failed"
+    else:
+        row["generation_status"] = "queued"
     return row
 
 

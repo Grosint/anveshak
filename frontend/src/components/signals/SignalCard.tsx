@@ -39,7 +39,7 @@ export function SignalCard({ signal, onAcknowledge, onDismiss, isActioning }: Si
 
   return (
     <article
-      className={`bg-anveshak-card border rounded-lg p-4 transition-all animate-fade-in cursor-pointer hover:border-anveshak-accent/50 ${
+      className={`h-full bg-anveshak-card border rounded-lg p-4 transition-all animate-fade-in cursor-pointer hover:border-anveshak-accent/50 ${
         isNew
           ? 'border-anveshak-accent/60 shadow-[0_0_0_1px_rgba(59,130,246,0.2)]'
           : 'border-anveshak-border'

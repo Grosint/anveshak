@@ -2,13 +2,27 @@ import api from './client'
 
 export type Platform = 'web' | 'telegram' | 'twitter' | 'reddit' | 'bluesky' | 'rss' | 'upload'
 
+export type HealthStatus = 'healthy' | 'degraded' | 'down' | 'unverified'
+
 export interface Source {
   id: string
   name: string
+  url_or_handle: string
   platform: Platform
   credibility_score: number
   is_active: boolean
+  health_status: HealthStatus
+  consecutive_failures: number
+  health_error: string | null
   last_checked_at: string | null
+}
+
+export interface HealthCheckResult {
+  source_id: string
+  health_status: HealthStatus
+  consecutive_failures: number
+  health_error: string | null
+  checked_at: string
 }
 
 export interface AuditEntry {
@@ -26,6 +40,11 @@ export interface CreateSourcePayload {
   url_or_handle: string
   platform: Platform
   credibility_score?: number
+}
+
+export interface UpdateSourcePayload {
+  name?: string
+  url_or_handle?: string
 }
 
 export const sourcesApi = {
@@ -60,4 +79,15 @@ export const sourcesApi = {
     api
       .get<{ source_id: string; warning_count: number }>(`/api/v1/sources/${sourceId}/report-warnings/count`)
       .then((r) => r.data),
+
+  checkHealth: (sourceId: string) =>
+    api
+      .post<HealthCheckResult>(`/api/v1/sources/${sourceId}/check-health`)
+      .then((r) => r.data),
+
+  update: (sourceId: string, payload: UpdateSourcePayload) =>
+    api.patch<{ source_id: string }>(`/api/v1/sources/${sourceId}`, payload).then((r) => r.data),
+
+  delete: (sourceId: string, force = false) =>
+    api.delete(`/api/v1/sources/${sourceId}`, { params: force ? { force: true } : {} }),
 }

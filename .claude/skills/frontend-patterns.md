@@ -10,6 +10,7 @@
 > See also: `learned/jwt-expiry-countdown.md` — JWT expiry countdown with 5-min warning toast
 > See also: `learned/vitest-vite-setup.md` — Vitest + jsdom + tsconfig exclusion for Vite projects
 > See also: `learned/phase-check-pitfalls.md` — pitfalls 12–14 (postcss CJS, missing SQL JOINs, vitest tsconfig)
+> See also: `learned/time-filter-bar-pattern.md` — preset chip + custom date range filter with React Query, UTC ISO strings, conditional pickers
 
 ---
 

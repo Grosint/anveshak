@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 310 82" fill="none" role="img" aria-label="Anveshak — AI OSINT Intelligence Platform">
+  <title>Anveshak — AI OSINT Intelligence Platform</title>
+
+  <!--
+    ANVESHAK HORIZONTAL LOCKUP
+    ──────────────────────────
+    ViewBox  : 310 × 82
+    Icon box : 82 × 82  (inner svg scales 100×100 → 82×82, factor 0.82)
+    Text     : starts at x=94
+
+    Outer circle top in icon coords: y=12
+    Scaled to logo coords: 12 × 82/100 = 9.84 ≈ 9.8
+    → Horizon line drawn at y=9.8 spanning full 310px width
+  -->
+
+  <!-- ── ICON (nested svg scales the 100×100 mark into 82×82 box) ── -->
+  <svg x="0" y="0" width="82" height="82" viewBox="0 0 100 100" overflow="visible">
+
+    <!-- Outer orbit ring -->
+    <circle cx="50" cy="55" r="43" stroke="#C47A0B" stroke-width="2" fill="none"/>
+
+    <!-- Inner focus ring -->
+    <circle cx="50" cy="55" r="29" stroke="#F5A623" stroke-width="2" fill="none"/>
+
+    <!-- Upward triangle — The Investigator's Prism -->
+    <polygon points="50,30 28,67 72,67"
+             fill="#FAF0E0" stroke="#F5A623" stroke-width="1.6" stroke-linejoin="miter"/>
+
+    <!-- Centre focal dot -->
+    <circle cx="50" cy="55" r="4.8" fill="#F5A623"/>
+
+    <!-- Cardinal orbital markers -->
+    <circle cx="93" cy="55" r="3" fill="#D4956A"/>
+    <circle cx="50" cy="98" r="3" fill="#D4956A"/>
+    <circle cx="7"  cy="55" r="3" fill="#D4956A"/>
+    <circle cx="50" cy="12" r="3" fill="#D4956A"/>
+  </svg>
+
+  <!-- ── FULL-WIDTH DATA-HORIZON LINE ── -->
+  <!-- Runs at the scaled top of the outer circle, spanning the entire lockup -->
+  <line x1="0" y1="9.8" x2="310" y2="9.8"
+        stroke="#F5A623" stroke-width="2.6" stroke-linecap="square"/>
+
+  <!-- ── WORDMARK ── -->
+  <!-- Primary: ANVESHAK — geometric bold, wide tracking -->
+  <text
+    x="94" y="44"
+    font-family="'Inter', 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+    font-size="26"
+    font-weight="700"
+    letter-spacing="5"
+    fill="#2C1810"
+    dominant-baseline="middle">ANVESHAK</text>
+
+  <!-- Sanskrit name + thin separator dot -->
+  <text
+    x="95" y="63"
+    font-family="'Noto Sans Devanagari', 'Mangal', 'Devanagari MT', serif"
+    font-size="13"
+    font-weight="400"
+    letter-spacing="2"
+    fill="#C47A0B"
+    dominant-baseline="middle">अन्वेषक</text>
+
+  <!-- Tagline — whisper-weight, maximum tracking -->
+  <text
+    x="95" y="76"
+    font-family="'Inter', 'Helvetica Neue', Arial, sans-serif"
+    font-size="7.5"
+    font-weight="400"
+    letter-spacing="3.5"
+    fill="#9A7040"
+    dominant-baseline="middle">AI · OSINT · INTELLIGENCE</text>
+</svg>

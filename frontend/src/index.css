@@ -130,3 +130,39 @@ body {
   100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
 }
 .pulse-ring { animation: pulse-ring 2s infinite; }
+
+/* ─── Brand mark animations (login page) ──────────────────────────────────────
+   Radar-scan: 4 orbital dots light up clockwise in sequence (E→S→W→N).
+   Inner ring breathes. Whole mark pulses with a warm amber glow.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@keyframes dot-scan {
+  0%, 12%, 100% { opacity: 0.3;  transform: scale(1);   }
+  6%            { opacity: 1;    transform: scale(1.5);  }
+}
+
+@keyframes orbit-breathe {
+  0%, 100% { transform: scale(1);    opacity: 0.75; }
+  50%      { transform: scale(1.06); opacity: 1;    }
+}
+
+@keyframes brand-glow-pulse {
+  0%, 100% { filter: drop-shadow(0 0 6px  rgba(245, 166, 35, 0.15)); }
+  50%      { filter: drop-shadow(0 0 24px rgba(245, 166, 35, 0.50)); }
+}
+
+/* Each dot gets its own delay so they fire clockwise: E → S → W → N */
+.dot-east  { transform-box: fill-box; transform-origin: center; animation: dot-scan 4.8s ease-in-out 0s    infinite; }
+.dot-south { transform-box: fill-box; transform-origin: center; animation: dot-scan 4.8s ease-in-out 1.2s  infinite; }
+.dot-west  { transform-box: fill-box; transform-origin: center; animation: dot-scan 4.8s ease-in-out 2.4s  infinite; }
+.dot-north { transform-box: fill-box; transform-origin: center; animation: dot-scan 4.8s ease-in-out 3.6s  infinite; }
+
+.orbit-inner-anim {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: orbit-breathe 5s ease-in-out infinite;
+}
+
+.brand-mark-glow {
+  animation: brand-glow-pulse 4s ease-in-out infinite;
+}

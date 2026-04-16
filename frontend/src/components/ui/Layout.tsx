@@ -1,14 +1,16 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { useWS } from '../../contexts/WSContext'
+import { sourcesApi } from '../../api/sources'
 
 const navItems = [
   { to: '/topics',  label: 'Topics',        icon: <TargetIcon /> },
-  { to: '/signals', label: 'Signals',        icon: <ZapIcon /> },
+  { to: '/signals', label: 'Signals',       icon: <ZapIcon /> },
   { to: '/vision',  label: 'Image Analysis', icon: <EyeIcon /> },
-  { to: '/reports', label: 'Reports',        icon: <FileIcon /> },
-  { to: '/sources', label: 'Sources',        icon: <RadioIcon /> },
+  { to: '/reports', label: 'Reports',       icon: <FileIcon /> },
+  { to: '/sources', label: 'Sources',       icon: <RadioIcon /> },
 ]
 
 export default function Layout() {
@@ -16,6 +18,15 @@ export default function Layout() {
   const { user, logout } = useAuth()
   const { status: wsStatus } = useWS()
   const navigate = useNavigate()
+
+  // Lightweight poll for down-source count — shown as red badge on Source Health nav item
+  const { data: sources } = useQuery({
+    queryKey: ['sources'],
+    queryFn: () => sourcesApi.list(),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  })
+  const downCount = sources?.filter((s) => s.health_status === 'down').length ?? 0
 
   function handleLogout() {
     logout()
@@ -59,7 +70,15 @@ export default function Layout() {
               }
             >
               <span className="w-4 h-4 shrink-0" aria-hidden="true">{item.icon}</span>
-              <span>{item.label}</span>
+              <span className="flex-1">{item.label}</span>
+              {item.to === '/sources' && downCount > 0 && (
+                <span
+                  className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-signal-high text-white shrink-0"
+                  aria-label={`${downCount} source${downCount > 1 ? 's' : ''} down`}
+                >
+                  {downCount}
+                </span>
+              )}
             </NavLink>
           ))}
         </div>
