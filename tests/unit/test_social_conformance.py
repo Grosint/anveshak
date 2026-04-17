@@ -229,13 +229,11 @@ class TestXAdapterConformance(SourceAdapterConformanceSuite):
         adapter._spend_guard = None
         self.assert_raw_item_platform_matches(raw, adapter)
 
-    def test_stream_adapter_raises_not_implemented(self):
+    @pytest.mark.asyncio
+    async def test_stream_adapter_raises_not_implemented(self):
         """XStreamAdapter must raise NotImplementedError — criteria 3.26."""
         with pytest.raises(NotImplementedError):
-            import asyncio
-            asyncio.get_event_loop().run_until_complete(
-                XStreamAdapter().authenticate()
-            )
+            await XStreamAdapter().authenticate()
 
     def test_monthly_key_includes_year_month(self):
         from anveshak.social.adapters.x_adapter import _monthly_key

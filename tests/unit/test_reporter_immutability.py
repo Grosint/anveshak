@@ -135,15 +135,16 @@ class TestGenerateReportIdempotency:
             mock_db_mod.fetch_rag_chunks = AsyncMock(return_value=[])  # empty!
             mock_db_mod.update_job_status = AsyncMock()
             mock_db_mod.set_report_generated = AsyncMock()
+            mock_db_mod.set_report_failed = AsyncMock()
 
             await generate_report(ctx, "report-1")
 
         # set_report_generated must NOT have been called
         mock_db_mod.set_report_generated.assert_not_called()
-        # update_job_status must have been called with failed
-        mock_db_mod.update_job_status.assert_called_once()
-        call_args = mock_db_mod.update_job_status.call_args
-        assert "failed" in str(call_args)
+        # set_report_failed must have been called with an error message
+        mock_db_mod.set_report_failed.assert_called_once()
+        call_args = mock_db_mod.set_report_failed.call_args
+        assert "report-1" in str(call_args)
 
     @pytest.mark.asyncio
     async def test_llm_returning_none_sets_failed_status(self):
@@ -189,16 +190,17 @@ class TestGenerateReportIdempotency:
             mock_db_mod.fetch_sources_for_snapshot = AsyncMock(return_value={})
             mock_db_mod.update_job_status = AsyncMock()
             mock_db_mod.set_report_generated = AsyncMock()
+            mock_db_mod.set_report_failed = AsyncMock()
             mock_llm.return_value = None  # LLM failed all retries
 
             await generate_report(ctx, "report-1")
 
         # Must NOT have stored an empty report
         mock_db_mod.set_report_generated.assert_not_called()
-        # Must have set failed
-        mock_db_mod.update_job_status.assert_called_once()
-        call_args = mock_db_mod.update_job_status.call_args
-        assert "failed" in str(call_args)
+        # Must have set failed via set_report_failed
+        mock_db_mod.set_report_failed.assert_called_once()
+        call_args = mock_db_mod.set_report_failed.call_args
+        assert "report-1" in str(call_args)
 
     @pytest.mark.asyncio
     async def test_successful_generation_stores_report(self):

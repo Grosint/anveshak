@@ -182,7 +182,7 @@ def test_main_returns_0_when_all_pass(capsys):
         "localhost:8002/health": (200, {"status": "ok"}),
         "localhost:8004/health": (200, {"status": "ok"}),
         "localhost:8005/health": (200, {"status": "ok"}),
-        "11434/api/tags": (200, {"models": [{"name": "mistral:7b"}, {"name": "llama3.2:3b"}]}),
+        "11434/api/tags": (200, {"models": [{"name": "qwen2:7b"}]}),
         "/auth/login": (200, {"access_token": "tok123"}),
         "/api/v1/topics": (200, [{"id": "1"}, {"id": "2"}, {"id": "3"}]),
         "signals?status=new": (200, [{"id": "s1"}]),
@@ -195,7 +195,8 @@ def test_main_returns_0_when_all_pass(capsys):
         return demo_check.Check("Step 3 — Demo login", True, "OK"), "tok123"
 
     with patch.object(demo_check, "http_get", _make_http_get(all_pass_responses)), \
-         patch.object(demo_check, "demo_login", _fake_login):
+         patch.object(demo_check, "demo_login", _fake_login), \
+         patch.dict("os.environ", {"OLLAMA_MODEL": "qwen2:7b"}):
         rc = demo_check.main()
     assert rc == 0
 
@@ -209,7 +210,7 @@ def test_main_returns_1_when_service_down(capsys):
         "localhost:8002/health": (200, {"status": "ok"}),
         "localhost:8004/health": (200, {"status": "ok"}),
         "localhost:8005/health": (200, {"status": "ok"}),
-        "11434/api/tags": (200, {"models": [{"name": "mistral:7b"}, {"name": "llama3.2:3b"}]}),
+        "11434/api/tags": (200, {"models": [{"name": "qwen2:7b"}]}),
         "/auth/login": (200, {"access_token": "tok123"}),
         "/api/v1/topics": (200, [{"id": "1"}, {"id": "2"}, {"id": "3"}]),
         "signals?status=new": (200, [{"id": "s1"}]),

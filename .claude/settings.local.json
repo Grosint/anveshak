@@ -85,7 +85,22 @@
       "Bash(find /Users/navitas28/Work/grosint -name *.svg)",
       "Bash(__NEW_LINE_4bdee2b21cfb2c48__ docker:*)",
       "Bash(__NEW_LINE_137385d22b3820fd__ echo:*)",
-      "Bash(docker port:*)"
+      "Bash(docker port:*)",
+      "Bash(git:*)",
+      "Bash(docker-compose ps:*)",
+      "Bash(sed -i '' 's/settings\\\\.ollama_report_model/settings.ollama_model/g' /Users/navitas28/Work/anveshak/services/reporter/anveshak/reporter/llm.py /Users/navitas28/Work/anveshak/services/reporter/anveshak/reporter/main.py)",
+      "Bash(sed -i '' 's/settings\\\\.ollama_cluster_model/settings.ollama_model/g' /Users/navitas28/Work/anveshak/services/analyst/anveshak/analyst/labeller.py /Users/navitas28/Work/anveshak/services/analyst/anveshak/analyst/main.py)",
+      "Bash(ollama list:*)",
+      "Bash(ollama pull:*)",
+      "Bash(make up:*)",
+      "Bash(ollama rm:*)",
+      "Bash(ls -la /Users/navitas28/Work/anveshak/services/api/migrations/versions/*.py)",
+      "Bash(docker top:*)",
+      "Bash(sort -k3 -h -r)",
+      "Bash(docker stats:*)",
+      "Bash(chmod:*)",
+      "Bash(make -n syscheck)",
+      "Bash(make health:*)"
     ]
   }
 }

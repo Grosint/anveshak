@@ -20,6 +20,7 @@ from .labeller import generate_label_for_cluster
 from .metrics import analyst_nlp_jobs_total, analyst_nlp_duration_seconds, analyst_clusters_created_total, arq_jobs_failed_total
 from .nlp import detect_language, load_models, parse_entities
 from .settings import settings
+from .translation import needs_translation, translate_to_english
 
 log = structlog.get_logger(__name__)
 
@@ -35,10 +36,12 @@ SQL_GET_CONTENT = """
 
 SQL_UPDATE_CONTENT_NLP = """
     UPDATE content_items
-    SET embedding = $1::vector,
-        language  = $2,
-        updated_at = $3
-    WHERE id = $4
+    SET embedding          = $1::vector,
+        language           = $2,
+        translated_text    = $3,
+        translation_model  = $4,
+        updated_at         = $5
+    WHERE id = $6
 """
 
 SQL_INSERT_ENTITY = """
@@ -57,11 +60,18 @@ _LABELS_JSON = '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"
 # ---------------------------------------------------------------------------
 
 async def analyse_content(ctx: dict, content_item_id: str) -> None:
-    """NLP pipeline: langdetect → spaCy NER → sentence embedding → DB (criteria 1.11–1.16).
+    """NLP pipeline: langdetect → translate → spaCy NER → sentence embedding → DB.
 
-    Writes embedding + language to content_items.
-    Inserts rows into extracted_entities.
-    Both writes are in a single transaction.
+    For non-English articles (zh, hi, ar, ur, ru):
+      1. Detects language via langdetect
+      2. Translates clean_text → English via NLLB-200 (stored as translated_text)
+      3. Runs English NER on translated text — entities come out in English
+      4. Embeds translated text — all vectors in English semantic space
+      5. Writes embedding, language, translated_text, translation_model to content_items
+
+    For English articles: translation step is skipped; clean_text used directly.
+
+    Criteria 1.11–1.16.
     """
     import time as _time
     _t0 = _time.monotonic()
@@ -79,27 +89,54 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
     clean_text: str = row["clean_text"]
 
     try:
-        # Language detection (criteria 1.12, 1.13)
+        # --- Step 1: Language detection (criteria 1.12, 1.13) ---
         lang = detect_language(clean_text)
 
-        # NER (criteria 1.14)
-        entities = parse_entities(clean_text, lang)
+        # --- Step 2: Translation (non-English → English) ---
+        translated_text: str | None = None
+        translation_model_used: str | None = None
 
-        # Embedding (criteria 1.15)
-        embedding = encode_text(clean_text)
+        if settings.translation_enabled and needs_translation(lang):
+            translated_text = translate_to_english(clean_text, lang)
+            if translated_text:
+                translation_model_used = settings.translation_model
+                log.info(
+                    "analyst.translated",
+                    content_item_id=content_item_id,
+                    src_lang=lang,
+                    model=translation_model_used,
+                )
+            else:
+                # Translation failed — fall back to original text and warn
+                log.warning(
+                    "analyst.translation_failed_fallback",
+                    content_item_id=content_item_id,
+                    lang=lang,
+                )
+
+        # work_text: what NER and embedding operate on.
+        # Use English translation if available; fall back to original.
+        work_text = translated_text if translated_text else clean_text
+
+        # --- Step 3: NER on work_text (English after translation) (criteria 1.14) ---
+        # Always use English model when work_text is the translated version.
+        nlp_lang = "en" if translated_text else lang
+        entities = parse_entities(work_text, nlp_lang)
+
+        # --- Step 4: Embedding on work_text (English semantic space) (criteria 1.15) ---
+        embedding = encode_text(work_text)
         # pgvector expects "[x1,x2,...]" string when using $1::vector cast in asyncpg
         embedding_str = "[" + ",".join(f"{x:.8f}" for x in embedding) + "]"
 
         now = datetime.now(UTC)
 
+        # --- Step 5: Write to DB (criteria 1.16) ---
         async with db_pool.acquire() as conn:
             async with conn.transaction():
-                # criteria 1.16: UPDATE content_items SET embedding, language
                 await conn.execute(
                     SQL_UPDATE_CONTENT_NLP,
-                    embedding_str, lang, now, content_item_id,
+                    embedding_str, lang, translated_text, translation_model_used, now, content_item_id,
                 )
-                # criteria 1.14: insert extracted_entities rows
                 for ent in entities:
                     await conn.execute(
                         SQL_INSERT_ENTITY,
@@ -119,6 +156,7 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
             "analyst.content_analysed",
             content_item_id=content_item_id,
             language=lang,
+            translated=translated_text is not None,
             entities=len(entities),
         )
     except Exception:
@@ -257,5 +295,5 @@ class WorkerSettings:
     on_job_result = on_job_result
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
     max_jobs = 4
-    job_timeout = 180    # 8C.2 — clustering is the heaviest job at ~180s on CPU
+    job_timeout = 300    # increased from 180s — translation adds ~30s per article on CPU
     keep_result = 3600   # 8C.6 — keep results 1h for UI polling

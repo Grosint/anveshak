@@ -11,6 +11,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import sys
 import urllib.error
 import urllib.parse
@@ -83,15 +84,13 @@ def check_ollama_models() -> list[Check]:
         return [Check("Step 2 — Ollama endpoint", False, f"HTTP {status}")]
 
     models = [m.get("name", "") for m in (body if isinstance(body, list) else body.get("models", []))]
-    checks = []
-    for required in ["mistral:7b", "llama3.2:3b"]:
-        found = any(required in m for m in models)
-        checks.append(Check(
-            f"Step 2 — Ollama model: {required}",
-            found,
-            "loaded" if found else f"not found — run: docker exec anveshak-ollama ollama pull {required}",
-        ))
-    return checks
+    configured_model = os.environ.get("OLLAMA_MODEL", "qwen2:7b")
+    found = any(configured_model in m for m in models)
+    return [Check(
+        f"Step 2 — Ollama model: {configured_model}",
+        found,
+        "loaded" if found else f"not found — run: docker exec anveshak-ollama ollama pull {configured_model}",
+    )]
 
 
 # ---------------------------------------------------------------------------

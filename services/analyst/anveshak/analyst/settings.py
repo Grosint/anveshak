@@ -11,12 +11,22 @@ class AnalystSettings(BaseSettings):
     spacy_ru_model: str = "ru_core_news_md"
     spacy_zh_model: str = "zh_core_web_md"
 
+    # Translation — hardware-controlled, see hardware.md
+    # NLLB-200 translates non-English articles to English before NLP/embedding.
+    # Upgrade: facebook/nllb-200-1.3B or facebook/nllb-200-3.3B on GPU.
+    translation_enabled: bool = True
+    translation_model: str = "facebook/nllb-200-distilled-600M"
+    translation_max_chars: int = 1500    # truncate before translation (Chinese chars ≈ 1 token each)
+    translation_max_tokens: int = 512    # max output tokens per translation call
+
     # Embeddings — hardware-controlled, see hardware.md
     embedding_model: str = "all-MiniLM-L6-v2"
     embedding_dimensions: int = 384
 
     # LLM — hardware-controlled, see hardware.md
-    ollama_cluster_model: str = "llama3.2:3b"
+    # Single model handles cluster labelling. All input text is English (post-translation).
+    # Upgrade path: qwen2.5:72b on RTX 4090 — see hardware.md
+    ollama_model: str = "qwen2:7b"
     llm_max_tokens: int = 512
 
     # Clustering

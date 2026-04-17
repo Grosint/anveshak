@@ -6,8 +6,10 @@ class ReporterSettings(BaseSettings):
     redis_url: str = "redis://localhost:6379"
 
     # LLM — hardware-controlled, see hardware.md
+    # Single model handles report generation. All input text is English (post-translation).
+    # Upgrade path: qwen2.5:72b on RTX 4090 — see hardware.md
     ollama_host: str = "http://ollama:11434"
-    ollama_report_model: str = "mistral:7b"
+    ollama_model: str = "qwen2:7b"
     llm_max_tokens: int = 2048
 
     # Embeddings — hardware-controlled, see hardware.md

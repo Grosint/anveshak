@@ -92,7 +92,7 @@ async def health():
     return {
         "status": "ok",
         "service": "anveshak-reporter",
-        "report_model": settings.ollama_report_model,
+        "report_model": settings.ollama_model,
     }
 
 

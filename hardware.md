@@ -4,8 +4,20 @@ This file documents every hardware-constrained decision in the codebase.
 Before adding any ML component, add its entry here.
 The CLAUDE.md hardware independence rule requires all settings to be env-var driven.
 
-**Demo hardware recommendation:** RTX 3080 (10GB VRAM), 32GB RAM, NVMe SSD 1TB, 8-core CPU.
-This eliminates all hardware risks. Cost: ~₹1.5–2L. Negligible for a ₹25Cr grant application.
+**Production hardware tiers:**
+
+| Tier | Hardware | Cost | Throughput |
+|------|----------|------|------------|
+| CPU-only (dev/testing) | 16-core, 32GB RAM, 512GB NVMe | ~₹80K | ~50 articles/day translated, 5min/report |
+| Demo/eval (recommended) | RTX 3080 (10GB), 32GB RAM, 1TB NVMe | ~₹1.5–2L | ~2K articles/day, 30s/report |
+| IAF production | RTX 4090 (24GB), 64GB RAM, 2TB NVMe | ~₹3–4L | ~10K articles/day, 10s/report, 72b LLM |
+
+**Critical CPU-only constraints (measured 2026-04-17):**
+- Analyst service needs **6GB RAM** (3 spaCy models + sentence-transformers + NLLB-200)
+- NLLB translation: **~4 min per article on CPU** — production bottleneck for >50 articles/day
+- NLLB model cold-load: ~25s on CPU (cached in Docker volume after first load)
+- `TRANSLATION_MAX_CHARS=1500` required on CPU (Chinese chars ≈ 1 token, NLLB max 1024)
+- GPU eliminates all above constraints; `TRANSLATION_MAX_CHARS=5000` safe on GPU
 
 ---
 
@@ -37,45 +49,27 @@ Service loads model by config value, never hardcoded.
 
 ---
 
-## LLM — Cluster Labelling — `analyst` service
+## LLM — Unified Model (cluster labels + reports) — `analyst` + `reporter` services
 
 **Current implementation:**
-- Model: `llama3.2:3b` (2.3GB RAM, ~10-15s per label on CPU)
-- Used for: narrative cluster label generation, entity disambiguation
+- Model: `qwen2:7b` (4.4GB, single model for both cluster labelling and report generation)
+- Replaced: `llama3.2:3b` (labels) + `mistral:7b` (reports) — net saving 2GB disk
+- Speed: ~10-15s per label, ~3-5min per report on CPU
+- All input text is English (post-translation) — no multilingual LLM needed
+- Env var: `OLLAMA_MODEL=qwen2:7b` (shared by analyst and reporter)
 
 **Upgrade when available:**
-- Model: `llama3.1:8b` (~5GB VRAM, ~2s per label on GPU)
+- Model: `qwen2.5:72b` (~40GB VRAM, ~2s/label, ~45s/report)
+- Or split: `llama3.1:8b` for labels + `llama3.1:70b` for reports
 
-**Hardware needed:** RTX 3070+ (8GB VRAM)
+**Hardware needed:** RTX 4090 (24GB VRAM) for 72b — or dual A100
 
 **Config change:**
 ```
-OLLAMA_CLUSTER_MODEL=llama3.2:3b  →  OLLAMA_CLUSTER_MODEL=llama3.1:8b
+OLLAMA_MODEL=qwen2:7b  →  OLLAMA_MODEL=qwen2.5:72b
 ```
 
-**Code change:** Zero. Analyst service reads `settings.OLLAMA_CLUSTER_MODEL`.
-
----
-
-## LLM — Report Generation — `reporter` service
-
-**Current implementation:**
-- Model: `mistral:7b` (4.7GB RAM, 3-5min per report on CPU)
-- Used for: intelligence_brief, research_summary, weekly_digest generation
-- Mitigation: runs as ARQ background job — UI shows progress while generating
-
-**Upgrade when available:**
-- Model: `llama3.1:70b` (~40GB VRAM, ~45s per report on GPU)
-- Significant quality improvement on structured intelligence analysis
-
-**Hardware needed:** RTX 4090 (24GB VRAM) for 70b — or dual A100 for best quality
-
-**Config change:**
-```
-OLLAMA_REPORT_MODEL=mistral:7b  →  OLLAMA_REPORT_MODEL=llama3.1:70b
-```
-
-**Code change:** Zero. Reporter reads `settings.OLLAMA_REPORT_MODEL`.
+**Code change:** Zero. Both analyst and reporter read `settings.ollama_model`.
 
 ---
 
@@ -84,13 +78,13 @@ OLLAMA_REPORT_MODEL=mistral:7b  →  OLLAMA_REPORT_MODEL=llama3.1:70b
 **Current implementation:**
 - `OLLAMA_KEEP_ALIVE=5m` — model evicted from RAM after 5 minutes idle
 - Saves RAM on constrained hardware (16GB laptop)
-- Cold-start on first inference: 25-40s (mistral:7b from SSD)
+- Cold-start on first inference: 25-40s (qwen2:7b from SSD)
 - Mitigation: pre-warm via dummy inference call in FastAPI lifespan startup
 
 **Upgrade when available:**
 - `OLLAMA_KEEP_ALIVE=-1` — model stays in VRAM permanently, zero cold-start
 
-**Hardware needed:** GPU with sufficient VRAM (8GB for mistral:7b, 40GB for 70b)
+**Hardware needed:** GPU with sufficient VRAM (8GB for qwen2:7b, 40GB for 72b)
 
 **Config change:**
 ```
@@ -368,6 +362,36 @@ OSM) by replacing `geocoder.py` logic. No settings.py change required.
 
 ---
 
+## Translation — `analyst` service
+
+**Current implementation:**
+- Model: `facebook/nllb-200-distilled-600M` (~2.4GB, CPU-capable)
+- Languages: 200+ — zh, hi, ar, ur, ru all handled by single model
+- Speed: **~4 min per article on CPU** (measured: 1500 Chinese chars → 1065 English chars)
+- Model cold-load: ~25s on CPU from HF cache volume
+- Max input: `TRANSLATION_MAX_CHARS=1500` (Chinese chars ≈ 1 token each, NLLB max 1024 tokens)
+- Translates non-English `clean_text` → English `translated_text` before NLP/embedding
+- All downstream NLP, clustering, RAG, and reports operate on English text
+- **Memory:** analyst container needs **6GB RAM** minimum (3 spaCy + embeddings + NLLB)
+- **Bottleneck:** CPU translation is the slowest step; >50 articles/day requires GPU
+
+**Upgrade when available:**
+- Model: `facebook/nllb-200-1.3B` (~5.2GB, ~3s/article on GPU)
+- Model: `facebook/nllb-200-3.3B` (~13GB, ~1s/article on GPU) — best quality for Arabic/Urdu
+- With GPU: `TRANSLATION_MAX_CHARS=5000` is safe (GPU handles longer sequences fast)
+
+**Hardware needed:** RTX 3080+ (8GB VRAM for 1.3B, 16GB for 3.3B)
+
+**Config change:**
+```
+TRANSLATION_MODEL=facebook/nllb-200-distilled-600M  →  TRANSLATION_MODEL=facebook/nllb-200-1.3B
+TRANSLATION_MAX_CHARS=1500                          →  TRANSLATION_MAX_CHARS=5000
+```
+
+**Code change:** Zero. `analyst/translation.py` reads `settings.translation_model`.
+
+---
+
 ## Summary Upgrade Checklist
 
 When production hardware (RTX 3080+, 32GB RAM) is available, update these env vars in .env:
@@ -378,10 +402,12 @@ SPACY_EN_MODEL=en_core_web_trf
 SPACY_RU_MODEL=ru_core_news_lg
 SPACY_ZH_MODEL=zh_core_web_trf
 
-# LLM — upgrade to larger models
-OLLAMA_CLUSTER_MODEL=llama3.1:8b
-OLLAMA_REPORT_MODEL=llama3.1:70b
+# LLM — upgrade to larger model (single model handles labels + reports)
+OLLAMA_MODEL=qwen2.5:72b
 OLLAMA_KEEP_ALIVE=-1
+
+# Translation — upgrade to higher-quality model
+TRANSLATION_MODEL=facebook/nllb-200-1.3B
 
 # Vision — enable GPU + better models
 VISION_DEVICE=cuda
@@ -397,10 +423,10 @@ EMBEDDING_DIMENSIONS=1024
 # No env var — run migration V2b
 ```
 
-Pull Ollama models after hardware upgrade:
+Pull Ollama model after hardware upgrade:
 ```bash
-ollama pull llama3.1:8b
-ollama pull llama3.1:70b
+ollama pull qwen2.5:72b
+ollama rm qwen2:7b
 ```
 
 Zero application code changes required for any of the above.

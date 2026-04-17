@@ -37,19 +37,39 @@ def load_models() -> None:
             log.error("nlp.model_load_failed", lang=lang, model=model_name, error=str(exc))
 
 
+import re
+
+_RE_URL = re.compile(r"https?://\S+")
+_RE_MARKDOWN_LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+_RE_MARKDOWN_IMG = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+
+
+def _strip_noise(text: str) -> str:
+    """Remove URLs and markdown syntax that confuse language detection."""
+    text = _RE_MARKDOWN_IMG.sub("", text)
+    text = _RE_MARKDOWN_LINK.sub(r"\1", text)
+    text = _RE_URL.sub("", text)
+    return text
+
+
 def detect_language(text: str) -> str:
     """Detect language of text. Returns ISO 639-1 code.
 
     Criteria 1.12: routes to en/ru/zh.
     Criteria 1.13: unknown language (not in loaded models) → 'en' fallback + warning.
     """
-    if len(text) < _MIN_LANGDETECT_LEN:
+    cleaned = _strip_noise(text)
+    if len(cleaned.strip()) < _MIN_LANGDETECT_LEN:
         return "en"
     try:
         from langdetect import detect, LangDetectException
-        lang = detect(text)
+        lang = detect(cleaned)
     except Exception:
         return "en"
+
+    # Normalise zh-cn/zh-tw to zh
+    if lang.startswith("zh"):
+        lang = "zh"
 
     if lang not in _MODELS:
         log.warning("nlp.unsupported_language", detected=lang, fallback="en")

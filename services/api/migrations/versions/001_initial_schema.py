@@ -1,10 +1,10 @@
 """001_initial_schema
 
-Initial database schema for Anveshak OSINT platform.
+Consolidated initial schema for Anveshak OSINT platform.
 
 Revision ID: 001
 Revises:
-Create Date: 2026-04-13 00:00:00.000000
+Create Date: 2026-04-17 00:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
@@ -67,17 +67,20 @@ def upgrade() -> None:
     # ------------------------------------------------------------------
     op.execute("""
         CREATE TABLE sources (
-            id                  TEXT        NOT NULL PRIMARY KEY,
-            name                TEXT        NOT NULL,
-            url_or_handle       TEXT        NOT NULL,
-            platform            TEXT        NOT NULL,
-            credibility_score   FLOAT       NOT NULL DEFAULT 50.0,
-            auto_score_enabled  BOOLEAN     NOT NULL DEFAULT TRUE,
-            last_checked_at     TIMESTAMPTZ,
-            is_active           BOOLEAN     NOT NULL DEFAULT TRUE,
-            created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            labels              JSONB       NOT NULL DEFAULT '{}'::jsonb
+            id                    TEXT        NOT NULL PRIMARY KEY,
+            name                  TEXT        NOT NULL,
+            url_or_handle         TEXT        NOT NULL,
+            platform              TEXT        NOT NULL,
+            credibility_score     FLOAT       NOT NULL DEFAULT 50.0,
+            auto_score_enabled    BOOLEAN     NOT NULL DEFAULT TRUE,
+            last_checked_at       TIMESTAMPTZ,
+            is_active             BOOLEAN     NOT NULL DEFAULT TRUE,
+            health_status         TEXT        NOT NULL DEFAULT 'unverified',
+            consecutive_failures  INT         NOT NULL DEFAULT 0,
+            health_error          TEXT,
+            created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            labels                JSONB       NOT NULL DEFAULT '{}'::jsonb
         )
     """)
     op.execute("CREATE INDEX idx_sources_platform ON sources(platform)")
@@ -103,6 +106,25 @@ def upgrade() -> None:
     op.execute("CREATE INDEX idx_credibility_audit_created ON credibility_audit_log(created_at DESC)")
 
     # ------------------------------------------------------------------
+    # narrative_clusters
+    # ------------------------------------------------------------------
+    op.execute("""
+        CREATE TABLE narrative_clusters (
+            id                      TEXT        NOT NULL PRIMARY KEY,
+            topic_id                TEXT        NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+            label                   TEXT        NOT NULL,
+            item_count              INT         NOT NULL DEFAULT 0,
+            independent_source_count INT        NOT NULL DEFAULT 0,
+            embedding_centroid      vector(384),
+            created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            labels                  JSONB       NOT NULL DEFAULT '{}'::jsonb
+        )
+    """)
+    op.execute("CREATE INDEX idx_clusters_topic ON narrative_clusters(topic_id)")
+    op.execute("CREATE INDEX idx_clusters_item_count ON narrative_clusters(item_count DESC)")
+
+    # ------------------------------------------------------------------
     # content_items
     # ------------------------------------------------------------------
     op.execute("""
@@ -110,9 +132,12 @@ def upgrade() -> None:
             id                          TEXT        NOT NULL PRIMARY KEY,
             topic_id                    TEXT        REFERENCES topics(id) ON DELETE SET NULL,
             source_id                   TEXT        NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+            narrative_cluster_id        TEXT        REFERENCES narrative_clusters(id) ON DELETE SET NULL,
             raw_text                    TEXT        NOT NULL,
             clean_text                  TEXT        NOT NULL,
             language                    TEXT        NOT NULL DEFAULT 'en',
+            translated_text             TEXT,
+            translation_model           TEXT,
             content_hash                TEXT        NOT NULL,
             url                         TEXT,
             captured_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -127,6 +152,8 @@ def upgrade() -> None:
     op.execute("CREATE INDEX idx_content_items_topic ON content_items(topic_id)")
     op.execute("CREATE INDEX idx_content_items_source ON content_items(source_id)")
     op.execute("CREATE INDEX idx_content_items_captured ON content_items(captured_at DESC)")
+    op.execute("CREATE INDEX idx_content_items_cluster ON content_items(narrative_cluster_id) WHERE narrative_cluster_id IS NOT NULL")
+    op.execute("CREATE INDEX idx_content_items_translated ON content_items(language) WHERE translated_text IS NOT NULL")
     # IVFFlat index for approximate nearest-neighbour vector search
     # lists=100 is appropriate for tables up to ~1M rows
     op.execute("""
@@ -199,25 +226,6 @@ def upgrade() -> None:
     op.execute("CREATE INDEX idx_vision_results_deepfake ON vision_results(deepfake_score DESC) WHERE deepfake_score IS NOT NULL")
 
     # ------------------------------------------------------------------
-    # narrative_clusters
-    # ------------------------------------------------------------------
-    op.execute("""
-        CREATE TABLE narrative_clusters (
-            id                      TEXT        NOT NULL PRIMARY KEY,
-            topic_id                TEXT        NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
-            label                   TEXT        NOT NULL,
-            item_count              INT         NOT NULL DEFAULT 0,
-            independent_source_count INT        NOT NULL DEFAULT 0,
-            embedding_centroid      vector(384),
-            created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            labels                  JSONB       NOT NULL DEFAULT '{}'::jsonb
-        )
-    """)
-    op.execute("CREATE INDEX idx_clusters_topic ON narrative_clusters(topic_id)")
-    op.execute("CREATE INDEX idx_clusters_item_count ON narrative_clusters(item_count DESC)")
-
-    # ------------------------------------------------------------------
     # signals
     # ------------------------------------------------------------------
     op.execute("""
@@ -229,6 +237,7 @@ def upgrade() -> None:
             evidence    JSONB       NOT NULL DEFAULT '{}'::jsonb,
             status      TEXT        NOT NULL DEFAULT 'new',
             cluster_id  TEXT        REFERENCES narrative_clusters(id) ON DELETE SET NULL,
+            delivered_at TIMESTAMPTZ,
             created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             labels      JSONB       NOT NULL DEFAULT '{}'::jsonb
@@ -237,6 +246,7 @@ def upgrade() -> None:
     op.execute("CREATE INDEX idx_signals_topic_status ON signals(topic_id, status)")
     op.execute("CREATE INDEX idx_signals_status ON signals(status)")
     op.execute("CREATE INDEX idx_signals_created ON signals(created_at DESC)")
+    op.execute("CREATE INDEX idx_signals_undelivered ON signals(created_at ASC) WHERE delivered_at IS NULL")
 
     # ------------------------------------------------------------------
     # analysis_jobs
@@ -277,6 +287,7 @@ def upgrade() -> None:
             geojson                 JSONB,
             confidence_score        FLOAT,
             generated_at            TIMESTAMPTZ,         -- SET ONCE. NEVER UPDATED.
+            generation_error        TEXT,
             source_snapshot         JSONB       NOT NULL DEFAULT '{}'::jsonb,
             content_item_count      INT         NOT NULL DEFAULT 0,
             created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -308,19 +319,36 @@ def upgrade() -> None:
     """)
     op.execute("CREATE INDEX idx_report_warnings_report ON report_source_warnings(report_id)")
     op.execute("CREATE INDEX idx_report_warnings_source ON report_source_warnings(source_id)")
+    op.execute("CREATE UNIQUE INDEX uq_report_source_warnings_pair ON report_source_warnings(report_id, source_id)")
+
+    # ------------------------------------------------------------------
+    # topic_content_items  (join table)
+    # ------------------------------------------------------------------
+    op.execute("""
+        CREATE TABLE topic_content_items (
+            topic_id          TEXT        NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+            content_item_id   TEXT        NOT NULL REFERENCES content_items(id) ON DELETE CASCADE,
+            similarity_score  FLOAT       NOT NULL DEFAULT 0.0,
+            assigned_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (topic_id, content_item_id)
+        )
+    """)
+    op.execute("CREATE INDEX idx_topic_content_items_topic ON topic_content_items(topic_id)")
+    op.execute("CREATE INDEX idx_topic_content_items_item ON topic_content_items(content_item_id)")
 
 
 def downgrade() -> None:
     # Drop in reverse dependency order
+    op.execute("DROP TABLE IF EXISTS topic_content_items CASCADE")
     op.execute("DROP TABLE IF EXISTS report_source_warnings CASCADE")
     op.execute("DROP TABLE IF EXISTS reports CASCADE")
     op.execute("DROP TABLE IF EXISTS analysis_jobs CASCADE")
     op.execute("DROP TABLE IF EXISTS signals CASCADE")
-    op.execute("DROP TABLE IF EXISTS narrative_clusters CASCADE")
     op.execute("DROP TABLE IF EXISTS vision_results CASCADE")
     op.execute("DROP TABLE IF EXISTS media_assets CASCADE")
     op.execute("DROP TABLE IF EXISTS extracted_entities CASCADE")
     op.execute("DROP TABLE IF EXISTS content_items CASCADE")
+    op.execute("DROP TABLE IF EXISTS narrative_clusters CASCADE")
     op.execute("DROP TABLE IF EXISTS credibility_audit_log CASCADE")
     op.execute("DROP TABLE IF EXISTS sources CASCADE")
     op.execute("DROP TABLE IF EXISTS topics CASCADE")

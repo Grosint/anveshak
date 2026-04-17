@@ -40,19 +40,27 @@ RUN uv pip install --system .
 
 # --------------------------------------------------------------------------
 # Download spaCy models at build time so the container is self-contained.
-# en_core_web_md is the default (CPU-compatible). Use en_core_web_trf on
-# GPU-capable hardware (set SPACY_MODEL build arg or see hardware.md).
+# All three language models are required for multilingual NER (en/ru/zh).
+# Override individual models via build args for GPU upgrades — see hardware.md.
 # --------------------------------------------------------------------------
-ARG SPACY_MODEL=en_core_web_md
-RUN python -m spacy download ${SPACY_MODEL}
+ARG SPACY_EN_MODEL=en_core_web_md
+ARG SPACY_RU_MODEL=ru_core_news_md
+ARG SPACY_ZH_MODEL=zh_core_web_md
+RUN python -m spacy download ${SPACY_EN_MODEL} \
+ && python -m spacy download ${SPACY_RU_MODEL} \
+ && python -m spacy download ${SPACY_ZH_MODEL}
 
 # --------------------------------------------------------------------------
-# Pre-download sentence-transformers model at build time.
+# Pre-download sentence-transformers + NLLB translation model at build time.
 # HF_HOME is set to /app/models so the non-root user can read it.
+# NLLB-200 (~2.4GB) translates zh/hi/ar/ur → English before NLP/embedding.
+# Upgrade: set TRANSLATION_MODEL=facebook/nllb-200-1.3B on GPU hardware.
 # --------------------------------------------------------------------------
 ARG EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+ARG TRANSLATION_MODEL=facebook/nllb-200-distilled-600M
 ENV HF_HOME=/app/models
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${EMBEDDING_MODEL}')"
+RUN python -c "from transformers import pipeline; pipeline('translation', model='${TRANSLATION_MODEL}', device=-1)"
 
 # --------------------------------------------------------------------------
 # Non-root user

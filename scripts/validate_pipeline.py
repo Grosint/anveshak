@@ -12,6 +12,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -86,7 +87,8 @@ def check_ollama() -> Check:
         return Check("Ollama", False, f"HTTP {status} — Ollama not reachable")
     models = [m.get("name", "") for m in (body if isinstance(body, list) else body.get("models", []))]
     if not models:
-        return Check("Ollama", False, "no models loaded — run: docker exec anveshak-ollama ollama pull llama3.2:3b")
+        configured_model = os.environ.get("OLLAMA_MODEL", "qwen2:7b")
+        return Check("Ollama", False, f"no models loaded — run: docker exec anveshak-ollama ollama pull {configured_model}")
     return Check("Ollama", True, f"{len(models)} model(s) loaded: {', '.join(models[:3])}")
 
 
@@ -212,6 +214,53 @@ def check_sources(metrics: dict) -> list[Check]:
 
 
 # ---------------------------------------------------------------------------
+# Stage 7 — Multilingual pipeline
+# ---------------------------------------------------------------------------
+
+def check_multilingual(metrics: dict) -> list[Check]:
+    """Verify the translation pipeline has processed non-English content."""
+    checks = []
+
+    zh_items = metrics.get("content_items_zh", 0)
+    checks.append(Check(
+        "Chinese content items",
+        zh_items >= 0,   # warning only — may be 0 if no Chinese sources seeded yet
+        f"{zh_items} Chinese-language items in corpus"
+        + (" — seed Chinese sources: uv run python scripts/seed_chinese_sources.py" if zh_items == 0 else " ✓"),
+        warning=(zh_items == 0),
+    ))
+
+    translated = metrics.get("content_items_translated", 0)
+    if zh_items > 0:
+        pct = (translated / zh_items * 100) if zh_items > 0 else 0.0
+        checks.append(Check(
+            "Translation coverage (zh→en)",
+            pct >= 80.0,
+            f"{translated}/{zh_items} Chinese items translated ({pct:.1f}%) — need ≥80%"
+            if pct < 80 else f"{translated}/{zh_items} translated ({pct:.1f}%) ✓",
+        ))
+    else:
+        checks.append(Check(
+            "Translation coverage (zh→en)",
+            True,
+            "No Chinese items yet — skipped",
+            warning=True,
+        ))
+
+    zh_entities = metrics.get("extracted_entities_zh", 0)
+    checks.append(Check(
+        "English entities from Chinese sources",
+        zh_entities >= 0,
+        f"{zh_entities} English entities extracted from Chinese content"
+        + (" — analyst worker may not have run yet" if zh_entities == 0 and zh_items > 0 else "")
+        + (" ✓" if zh_entities > 0 else ""),
+        warning=(zh_entities == 0 and zh_items > 0),
+    ))
+
+    return checks
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -285,6 +334,12 @@ def main() -> int:
     print()
     print("Stage 6 — Source health:")
     for c in check_sources(metrics):
+        _p(c)
+
+    # Stage 7 — Multilingual pipeline
+    print()
+    print("Stage 7 — Multilingual pipeline:")
+    for c in check_multilingual(metrics):
         _p(c)
 
     # Summary

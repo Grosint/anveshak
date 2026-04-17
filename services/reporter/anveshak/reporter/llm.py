@@ -114,7 +114,7 @@ async def call_ollama_with_retry(
         try:
             raw = await call_ollama(
                 prompt=retry_prompt,
-                model=settings.ollama_report_model,
+                model=settings.ollama_model,
                 host=settings.ollama_host,
                 timeout=settings.ollama_report_timeout_s,
             )

@@ -214,11 +214,18 @@ services:
       context: ..
       dockerfile: services/analyst/Dockerfile
     restart: unless-stopped
-    mem_limit: 1g
+    mem_limit: 6g
     environment:
       <<: *common-env
       ANALYST_PORT: 8004
-      SPACY_MODEL: ${SPACY_MODEL:-en_core_web_md}
+      SPACY_EN_MODEL: ${SPACY_EN_MODEL:-en_core_web_md}
+      SPACY_RU_MODEL: ${SPACY_RU_MODEL:-ru_core_news_md}
+      SPACY_ZH_MODEL: ${SPACY_ZH_MODEL:-zh_core_web_md}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2:7b}
+      TRANSLATION_ENABLED: ${TRANSLATION_ENABLED:-true}
+      TRANSLATION_MODEL: ${TRANSLATION_MODEL:-facebook/nllb-200-distilled-600M}
+      TRANSLATION_MAX_CHARS: ${TRANSLATION_MAX_CHARS:-1500}
+      TRANSLATION_MAX_TOKENS: ${TRANSLATION_MAX_TOKENS:-512}
       NER_CONFIDENCE_THRESHOLD: ${NER_CONFIDENCE_THRESHOLD:-0.75}
       ENTITY_SIMILARITY_THRESHOLD: ${ENTITY_SIMILARITY_THRESHOLD:-0.85}
       HF_HOME: /app/models
@@ -279,10 +286,10 @@ services:
       <<: *common-env
       REPORT_OUTPUT_DIR: /app/reports
       REPORT_TEMPLATE_DIR: /app/templates
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2:7b}
       HOME: /tmp
       HF_HOME: /tmp/hf_cache
       TRANSFORMERS_CACHE: /tmp/hf_cache
-      OLLAMA_REPORT_MODEL: ${OLLAMA_REPORT_MODEL:-llama3.2:3b}
       OLLAMA_REPORT_TIMEOUT_S: ${OLLAMA_REPORT_TIMEOUT_S:-540}
       METRICS_PORT: 8006
     volumes:

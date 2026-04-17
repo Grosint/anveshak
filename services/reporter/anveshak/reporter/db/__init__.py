@@ -38,7 +38,11 @@ SQL_FETCH_REPORT = """
 SQL_FETCH_TOPIC = "SELECT * FROM topics WHERE id = $1"
 
 SQL_FETCH_RAG_CHUNKS = """
-    SELECT id, clean_text, credibility_score_at_capture, url, source_id
+    SELECT id,
+           COALESCE(translated_text, clean_text) AS clean_text,
+           credibility_score_at_capture,
+           url,
+           source_id
     FROM content_items
     WHERE topic_id = $1
       AND embedding IS NOT NULL

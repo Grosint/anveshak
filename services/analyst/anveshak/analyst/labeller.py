@@ -91,7 +91,7 @@ async def call_ollama_label(prompt: str) -> str:
         resp = await client.post(
             f"{settings.ollama_host}/api/generate",
             json={
-                "model": settings.ollama_cluster_model,
+                "model": settings.ollama_model,
                 "prompt": prompt,
                 "stream": False,
                 "options": {"num_predict": settings.llm_max_tokens},

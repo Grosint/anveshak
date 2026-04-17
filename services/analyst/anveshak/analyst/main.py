@@ -46,7 +46,7 @@ async def main():
     log.info("analyst.starting",
              spacy_en=settings.spacy_en_model,
              embedding_model=settings.embedding_model,
-             cluster_model=settings.ollama_cluster_model)
+             cluster_model=settings.ollama_model)
 
     # criteria 1.17, 1.18: load models ONCE before starting loops
     load_models()
