@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: anveshak
+
+resources:
+  - namespace.yml
+  - secrets-template.yml
+  - postgres.yml
+  - redis.yml
+  - api.yml
+  - analyst.yml
+
+commonLabels:
+  app.kubernetes.io/part-of: anveshak
+  app.kubernetes.io/managed-by: kustomize

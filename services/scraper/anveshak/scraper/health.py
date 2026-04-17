@@ -15,6 +15,7 @@ import httpx
 import structlog
 
 from .fetch import fetch_url
+from .metrics import scraper_circuit_breaker_total
 from .settings import settings
 
 log = structlog.get_logger(__name__)
@@ -29,7 +30,7 @@ _PAYWALL_PATTERNS = frozenset({
 })
 
 SQL_GET_ALL_ACTIVE_SOURCES = """
-    SELECT id, url_or_handle, platform, consecutive_failures
+    SELECT id, url_or_handle, platform, consecutive_failures, health_status
     FROM sources
     WHERE is_active = TRUE AND platform IN ('rss', 'web')
 """
@@ -116,6 +117,7 @@ async def run_all_health_checks(db_pool) -> int:
         url: str = source["url_or_handle"]
         platform: str = source["platform"]
         prev_failures: int = source["consecutive_failures"]
+        prev_status: str = source["health_status"]
 
         try:
             if platform == "rss":
@@ -129,6 +131,25 @@ async def run_all_health_checks(db_pool) -> int:
                 await conn.execute(
                     SQL_UPDATE_HEALTH,
                     source_id, new_status, new_failures, result.error,
+                )
+
+            # Circuit breaker recovery: log when a "down" source comes back
+            if prev_status == "down" and new_status == "healthy":
+                scraper_circuit_breaker_total.labels(event="recovered").inc()
+                log.info(
+                    "health.circuit_breaker_recovered",
+                    source_id=source_id,
+                    platform=platform,
+                    url=url,
+                )
+            elif new_status == "down" and prev_status != "down":
+                scraper_circuit_breaker_total.labels(event="tripped").inc()
+                log.warning(
+                    "health.circuit_breaker_tripped",
+                    source_id=source_id,
+                    platform=platform,
+                    url=url,
+                    consecutive_failures=new_failures,
                 )
 
             log.info(

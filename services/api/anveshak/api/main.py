@@ -19,6 +19,8 @@ from .middleware.security import SecurityHeadersMiddleware
 from .signal_delivery import signal_delivery_loop
 from .settings import settings
 from .routes import health, topics, sources, signals, auth, content
+from .routes.export import router as export_router
+from .routes.intelligence import router as intelligence_router
 from .routes.vision import router as vision_router, content_vision_router
 from .routes.reports import router as reports_router
 from .routes.system import router as system_router
@@ -102,6 +104,8 @@ app.include_router(content.router)
 app.include_router(vision_router)           # Phase 4: vision analysis + pHash search
 app.include_router(content_vision_router)   # Phase 4: GET /api/v1/content/{id}/vision
 app.include_router(reports_router)          # Phase 5: report generation + GeoJSON
+app.include_router(export_router)           # CSV/JSON export for content, signals, entities
+app.include_router(intelligence_router)     # Entity graph, topic similarity, source discovery
 app.include_router(system_router)           # Pipeline health metrics for make validate
 
 # Prometheus metrics endpoint — uses isolated registry (API_REGISTRY) so custom

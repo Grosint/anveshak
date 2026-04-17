@@ -39,12 +39,14 @@ SQL_GET_WEB_SOURCES = """
     SELECT s.id, s.url_or_handle, s.credibility_score
     FROM sources s
     WHERE s.is_active = TRUE AND s.platform = 'web'
+      AND s.health_status != 'down'
 """
 
 SQL_GET_RSS_SOURCES = """
     SELECT s.id, s.url_or_handle, s.credibility_score
     FROM sources s
     WHERE s.is_active = TRUE AND s.platform = 'rss'
+      AND s.health_status != 'down'
 """
 
 SQL_INSERT_CONTENT = """

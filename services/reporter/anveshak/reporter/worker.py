@@ -120,8 +120,11 @@ async def generate_report(ctx: dict, report_id: str) -> None:
         return
 
     # --- 4. Assemble context and render prompt ---
-    context = assemble_context(chunks, max_tokens=s.rag_max_context_tokens)
-    prompt = render_prompt(report_type, topic_name, keywords, context)
+    context, source_count, date_range = assemble_context(chunks, max_tokens=s.rag_max_context_tokens)
+    prompt = render_prompt(
+        report_type, topic_name, keywords, context,
+        source_count=source_count, date_range=date_range,
+    )
 
     # --- 5. Call LLM ---
     report_content = await call_ollama_with_retry(prompt, s, max_retries=s.ollama_retry_max)

@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     vision_service_url: Optional[str] = "http://vision:8003"
     phash_duplicate_threshold: int = 8   # Hamming distance for reverse-image search
 
+    # Signal webhook notifications
+    signal_webhook_enabled: bool = False
+    signal_webhook_url: Optional[str] = None
+
     # Service
     debug: bool = False
     log_level: str = "INFO"

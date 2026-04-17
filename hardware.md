@@ -392,6 +392,38 @@ TRANSLATION_MAX_CHARS=1500                          →  TRANSLATION_MAX_CHARS=5
 
 ---
 
+## Sentiment Analysis — `analyst` service
+
+**Current implementation:**
+- Library: VADER (Valence Aware Dictionary and sEntiment Reasoner)
+- Type: Rule-based, pure Python, ~1MB memory
+- Speed: <1ms per article (negligible)
+- Output: compound score [-1.0, 1.0] stored in `content_items.labels.sentiment`
+
+**Upgrade path:** None required — VADER is CPU-native, no GPU benefit.
+For domain-specific sentiment (military/intelligence language), consider fine-tuning
+a DistilBERT classifier on labelled OSINT data when GPU available.
+
+**Config change:** None required.
+**Code change:** None.
+
+---
+
+## Keyword Extraction — `analyst` service
+
+**Current implementation:**
+- Library: YAKE (Yet Another Keyword Extractor)
+- Type: Unsupervised, statistical, pure Python
+- Speed: <10ms per article (negligible)
+- Output: top-10 key phrases stored in `content_items.labels.keywords`
+
+**Upgrade path:** None required — YAKE is CPU-native, no GPU benefit.
+
+**Config change:** None required.
+**Code change:** None.
+
+---
+
 ## Summary Upgrade Checklist
 
 When production hardware (RTX 3080+, 32GB RAM) is available, update these env vars in .env:

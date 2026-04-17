@@ -48,28 +48,49 @@ def generate_query_embedding(
 def assemble_context(
     chunks: list[dict[str, Any]],
     max_tokens: int,
-) -> str:
+) -> tuple[str, int, str]:
     """Build prompt context from RAG chunks, stopping at max_tokens.
 
     Token estimate: len(text) // 4  (rough 1 token ≈ 4 chars heuristic).
 
     Each chunk is formatted as:
-        [Source: <url>]
+        [Source: <url> | Credibility: <score> | <date>]
         <clean_text>
 
     Chunks are included in order (already ranked by similarity from the DB query).
-    Returns empty string when chunks is empty or max_tokens is 0.
+    Returns (context_string, source_count, date_range).
+    Returns ("", 0, "") when chunks is empty or max_tokens is 0.
     """
     if not chunks or max_tokens <= 0:
-        return ""
+        return "", 0, ""
 
     parts: list[str] = []
     token_count = 0
+    dates: list[str] = []
 
     for chunk in chunks:
         url = chunk.get("url", "unknown")
         text = chunk.get("clean_text", "")
-        formatted = f"[Source: {url}]\n{text}\n\n"
+        cred = chunk.get("credibility_score_at_capture", 50.0)
+        captured = chunk.get("captured_at")
+
+        date_str = ""
+        if captured is not None:
+            try:
+                date_str = captured.strftime("%Y-%m-%d")
+                dates.append(date_str)
+            except (AttributeError, TypeError):
+                date_str = str(captured)[:10]
+                dates.append(date_str)
+
+        header_parts = [f"Source: {url}"]
+        if cred is not None:
+            header_parts.append(f"Credibility: {float(cred):.1f}")
+        if date_str:
+            header_parts.append(date_str)
+
+        header = " | ".join(header_parts)
+        formatted = f"[{header}]\n{text}\n\n"
         chunk_tokens = len(formatted) // 4
 
         if token_count + chunk_tokens > max_tokens:
@@ -78,4 +99,13 @@ def assemble_context(
         parts.append(formatted)
         token_count += chunk_tokens
 
-    return "".join(parts)
+    source_count = len(parts)
+    date_range = ""
+    if dates:
+        sorted_dates = sorted(set(dates))
+        if len(sorted_dates) == 1:
+            date_range = sorted_dates[0]
+        else:
+            date_range = f"{sorted_dates[0]} to {sorted_dates[-1]}"
+
+    return "".join(parts), source_count, date_range

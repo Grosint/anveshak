@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analyst
+  namespace: anveshak
+  labels:
+    app: analyst
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: analyst
+  template:
+    metadata:
+      labels:
+        app: analyst
+    spec:
+      containers:
+        - name: analyst
+          image: anveshak-analyst:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8004
+          env:
+            - name: POSTGRES_URL
+              value: "postgresql://anveshak:$(POSTGRES_PASSWORD)@postgres:5432/anveshak"
+            - name: REDIS_URL
+              value: "redis://redis:6379/0"
+            - name: OLLAMA_HOST
+              value: "http://ollama:11434"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: anveshak-secrets
+                  key: POSTGRES_PASSWORD
+          resources:
+            requests:
+              memory: 4Gi
+              cpu: 500m
+            limits:
+              memory: 6Gi    # 3 spaCy + NLLB + embeddings
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: analyst
+  namespace: anveshak
+spec:
+  selector:
+    app: analyst
+  ports:
+    - port: 8004
+      targetPort: 8004

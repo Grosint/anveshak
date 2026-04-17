@@ -26,7 +26,7 @@ function decodeJWT(token: string): JWTPayload | null {
 }
 
 function isExpired(payload: JWTPayload): boolean {
-  return Date.now() / 1000 > payload.exp
+  return Date.now() / 1000 >= payload.exp
 }
 
 function loadInitial(): { user: JWTPayload | null; token: string | null } {

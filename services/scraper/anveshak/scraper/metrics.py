@@ -39,3 +39,19 @@ arq_jobs_failed_total = Counter(
     ["job_name"],
     registry=REGISTRY,
 )
+
+# Circuit breaker events — tripped (source went down) and recovered
+scraper_circuit_breaker_total = Counter(
+    "scraper_circuit_breaker_total",
+    "Circuit breaker state transitions",
+    ["event"],  # "tripped" or "recovered"
+    registry=REGISTRY,
+)
+
+# Sources skipped due to circuit breaker (down status)
+scraper_sources_skipped_total = Counter(
+    "scraper_sources_skipped_total",
+    "Sources skipped by circuit breaker (health_status=down)",
+    ["platform"],
+    registry=REGISTRY,
+)

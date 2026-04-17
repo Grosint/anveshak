@@ -82,7 +82,7 @@ class TestGenerateReportIdempotency:
             patch("anveshak.reporter.worker.db") as mock_db_mod,
             patch("anveshak.reporter.worker.call_ollama_with_retry", new_callable=AsyncMock) as mock_llm,
             patch("anveshak.reporter.worker.generate_query_embedding", return_value=[0.1] * 384),
-            patch("anveshak.reporter.worker.assemble_context", return_value="context text"),
+            patch("anveshak.reporter.worker.assemble_context", return_value=("context text", 1, "2026-04-10")),
             patch("anveshak.reporter.worker.render_prompt", return_value="prompt text"),
         ):
             mock_db_mod.fetch_report = AsyncMock(return_value=mock_report)
@@ -181,7 +181,7 @@ class TestGenerateReportIdempotency:
             patch("anveshak.reporter.worker.db") as mock_db_mod,
             patch("anveshak.reporter.worker.call_ollama_with_retry", new_callable=AsyncMock) as mock_llm,
             patch("anveshak.reporter.worker.generate_query_embedding", return_value=[0.1] * 384),
-            patch("anveshak.reporter.worker.assemble_context", return_value="context text"),
+            patch("anveshak.reporter.worker.assemble_context", return_value=("context text", 1, "2026-04-10")),
             patch("anveshak.reporter.worker.render_prompt", return_value="prompt text"),
         ):
             mock_db_mod.fetch_report = AsyncMock(return_value=mock_report)
@@ -238,7 +238,7 @@ class TestGenerateReportIdempotency:
             patch("anveshak.reporter.worker.db") as mock_db_mod,
             patch("anveshak.reporter.worker.call_ollama_with_retry", new_callable=AsyncMock) as mock_llm,
             patch("anveshak.reporter.worker.generate_query_embedding", return_value=[0.1] * 384),
-            patch("anveshak.reporter.worker.assemble_context", return_value="context text"),
+            patch("anveshak.reporter.worker.assemble_context", return_value=("context text", 1, "2026-04-10")),
             patch("anveshak.reporter.worker.render_prompt", return_value="prompt text"),
             patch("anveshak.reporter.worker.geocode_locations", return_value={}),
             patch("anveshak.reporter.worker.extract_locations_from_text", return_value=[]),

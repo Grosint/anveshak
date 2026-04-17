@@ -20,6 +20,8 @@ from .labeller import generate_label_for_cluster
 from .metrics import analyst_nlp_jobs_total, analyst_nlp_duration_seconds, analyst_clusters_created_total, arq_jobs_failed_total
 from .nlp import detect_language, load_models, parse_entities
 from .settings import settings
+from .keywords import extract_keywords
+from .sentiment import analyse_sentiment
 from .translation import needs_translation, translate_to_english
 
 log = structlog.get_logger(__name__)
@@ -40,8 +42,9 @@ SQL_UPDATE_CONTENT_NLP = """
         language           = $2,
         translated_text    = $3,
         translation_model  = $4,
-        updated_at         = $5
-    WHERE id = $6
+        labels             = $5::jsonb,
+        updated_at         = $6
+    WHERE id = $7
 """
 
 SQL_INSERT_ENTITY = """
@@ -128,6 +131,25 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
         # pgvector expects "[x1,x2,...]" string when using $1::vector cast in asyncpg
         embedding_str = "[" + ",".join(f"{x:.8f}" for x in embedding) + "]"
 
+        # --- Step 4b: Sentiment + keyword extraction (CPU-only, no extra ML) ---
+        sentiment = analyse_sentiment(work_text)
+        kw_results = extract_keywords(work_text, language="en", max_keywords=10)
+
+        import json
+        labels_dict = {
+            "classification": "OPEN",
+            "domain": "osint",
+            "owner_org": "anveshak",
+            "sentiment": {
+                "compound": sentiment.compound,
+                "positive": sentiment.positive,
+                "negative": sentiment.negative,
+                "neutral": sentiment.neutral,
+            },
+            "keywords": [kw.keyword for kw in kw_results],
+        }
+        labels_json = json.dumps(labels_dict)
+
         now = datetime.now(UTC)
 
         # --- Step 5: Write to DB (criteria 1.16) ---
@@ -135,7 +157,8 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
             async with conn.transaction():
                 await conn.execute(
                     SQL_UPDATE_CONTENT_NLP,
-                    embedding_str, lang, translated_text, translation_model_used, now, content_item_id,
+                    embedding_str, lang, translated_text, translation_model_used,
+                    labels_json, now, content_item_id,
                 )
                 for ent in entities:
                     await conn.execute(

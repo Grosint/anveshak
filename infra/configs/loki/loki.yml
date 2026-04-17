@@ -57,7 +57,6 @@ ingester:
     final_sleep: 0s
   chunk_idle_period: 5m
   chunk_retain_period: 30s
-  max_transfer_retries: 0
 
 # Compactor: enforces retention and deduplicated chunk writes
 compactor:
@@ -67,6 +66,7 @@ compactor:
   retention_delete_delay: 2h
   retention_delete_worker_count: 150
   delete_request_cancel_period: 24h
+  delete_request_store: filesystem
 
 # Retention policy — 7 days by default; sovereign deployment keeps short window
 limits_config:

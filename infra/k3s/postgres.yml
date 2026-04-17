@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: anveshak
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: anveshak
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: pgvector/pgvector:pg16
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: anveshak
+            - name: POSTGRES_DB
+              value: anveshak
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: anveshak-secrets
+                  key: POSTGRES_PASSWORD
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 250m
+            limits:
+              memory: 2Gi
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "anveshak"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgres-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: anveshak
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

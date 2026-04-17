@@ -494,3 +494,44 @@ purge:
 	@docker image prune -f 2>/dev/null || true
 	$(call success,Full purge complete)
 	@printf "\n  To start fresh: $(_BOLD)make setup$(_RST)\n\n"
+
+# =============================================================================
+# BACKUP / RESTORE
+# =============================================================================
+
+# backup — PostgreSQL + Redis + media
+backup:
+	$(call header,Creating Backup)
+	@bash scripts/backup.sh
+
+# restore — from backup directory
+restore:
+	$(call header,Restoring from Backup)
+	@if [ -z "$(BACKUP_DIR)" ]; then \
+		printf "  $(_RED)Usage: make restore BACKUP_DIR=./backups/anveshak_20260417_120000$(_RST)\n"; \
+		exit 1; \
+	fi
+	@bash scripts/restore.sh $(BACKUP_DIR)
+
+# =============================================================================
+# K3S DEPLOYMENT
+# =============================================================================
+
+# k3s-deploy — apply all k3s manifests
+k3s-deploy:
+	$(call header,Deploying to k3s)
+	@kubectl apply -k infra/k3s/
+	$(call success,k3s manifests applied)
+	@printf "\n  Watch pods: $(_BOLD)kubectl get pods -n anveshak -w$(_RST)\n\n"
+
+# k3s-teardown — delete the anveshak namespace
+k3s-teardown:
+	$(call header,Tearing down k3s deployment)
+	@printf "  $(_RED)$(_BOLD)This will delete the anveshak namespace and all resources.$(_RST)\n"
+	@printf "  $(_YEL)Continue? [y/N]$(_RST) "; \
+	read confirm; \
+	if [ "$$confirm" != "y" ] && [ "$$confirm" != "Y" ]; then \
+		printf "  Aborted.\n"; exit 1; \
+	fi
+	@kubectl delete namespace anveshak --ignore-not-found
+	$(call success,k3s namespace deleted)

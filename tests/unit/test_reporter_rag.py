@@ -28,16 +28,18 @@ class TestAssembleContext:
     def test_empty_chunks_returns_empty_string(self):
         from anveshak.reporter.rag import assemble_context
 
-        result = assemble_context([], max_tokens=4000)
+        result, count, dr = assemble_context([], max_tokens=4000)
         assert result == ""
+        assert count == 0
 
     def test_single_chunk_included(self):
         from anveshak.reporter.rag import assemble_context
 
         chunks = [_make_chunk("https://example.com/a", "Some intelligence text here.")]
-        result = assemble_context(chunks, max_tokens=4000)
+        result, count, dr = assemble_context(chunks, max_tokens=4000)
         assert "Some intelligence text here." in result
         assert "https://example.com/a" in result
+        assert count == 1
 
     def test_truncates_at_max_tokens(self):
         from anveshak.reporter.rag import assemble_context
@@ -49,7 +51,7 @@ class TestAssembleContext:
             _make_chunk("https://a.com/2", long_text),
             _make_chunk("https://a.com/3", long_text),
         ]
-        result = assemble_context(chunks, max_tokens=150)
+        result, count, dr = assemble_context(chunks, max_tokens=150)
         # Only first chunk should fit (400 chars ÷ 4 = 100 tokens, second would exceed 150)
         assert "https://a.com/1" in result
         assert "https://a.com/3" not in result
@@ -58,7 +60,7 @@ class TestAssembleContext:
         from anveshak.reporter.rag import assemble_context
 
         chunks = [_make_chunk("https://news.example.com/article", "Breaking: test event.")]
-        result = assemble_context(chunks, max_tokens=4000)
+        result, count, dr = assemble_context(chunks, max_tokens=4000)
         assert "[Source:" in result
         assert "https://news.example.com/article" in result
 
@@ -69,16 +71,18 @@ class TestAssembleContext:
             _make_chunk("https://a.com/1", "First item."),
             _make_chunk("https://a.com/2", "Second item."),
         ]
-        result = assemble_context(chunks, max_tokens=4000)
+        result, count, dr = assemble_context(chunks, max_tokens=4000)
         assert "First item." in result
         assert "Second item." in result
+        assert count == 2
 
     def test_zero_max_tokens_returns_empty(self):
         from anveshak.reporter.rag import assemble_context
 
         chunks = [_make_chunk("https://a.com/1", "Some text here that is long enough.")]
-        result = assemble_context(chunks, max_tokens=0)
+        result, count, dr = assemble_context(chunks, max_tokens=0)
         assert result == ""
+        assert count == 0
 
 
 class TestGenerateQueryEmbedding:

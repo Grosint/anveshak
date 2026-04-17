@@ -23,6 +23,8 @@ dependencies = [
     "pydantic-settings>=2.2",
     "structlog>=24.1",
     "prometheus-client>=0.20",
+    "vaderSentiment>=3.3",
+    "yake>=0.4",
 ]
 [tool.hatch.build.targets.wheel]
 packages = ["anveshak"]

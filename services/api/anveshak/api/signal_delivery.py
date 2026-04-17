@@ -70,7 +70,7 @@ async def _deliver_one(
     row: asyncpg.Record,
     broadcast: object,  # Callable[[dict], Awaitable[None]]
 ) -> None:
-    """Broadcast a single signal and mark it delivered."""
+    """Broadcast a single signal via WebSocket + webhook, then mark delivered."""
     payload = _build_ws_payload(row)
     try:
         await broadcast(payload)
@@ -82,6 +82,14 @@ async def _deliver_one(
             signal_id=row["id"],
             error=str(exc),
         )
+
+    # Webhook notification — non-blocking, failures never prevent delivery
+    try:
+        from .notifications import send_webhook
+        await send_webhook(payload)
+    except Exception as exc:
+        log.debug("signal_delivery.webhook_noop", signal_id=row["id"], error=str(exc))
+
     await conn.execute(SQL_MARK_DELIVERED, datetime.now(UTC), row["id"])
     log.info("signal_delivery.delivered", signal_id=row["id"], topic_id=row["topic_id"])
 
