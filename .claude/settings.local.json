@@ -100,7 +100,17 @@
       "Bash(docker stats:*)",
       "Bash(chmod:*)",
       "Bash(make -n syscheck)",
-      "Bash(make health:*)"
+      "Bash(make health:*)",
+      "Bash(find /Users/navitas28/Work/anveshak/frontend -name vite.config.ts -o -name vitest.config.ts -o -name jest.config.*)",
+      "Bash(ls -la /Users/navitas28/Work/anveshak/tests/unit/test_reporter*)",
+      "Bash(xargs -I {} ls -la {})",
+      "Bash(gh api:*)",
+      "WebFetch(domain:subzeroid.github.io)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:snyk.io)",
+      "Bash(npx vitest:*)",
+      "Bash(make restart-loki:*)",
+      "Bash(ls:*)"
     ]
   }
 }
