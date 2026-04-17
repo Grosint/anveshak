@@ -110,7 +110,14 @@
       "WebFetch(domain:snyk.io)",
       "Bash(npx vitest:*)",
       "Bash(make restart-loki:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "WebFetch(domain:www.vendr.com)",
+      "WebFetch(domain:www.digitalstakeout.com)",
+      "WebFetch(domain:senzing.com)",
+      "WebFetch(domain:www.quora.com)",
+      "WebFetch(domain:fed-spend.com)",
+      "WebFetch(domain:www.maltego.com)",
+      "WebFetch(domain:startupmandi.in)"
     ]
   }
 }
