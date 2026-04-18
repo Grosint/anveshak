@@ -13,6 +13,21 @@ x-common-env: &common-env
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   ENVIRONMENT: ${ENVIRONMENT:-production}
 
+x-vision-env: &vision-env
+  <<: *common-env
+  VISION_DEVICE: ${VISION_DEVICE:-cpu}
+  MODEL_DIR: /app/models
+  MEDIA_STORAGE_ROOT: /app/media
+  YOLO_MODEL_SIZE: ${YOLO_MODEL_SIZE:-nano}
+  CLIP_MODEL_NAME: ${CLIP_MODEL_NAME:-openai/clip-vit-base-patch32}
+  VISION_DEEPFAKE_IMAGE_MODEL: ${VISION_DEEPFAKE_IMAGE_MODEL:-facetorch}
+  VISION_DEEPFAKE_VIDEO_MODEL: ${VISION_DEEPFAKE_VIDEO_MODEL:-efficientnet}
+  VISION_BATCH_SIZE: ${VISION_BATCH_SIZE:-1}
+  PHASH_DUPLICATE_THRESHOLD: ${PHASH_DUPLICATE_THRESHOLD:-8}
+  VIDEO_KEYFRAME_INTERVAL_S: ${VIDEO_KEYFRAME_INTERVAL_S:-5}
+  VISION_MAX_VIDEO_SIZE_MB: ${VISION_MAX_VIDEO_SIZE_MB:-500}
+  EXIF_BACKEND: ${EXIF_BACKEND:-pillow}
+
 x-healthcheck-defaults: &healthcheck-defaults
   interval: 30s
   timeout: 10s
@@ -108,6 +123,7 @@ services:
       SOCIAL_SERVICE_URL: http://social:8002
       ANALYST_SERVICE_URL: http://analyst:8004
       REPORTER_SERVICE_URL: http://reporter:8005
+      VISION_SERVICE_URL: http://vision:8003
     ports:
       - "8000:8000"
     depends_on:
@@ -136,6 +152,11 @@ services:
       SCRAPER_CONCURRENCY: ${SCRAPER_CONCURRENCY:-4}
       SCRAPER_REQUEST_TIMEOUT_S: ${SCRAPER_REQUEST_TIMEOUT_S:-30}
       TOR_PROXY_URL: ${TOR_PROXY_URL:-}
+      MEDIA_STORAGE_ROOT: /app/media
+      MEDIA_MAX_SIZE_MB: ${MEDIA_MAX_SIZE_MB:-50}
+      MEDIA_DOWNLOAD_ENABLED: "true"
+    volumes:
+      - vision_media:/app/media
     ports:
       - "8001:8001"
     depends_on:
@@ -196,6 +217,10 @@ services:
       INSTAGRAM_USERNAME: ${INSTAGRAM_USERNAME:-}
       INSTAGRAM_PASSWORD: ${INSTAGRAM_PASSWORD:-}
       SOCIAL_RATE_LIMIT_RPM: ${SOCIAL_RATE_LIMIT_RPM:-60}
+      MEDIA_STORAGE_ROOT: /app/media
+      MEDIA_MAX_SIZE_MB: ${MEDIA_MAX_SIZE_MB:-50}
+    volumes:
+      - vision_media:/app/media
     ports:
       - "8002:8002"
     depends_on:
@@ -312,6 +337,66 @@ services:
     networks:
       - anveshak-net
     command: ["python", "-m", "arq", "anveshak.reporter.worker.WorkerSettings"]
+
+  # ---------------------------------------------------------------------------
+  # Vision (M4: YOLO, CLIP, deepfake, EXIF, pHash)
+  # ---------------------------------------------------------------------------
+
+  vision:
+    build:
+      context: ..
+      dockerfile: services/vision/Dockerfile
+    restart: unless-stopped
+    mem_limit: 4g
+    environment:
+      <<: *vision-env
+      PORT: 8003
+    volumes:
+      - vision_models:/app/models
+      - vision_media:/app/media
+    ports:
+      - "8003:8003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8003/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    networks:
+      - anveshak-net
+
+  # ARQ worker for vision analysis jobs (run_vision_analysis)
+  # Separate process from FastAPI so uploads don't block ML inference
+  vision-worker:
+    build:
+      context: ..
+      dockerfile: services/vision/Dockerfile
+    restart: unless-stopped
+    mem_limit: 6g
+    environment:
+      <<: *vision-env
+    volumes:
+      - vision_models:/app/models
+      - vision_media:/app/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import arq; import anveshak.vision.jobs'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - anveshak-net
+    command: ["python", "-m", "arq", "anveshak.vision.jobs.WorkerSettings"]
 
   # ---------------------------------------------------------------------------
   # Frontend
@@ -535,4 +620,8 @@ volumes:
   loki_data:
     driver: local
   promtail_positions:
+    driver: local
+  vision_models:
+    driver: local
+  vision_media:
     driver: local

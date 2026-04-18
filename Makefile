@@ -3,11 +3,11 @@
 # =============================================================================
 #
 # SETUP (new developer):
-#   make setup            full first-run: syscheck -> build -> infra up -> migrate -> pull-models -> all up + seed -> validate
+#   make setup            full first-run: syscheck -> build -> infra up -> migrate -> pull-models -> all up -> download-models -> seed -> validate
 #
 # LIFECYCLE:
-#   make up               start core stack (no rebuild)
-#   make up-vision        core + vision overlay
+#   make up               start full stack including vision (no rebuild)
+#   make up-vision        full stack + NVIDIA GPU overlay for vision
 #   make up-bridge        core + Drishti bridge overlay
 #   make down             stop all containers
 #   make restart          restart all containers
@@ -86,7 +86,7 @@ _INFO  := $(_BLU)→$(_RST)
 _WORK  := $(_CYN)⟳$(_RST)
 
 .PHONY: all setup up up-vision up-bridge build build-vision down restart \
-        ps logs init pull-models migrate migrate-status migrate-hnsw \
+        ps logs init pull-models download-models migrate migrate-status migrate-hnsw \
         migrate-rollback seed-demo \
         fresh fresh-all \
         test test-unit test-integration test-e2e test-coverage \
@@ -140,7 +140,7 @@ endef
 
 setup:
 	$(call header,ANVESHAK — First-Run Setup)
-	$(call step,Step 1/7,System requirements check)
+	$(call step,Step 1/8,System requirements check)
 	@$(UV) python scripts/syscheck.py || { \
 		printf "\n"; \
 		printf "  $(_WARN) $(_YEL)System does not meet minimum requirements — see above$(_RST)\n"; \
@@ -149,12 +149,12 @@ setup:
 		if [ "$$confirm" != "y" ] && [ "$$confirm" != "Y" ]; then exit 1; fi; \
 	}
 	$(call check_env)
-	$(call step,Step 2/7,Building Docker images)
+	$(call step,Step 2/8,Building Docker images)
 	@$(COMPOSE) build
 	$(call success,Images built)
-	$(call step,Step 3/7,Starting infrastructure — postgres + redis + ollama)
+	$(call step,Step 3/8,Starting infrastructure — postgres + redis + ollama)
 	@$(COMPOSE) up -d --remove-orphans postgres redis ollama
-	$(call step,Step 4/7,Waiting for infrastructure to be healthy...)
+	$(call step,Step 4/8,Waiting for infrastructure to be healthy...)
 	@timeout=120; elapsed=0; \
 	while [ $$elapsed -lt $$timeout ]; do \
 		healthy=$$(docker compose --env-file .env -p anveshak -f infra/compose.yml ps --format json 2>/dev/null | python3 -c "import sys,json; lines=sys.stdin.read().strip().split('\n'); print(sum(1 for l in lines if json.loads(l).get('Health','')=='healthy'))" 2>/dev/null || echo 0); \
@@ -163,7 +163,7 @@ setup:
 		printf "  $(_DIM)  waiting... ($$elapsed/$$timeout s)$(_RST)\r"; \
 	done
 	$(call success,Infrastructure healthy)
-	$(call step,Step 5/7,Running migrations + pulling Ollama model)
+	$(call step,Step 5/8,Running migrations + pulling Ollama model)
 	@$(COMPOSE) exec -T api alembic upgrade head 2>&1 || { \
 		printf "  $(_INFO) API not yet running — starting it for migrations...\n"; \
 		$(COMPOSE) up -d api; sleep 10; \
@@ -173,7 +173,7 @@ setup:
 	@printf "  $(_WORK) Pulling Ollama model (this may take several minutes on first run)...\n"
 	@$(COMPOSE) exec -T ollama ollama pull $$(grep -E '^OLLAMA_MODEL=' .env 2>/dev/null | cut -d= -f2 | sed 's/#.*//' | tr -d ' ' || echo "qwen2:7b") 2>&1 | tail -3
 	$(call success,Ollama model ready)
-	$(call step,Step 6/7,Starting all services + seeding demo data)
+	$(call step,Step 6/8,Starting all services)
 	@$(COMPOSE) up -d --remove-orphans
 	@timeout=120; elapsed=0; \
 	while [ $$elapsed -lt $$timeout ]; do \
@@ -183,9 +183,16 @@ setup:
 		printf "  $(_DIM)  waiting for services... ($$elapsed/$$timeout s)$(_RST)\r"; \
 	done
 	$(call success,All services started)
+	$(call step,Step 7/8,Downloading deepfake ONNX models)
+	@$(COMPOSE) cp scripts/download_models.py vision:/tmp/download_models.py
+	@$(COMPOSE) exec -T -u root vision pip install -q onnxscript 2>/dev/null || true
+	@$(COMPOSE) exec -T -u root vision python /tmp/download_models.py --model-dir /app/models
+	@$(COMPOSE) exec -T -u root vision chown -R anveshak:anveshak /app/models/
+	@$(COMPOSE) restart vision-worker
+	$(call success,Deepfake models ready — vision worker restarted)
 	@$(COMPOSE) exec -T postgres psql -U anveshak -d anveshak < scripts/seed_demo.sql 2>&1 | tail -1
 	$(call success,Demo scenario loaded)
-	$(call step,Step 7/7,Validating pipeline)
+	$(call step,Step 8/8,Validating pipeline)
 	@$(UV) python scripts/validate_pipeline.py || { \
 		printf "\n"; \
 		printf "  $(_WARN) $(_YEL)Validation had failures — this is expected on first setup$(_RST)\n"; \
@@ -225,10 +232,10 @@ up:
 	@printf "  Run $(_BOLD)make health$(_RST) for quick health check\n\n"
 
 up-vision:
-	$(call header,Starting Anveshak + Vision Service)
+	$(call header,Starting Anveshak + Vision GPU Overlay)
 	$(call check_env)
 	@$(COMPOSE_VIS) up -d --remove-orphans
-	$(call success,Core + Vision stack started)
+	$(call success,Core + Vision (GPU) stack started)
 
 up-bridge:
 	$(call header,Starting Anveshak + Drishti Bridge)
@@ -280,6 +287,15 @@ pull-models:
 	@$(COMPOSE) exec -T ollama ollama pull $$(grep -E '^OLLAMA_MODEL=' .env 2>/dev/null | cut -d= -f2 | sed 's/#.*//' | tr -d ' ' || echo "qwen2:7b")
 	$(call success,Model ready)
 
+download-models:
+	$(call header,Downloading Deepfake ONNX Models)
+	@$(COMPOSE) cp scripts/download_models.py vision:/tmp/download_models.py
+	@$(COMPOSE) exec -T -u root vision pip install -q onnxscript 2>/dev/null || true
+	@$(COMPOSE) exec -T -u root vision python /tmp/download_models.py --model-dir /app/models
+	@$(COMPOSE) exec -T -u root vision chown -R anveshak:anveshak /app/models/
+	@$(COMPOSE) restart vision-worker
+	$(call success,Deepfake models ready — vision worker restarted)
+
 # Pull upgraded models when hardware is available (see hardware.md)
 pull-models-gpu:
 	$(call header,Pulling GPU-Tier Ollama Models)
@@ -328,7 +344,7 @@ seed-demo:
 # Fresh start shortcuts
 # ---------------------------------------------------------------------------
 
-fresh: clean-containers build up migrate validate
+fresh: clean-containers build up migrate download-models validate
 	$(call success,Fresh rebuild complete)
 
 fresh-all:
@@ -352,6 +368,7 @@ fresh-all:
 	@$(MAKE) --no-print-directory migrate
 	@$(MAKE) --no-print-directory up
 	@$(MAKE) --no-print-directory pull-models
+	@$(MAKE) --no-print-directory download-models
 	@$(MAKE) --no-print-directory seed-demo
 	@$(MAKE) --no-print-directory validate
 	$(call success,Full fresh start complete)
@@ -410,7 +427,7 @@ health:
 	$(call header,Service Health Check)
 	@printf "  %-20s %s\n" "SERVICE" "STATUS"
 	@printf "  %-20s %s\n" "───────────────────" "──────────────────────────"
-	@for svc in api:8000 scraper:8001 social:8002 analyst:8004 reporter:8005; do \
+	@for svc in api:8000 scraper:8001 social:8002 vision:8003 analyst:8004 reporter:8005; do \
 		name=$$(echo $$svc | cut -d: -f1); \
 		port=$$(echo $$svc | cut -d: -f2); \
 		if curl -sf http://localhost:$$port/health > /dev/null 2>&1; then \

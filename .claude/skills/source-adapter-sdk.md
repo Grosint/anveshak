@@ -12,6 +12,11 @@
 > See also: `learned/alembic-migrate-in-container.md` — run alembic inside container; host alembic uses wrong DB URL
 > See also: `learned/postgres-volume-password-mismatch.md` — stale volume keeps old password; fix with ALTER USER, not volume wipe
 > See also: `learned/seed-sql-schema-sync.md` — seed SQL drifts from schema silently; verify with \d tablename before debugging logic
+> See also: `learned/makefile-infrastructure-first-setup.md` — start infra before app services; health-poll instead of sleep; `@printf` pitfall in Make shell blocks
+> See also: `learned/docker-nuke-graduated-cleanup.md` — graduated cleanup (clean→purge→nuke); `docker image prune` misses tagged images
+> See also: `learned/compose-overlay-core-feature-trap.md` — core features must be in base compose.yml; overlays only for GPU/optional services
+> See also: `learned/nginx-dynamic-dns-resolver.md` — resolver 127.0.0.11 + set $upstream to avoid 502s after container restarts
+> See also: `learned/volume-mounted-models-silent-failure.md` — empty volume = silent 0.0 scores; need make download-models + health check
 
 ---
 
