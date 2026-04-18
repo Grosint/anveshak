@@ -4,6 +4,8 @@ export interface ContentItem {
   id: string
   url: string
   clean_text: string
+  translated_text?: string | null
+  translation_model?: string | null
   language: string
   credibility_score_at_capture: number
   captured_at: string

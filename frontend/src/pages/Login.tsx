@@ -95,7 +95,10 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0C1018] overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-[#0C1018] overflow-hidden relative">
+
+      {/* ── Intelligence scan line ─────────────────────────────────────────── */}
+      <div className="scan-line" aria-hidden />
 
       {/* ── Classification bar ─────────────────────────────────────────────── */}
       <div className="shrink-0 w-full border-b border-[#F5A623]/12 py-1.5 px-4 text-center"

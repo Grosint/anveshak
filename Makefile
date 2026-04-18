@@ -31,11 +31,15 @@
 #   make health           quick health check (are services up?)
 #   make validate         full pipeline validation (7 stages)
 #   make validate-vision  vision pipeline validation (M4 deepfake)
+#   make validate-vector  vector pipeline validation (dedup, HNSW, temporal, convergence)
+#   make validate-all     all three validation suites
 #
 # TEST:
 #   make test             unit + integration
 #   make test-unit        unit tests only
+#   make test-vector      vector pipeline unit tests only
 #   make test-integration integration tests (requires running stack)
+#   make test-vector-integration  vector cross-dependency tests (requires running stack)
 #   make test-e2e         end-to-end tests (requires full stack + credentials)
 #   make test-coverage    coverage report
 #
@@ -342,6 +346,19 @@ test-e2e:
 	$(call info,Requires full stack + live credentials)
 	@E2E_LIVE=1 $(UV) pytest tests/e2e/ -v --tb=short -m e2e
 
+test-vector:
+	$(call header,Running Vector Pipeline Tests)
+	@$(UV) pytest tests/unit/test_near_duplicate_dedup.py \
+		tests/unit/test_temporal_windowing.py \
+		tests/unit/test_label_staleness.py \
+		tests/unit/test_cross_topic_convergence.py \
+		tests/unit/test_backfill.py -v --tb=short
+
+test-vector-integration:
+	$(call header,Running Vector Pipeline Integration Tests)
+	$(call info,Requires running stack — run make up first)
+	@$(UV) pytest tests/integration/test_vector_pipeline.py -v --tb=short -m integration
+
 test-coverage:
 	$(call header,Running Tests with Coverage)
 	@$(UV) pytest tests/unit/ tests/integration/ \
@@ -403,7 +420,11 @@ validate-vision:
 	$(call header,Vision Pipeline Validation)
 	@$(UV) python scripts/validate_vision.py
 
-validate-all: validate validate-vision
+validate-vector:
+	$(call header,Vector Pipeline Validation)
+	@$(UV) python scripts/validate_vector.py
+
+validate-all: validate validate-vision validate-vector
 
 # Verify all Pydantic models have non-optional labels field
 verify-labels:

@@ -142,11 +142,30 @@ export function ContentDetail({ contentId, onClose }: ContentDetailProps) {
 
             {/* Full text with entity highlighting */}
             <div className="px-5 py-4 border-b border-anveshak-border">
-              <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Content</h3>
+              <div className="flex items-center gap-2 mb-3">
+                <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Content</h3>
+                {item.translated_text && (
+                  <span className="text-[10px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-1.5 py-0.5">
+                    Machine Translated
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">
-                {highlightEntities(item.clean_text, item.extracted_entities ?? [])}
+                {highlightEntities(item.translated_text ?? item.clean_text, item.extracted_entities ?? [])}
               </p>
             </div>
+
+            {/* Original text (collapsible) — shown when translation exists */}
+            {item.translated_text && (
+              <details className="px-5 py-3 border-b border-anveshak-border">
+                <summary className="text-xs font-semibold text-text-muted uppercase tracking-wider cursor-pointer hover:text-text-secondary transition-colors">
+                  View Original ({item.language?.toUpperCase()})
+                </summary>
+                <p className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap mt-2">
+                  {item.clean_text}
+                </p>
+              </details>
+            )}
 
             {/* Entities */}
             {Object.keys(entityTypeGroups).length > 0 && (

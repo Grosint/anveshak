@@ -166,3 +166,41 @@ body {
 .brand-mark-glow {
   animation: brand-glow-pulse 4s ease-in-out infinite;
 }
+
+/* ─── Login scan line — intelligence sweep effect ────────────────────────────
+   A thin amber line sweeps top→bottom continuously across the full page.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@keyframes scan-sweep {
+  0%   { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+.scan-line {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.scan-line::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 40px;
+  top: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(245, 166, 35, 0.03) 30%,
+    rgba(245, 166, 35, 0.12) 48%,
+    rgba(245, 166, 35, 0.25) 50%,
+    rgba(245, 166, 35, 0.12) 52%,
+    rgba(245, 166, 35, 0.03) 70%,
+    transparent 100%
+  );
+  box-shadow: 0 0 20px 4px rgba(245, 166, 35, 0.08);
+  animation: scan-sweep 7s linear infinite;
+}

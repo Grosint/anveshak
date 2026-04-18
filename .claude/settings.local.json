@@ -117,7 +117,16 @@
       "WebFetch(domain:www.quora.com)",
       "WebFetch(domain:fed-spend.com)",
       "WebFetch(domain:www.maltego.com)",
-      "WebFetch(domain:startupmandi.in)"
+      "WebFetch(domain:startupmandi.in)",
+      "Bash(find /Users/navitas28/Work/anveshak/services -name \"*.py\" -exec grep -l \"content_hash\\\\|dedup\\\\|duplicate\" {})",
+      "Bash(find /Users/navitas28/Work/anveshak/services/api -name \"*.py\" -exec grep -l \"embedding\\\\|similarity\\\\|search\" {})",
+      "Bash(find /Users/navitas28/Work/anveshak -name *demo-check* -o -name *phase-check* -o -name *deploy-check*)",
+      "Bash(make test-vector:*)",
+      "Bash(xargs -I {} ls -lh {})",
+      "Bash(docker start:*)",
+      "Bash(printf '{\"\"\"\"email\"\"\"\":\"\"\"\"demo@anveshak.local\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"AnveshakDemo2024!\"\"\"\"}')",
+      "Bash(printf '{\"\"\"\"username\"\"\"\":\"\"\"\"demo@anveshak.local\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"AnveshakDemo2024!\"\"\"\"}')",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJleHAiOjE3NzY1MjQxMTUsImlhdCI6MTc3NjQ5NTMxNX0.X844IaOtyFJMeviq8LD6ToygQUKdbjxRqpaKAvMr9ss\")"
     ]
   }
 }

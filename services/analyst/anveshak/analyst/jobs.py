@@ -204,9 +204,11 @@ async def run_clustering(ctx: dict, topic_id: str) -> None:
     from arq import create_pool
     redis = await create_pool(WorkerSettings.redis_settings)
 
-    # Enqueue label generation for each new/updated cluster (criteria 2.6)
+    # Enqueue label generation only for stale/new clusters (criteria 2.6, P3)
+    from .labeller import check_label_staleness
     for cluster_id in cluster_ids:
-        await redis.enqueue_job("generate_cluster_label", cluster_id)
+        if await check_label_staleness(cluster_id, db_pool):
+            await redis.enqueue_job("generate_cluster_label", cluster_id)
 
     # Enqueue cross-verification boost for this topic (7.1)
     if cluster_ids:

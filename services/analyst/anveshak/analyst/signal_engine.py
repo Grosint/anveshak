@@ -39,6 +39,7 @@ SQL_BREACHING_CLUSTERS = """
     JOIN topics t ON t.id = nc.topic_id
     WHERE nc.independent_source_count >= t.signal_threshold
       AND t.status = 'active'
+      AND nc.archived_at IS NULL
 """
 
 SQL_DUPLICATE_SIGNAL_CHECK = """
@@ -69,6 +70,7 @@ SQL_MISSED_SIGNALS = """
 """
 
 _SIGNAL_TYPE_MULTI_SOURCE = "multi_source_convergence"
+_SIGNAL_TYPE_CROSS_TOPIC = "cross_topic_convergence"
 
 
 # ---------------------------------------------------------------------------

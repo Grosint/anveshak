@@ -11,6 +11,7 @@ import asyncpg
 
 SQL_GET_CONTENT_ITEM = """
     SELECT ci.id, ci.url, ci.clean_text, ci.language,
+           ci.translated_text, ci.translation_model,
            ci.credibility_score_at_capture, ci.captured_at, ci.content_hash,
            ci.topic_id, ci.source_id,
            s.name AS source_name, s.platform
@@ -29,6 +30,7 @@ SQL_GET_ENTITIES = """
 SQL_VECTOR_SEARCH = """
     SELECT ci.id, ci.url,
            LEFT(ci.clean_text, 500) AS clean_text,
+           LEFT(ci.translated_text, 500) AS translated_text,
            ci.language, ci.captured_at,
            ci.credibility_score_at_capture,
            1 - (ci.embedding <=> $1::vector) AS similarity_score

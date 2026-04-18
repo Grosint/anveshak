@@ -188,3 +188,37 @@ class TestBackfillTopic:
         query_args = fetch_calls[0]
         threshold_value = query_args[2]  # $1=topic_id, $2=embedding, $3=threshold
         assert threshold_value == backfill_module.settings.backfill_similarity_threshold
+
+
+# ---------------------------------------------------------------------------
+# Continuous backfill — idempotency
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestContinuousBackfill:
+    """Tests for re-running backfill (Phase 4 — P2a)."""
+
+    @pytest.mark.asyncio
+    async def test_backfill_idempotent_on_repeat(self):
+        """Second backfill run with same data inserts 0 rows (ON CONFLICT DO NOTHING)."""
+        topic_row = {"name": "Defence", "keywords": ["IAF", "rafale"]}
+
+        conn = AsyncMock()
+        conn.fetchrow = AsyncMock(return_value=topic_row)
+        conn.fetch = AsyncMock(return_value=[])  # no similar items on second run
+        conn.execute = AsyncMock()
+        conn.transaction = MagicMock()
+        conn.transaction.return_value.__aenter__ = AsyncMock(return_value=None)
+        conn.transaction.return_value.__aexit__ = AsyncMock(return_value=None)
+        conn.__aenter__ = AsyncMock(return_value=conn)
+        conn.__aexit__ = AsyncMock(return_value=False)
+
+        pool = AsyncMock()
+        pool.acquire = MagicMock(return_value=conn)
+
+        dummy_vec = np.zeros(384, dtype=np.float32)
+        with patch("anveshak.analyst.backfill.encode_text", return_value=dummy_vec):
+            result = await backfill_topic("topic-repeat", pool)
+
+        assert result == 0

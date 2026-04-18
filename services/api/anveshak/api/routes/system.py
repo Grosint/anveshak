@@ -26,3 +26,18 @@ async def pipeline_health(
     metrics = await system_db.get_pipeline_metrics(db)
     log.info("system.pipeline_health_queried", user=user.get("sub"))
     return metrics
+
+
+@router.get("/vector-health")
+async def vector_health(
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Return vector pipeline health metrics for validation.
+
+    Read-only schema and data checks for migrations 002–006.
+    Used by `make validate-vector` (scripts/validate_vector.py).
+    """
+    metrics = await system_db.get_vector_health(db)
+    log.info("system.vector_health_queried", user=user.get("sub"))
+    return metrics

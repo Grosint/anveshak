@@ -60,6 +60,8 @@ async def main():
         cluster_loop(pool),
         signal_check_loop(pool),
         credibility_update_loop(pool),
+        backfill_loop(pool),
+        convergence_loop(pool),
     )
 
 
@@ -81,17 +83,41 @@ async def nlp_loop(pool: asyncpg.Pool):
         await asyncio.sleep(30)
 
 
+SQL_ARCHIVE_OLD_CLUSTERS = """
+    UPDATE narrative_clusters
+    SET archived_at = NOW()
+    WHERE archived_at IS NULL
+      AND updated_at < NOW() - MAKE_INTERVAL(days => $1)
+"""
+
+
 async def cluster_loop(pool: asyncpg.Pool):
     """Cluster content_items by topic using HDBSCAN (criteria 2.1–2.5)."""
     while True:
         await asyncio.sleep(300)
         try:
+            # Archive stale clusters before processing
+            if settings.cluster_archive_after_days > 0:
+                async with pool.acquire() as conn:
+                    archived = await conn.execute(
+                        SQL_ARCHIVE_OLD_CLUSTERS,
+                        settings.cluster_archive_after_days,
+                    )
+                    if archived and archived != "UPDATE 0":
+                        log.info("analyst.cluster_loop.archived", result=archived)
+
             async with pool.acquire() as conn:
                 topic_rows = await conn.fetch(SQL_ACTIVE_TOPICS)
 
             for row in topic_rows:
                 topic_id: str = row["id"]
                 try:
+                    # Detect near-duplicates before clustering so ISC is accurate
+                    from .dedup import detect_near_duplicates, upsert_near_duplicates
+                    pairs = await detect_near_duplicates(topic_id, pool)
+                    if pairs:
+                        await upsert_near_duplicates(pairs, pool)
+
                     cluster_ids = await run_clustering(topic_id, pool)
                     if cluster_ids:
                         log.info(
@@ -112,6 +138,53 @@ async def cluster_loop(pool: asyncpg.Pool):
 async def signal_check_loop(pool: asyncpg.Pool):
     """Check if any clusters cross topic.signal_threshold → fire Signal (criteria 2.11)."""
     await signal_engine_loop(pool, _noop_broadcast)
+
+
+async def backfill_loop(pool: asyncpg.Pool):
+    """Periodic backfill of cross-topic content (criterion 2.9 extended)."""
+    from .backfill import backfill_topic
+
+    if settings.backfill_interval_s <= 0:
+        log.info("analyst.backfill_loop.disabled")
+        return
+
+    log.info("analyst.backfill_loop.started", interval_s=settings.backfill_interval_s)
+    while True:
+        await asyncio.sleep(settings.backfill_interval_s)
+        try:
+            async with pool.acquire() as conn:
+                topic_rows = await conn.fetch(SQL_ACTIVE_TOPICS)
+            for row in topic_rows:
+                try:
+                    inserted = await backfill_topic(row["id"], pool)
+                    if inserted:
+                        log.info("analyst.backfill_loop.topic_done",
+                                 topic_id=row["id"], inserted=inserted)
+                except Exception as exc:
+                    log.warning("analyst.backfill_loop.topic_failed",
+                                topic_id=row["id"], error=str(exc))
+        except Exception as exc:
+            log.error("analyst.backfill_loop.error", error=str(exc))
+
+
+async def convergence_loop(pool: asyncpg.Pool):
+    """Cross-topic cluster convergence detection (Phase 6 — P2b)."""
+    from .convergence import check_cross_topic_convergence
+
+    if settings.cross_topic_check_interval_s <= 0:
+        log.info("analyst.convergence_loop.disabled")
+        return
+
+    log.info("analyst.convergence_loop.started",
+             interval_s=settings.cross_topic_check_interval_s)
+    while True:
+        await asyncio.sleep(settings.cross_topic_check_interval_s)
+        try:
+            fired = await check_cross_topic_convergence(pool)
+            if fired:
+                log.info("analyst.convergence_loop.cycle_done", signals_fired=fired)
+        except Exception as exc:
+            log.error("analyst.convergence_loop.error", error=str(exc))
 
 
 async def credibility_update_loop(pool: asyncpg.Pool):

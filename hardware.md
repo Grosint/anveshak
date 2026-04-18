@@ -199,23 +199,25 @@ Application code reads dimension from settings — zero other changes.
 
 ## pgvector Index — PostgreSQL
 
-**Current implementation:**
-- Index type: IVFFlat (inverted file with flat quantisation)
-- Performance: Good for <100K vectors, moderate build time (~30s)
-- Recall: ~95% at lists=100
-
-**Upgrade when available:**
+**Current implementation (migration 003):**
 - Index type: HNSW (Hierarchical Navigable Small World)
-- Performance: Significantly faster at 1M+ vectors, 50ms queries vs 8s
-- Recall: ~95% with much better latency at scale
-- Build time: ~5 minutes on 1M vectors (one-time cost)
+- Params: m=16, ef_construction=64 (env: HNSW_M, HNSW_EF_CONSTRUCTION)
+- Performance: Self-tuning recall regardless of corpus size
+- Build time: <60s for <100K vectors, ~5 minutes at 1M vectors
+- Query latency: ~50ms at 1M vectors
 
-**Hardware needed:** 32GB RAM (HNSW graph lives in memory)
+**Upgrade for production (RTX 4090 tier):**
+- Params: m=32, ef_construction=128 (higher recall, more RAM)
+- Hardware needed: 32GB RAM (HNSW graph lives in memory)
 
-**Config change:** No env var — migration-only change.
-Run `make migrate-hnsw` when hardware available (migration V2b).
+**Config change:**
+```
+HNSW_M=32
+HNSW_EF_CONSTRUCTION=128
+```
 
-**Code change:** Zero in application code. Migration drops IVFFlat, creates HNSW.
+**Code change:** Zero in application code. The `<=>` operator works identically.
+Re-run migration 003 with new params if upgrading.
 
 ---
 

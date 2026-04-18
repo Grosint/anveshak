@@ -37,6 +37,18 @@ SQL_TOPIC_EMBEDDINGS = """
     ORDER BY ci.captured_at ASC
 """
 
+SQL_TOPIC_EMBEDDINGS_WINDOWED = """
+    SELECT ci.id AS content_item_id,
+           ci.embedding::text AS embedding_text,
+           s.platform
+    FROM content_items ci
+    JOIN sources s ON ci.source_id = s.id
+    WHERE ci.topic_id = $1
+      AND ci.embedding IS NOT NULL
+      AND ci.captured_at >= NOW() - MAKE_INTERVAL(days => $2)
+    ORDER BY ci.captured_at ASC
+"""
+
 SQL_UPSERT_CLUSTER = """
     INSERT INTO narrative_clusters (
         id, topic_id, label, item_count, embedding_centroid,
@@ -96,10 +108,20 @@ def _vec_to_pgvector(arr: np.ndarray) -> str:
 # Core functions (all unit-testable with injected data)
 # ---------------------------------------------------------------------------
 
-async def load_embeddings(topic_id: str, pool: asyncpg.Pool) -> list[EmbeddingRow]:
-    """Fetch content_item embeddings for a topic (criteria 2.2)."""
+async def load_embeddings(
+    topic_id: str,
+    pool: asyncpg.Pool,
+    window_days: int = 0,
+) -> list[EmbeddingRow]:
+    """Fetch content_item embeddings for a topic (criteria 2.2).
+
+    When window_days > 0, only items captured within that window are loaded.
+    """
     async with pool.acquire() as conn:
-        rows = await conn.fetch(SQL_TOPIC_EMBEDDINGS, topic_id)
+        if window_days > 0:
+            rows = await conn.fetch(SQL_TOPIC_EMBEDDINGS_WINDOWED, topic_id, window_days)
+        else:
+            rows = await conn.fetch(SQL_TOPIC_EMBEDDINGS, topic_id)
 
     result = []
     for row in rows:
@@ -194,10 +216,24 @@ async def upsert_cluster(
     cluster_data: ClusterData,
     label: str,
     now: datetime,
+    duplicate_ids: set[str] | None = None,
 ) -> None:
-    """Persist a narrative cluster and link its content items (criteria 2.4, 2.5)."""
+    """Persist a narrative cluster and link its content items (criteria 2.4, 2.5).
+
+    When duplicate_ids is provided, items in that set are excluded from
+    independent_source_count to prevent near-duplicate inflation.
+    item_count remains the total for transparency.
+    """
     centroid_str = _vec_to_pgvector(cluster_data.centroid)
-    isc = count_independent_sources(cluster_data.platforms)
+
+    if duplicate_ids:
+        filtered_platforms = [
+            p for cid, p in zip(cluster_data.content_item_ids, cluster_data.platforms)
+            if cid not in duplicate_ids
+        ]
+        isc = count_independent_sources(filtered_platforms) if filtered_platforms else count_independent_sources(cluster_data.platforms)
+    else:
+        isc = count_independent_sources(cluster_data.platforms)
 
     await conn.execute(
         SQL_UPSERT_CLUSTER,
@@ -235,7 +271,7 @@ async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
 
     Criteria 2.1–2.5, 2.9.
     """
-    rows = await load_embeddings(topic_id, pool)
+    rows = await load_embeddings(topic_id, pool, window_days=settings.clustering_window_days)
     if not rows:
         log.info("clustering.no_embeddings", topic_id=topic_id)
         return []
@@ -251,6 +287,11 @@ async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
     async with pool.acquire() as conn:
         # Determine existing cluster count for stable naming fallback
         existing_count = await conn.fetchval(SQL_TOPIC_CLUSTER_COUNT, topic_id)
+
+        # Load near-duplicate IDs for accurate independent_source_count
+        from .dedup import get_duplicate_ids_for_cluster
+        all_item_ids = [r.content_item_id for r in rows]
+        duplicate_ids = await get_duplicate_ids_for_cluster(all_item_ids, conn)
 
         async with conn.transaction():
             for hdbscan_label, indices in groups.items():
@@ -268,6 +309,7 @@ async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
                     cluster_data=cluster_data,
                     label=fallback_label,  # updated by generate_cluster_label job
                     now=now,
+                    duplicate_ids=duplicate_ids,
                 )
                 cluster_ids.append(cluster_id)
 

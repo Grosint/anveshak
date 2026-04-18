@@ -18,12 +18,14 @@ Anveshak (Sanskrit: investigator, seeker) is a standalone, sovereign AI-OSINT an
 8. [Inter-Service Communication](#inter-service-communication)
 9. [Data Flow — End to End](#data-flow--end-to-end)
 10. [Database Schema](#database-schema)
-11. [Signal Engine](#signal-engine)
-12. [Report Generation Pipeline](#report-generation-pipeline)
-13. [Security Model](#security-model)
-14. [Hardware Independence](#hardware-independence)
-15. [Deployment](#deployment)
-16. [Key Invariants](#key-invariants)
+11. [Vector Similarity Pipeline](#vector-similarity-pipeline)
+12. [Signal Engine](#signal-engine)
+13. [Report Generation Pipeline](#report-generation-pipeline)
+14. [Security Model](#security-model)
+15. [Hardware Independence](#hardware-independence)
+16. [Validation Suite](#validation-suite)
+17. [Deployment](#deployment)
+18. [Key Invariants](#key-invariants)
 
 ---
 
@@ -269,7 +271,7 @@ Anveshak runs as **17 containers** (+ 1 optional) on a single Docker network (`a
 
 ### Analyst (`analyst`)
 
-**What it does:** The intelligence processing engine. Runs four concurrent async loops that transform raw content into structured intelligence:
+**What it does:** The intelligence processing engine. Runs seven concurrent async loops that transform raw content into structured intelligence:
 
 1. **NLP Loop** (every 30s) — picks up content items without embeddings, runs:
    - Language detection
@@ -280,11 +282,17 @@ Anveshak runs as **17 containers** (+ 1 optional) on a single Docker network (`a
    - YAKE keyword extraction (unsupervised, statistical)
    - Results stored in `content_items.embedding`, `content_items.labels`, `extracted_entities`
 
-2. **Clustering Loop** (every 5 min) — runs HDBSCAN clustering on embeddings per topic, creates/updates `narrative_clusters` with item counts and source diversity metrics
+2. **Clustering Loop** (every 5 min) — runs near-duplicate detection, then HDBSCAN clustering on embeddings per topic. Creates/updates `narrative_clusters` with item counts and source diversity metrics. Excludes near-duplicate items from `independent_source_count` to prevent false signals. Archives stale clusters older than `cluster_archive_after_days`. Only clusters content within a configurable temporal window (`clustering_window_days`).
 
-3. **Signal Check Loop** — monitors clusters for corroboration threshold: when `independent_source_count >= topic.signal_threshold`, fires a signal (inserts into `signals` table)
+3. **Signal Check Loop** — monitors clusters for corroboration threshold: when `independent_source_count >= topic.signal_threshold`, fires a signal (inserts into `signals` table). Excludes archived clusters.
 
 4. **Credibility Update Loop** — auto-downgrades source credibility when a source consistently amplifies content flagged as deepfake
+
+5. **Backfill Loop** (every 10 min) — continuously discovers content from other topics that semantically matches each active topic's keywords. Uses pgvector cosine similarity search. Idempotent via `ON CONFLICT DO NOTHING`.
+
+6. **Convergence Loop** (every 15 min) — detects when two different topics surface the same narrative by comparing cluster centroids across topics. Fires `cross_topic_convergence` signals when centroid similarity exceeds threshold. Enables analysts to spot intelligence connections across monitoring topics.
+
+7. **Label Staleness Loop** — integrated into the clustering job. Tracks cluster composition via `label_item_hash` (SHA-256 of sorted item IDs). When cluster composition changes by more than 30%, re-enqueues Ollama label generation to keep cluster names accurate.
 
 **Why it's needed:** This is the core intelligence value-add. Raw scraped text is useless to an analyst — they need entities, clusters, trends, and alerts. The analyst service transforms raw data into actionable intelligence.
 
@@ -615,24 +623,28 @@ Step 10: Analyst reads report
 
 ## Database Schema
 
-12 core tables, all following conventions: `snake_case` names, `created_at`/`updated_at` timestamps, `labels JSONB` field (never Optional).
+15 tables, all following conventions: `snake_case` names, `created_at`/`updated_at` timestamps, `labels JSONB` field (never Optional).
 
 ### Entity Relationship Overview
 
 ```
 topics ─────────────┬───────────── narrative_clusters
   │                 │                    │
-  │            topic_content_items       │
-  │                 │                    │
+  │            topic_content_items       │ label_generated_at
+  │                 │                    │ label_item_hash
+  │                 │                    │ archived_at
   └── sources ──── content_items ────────┘
-        │              │
-        │         extracted_entities
+        │              │       │
+        │         extracted    near_duplicates
+        │         _entities    (a_id ↔ b_id, sim_score)
         │              │
    credibility    media_assets
    _audit_log         │
                  vision_results
 
   signals ── (references topic + cluster)
+    ├── signal_type: multi_source_convergence
+    └── signal_type: cross_topic_convergence   ← NEW
   reports ── (references topic, immutable once generated)
   report_source_warnings ── (links report ↔ source degradation)
   analysis_jobs ── (ARQ job tracking)
@@ -648,15 +660,240 @@ topics ─────────────┬──────────�
 | `sources` | ~100 | OSINT sources (URLs, platforms, credibility scores, health) |
 | `content_items` | ~100K+ | Scraped/collected text with embeddings (SHA-256 deduplicated) |
 | `extracted_entities` | ~500K+ | NER results (PERSON, ORG, GPE, DATE) linked to content |
-| `narrative_clusters` | ~1K | HDBSCAN clusters with centroids and source diversity counts |
-| `signals` | ~500 | Threshold-based alerts (new → acknowledged → dismissed) |
+| `narrative_clusters` | ~1K | HDBSCAN clusters with centroids, source diversity, archival status, label tracking |
+| `near_duplicates` | ~5K | Semantically equivalent content pairs (cosine ≥0.95, canonical a<b ordering) |
+| `signals` | ~500 | Threshold-based alerts including cross-topic convergence (new → acknowledged → dismissed) |
 | `reports` | ~200 | LLM-generated intelligence reports (immutable after generation) |
 | `media_assets` | ~50K | Images/videos with pHash for reverse lookup |
 | `vision_results` | ~50K | YOLO detections, deepfake scores, CLIP labels |
 | `credibility_audit_log` | ~1K | Immutable log of every credibility score change |
 | `report_source_warnings` | ~50 | Post-generation credibility downgrade alerts |
-| `topic_content_items` | ~100K | Many-to-many join (content can appear in multiple topics) |
+| `topic_content_items` | ~100K | Many-to-many join (content can appear in multiple topics via backfill) |
 | `analysis_jobs` | ~10K | ARQ job tracking (status, payload, result, error) |
+
+---
+
+## Vector Similarity Pipeline
+
+The vector similarity pipeline is the intelligence backbone of Anveshak. It transforms raw text into embeddings, groups them into narrative clusters, detects duplicates, fires signals, and discovers cross-topic connections. Six interconnected subsystems work together.
+
+### Architecture Overview
+
+```
+Content Items (raw text)
+    │
+    ▼
+┌──────────────────┐     ┌──────────────────────┐
+│  Embedding        │     │  Content Dedup        │
+│  all-MiniLM-L6-v2 │     │  SHA-256 content_hash │
+│  384-dim, L2-norm │     │  ON CONFLICT DO NOTH. │
+└────────┬─────────┘     └──────────────────────┘
+         │
+    ┌────▼────────────────────┐
+    │  pgvector (HNSW index)  │  ← Migration 003
+    │  cosine distance <=>    │
+    └────┬───────────┬────────┘
+         │           │
+    ┌────▼────┐ ┌────▼──────────────┐
+    │ Backfill│ │ Near-Duplicate    │  ← Migration 002
+    │ (1→many)│ │ Detection         │
+    │ cosine  │ │ pairwise cosine   │
+    │ ≥0.85   │ │ ≥0.95 threshold   │
+    └─────────┘ └────┬──────────────┘
+                     │
+              ┌──────▼──────────────────┐
+              │  HDBSCAN Clustering     │
+              │  per topic, windowed    │  ← Migration 004
+              │  ISC excludes near-dups │
+              │  centroids stored       │
+              └──────┬──────────────────┘
+                     │
+         ┌───────────┼───────────────┐
+         │           │               │
+    ┌────▼────┐ ┌────▼────┐    ┌────▼──────────────┐
+    │ Signal  │ │ Label   │    │ Cross-Topic       │
+    │ Engine  │ │Staleness│    │ Convergence       │  ← Migration 006
+    │ ISC ≥   │ │ hash    │    │ centroid cosine   │
+    │threshold│ │ compare │    │ across topics     │
+    └─────────┘ └─────────┘    └───────────────────┘
+```
+
+### 1. Near-Duplicate Detection (Semantic Dedup)
+
+**Problem solved:** Two news articles paraphrasing the same event from different platforms both count toward `independent_source_count`. This inflates ISC and triggers false signals — a credibility failure for court-admissible output.
+
+**How it works:**
+- Before each clustering cycle, the analyst loads all embeddings for a topic
+- Pairwise cosine similarity is computed via numpy dot product (O(N²), bounded by `near_duplicate_batch_size=200`)
+- Pairs with cosine similarity ≥ `near_duplicate_similarity_threshold` (default 0.95) are stored in the `near_duplicates` table
+- Canonical ordering constraint: `content_item_a_id < content_item_b_id` prevents duplicate pairs
+- During clustering, the "b" side of each pair is excluded from `independent_source_count`
+- `item_count` remains the total (for transparency), but ISC reflects only genuinely independent sources
+
+**Why 0.95 threshold:** On all-MiniLM-L6-v2, cosine similarity ≥ 0.95 captures only near-paraphrases (same facts, different wording). Lower thresholds would conflate related-but-different articles.
+
+**Key files:**
+- `services/analyst/anveshak/analyst/dedup.py` — detection and upsert logic
+- `services/api/migrations/versions/002_near_duplicates.py` — schema
+- `services/analyst/anveshak/analyst/clustering.py` — ISC filtering in `upsert_cluster()`
+
+**Configuration:** `NEAR_DUPLICATE_SIMILARITY_THRESHOLD` (0.95), `NEAR_DUPLICATE_BATCH_SIZE` (200)
+
+---
+
+### 2. HNSW Vector Index
+
+**Problem solved:** The original IVFFlat index (`lists=100`) is tuned for ~10K vectors. As the corpus grows, recall degrades because IVFFlat requires pre-training on the data distribution. Queries slow down and miss relevant results.
+
+**How it works:**
+- Migration 003 replaces IVFFlat with HNSW (Hierarchical Navigable Small World)
+- HNSW builds a multi-layered graph connecting similar vectors
+- No training phase — self-tuning regardless of corpus size
+- Same `<=>` cosine distance operator — zero application code changes
+
+**Parameters:** `m=16` (connections per layer), `ef_construction=64` (build-time search width). Production upgrade: `m=32`, `ef_construction=128` for higher recall at scale.
+
+**Performance:** ~50ms queries at 1M vectors (vs 8s with IVFFlat). Build time <60s for <100K vectors.
+
+**Key files:**
+- `services/api/migrations/versions/003_hnsw_index.py` — migration
+- `hardware.md` — upgrade parameters
+
+**Configuration:** `HNSW_M` (16), `HNSW_EF_CONSTRUCTION` (64)
+
+---
+
+### 3. Temporal Windowing for Clustering
+
+**Problem solved:** HDBSCAN treats a 6-month-old article identically to one from 10 minutes ago. For a real-time monitoring platform, fresh narratives drown in historical noise. An analyst watching for emerging threats doesn't want last year's articles dominating cluster composition.
+
+**How it works:**
+- `load_embeddings()` accepts a `window_days` parameter (default: `clustering_window_days=30`)
+- Only content items with `captured_at` within the window are loaded for HDBSCAN
+- Clusters older than `cluster_archive_after_days` (default: 90) are marked with `archived_at` timestamp
+- Archived clusters are excluded from the signal engine — they won't trigger new signals
+- The temporal filter uses `MAKE_INTERVAL(days => $2)` in PostgreSQL for timezone-safe comparison
+
+**Key files:**
+- `services/api/migrations/versions/004_cluster_temporal.py` — adds `archived_at` column
+- `services/analyst/anveshak/analyst/clustering.py` — windowed SQL, `load_embeddings()` signature
+- `services/analyst/anveshak/analyst/signal_engine.py` — `AND nc.archived_at IS NULL` filter
+- `services/analyst/anveshak/analyst/main.py` — archival SQL in `cluster_loop()`
+
+**Configuration:** `CLUSTERING_WINDOW_DAYS` (30), `CLUSTER_ARCHIVE_AFTER_DAYS` (90)
+
+---
+
+### 4. Continuous Backfill
+
+**Problem solved:** Backfill originally ran only once — when a topic was created. Any content scraped later for a different topic, even if it matched the original topic's keywords, was never discovered. Topics became isolated silos.
+
+**How it works:**
+- A dedicated `backfill_loop` runs every `backfill_interval_s` seconds (default: 600 = 10 minutes)
+- For each active topic, encodes topic keywords as a vector, runs pgvector cosine search across the entire corpus
+- Items with similarity ≥ `backfill_similarity_threshold` (0.85) are linked via the `topic_content_items` join table
+- Fully idempotent: `ON CONFLICT (topic_id, content_item_id) DO NOTHING` — safe to re-run indefinitely
+- Runs as a separate async loop, independent of the clustering cycle
+
+**Key files:**
+- `services/analyst/anveshak/analyst/main.py` — `backfill_loop()` function
+- `services/analyst/anveshak/analyst/backfill.py` — core logic (unchanged, already idempotent)
+
+**Configuration:** `BACKFILL_INTERVAL_S` (600, 0 = disabled), `BACKFILL_SIMILARITY_THRESHOLD` (0.85)
+
+---
+
+### 5. Label Staleness Detection
+
+**Problem solved:** HDBSCAN re-runs every 5 minutes. Cluster composition may shift significantly — items join, leave, or swap clusters. But the Ollama-generated cluster label persists and may no longer describe what the cluster actually contains. An analyst sees "Chinese Military Exercises" on a cluster that is now about "South China Sea Shipping Lanes".
+
+**How it works:**
+- When a label is generated, `compute_item_hash()` creates a SHA-256 hash of the sorted, comma-joined content_item IDs in the cluster
+- This hash and `label_generated_at` are stored on the `narrative_clusters` row
+- On each clustering cycle, before enqueuing label generation, `check_label_staleness()` compares the stored hash against the current composition
+- If the hash differs (any item added/removed/swapped), the label is re-enqueued for Ollama regeneration
+- New clusters (NULL hash) are always labelled — backward compatible with existing data
+
+**Key files:**
+- `services/api/migrations/versions/005_label_staleness.py` — adds `label_generated_at`, `label_item_hash` columns
+- `services/analyst/anveshak/analyst/labeller.py` — `compute_item_hash()`, `check_label_staleness()`, updated SQL
+- `services/analyst/anveshak/analyst/jobs.py` — staleness check before enqueuing label jobs
+
+**Configuration:** `LABEL_STALENESS_CHANGE_THRESHOLD` (0.30)
+
+---
+
+### 6. Cross-Topic Cluster Convergence
+
+**Problem solved:** An analyst monitoring "Chinese Military" and "South China Sea" topics sees each topic's signals independently. But when both topics surface the same narrative — say, a specific naval exercise — there's no mechanism to alert the analyst that two separate intelligence streams have converged on the same story. This is exactly the kind of cross-correlation that intelligence analysis demands.
+
+**How it works:**
+- A dedicated `convergence_loop` runs every `cross_topic_check_interval_s` (default: 900 = 15 minutes)
+- Compares cluster centroids across different topics using pgvector cosine distance
+- SQL uses `nc1.topic_id < nc2.topic_id` to ensure cross-topic comparison only (canonical ordering)
+- When centroid similarity ≥ `cross_topic_similarity_threshold` (0.85), fires a `cross_topic_convergence` signal
+- Evidence JSONB contains both cluster IDs, both topic IDs, and the similarity score
+- Severity is always HIGH — cross-topic convergence is a significant intelligence finding
+- Deduplication: same 24h window as multi-source signals (per cluster_a + signal_type)
+- Archived clusters are excluded from comparison
+
+**Signal type:** `cross_topic_convergence` (vs existing `multi_source_convergence`)
+
+**Key files:**
+- `services/analyst/anveshak/analyst/convergence.py` — detection and signal firing
+- `services/api/migrations/versions/006_cross_topic_signals.py` — partial index on signal_type
+- `services/analyst/anveshak/analyst/main.py` — `convergence_loop()` function
+- `services/analyst/anveshak/analyst/signal_engine.py` — `_SIGNAL_TYPE_CROSS_TOPIC` constant
+
+**Configuration:** `CROSS_TOPIC_SIMILARITY_THRESHOLD` (0.85), `CROSS_TOPIC_CHECK_INTERVAL_S` (900, 0 = disabled), `CROSS_TOPIC_MAX_PAIRS` (50)
+
+---
+
+### Cross-Dependencies Between Subsystems
+
+These six improvements are not independent features — they form a reinforcing chain:
+
+```
+Near-Duplicate Detection ──► prevents false ISC inflation
+         │
+         ▼
+Clustering (windowed) ──► uses dedup-adjusted ISC
+         │                  only recent content
+         │
+         ├──► Signal Engine ──► fires on accurate ISC
+         │                       excludes archived clusters
+         │
+         ├──► Label Staleness ──► detects composition drift
+         │                         re-labels when needed
+         │
+         └──► Cross-Topic Convergence ──► compares centroids
+                                           fires HIGH signals
+
+Continuous Backfill ──► feeds content into multiple topics
+                         enables cross-topic convergence
+
+HNSW Index ──► accelerates all pgvector queries
+               backfill, vector search, centroid comparison
+```
+
+**Critical path for court-admissible output:**
+`Content → Dedup → Accurate ISC → Accurate Signals → Trustworthy Reports`
+
+Without near-duplicate detection, a single-source story paraphrased across 3 platforms would appear as "confirmed by 3 independent sources" in a generated report — a factual error in what is intended to be court-admissible evidence.
+
+---
+
+### Database Migrations (002–006)
+
+| Migration | Table/Index | Change |
+|-----------|------------|--------|
+| 002 | `near_duplicates` | New table: semantic duplicate pairs with CHECK constraint (a < b) |
+| 003 | `idx_content_items_embedding` | Replace IVFFlat with HNSW (m=16, ef_construction=64) |
+| 004 | `narrative_clusters.archived_at` | New column for temporal cluster archival |
+| 005 | `narrative_clusters.label_generated_at`, `label_item_hash` | New columns for label staleness tracking |
+| 006 | `idx_signals_cross_topic` | Partial index for `cross_topic_convergence` signal type |
+
+All migrations are additive — no columns dropped, no data modified, backward compatible with existing deployments.
 
 ---
 
@@ -666,10 +903,19 @@ Signals are Anveshak's real-time alerting mechanism. They fire when enough indep
 
 **How it works:**
 1. Content items are clustered by semantic similarity (HDBSCAN on pgvector embeddings)
-2. Each cluster tracks `independent_source_count` — the number of distinct `source.platform` values contributing to that cluster
-3. When `independent_source_count >= topic.signal_threshold`, a signal is created
-4. The API's background loop delivers signals to connected analyst sessions via WebSocket within ~10 seconds
-5. Optionally, a webhook POST is fired to a configured URL
+2. Near-duplicate items are excluded from source counting — prevents paraphrased content from inflating diversity
+3. Each cluster tracks `independent_source_count` — the number of distinct `source.platform` values contributing unique content
+4. When `independent_source_count >= topic.signal_threshold`, a `multi_source_convergence` signal is created
+5. Archived clusters (older than `cluster_archive_after_days`) are excluded from signal checks
+6. The API's background loop delivers signals to connected analyst sessions via WebSocket within ~10 seconds
+7. Optionally, a webhook POST is fired to a configured URL
+
+**Signal types:**
+
+| Type | Trigger | Severity |
+|------|---------|----------|
+| `multi_source_convergence` | Cluster ISC ≥ topic threshold | HIGH if ISC ≥ 3, else MEDIUM |
+| `cross_topic_convergence` | Two topics share a narrative (centroid similarity ≥ 0.85) | Always HIGH |
 
 **Signal lifecycle:**
 ```
@@ -677,7 +923,9 @@ new → acknowledged → dismissed
                   → escalated
 ```
 
-**Why independent sources matter:** A single Telegram channel posting the same thing 50 times is noise. But when Telegram, Reddit, and a news website all report the same narrative — that's a signal worth investigating.
+**Why independent sources matter:** A single Telegram channel posting the same thing 50 times is noise. But when Telegram, Reddit, and a news website all report the same narrative — that's a signal worth investigating. Near-duplicate detection ensures that paraphrased content from different platforms doesn't falsely inflate this count.
+
+**Why cross-topic convergence matters:** When two independently monitored topics converge on the same narrative, it often indicates a significant real-world event that cuts across intelligence domains.
 
 ---
 
@@ -775,9 +1023,59 @@ Every hardware-sensitive parameter comes from environment variables. When produc
 | Translation | NLLB-200 distilled 600M | NLLB-200 1.3B on GPU |
 | Sentiment | VADER (rule-based, ~1 MB) | No GPU benefit |
 | Keywords | YAKE (statistical, pure Python) | No GPU benefit |
-| pgvector index | IVFFlat | HNSW on larger corpus |
+| pgvector index | HNSW (m=16, ef=64) | HNSW (m=32, ef=128) on production |
 
 See `hardware.md` for the complete upgrade matrix with memory requirements and expected performance gains.
+
+---
+
+## Validation Suite
+
+Anveshak has a comprehensive validation framework that verifies the system at multiple levels — from unit tests to live pipeline health checks. All validation scripts use stdlib only (no external dependencies), are read-only (never mutate data), and return exit codes (0 = pass, 1 = fail).
+
+### Test Tiers
+
+| Command | Scope | Requires Stack | Tests |
+|---------|-------|----------------|-------|
+| `make test-unit` | Unit tests | No | 250+ tests, all markers `@pytest.mark.unit` |
+| `make test-vector` | Vector pipeline units | No | 44 tests across dedup, temporal, staleness, convergence, backfill |
+| `make test-integration` | Integration tests | Yes | Real PostgreSQL + Redis via Docker Compose |
+| `make test-vector-integration` | Vector cross-deps | Yes | 5 tests: dedup→clustering→signal→convergence chain |
+| `make test-e2e` | End-to-end | Yes + seeded data | Full demo arc with live API calls |
+
+### Validation Suites
+
+| Command | Script | Stages | What It Checks |
+|---------|--------|--------|----------------|
+| `make validate` | `validate_pipeline.py` | 7 | Infra, auth, corpus, intelligence, reports, sources, multilingual |
+| `make validate-vision` | `validate_vision.py` | 10 | Deepfake detection, YOLO, pHash dedup, score ranges |
+| `make validate-vector` | `validate_vector.py` | 8 | Migrations 002–006, HNSW, dedup, temporal, labels, convergence, backfill |
+| `make validate-all` | All three | 25 | Complete system health |
+
+### Invariant Checks
+
+| Command | Script | What It Enforces |
+|---------|--------|------------------|
+| `make verify-labels` | `verify_labels.py` | All Pydantic models have non-Optional `labels` field |
+| `make verify-reports` | `verify_reports_immutable.py` | `generated_at` set once, never updated |
+| `make syscheck` | `syscheck.py` | System requirements (RAM, disk, Docker, ports, GPU) |
+| `make health` | Makefile inline | Quick service health (all 5 services + ollama + frontend) |
+| `make demo-check` | `demo_check.py` | 8-step demo readiness for iDEX ADITI review |
+
+### Vector Pipeline Validation (`make validate-vector`)
+
+The vector validation script queries the `/api/v1/system/vector-health` endpoint, which runs 12 read-only SQL queries against the live database:
+
+1. **Migrations** — verifies `near_duplicates` table, `archived_at`/`label_item_hash` columns, HNSW index, convergence index all exist
+2. **HNSW Index** — confirms `idx_content_items_embedding` uses `hnsw` (not `ivfflat`) in `pg_indexes`
+3. **Near-Duplicate Detection** — checks pair count (WARN if 0 on fresh deploy)
+4. **Dedup→ISC Integrity** — confirms near-duplicate pairs exist and ISC filtering is active
+5. **Temporal Windowing** — checks for archived clusters (WARN if none)
+6. **Label Staleness** — checks clusters with `label_generated_at IS NOT NULL`
+7. **Cross-Topic Convergence** — checks index exists, convergence signals fired
+8. **Continuous Backfill** — checks `topic_content_items` for backfilled entries
+
+Data-dependent checks use WARN (not FAIL) on fresh deployments where no data has been processed yet.
 
 ---
 
@@ -835,6 +1133,7 @@ These rules are enforced by code, tests, and CI. They are non-negotiable.
 | Labels are never Optional | `verify_labels.py` script, unit tests on every Pydantic model |
 | Reports are immutable | `generated_at` set once, `WHERE generated_at IS NULL` guard in worker |
 | Content is deduplicated | `UNIQUE(content_hash)`, `ON CONFLICT DO NOTHING` on every insert |
+| Near-duplicates excluded from ISC | `dedup.py` filters before `count_independent_sources()` in clustering |
 | Deepfake scores are float 0.0-1.0 | Type system, never `bool` — analyst decides threshold |
 | All LLM calls are async | ARQ jobs only — API routes never call Ollama directly |
 | No cloud LLM with real data | Ollama localhost/container only, sovereign requirement |
@@ -844,6 +1143,9 @@ These rules are enforced by code, tests, and CI. They are non-negotiable.
 | Hardware config comes from env vars | All model names, device strings, batch sizes in `settings.py` |
 | LLM output is Pydantic-validated | Raw LLM strings never stored or displayed |
 | Standalone-first | `ANVESHAK_DRISHTI_BRIDGE=false` by default, no external dependencies |
+| Cluster labels reflect composition | `label_item_hash` detects drift, triggers Ollama re-label |
+| Archived clusters don't fire signals | `AND nc.archived_at IS NULL` in signal engine SQL |
+| Cross-topic convergence detected | Centroid comparison across topics, HIGH severity signal |
 
 ---
 

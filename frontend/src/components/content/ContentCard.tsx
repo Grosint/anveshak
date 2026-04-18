@@ -31,14 +31,19 @@ export function ContentCard({ item, onClick }: ContentCardProps) {
         {item.language && item.language !== 'en' && (
           <Badge variant="ghost">{item.language.toUpperCase()}</Badge>
         )}
+        {item.translated_text && (
+          <span className="text-[10px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-1.5 py-0.5">
+            Translated
+          </span>
+        )}
         {item.backfilled && (
           <Badge variant="default" className="text-[10px]">backfill</Badge>
         )}
       </div>
 
-      {/* Text preview */}
+      {/* Text preview — show translation when available */}
       <p className="text-sm text-text-primary line-clamp-3 group-hover:text-white transition-colors">
-        {item.clean_text}
+        {item.translated_text ?? item.clean_text}
       </p>
 
       {/* Footer */}
