@@ -132,7 +132,12 @@
       "Bash(make validate:*)",
       "Bash(make -n setup)",
       "Bash(make test-unit:*)",
-      "Bash(make -n nuke)"
+      "Bash(make -n nuke)",
+      "Bash(find /Users/navitas28/Work/anveshak/.claude/skills/learned -type f -name *.md)",
+      "Bash(find /Users/navitas28/Work/anveshak -name *test*log* -o -name *issue* -o -name NOTES*)",
+      "Bash(find /Users/navitas28/Work/anveshak/services/api -type f \\\\\\(-name *.ts -o -name *.js -o -name *.py \\\\\\))",
+      "Bash(make up-vision:*)",
+      "Bash(docker volume:*)"
     ]
   }
 }
