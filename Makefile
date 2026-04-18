@@ -25,6 +25,7 @@
 #   make clean-volumes    stop + remove containers + volumes (DB data lost!)
 #   make clean-cache      Docker build cache prune
 #   make purge            ALL of the above (nuclear option, asks confirmation)
+#   make nuke             remove EVERY Anveshak Docker artifact — images, volumes, cache, networks
 #
 # VALIDATE:
 #   make syscheck         system requirements check (RAM, disk, Docker, ports)
@@ -91,7 +92,7 @@ _WORK  := $(_CYN)⟳$(_RST)
         test test-unit test-integration test-e2e test-coverage \
         demo-check validate validate-vision health syscheck \
         lint format typecheck security-scan \
-        clean clean-containers clean-volumes clean-cache purge \
+        clean clean-containers clean-volumes clean-cache purge nuke \
         verify-labels verify-reports shell-%
 
 # ---------------------------------------------------------------------------
@@ -548,6 +549,52 @@ purge:
 	@docker images -q --filter reference='anveshak-*' 2>/dev/null | xargs docker rmi -f 2>/dev/null || true
 	@docker image prune -f 2>/dev/null || true
 	$(call success,Full purge complete)
+	@printf "\n  To start fresh: $(_BOLD)make setup$(_RST)\n\n"
+
+# nuke — remove every Docker artifact related to Anveshak (images, volumes, cache, networks)
+nuke:
+	$(call header,NUKE — Remove All Anveshak Docker Artifacts)
+	@printf "  $(_RED)$(_BOLD)This will permanently remove:$(_RST)\n"
+	@printf "    - All Anveshak containers and volumes (DB data, models, caches)\n"
+	@printf "    - All Anveshak Docker images (analyst ~12GB, scraper ~3.4GB, etc.)\n"
+	@printf "    - All Docker build cache\n"
+	@printf "    - Python caches\n"
+	@printf "    - Anveshak Docker networks\n\n"
+	@printf "  $(_YEL)Total space reclaimed: ~35GB+$(_RST)\n\n"
+	@printf "  $(_RED)Continue? [y/N]$(_RST) "; \
+	read confirm; \
+	if [ "$$confirm" != "y" ] && [ "$$confirm" != "Y" ]; then \
+		printf "  Aborted.\n"; exit 1; \
+	fi
+	$(call step,1/5,Stopping and removing containers + volumes)
+	@$(COMPOSE_BRG) down -v --remove-orphans 2>/dev/null || true
+	@$(COMPOSE_VIS) down -v --remove-orphans 2>/dev/null || true
+	@$(COMPOSE) down -v --remove-orphans 2>/dev/null || true
+	$(call success,Containers and volumes removed)
+	$(call step,2/5,Removing all Anveshak images)
+	@docker images -q --filter reference='anveshak-*' 2>/dev/null | xargs docker rmi -f 2>/dev/null || true
+	@docker images -q --filter reference='infra-*' 2>/dev/null | xargs docker rmi -f 2>/dev/null || true
+	$(call success,Anveshak images removed)
+	$(call step,3/5,Removing third-party base images)
+	@docker rmi pgvector/pgvector:pg16 redis:7-alpine ollama/ollama:latest \
+		prom/prometheus:latest grafana/grafana:latest grafana/loki:3.0.0 \
+		grafana/promtail:3.0.0 prometheuscommunity/postgres-exporter:latest \
+		oliver006/redis_exporter:latest nginx:1.27-alpine node:20-alpine \
+		python:3.12-slim jaegertracing/all-in-one:1.57 2>/dev/null || true
+	$(call success,Base images removed)
+	$(call step,4/5,Pruning Docker build cache + dangling resources)
+	@docker builder prune --all -f 2>/dev/null || true
+	@docker system prune -f 2>/dev/null || true
+	$(call success,Build cache pruned)
+	$(call step,5/5,Cleaning Python caches)
+	@find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	@find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
+	@find . -type d -name ".ruff_cache" -exec rm -rf {} + 2>/dev/null || true
+	@find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
+	@rm -rf htmlcov .coverage 2>/dev/null || true
+	$(call success,Python caches cleaned)
+	@printf "\n"
+	$(call success,All Anveshak Docker artifacts removed)
 	@printf "\n  To start fresh: $(_BOLD)make setup$(_RST)\n\n"
 
 # =============================================================================

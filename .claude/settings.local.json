@@ -131,7 +131,8 @@
       "Bash(make pull-models:*)",
       "Bash(make validate:*)",
       "Bash(make -n setup)",
-      "Bash(make test-unit:*)"
+      "Bash(make test-unit:*)",
+      "Bash(make -n nuke)"
     ]
   }
 }
