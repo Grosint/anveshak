@@ -3,7 +3,7 @@
 # =============================================================================
 #
 # SETUP (new developer):
-#   make setup            full first-run: syscheck -> build -> up -> migrate -> pull-models -> validate
+#   make setup            full first-run: syscheck -> build -> infra up -> migrate -> pull-models -> all up + seed -> validate
 #
 # LIFECYCLE:
 #   make up               start core stack (no rebuild)
@@ -139,39 +139,65 @@ endef
 
 setup:
 	$(call header,ANVESHAK — First-Run Setup)
-	$(call step,Step 1/6,System requirements check)
+	$(call step,Step 1/7,System requirements check)
 	@$(UV) python scripts/syscheck.py || { \
 		printf "\n"; \
-		$(call warn,System does not meet minimum requirements — see above); \
+		printf "  $(_WARN) $(_YEL)System does not meet minimum requirements — see above$(_RST)\n"; \
 		printf "  $(_INFO) Continue anyway? [y/N] "; \
 		read confirm; \
 		if [ "$$confirm" != "y" ] && [ "$$confirm" != "Y" ]; then exit 1; fi; \
 	}
 	$(call check_env)
-	$(call step,Step 2/6,Building Docker images)
-	@$(COMPOSE) build --quiet
+	$(call step,Step 2/7,Building Docker images)
+	@$(COMPOSE) build
 	$(call success,Images built)
-	$(call step,Step 3/6,Starting services)
-	@$(COMPOSE) up -d --remove-orphans
-	$(call success,Services started)
-	$(call step,Step 4/6,Waiting for services to be healthy...)
-	@sleep 10
-	$(call step,Step 5/6,Running migrations + pulling Ollama model)
-	@$(COMPOSE) exec -T api alembic upgrade head 2>&1 | tail -1
+	$(call step,Step 3/7,Starting infrastructure — postgres + redis + ollama)
+	@$(COMPOSE) up -d --remove-orphans postgres redis ollama
+	$(call step,Step 4/7,Waiting for infrastructure to be healthy...)
+	@timeout=120; elapsed=0; \
+	while [ $$elapsed -lt $$timeout ]; do \
+		healthy=$$(docker compose --env-file .env -p anveshak -f infra/compose.yml ps --format json 2>/dev/null | python3 -c "import sys,json; lines=sys.stdin.read().strip().split('\n'); print(sum(1 for l in lines if json.loads(l).get('Health','')=='healthy'))" 2>/dev/null || echo 0); \
+		if [ "$$healthy" -ge 3 ]; then break; fi; \
+		sleep 5; elapsed=$$((elapsed + 5)); \
+		printf "  $(_DIM)  waiting... ($$elapsed/$$timeout s)$(_RST)\r"; \
+	done
+	$(call success,Infrastructure healthy)
+	$(call step,Step 5/7,Running migrations + pulling Ollama model)
+	@$(COMPOSE) exec -T api alembic upgrade head 2>&1 || { \
+		printf "  $(_INFO) API not yet running — starting it for migrations...\n"; \
+		$(COMPOSE) up -d api; sleep 10; \
+		$(COMPOSE) exec -T api alembic upgrade head 2>&1 | tail -1; \
+	}
 	$(call success,Migrations applied)
 	@printf "  $(_WORK) Pulling Ollama model (this may take several minutes on first run)...\n"
 	@$(COMPOSE) exec -T ollama ollama pull $$(grep -E '^OLLAMA_MODEL=' .env 2>/dev/null | cut -d= -f2 | sed 's/#.*//' | tr -d ' ' || echo "qwen2:7b") 2>&1 | tail -3
 	$(call success,Ollama model ready)
-	$(call step,Step 6/6,Validating pipeline)
-	@$(UV) python scripts/validate_pipeline.py
+	$(call step,Step 6/7,Starting all services + seeding demo data)
+	@$(COMPOSE) up -d --remove-orphans
+	@timeout=120; elapsed=0; \
+	while [ $$elapsed -lt $$timeout ]; do \
+		unhealthy=$$(docker compose --env-file .env -p anveshak -f infra/compose.yml ps 2>/dev/null | grep -cE '(Restarting|unhealthy|starting)' || echo 0); \
+		if [ "$$unhealthy" -eq 0 ]; then break; fi; \
+		sleep 5; elapsed=$$((elapsed + 5)); \
+		printf "  $(_DIM)  waiting for services... ($$elapsed/$$timeout s)$(_RST)\r"; \
+	done
+	$(call success,All services started)
+	@$(COMPOSE) exec -T postgres psql -U anveshak -d anveshak < scripts/seed_demo.sql 2>&1 | tail -1
+	$(call success,Demo scenario loaded)
+	$(call step,Step 7/7,Validating pipeline)
+	@$(UV) python scripts/validate_pipeline.py || { \
+		printf "\n"; \
+		printf "  $(_WARN) $(_YEL)Validation had failures — this is expected on first setup$(_RST)\n"; \
+		printf "  $(_INFO) Corpus will grow as scraper and social adapters run.\n"; \
+	}
 	$(call header,Setup Complete)
 	@printf "  $(_GRN)$(_BOLD)Anveshak is ready!$(_RST)\n\n"
 	@printf "  Analyst workbench:  $(_CYN)http://localhost:3000$(_RST)\n"
 	@printf "  API:                $(_CYN)http://localhost:8000$(_RST)\n"
 	@printf "  Grafana:            $(_CYN)http://localhost:3001$(_RST)\n"
 	@printf "  Prometheus:         $(_CYN)http://localhost:9090$(_RST)\n\n"
-	@printf "  Next: $(_BOLD)make seed-demo$(_RST) to load the demo scenario\n"
-	@printf "        $(_BOLD)make validate$(_RST)  to re-run validation anytime\n\n"
+	@printf "  Login:    $(_BOLD)demo@anveshak.local$(_RST) / $(_BOLD)AnveshakDemo2024!$(_RST)\n"
+	@printf "  Next:     $(_BOLD)make validate$(_RST)  to re-run validation anytime\n\n"
 
 # ---------------------------------------------------------------------------
 # Docker Compose lifecycle
@@ -314,9 +340,16 @@ fresh-all:
 	fi
 	@$(MAKE) --no-print-directory clean-volumes
 	@$(MAKE) --no-print-directory build
-	@$(MAKE) --no-print-directory up
-	@sleep 8
+	@$(COMPOSE) up -d --remove-orphans postgres redis ollama
+	@printf "  $(_WORK) Waiting for infrastructure...\n"
+	@timeout=120; elapsed=0; \
+	while [ $$elapsed -lt $$timeout ]; do \
+		healthy=$$(docker compose --env-file .env -p anveshak -f infra/compose.yml ps --format json 2>/dev/null | python3 -c "import sys,json; lines=sys.stdin.read().strip().split('\n'); print(sum(1 for l in lines if json.loads(l).get('Health','')=='healthy'))" 2>/dev/null || echo 0); \
+		if [ "$$healthy" -ge 3 ]; then break; fi; \
+		sleep 5; elapsed=$$((elapsed + 5)); \
+	done
 	@$(MAKE) --no-print-directory migrate
+	@$(MAKE) --no-print-directory up
 	@$(MAKE) --no-print-directory pull-models
 	@$(MAKE) --no-print-directory seed-demo
 	@$(MAKE) --no-print-directory validate
@@ -512,6 +545,7 @@ purge:
 	@$(MAKE) --no-print-directory clean
 	@$(MAKE) --no-print-directory clean-volumes
 	@$(MAKE) --no-print-directory clean-cache
+	@docker images -q --filter reference='anveshak-*' 2>/dev/null | xargs docker rmi -f 2>/dev/null || true
 	@docker image prune -f 2>/dev/null || true
 	$(call success,Full purge complete)
 	@printf "\n  To start fresh: $(_BOLD)make setup$(_RST)\n\n"
