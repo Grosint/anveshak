@@ -20,7 +20,7 @@ from arq.connections import RedisSettings
 
 from anveshak.media.downloader import download_media_asset
 
-from .fetch import fetch_url
+from .fetch import fetch_url, fetch_url_with_crawler, create_shared_crawler, fetch_html, extract_article_links
 from .health import run_all_health_checks
 from .rss import fetch_rss_items
 from .metrics import scraper_items_fetched_total, scraper_fetch_errors_total, scraper_fetch_duration_seconds, arq_jobs_failed_total
@@ -38,14 +38,18 @@ SQL_GET_TOPIC = "SELECT id FROM topics WHERE id = $1"
 SQL_GET_WEB_SOURCES = """
     SELECT s.id, s.url_or_handle, s.credibility_score
     FROM sources s
-    WHERE s.is_active = TRUE AND s.platform = 'web'
+    JOIN topic_sources ts ON ts.source_id = s.id
+    WHERE ts.topic_id = $1
+      AND s.is_active = TRUE AND s.platform = 'web'
       AND s.health_status != 'down'
 """
 
 SQL_GET_RSS_SOURCES = """
     SELECT s.id, s.url_or_handle, s.credibility_score
     FROM sources s
-    WHERE s.is_active = TRUE AND s.platform = 'rss'
+    JOIN topic_sources ts ON ts.source_id = s.id
+    WHERE ts.topic_id = $1
+      AND s.is_active = TRUE AND s.platform = 'rss'
       AND s.health_status != 'down'
 """
 
@@ -130,68 +134,122 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
         if not topic:
             log.warning("scraper.topic_not_found", topic_id=topic_id)
             return 0
-        sources = await conn.fetch(SQL_GET_WEB_SOURCES)
+        sources = await conn.fetch(SQL_GET_WEB_SOURCES, topic_id)
+
+    if not sources:
+        log.debug("scraper.no_sources", topic_id=topic_id)
+        return 0
 
     semaphore = asyncio.Semaphore(settings.scraper_concurrency)  # criteria 1.8
     counter: dict[str, int] = {"inserted": 0}
 
-    async def _process(source: asyncpg.Record) -> None:
+    async def _insert_content(
+        clean_text: str, url: str, source_id: str, credibility_score: float,
+    ) -> Optional[str]:
+        """Insert a content item, return content_item_id or None if dedup hit."""
+        content_hash = compute_content_hash(clean_text)
+        now = datetime.now(UTC)
+        async with db_pool.acquire() as conn:
+            result = await conn.fetchrow(
+                SQL_INSERT_CONTENT,
+                str(uuid.uuid4()),
+                topic_id,
+                source_id,
+                clean_text,
+                clean_text,
+                "en",
+                content_hash,
+                url,
+                now,
+                credibility_score,
+                now,
+                now,
+                _LABELS_JSON,
+            )
+        if result is not None:
+            counter["inserted"] += 1
+            scraper_items_fetched_total.labels(
+                topic_id=topic_id, source_platform="web"
+            ).inc()
+            return result["id"]
+        return None
+
+    async def _process(source: asyncpg.Record, crawler, run_cfg) -> None:
         async with semaphore:
             url: str = source["url_or_handle"]
+            source_id: str = source["id"]
+            cred_score = float(source["credibility_score"])
             try:
                 import time as _time
                 _t0 = _time.monotonic()
-                clean_text = await fetch_url(url)  # timeout respected inside fetch_url
+                # Per-URL timeout so one slow URL doesn't block others
+                clean_text = await asyncio.wait_for(
+                    fetch_url_with_crawler(url, crawler, run_cfg),
+                    timeout=settings.scraper_request_timeout_s,
+                )
                 scraper_fetch_duration_seconds.observe(_time.monotonic() - _t0)
                 if not clean_text:
                     return
 
-                content_hash = compute_content_hash(clean_text)  # criteria 1.4
-                now = datetime.now(UTC)
+                content_item_id = await _insert_content(clean_text, url, source_id, cred_score)
 
-                async with db_pool.acquire() as conn:
-                    result = await conn.fetchrow(
-                        SQL_INSERT_CONTENT,
-                        str(uuid.uuid4()),
-                        topic_id,
-                        source["id"],
-                        clean_text,          # raw_text == clean_text for web
-                        clean_text,          # clean_text
-                        "en",               # language — updated by analyst NLP (criteria 1.29)
-                        content_hash,       # criteria 1.4, 1.5
-                        url,
-                        now,                # captured_at
-                        float(source["credibility_score"]),  # criteria 1.6 — snapshot
-                        now,                # created_at
-                        now,                # updated_at
-                        _LABELS_JSON,
+                if content_item_id and settings.media_download_enabled:
+                    await _download_page_media(
+                        page_url=url,
+                        topic_id=topic_id,
+                        content_item_id=content_item_id,
+                        db_pool=db_pool,
+                        redis=redis,
                     )
 
-                if result is not None:
-                    content_item_id: str = result["id"]
-                    counter["inserted"] += 1
-                    scraper_items_fetched_total.labels(
-                        topic_id=topic_id, source_platform="web"
-                    ).inc()
+                # Recursive scraping: follow article links (depth-1)
+                if settings.scraper_follow_links:
+                    html = await fetch_html(url)
+                    if html:
+                        article_links = extract_article_links(html, url)
+                        for link_url in article_links:
+                            try:
+                                link_text = await asyncio.wait_for(
+                                    fetch_url_with_crawler(link_url, crawler, run_cfg),
+                                    timeout=settings.scraper_request_timeout_s,
+                                )
+                                if link_text:
+                                    await _insert_content(link_text, link_url, source_id, cred_score)
+                            except asyncio.TimeoutError:
+                                log.debug("scraper.link_timeout", url=link_url)
+                            except Exception as exc:
+                                log.debug("scraper.link_failed", url=link_url, error=str(exc))
 
-                    # Phase 4: download images/videos from page (criteria 4.1)
-                    if settings.media_download_enabled:
-                        await _download_page_media(
-                            page_url=url,
-                            topic_id=topic_id,
-                            content_item_id=content_item_id,
-                            db_pool=db_pool,
-                            redis=redis,
-                        )
-
+            except asyncio.TimeoutError:
+                scraper_fetch_errors_total.labels(error_type="TimeoutError").inc()
+                log.warning("scraper.source_timeout", url=url)
             except Exception as exc:
-                # criteria 1.9: failures log url + error, do NOT crash the loop
                 scraper_fetch_errors_total.labels(
                     error_type=type(exc).__name__
                 ).inc()
                 log.warning("scraper.source_failed", url=url, error=str(exc))
 
-    await asyncio.gather(*[_process(s) for s in sources])
+    # Shared browser instance — one Chromium for the entire job
+    try:
+        async with create_shared_crawler() as (crawler, run_cfg):
+            await asyncio.gather(*[_process(s, crawler, run_cfg) for s in sources])
+    except Exception as exc:
+        log.error("scraper.browser_launch_failed", error=str(exc))
+        # Fallback: process without shared browser (uses trafilatura only)
+        async def _process_fallback(source: asyncpg.Record) -> None:
+            async with semaphore:
+                url = source["url_or_handle"]
+                try:
+                    clean_text = await fetch_url(url)
+                    if clean_text:
+                        await _insert_content(
+                            clean_text, url, source["id"],
+                            float(source["credibility_score"]),
+                        )
+                except Exception as exc:
+                    log.warning("scraper.fallback_failed", url=url, error=str(exc))
+        await asyncio.gather(*[_process_fallback(s) for s in sources])
+
     log.info(
         "scraper.job_done",
         topic_id=topic_id,
@@ -215,7 +273,7 @@ async def poll_rss_sources(ctx: dict, topic_id: str) -> int:
         if not topic:
             log.warning("rss.topic_not_found", topic_id=topic_id)
             return 0
-        sources = await conn.fetch(SQL_GET_RSS_SOURCES)
+        sources = await conn.fetch(SQL_GET_RSS_SOURCES, topic_id)
 
     if not sources:
         log.debug("rss.no_sources", topic_id=topic_id)
@@ -404,5 +462,5 @@ class WorkerSettings:
     on_job_result = on_job_result
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
     max_jobs = settings.scraper_concurrency
-    job_timeout = 120    # 8C.5 — 2 min total budget per scrape job
+    job_timeout = settings.scraper_job_timeout_s  # default 300s (5 min)
     keep_result = 3600   # 8C.6 — keep results 1h

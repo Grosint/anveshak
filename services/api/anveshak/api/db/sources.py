@@ -93,15 +93,39 @@ SQL_TOPIC_SOURCES = """
     SELECT
         s.id,
         s.name,
+        s.url_or_handle,
         s.platform,
         s.credibility_score,
         s.is_active,
-        COUNT(ci.id) AS item_count
-    FROM sources s
-    JOIN content_items ci ON ci.source_id = s.id
-    WHERE ci.topic_id = $1
-    GROUP BY s.id, s.name, s.platform, s.credibility_score, s.is_active
+        s.health_status,
+        ts.added_at,
+        COALESCE(ci_counts.item_count, 0) AS item_count
+    FROM topic_sources ts
+    JOIN sources s ON s.id = ts.source_id
+    LEFT JOIN (
+        SELECT source_id, COUNT(*) AS item_count
+        FROM content_items
+        WHERE topic_id = $1
+        GROUP BY source_id
+    ) ci_counts ON ci_counts.source_id = s.id
+    WHERE ts.topic_id = $1
     ORDER BY item_count DESC
+"""
+
+SQL_ADD_TOPIC_SOURCE = """
+    INSERT INTO topic_sources (topic_id, source_id)
+    VALUES ($1, $2)
+    ON CONFLICT DO NOTHING
+"""
+
+SQL_REMOVE_TOPIC_SOURCE = """
+    DELETE FROM topic_sources
+    WHERE topic_id = $1 AND source_id = $2
+"""
+
+SQL_CHECK_TOPIC_SOURCE = """
+    SELECT 1 FROM topic_sources
+    WHERE topic_id = $1 AND source_id = $2
 """
 
 # ---------------------------------------------------------------------------
@@ -239,6 +263,27 @@ async def count_content_items_for_source(
 async def list_topic_sources(
     conn: asyncpg.Connection, topic_id: str
 ) -> list[dict[str, Any]]:
-    """Return sources that have contributed content items to a topic, with item_count."""
+    """Return sources assigned to a topic via topic_sources, with item_count."""
     rows = await conn.fetch(SQL_TOPIC_SOURCES, topic_id)
     return [dict(r) for r in rows]
+
+
+async def add_topic_source(
+    conn: asyncpg.Connection, topic_id: str, source_id: str
+) -> None:
+    """Associate a source with a topic."""
+    await conn.execute(SQL_ADD_TOPIC_SOURCE, topic_id, source_id)
+
+
+async def remove_topic_source(
+    conn: asyncpg.Connection, topic_id: str, source_id: str
+) -> None:
+    """Remove a source association from a topic."""
+    await conn.execute(SQL_REMOVE_TOPIC_SOURCE, topic_id, source_id)
+
+
+async def topic_source_exists(
+    conn: asyncpg.Connection, topic_id: str, source_id: str
+) -> bool:
+    row = await conn.fetchrow(SQL_CHECK_TOPIC_SOURCE, topic_id, source_id)
+    return row is not None

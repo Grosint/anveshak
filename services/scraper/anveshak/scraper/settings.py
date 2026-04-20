@@ -23,9 +23,17 @@ class ScraperSettings(BaseSettings):
     # Prometheus metrics HTTP server port (8A.17)
     metrics_port: int = 8001  # matches SCRAPER_PORT in compose.yml
 
+    # ARQ job timeout — must be > (num_sources * scraper_request_timeout_s / concurrency)
+    scraper_job_timeout_s: int = 300        # 5 min total budget per scrape job
+
     # RSS feed settings
     rss_max_items_per_fetch: int = 20       # cap items per feed per poll cycle
     rss_full_text_min_chars: int = 200      # fetch full article if summary shorter than this
+
+    # Recursive scraping — follow article links from fetched pages
+    scraper_follow_links: bool = True       # enable depth-1 link following
+    scraper_max_links_per_page: int = 5     # cap followed links per source page
+    scraper_follow_same_domain: bool = True # only follow same-domain links
 
     log_level: str = "INFO"
     model_config = {"env_prefix": "", "case_sensitive": False}

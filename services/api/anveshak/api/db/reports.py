@@ -40,7 +40,12 @@ SQL_FETCH_REPORT = """
 
 SQL_LIST_TOPIC_REPORTS = """
     SELECT id, topic_id, report_type, generated_at, confidence_score,
-           content_item_count, created_at
+           content_item_count, created_at,
+           CASE
+               WHEN generated_at IS NOT NULL THEN 'complete'
+               WHEN generation_error IS NOT NULL THEN 'failed'
+               ELSE 'queued'
+           END AS generation_status
     FROM reports
     WHERE topic_id = $1
     ORDER BY created_at DESC

@@ -79,6 +79,25 @@ Every IAF wing intelligence officer should be able to run it on one machine.
 
 Cross-cutting: Signals engine (threshold-based notifications), real-time topic monitoring.
 
+## SOURCE-TOPIC ASSOCIATION — MANDATORY
+
+Sources are linked to topics via the `topic_sources` join table:
+
+```
+topics ──┬── topic_sources ──┬── sources
+         │                   │
+         └── content_items ──┘
+```
+
+- **Sources are global entities** but must be explicitly assigned to topics.
+- The scraper ONLY scrapes sources linked to a topic via `topic_sources`.
+- `SQL_GET_WEB_SOURCES` and `SQL_GET_RSS_SOURCES` MUST filter by topic_id
+  through a JOIN on `topic_sources`.
+- When a source is created with a `topic_id`, it is auto-linked.
+- API: `POST /api/v1/topics/{id}/sources/{source_id}` to link,
+       `DELETE /api/v1/topics/{id}/sources/{source_id}` to unlink.
+- Migration 007 backfills existing associations from content_items.
+
 ## WHAT ANVESHAK IS NOT
 
 - Not an entity resolution platform (that is Drishti's job)

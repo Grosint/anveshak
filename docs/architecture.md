@@ -138,6 +138,7 @@ Anveshak runs as **17 containers** (+ 1 optional) on a single Docker network (`a
 **Why it's needed:** Single source of truth for the entire platform. Uses the `pgvector` extension (384-dimensional vectors) for semantic similarity search, which powers content clustering, topic backfilling, and RAG retrieval for report generation. Also uses `pg_trgm` for fuzzy text search on entity names.
 
 **Key details:**
+
 - Image: `pgvector/pgvector:pg16` (PostgreSQL 16 with vector extension pre-installed)
 - Data persisted to `postgres_data` volume
 - Extensions loaded on init: `vector`, `uuid-ossp`, `pg_trgm`, `btree_gin`
@@ -145,6 +146,7 @@ Anveshak runs as **17 containers** (+ 1 optional) on a single Docker network (`a
 - 12 core tables (see [Database Schema](#database-schema))
 
 **Connects to:**
+
 - Every application service reads/writes via `asyncpg` connection pool
 - `postgres-exporter` scrapes internal stats for Prometheus
 
@@ -157,16 +159,19 @@ Anveshak runs as **17 containers** (+ 1 optional) on a single Docker network (`a
 **Why it's needed:** All heavy work (web scraping, NLP processing, LLM report generation) runs as background jobs, not in HTTP request handlers. Redis + ARQ provides reliable job dispatch with retry logic, timeout enforcement, and queue isolation. This keeps the API responsive (sub-100ms responses) while heavy ML tasks run asynchronously.
 
 **Key details:**
+
 - Image: `redis:7-alpine`
 - Max memory: 200 MB with LRU eviction
 - Persistence: RDB snapshot every 60 seconds
 - Data persisted to `redis_data` volume
 
 **ARQ queues:**
+
 - `arq:queue` — default queue (scraper jobs, report generation)
 - Jobs include: `scrape_topic`, `poll_rss_sources`, `check_all_source_health`, `generate_report`, `check_scheduled_reports`, `check_source_warnings`
 
 **Connects to:**
+
 - `scraper` / `scraper-worker` — enqueue and execute scraping jobs
 - `reporter` / `reporter-worker` — enqueue and execute report generation
 - `api` — enqueues vision analysis jobs
@@ -182,6 +187,7 @@ Anveshak runs as **17 containers** (+ 1 optional) on a single Docker network (`a
 **Why it's needed:** Sovereign requirement — intelligence data must never leave the deployment boundary. No cloud LLM APIs (OpenAI, Anthropic, etc.) are permitted with real data. Ollama provides a local inference API compatible with the OpenAI chat format, accessible via LiteLLM abstraction layer.
 
 **Key details:**
+
 - Image: `ollama/ollama:latest`
 - Memory limit: 8 GB (model weights + KV cache)
 - Model stored in `ollama_models` volume (survives container restarts)
@@ -189,6 +195,7 @@ Anveshak runs as **17 containers** (+ 1 optional) on a single Docker network (`a
 - `OLLAMA_KEEP_ALIVE=5m` — keeps model loaded in memory between requests
 
 **Used by:**
+
 - `reporter-worker` — RAG-grounded report generation (intelligence briefs, summaries, digests)
 - `analyst` — cluster label generation (short descriptive labels for narrative clusters)
 - `api` — pre-warms model on startup to avoid cold-start latency
@@ -206,6 +213,7 @@ Anveshak runs as **17 containers** (+ 1 optional) on a single Docker network (`a
 **Why it's needed:** Centralises access control, rate limiting, and request routing. No other service exposes HTTP endpoints to the frontend — everything goes through the API.
 
 **Key responsibilities:**
+
 - **JWT authentication** — login endpoint issues tokens, all other routes require valid JWT
 - **Topic management** — CRUD for topics (keywords, signal thresholds, languages)
 - **Source management** — CRUD for OSINT sources (URLs, platforms, credibility scores)
@@ -218,11 +226,13 @@ Anveshak runs as **17 containers** (+ 1 optional) on a single Docker network (`a
 - **Webhook notifications** — fires HTTP POST to configured webhook URL on new signals
 
 **Middleware (applied in order):**
+
 1. CORS (configurable origins)
 2. Rate limiting
 3. Security headers (X-Content-Type-Options, X-Frame-Options, etc.)
 
 **Connects to:**
+
 - `postgres` — direct DB access via asyncpg pool
 - `redis` — ARQ job dispatch + rate limit state
 - `ollama` — pre-warm on startup
@@ -239,12 +249,14 @@ Anveshak runs as **17 containers** (+ 1 optional) on a single Docker network (`a
 **Why it's needed:** Separates the scheduling concern from the actual crawling work. The scraper process is lightweight — it just reads topics from the DB and enqueues jobs. The heavy HTTP fetching and content extraction happens in the `scraper-worker`.
 
 **Key details:**
+
 - Polls every `SCRAPER_POLL_INTERVAL_S` (default: 30 seconds)
 - For each active topic, enqueues two jobs: `scrape_topic` (web sources) and `poll_rss_sources` (RSS feeds)
 - Prometheus metrics on port 8001
 - Includes Playwright browsers for JavaScript-rendered pages
 
 **Connects to:**
+
 - `postgres` — reads active topics and sources
 - `redis` — enqueues ARQ jobs
 
@@ -257,12 +269,14 @@ Anveshak runs as **17 containers** (+ 1 optional) on a single Docker network (`a
 **Why it's needed:** Social media is a primary OSINT source. Each platform has its own API, rate limits, and authentication requirements. The social service abstracts these behind a common `SourceAdapterBase` interface.
 
 **Key details:**
+
 - Each adapter is independently toggleable via environment variables
 - X/Twitter has a separate poll interval and hard monthly read cap (`X_MONTHLY_READ_CAP`) to control API costs ($0.005/read)
 - Rate limited at `SOCIAL_RATE_LIMIT_RPM` (default: 60 requests/minute)
 - All adapters produce `content_items` with the same schema as web-scraped content
 
 **Connects to:**
+
 - `postgres` — reads topics/sources, writes content items
 - `redis` — enqueues social polling jobs
 - External APIs — Telegram, Reddit, Bluesky, X/Twitter (outbound only)
@@ -297,12 +311,14 @@ Anveshak runs as **17 containers** (+ 1 optional) on a single Docker network (`a
 **Why it's needed:** This is the core intelligence value-add. Raw scraped text is useless to an analyst — they need entities, clusters, trends, and alerts. The analyst service transforms raw data into actionable intelligence.
 
 **Key details:**
+
 - Memory limit: 6 GB (3 spaCy models + NLLB translation model + embedding model)
 - Models cached in `analyst_models` volume
 - Cluster labels generated via Ollama (qwen2:7b)
 - All NLP model names come from environment variables (hardware independence)
 
 **Connects to:**
+
 - `postgres` — reads content items, writes embeddings/entities/clusters/signals
 - `redis` — ARQ job coordination
 - `ollama` — cluster label generation
@@ -316,12 +332,14 @@ Anveshak runs as **17 containers** (+ 1 optional) on a single Docker network (`a
 **Why it's needed:** Separates the lightweight API (create report request, check status, download PDF) from the heavy LLM generation work that runs in the worker. The API returns immediately with a job ID; the frontend polls until generation completes.
 
 **Key details:**
+
 - FastAPI app on port 8005
 - Report types: `intelligence_brief`, `research_summary`, `weekly_digest`
 - Cron-based scheduled reports evaluated every 15 minutes
 - Generated PDFs stored in `reporter_output` volume
 
 **Connects to:**
+
 - `postgres` — report CRUD, source snapshot storage
 - `redis` — enqueues `generate_report` ARQ jobs
 - `ollama` — health check only (actual inference in worker)
@@ -337,11 +355,13 @@ Workers are separate container processes that execute heavy background jobs disp
 **What it does:** Executes the actual web crawling and content extraction.
 
 **Jobs:**
+
 - `scrape_topic` — fetches all active web sources for a topic using Crawl4AI + trafilatura. Concurrent fetching with configurable semaphore. Circuit breaker skips sources with `health_status='down'`.
 - `poll_rss_sources` — parses RSS/Atom feeds, extracts articles
 - `check_all_source_health` — daily cron (02:00 UTC) checks all source URLs are reachable
 
 **Key details:**
+
 - Memory limit: 1 GB (Playwright browser instances)
 - Includes Playwright for JavaScript-rendered pages
 - Content deduplication: SHA-256 hash, `ON CONFLICT(content_hash) DO NOTHING`
@@ -349,6 +369,7 @@ Workers are separate container processes that execute heavy background jobs disp
 - Media files stored in `media_store` volume
 
 **Connects to:**
+
 - `postgres` — writes content items, media assets
 - `redis` — receives jobs from ARQ queue
 - Internet — outbound HTTP to source URLs
@@ -360,6 +381,7 @@ Workers are separate container processes that execute heavy background jobs disp
 **What it does:** Executes the LLM report generation pipeline.
 
 **Jobs:**
+
 - `generate_report` — the full pipeline:
   1. RAG retrieval: pgvector cosine search over topic content → top-k context chunks
   2. Context enrichment: each chunk gets a header with source URL, credibility score, date
@@ -373,11 +395,13 @@ Workers are separate container processes that execute heavy background jobs disp
 - `check_source_warnings` — every 6 hours, checks if any source cited in a report has been downgraded since generation, writes `report_source_warnings`
 
 **Key details:**
+
 - Memory limit: 1 GB
 - Prometheus metrics on port 8006
 - Idempotency guard: `WHERE generated_at IS NULL` prevents re-generation
 
 **Connects to:**
+
 - `postgres` — reads content for RAG, writes completed reports
 - `redis` — receives jobs from ARQ queue
 - `ollama` — LLM inference (the only container that does heavy Ollama work)
@@ -393,6 +417,7 @@ Workers are separate container processes that execute heavy background jobs disp
 **Why it's needed:** Analysts need a visual interface to monitor topics, review signals, read reports, and manage sources. The workbench is designed for intelligence officers who may not be technical users.
 
 **Key details:**
+
 - React + TypeScript + Vite (build) + Tailwind CSS
 - MapLibre GL for geographic visualization (GeoJSON from reports)
 - WebSocket connection for real-time signal notifications
@@ -401,6 +426,7 @@ Workers are separate container processes that execute heavy background jobs disp
 - Depends on `api` being healthy before starting
 
 **Connects to:**
+
 - `api` — REST API + WebSocket (the only backend it talks to)
 
 ---
@@ -416,6 +442,7 @@ Workers are separate container processes that execute heavy background jobs disp
 **Scrape targets:** api (8000), scraper (8001), social (8002), vision (8003), analyst (8004), reporter (8005), reporter-worker (8006), ollama (11434), postgres-exporter (9187), redis-exporter (9121), loki (3100)
 
 **Alerting rules (13 rules):**
+
 - `AnveshakServiceDown` — any service unreachable for 1+ min
 - `ScraperIngestionStopped` — zero items fetched in 10 min
 - `ReportGenerationSlow` — p95 latency > 270s
@@ -426,6 +453,7 @@ Workers are separate container processes that execute heavy background jobs disp
 - And more (credibility loop, Loki ingestion, Ollama model status)
 
 **Connects to:**
+
 - All services — scrapes `/metrics` endpoints
 - `grafana` — serves as primary data source
 
@@ -436,6 +464,7 @@ Workers are separate container processes that execute heavy background jobs disp
 **What it does:** Provides 8 pre-configured dashboards for visual monitoring.
 
 **Dashboards:**
+
 1. **Overview** — system-wide health at a glance
 2. **Pipeline** — end-to-end content flow metrics
 3. **Ingestion** — scraper throughput, source health, RSS stats
@@ -446,6 +475,7 @@ Workers are separate container processes that execute heavy background jobs disp
 8. **Infrastructure** — PostgreSQL connections, Redis memory, Ollama model status
 
 **Connects to:**
+
 - `prometheus` — time-series queries
 - `loki` — log queries (live tail, search)
 
@@ -458,6 +488,7 @@ Workers are separate container processes that execute heavy background jobs disp
 **Why it's needed:** With 17 containers, checking `docker logs` on each one is impractical. Loki provides searchable, correlated logs across all services via Grafana.
 
 **Key details:**
+
 - Promtail extracts low-cardinality labels: `service`, `level`, `container`
 - High-cardinality fields (content_hash, URL) stay in the log body (not indexed)
 - DEBUG logs are dropped in production
@@ -465,6 +496,7 @@ Workers are separate container processes that execute heavy background jobs disp
 - Write-ahead log enabled for crash recovery
 
 **Connects to:**
+
 - `promtail` → reads Docker socket (read-only) → ships to `loki`
 - `grafana` → queries `loki` for log panels
 
@@ -477,6 +509,7 @@ Workers are separate container processes that execute heavy background jobs disp
 **Why they're needed:** Prometheus can't scrape PostgreSQL/Redis natively. These exporters translate internal database stats (connection count, query duration, replication lag, memory usage, key count, etc.) into `/metrics` endpoints.
 
 **Connects to:**
+
 - `postgres-exporter` → `postgres` (SQL stats queries) → scraped by `prometheus`
 - `redis-exporter` → `redis` (INFO command) → scraped by `prometheus`
 
@@ -489,6 +522,7 @@ Workers are separate container processes that execute heavy background jobs disp
 **Why it's needed:** When debugging slow requests or failures, traces show exactly which service/function took how long. Optional because it adds overhead and is primarily useful during development or incident investigation.
 
 **Key details:**
+
 - Only starts with `docker compose --profile tracing up`
 - Services opt-in via `OTEL_ENABLED=true` environment variable
 - OTLP HTTP receiver on port 4318, UI on port 16686
@@ -539,6 +573,7 @@ Workers are separate container processes that execute heavy background jobs disp
 ```
 
 **Key design decisions:**
+
 - **No service-to-service HTTP calls** (except api→reporter for PDF proxy). Services communicate through the database and Redis queue. This eliminates tight coupling and allows any service to restart independently.
 - **All LLM calls go through ARQ.** The API never calls Ollama directly. This prevents slow LLM inference from blocking HTTP requests.
 - **WebSocket is API-only.** The analyst service writes signals to the database. The API's background loop picks them up and pushes to connected clients. The analyst never talks to the frontend.
@@ -723,6 +758,7 @@ Content Items (raw text)
 **Problem solved:** Two news articles paraphrasing the same event from different platforms both count toward `independent_source_count`. This inflates ISC and triggers false signals — a credibility failure for court-admissible output.
 
 **How it works:**
+
 - Before each clustering cycle, the analyst loads all embeddings for a topic
 - Pairwise cosine similarity is computed via numpy dot product (O(N²), bounded by `near_duplicate_batch_size=200`)
 - Pairs with cosine similarity ≥ `near_duplicate_similarity_threshold` (default 0.95) are stored in the `near_duplicates` table
@@ -733,6 +769,7 @@ Content Items (raw text)
 **Why 0.95 threshold:** On all-MiniLM-L6-v2, cosine similarity ≥ 0.95 captures only near-paraphrases (same facts, different wording). Lower thresholds would conflate related-but-different articles.
 
 **Key files:**
+
 - `services/analyst/anveshak/analyst/dedup.py` — detection and upsert logic
 - `services/api/migrations/versions/002_near_duplicates.py` — schema
 - `services/analyst/anveshak/analyst/clustering.py` — ISC filtering in `upsert_cluster()`
@@ -746,6 +783,7 @@ Content Items (raw text)
 **Problem solved:** The original IVFFlat index (`lists=100`) is tuned for ~10K vectors. As the corpus grows, recall degrades because IVFFlat requires pre-training on the data distribution. Queries slow down and miss relevant results.
 
 **How it works:**
+
 - Migration 003 replaces IVFFlat with HNSW (Hierarchical Navigable Small World)
 - HNSW builds a multi-layered graph connecting similar vectors
 - No training phase — self-tuning regardless of corpus size
@@ -756,6 +794,7 @@ Content Items (raw text)
 **Performance:** ~50ms queries at 1M vectors (vs 8s with IVFFlat). Build time <60s for <100K vectors.
 
 **Key files:**
+
 - `services/api/migrations/versions/003_hnsw_index.py` — migration
 - `hardware.md` — upgrade parameters
 
@@ -768,6 +807,7 @@ Content Items (raw text)
 **Problem solved:** HDBSCAN treats a 6-month-old article identically to one from 10 minutes ago. For a real-time monitoring platform, fresh narratives drown in historical noise. An analyst watching for emerging threats doesn't want last year's articles dominating cluster composition.
 
 **How it works:**
+
 - `load_embeddings()` accepts a `window_days` parameter (default: `clustering_window_days=30`)
 - Only content items with `captured_at` within the window are loaded for HDBSCAN
 - Clusters older than `cluster_archive_after_days` (default: 90) are marked with `archived_at` timestamp
@@ -775,6 +815,7 @@ Content Items (raw text)
 - The temporal filter uses `MAKE_INTERVAL(days => $2)` in PostgreSQL for timezone-safe comparison
 
 **Key files:**
+
 - `services/api/migrations/versions/004_cluster_temporal.py` — adds `archived_at` column
 - `services/analyst/anveshak/analyst/clustering.py` — windowed SQL, `load_embeddings()` signature
 - `services/analyst/anveshak/analyst/signal_engine.py` — `AND nc.archived_at IS NULL` filter
@@ -789,6 +830,7 @@ Content Items (raw text)
 **Problem solved:** Backfill originally ran only once — when a topic was created. Any content scraped later for a different topic, even if it matched the original topic's keywords, was never discovered. Topics became isolated silos.
 
 **How it works:**
+
 - A dedicated `backfill_loop` runs every `backfill_interval_s` seconds (default: 600 = 10 minutes)
 - For each active topic, encodes topic keywords as a vector, runs pgvector cosine search across the entire corpus
 - Items with similarity ≥ `backfill_similarity_threshold` (0.85) are linked via the `topic_content_items` join table
@@ -796,6 +838,7 @@ Content Items (raw text)
 - Runs as a separate async loop, independent of the clustering cycle
 
 **Key files:**
+
 - `services/analyst/anveshak/analyst/main.py` — `backfill_loop()` function
 - `services/analyst/anveshak/analyst/backfill.py` — core logic (unchanged, already idempotent)
 
@@ -808,6 +851,7 @@ Content Items (raw text)
 **Problem solved:** HDBSCAN re-runs every 5 minutes. Cluster composition may shift significantly — items join, leave, or swap clusters. But the Ollama-generated cluster label persists and may no longer describe what the cluster actually contains. An analyst sees "Chinese Military Exercises" on a cluster that is now about "South China Sea Shipping Lanes".
 
 **How it works:**
+
 - When a label is generated, `compute_item_hash()` creates a SHA-256 hash of the sorted, comma-joined content_item IDs in the cluster
 - This hash and `label_generated_at` are stored on the `narrative_clusters` row
 - On each clustering cycle, before enqueuing label generation, `check_label_staleness()` compares the stored hash against the current composition
@@ -815,6 +859,7 @@ Content Items (raw text)
 - New clusters (NULL hash) are always labelled — backward compatible with existing data
 
 **Key files:**
+
 - `services/api/migrations/versions/005_label_staleness.py` — adds `label_generated_at`, `label_item_hash` columns
 - `services/analyst/anveshak/analyst/labeller.py` — `compute_item_hash()`, `check_label_staleness()`, updated SQL
 - `services/analyst/anveshak/analyst/jobs.py` — staleness check before enqueuing label jobs
@@ -828,6 +873,7 @@ Content Items (raw text)
 **Problem solved:** An analyst monitoring "Chinese Military" and "South China Sea" topics sees each topic's signals independently. But when both topics surface the same narrative — say, a specific naval exercise — there's no mechanism to alert the analyst that two separate intelligence streams have converged on the same story. This is exactly the kind of cross-correlation that intelligence analysis demands.
 
 **How it works:**
+
 - A dedicated `convergence_loop` runs every `cross_topic_check_interval_s` (default: 900 = 15 minutes)
 - Compares cluster centroids across different topics using pgvector cosine distance
 - SQL uses `nc1.topic_id < nc2.topic_id` to ensure cross-topic comparison only (canonical ordering)
@@ -840,6 +886,7 @@ Content Items (raw text)
 **Signal type:** `cross_topic_convergence` (vs existing `multi_source_convergence`)
 
 **Key files:**
+
 - `services/analyst/anveshak/analyst/convergence.py` — detection and signal firing
 - `services/api/migrations/versions/006_cross_topic_signals.py` — partial index on signal_type
 - `services/analyst/anveshak/analyst/main.py` — `convergence_loop()` function
@@ -902,6 +949,7 @@ All migrations are additive — no columns dropped, no data modified, backward c
 Signals are Anveshak's real-time alerting mechanism. They fire when enough independent sources corroborate a narrative cluster.
 
 **How it works:**
+
 1. Content items are clustered by semantic similarity (HDBSCAN on pgvector embeddings)
 2. Near-duplicate items are excluded from source counting — prevents paraphrased content from inflating diversity
 3. Each cluster tracks `independent_source_count` — the number of distinct `source.platform` values contributing unique content
@@ -918,6 +966,7 @@ Signals are Anveshak's real-time alerting mechanism. They fire when enough indep
 | `cross_topic_convergence` | Two topics share a narrative (centroid similarity ≥ 0.85) | Always HIGH |
 
 **Signal lifecycle:**
+
 ```
 new → acknowledged → dismissed
                   → escalated
@@ -986,6 +1035,7 @@ Reports are Anveshak's court-admissible output. They are **immutable** — once 
 ```
 
 **Immutability rules:**
+
 - `generated_at` is set exactly once on first write — never updated
 - `source_snapshot` captures source credibility scores at generation time
 - If a source is later downgraded, a `report_source_warning` is inserted — the report itself is NOT modified

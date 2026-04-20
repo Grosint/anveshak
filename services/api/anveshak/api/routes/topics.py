@@ -135,7 +135,7 @@ async def get_topic_sources(
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """Return all sources that have contributed content to this topic.
+    """Return all sources assigned to this topic via topic_sources.
 
     Each source includes item_count — number of content items from that source
     in this topic, descending (most active source first). Criterion 7.10.
@@ -143,3 +143,33 @@ async def get_topic_sources(
     if not await topics_db.topic_exists(db, topic_id):
         raise HTTPException(status_code=404, detail="Topic not found")
     return await sources_db.list_topic_sources(db, topic_id)
+
+
+@router.post("/{topic_id}/sources/{source_id}", status_code=status.HTTP_201_CREATED)
+async def add_topic_source(
+    topic_id: str,
+    source_id: str,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Associate a source with a topic so the scraper monitors it."""
+    if not await topics_db.topic_exists(db, topic_id):
+        raise HTTPException(status_code=404, detail="Topic not found")
+    if not await sources_db.source_exists(db, source_id):
+        raise HTTPException(status_code=404, detail="Source not found")
+    await sources_db.add_topic_source(db, topic_id, source_id)
+    return {"topic_id": topic_id, "source_id": source_id, "status": "linked"}
+
+
+@router.delete("/{topic_id}/sources/{source_id}", status_code=status.HTTP_200_OK)
+async def remove_topic_source(
+    topic_id: str,
+    source_id: str,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Remove a source from a topic's monitoring list."""
+    if not await topics_db.topic_exists(db, topic_id):
+        raise HTTPException(status_code=404, detail="Topic not found")
+    await sources_db.remove_topic_source(db, topic_id, source_id)
+    return {"topic_id": topic_id, "source_id": source_id, "status": "unlinked"}

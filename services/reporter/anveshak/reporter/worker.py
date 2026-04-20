@@ -288,7 +288,12 @@ async def check_source_warnings(ctx: dict) -> None:
     reports = await db.fetch_reports_for_warning_check(pool, s.source_warning_lookback_days)
 
     for report in reports:
-        snapshot: dict[str, Any] = report.get("source_snapshot") or {}
+        snapshot = report.get("source_snapshot") or {}
+        if isinstance(snapshot, str):
+            try:
+                snapshot = json.loads(snapshot)
+            except (json.JSONDecodeError, TypeError):
+                continue
         if not snapshot:
             continue
 
