@@ -19,8 +19,8 @@ depends_on = None
 def upgrade() -> None:
     op.execute("""
         CREATE TABLE topic_sources (
-            topic_id   UUID NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
-            source_id  UUID NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+            topic_id   TEXT NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+            source_id  TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
             added_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
             PRIMARY KEY (topic_id, source_id)
         )
