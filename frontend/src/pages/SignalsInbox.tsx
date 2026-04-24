@@ -3,12 +3,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { signalsApi, Signal, SignalStatus } from '../api/signals'
 import { useWS } from '../contexts/WSContext'
 import { SignalCard } from '../components/signals/SignalCard'
+import { SignalTimeline } from '../components/signals/SignalTimeline'
+import { SignalGraph } from '../components/signals/SignalGraph'
 import { Spinner } from '../components/ui/Spinner'
 import { EmptyState } from '../components/ui/EmptyState'
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ── Types ────────────────────────────────────────────────────────────────
 
 type TimePreset = 'today' | '7d' | '30d' | 'custom'
+type ViewMode = 'list' | 'timeline'
 
 const TABS: { key: SignalStatus; label: string }[] = [
   { key: 'new',          label: 'New' },
@@ -23,13 +26,12 @@ const TIME_PRESETS: { key: TimePreset; label: string }[] = [
   { key: 'custom', label: 'Custom' },
 ]
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────
 
 function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10)
 }
 
-/** Compute [since, until] ISO strings from the current preset + custom inputs. */
 function resolveRange(
   preset: TimePreset,
   customFrom: string,
@@ -53,7 +55,6 @@ function resolveRange(
     d.setUTCDate(d.getUTCDate() - 30)
     return { since: d.toISOString(), until }
   }
-  // custom
   const since = customFrom ? new Date(customFrom + 'T00:00:00Z').toISOString() : ''
   const customUntil = customTo
     ? new Date(customTo + 'T23:59:59Z').toISOString()
@@ -61,14 +62,16 @@ function resolveRange(
   return { since, until: customUntil }
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
+// ── Component ────────────────────────────────────────────────────────────
 
 export default function SignalsInbox() {
   const [activeTab, setActiveTab]     = useState<SignalStatus>('new')
   const [newCount, setNewCount]       = useState(0)
-  const [preset, setPreset]           = useState<TimePreset>('today')
+  const [preset, setPreset]           = useState<TimePreset>('7d')
   const [customFrom, setCustomFrom]   = useState('')
   const [customTo, setCustomTo]       = useState(() => toISODate(new Date()))
+  const [viewMode, setViewMode]       = useState<ViewMode>('timeline')
+  const [graphSignalId, setGraphSignalId] = useState<string | null>(null)
 
   const qc = useQueryClient()
   const { subscribe } = useWS()
@@ -78,7 +81,6 @@ export default function SignalsInbox() {
     [preset, customFrom, customTo],
   )
 
-  // Custom preset is only "active" once both dates are filled
   const rangeReady = preset !== 'custom' || (customFrom !== '' && customTo !== '')
 
   const { data: signals = [], isLoading } = useQuery({
@@ -88,7 +90,7 @@ export default function SignalsInbox() {
     enabled: rangeReady,
   })
 
-  // Real-time: WS push → invalidate all signal cache keys + badge counter
+  // Real-time: WS push → invalidate
   useEffect(() => {
     return subscribe((msg) => {
       if (msg.type === 'signal' || msg.type === 'signal_replay') {
@@ -141,11 +143,30 @@ export default function SignalsInbox() {
   return (
     <div className="h-full flex flex-col">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="px-6 pt-6 pb-4 border-b border-anveshak-border">
-        <h1 className="text-xl font-semibold text-text-primary">Signals Inbox</h1>
-        <p className="text-sm text-text-muted mt-0.5">
-          Threshold-based intelligence alerts — real-time via WebSocket
-        </p>
+      <div className="px-6 pt-6 pb-4 border-b border-anveshak-border flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-text-primary">Signals Intelligence</h1>
+          <p className="text-sm text-text-muted mt-0.5">
+            Threshold-based intelligence alerts — real-time via WebSocket
+          </p>
+        </div>
+
+        {/* View toggle */}
+        <div className="flex items-center bg-anveshak-muted rounded-lg p-0.5">
+          {(['list', 'timeline'] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                viewMode === mode
+                  ? 'bg-anveshak-card text-text-primary shadow-sm'
+                  : 'text-text-muted hover:text-text-secondary'
+              }`}
+            >
+              {mode === 'list' ? 'List' : 'Timeline'}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── Status tabs ────────────────────────────────────────────────────── */}
@@ -193,7 +214,6 @@ export default function SignalsInbox() {
           ))}
         </div>
 
-        {/* Custom date pickers — visible only when Custom is active */}
         {preset === 'custom' && (
           <div className="flex flex-wrap items-center gap-3 mt-2.5">
             <label className="flex items-center gap-1.5 text-xs text-text-muted">
@@ -240,6 +260,14 @@ export default function SignalsInbox() {
                 : undefined
             }
           />
+        ) : viewMode === 'timeline' ? (
+          <SignalTimeline
+            signals={signals}
+            onAcknowledge={(id) => acknowledge.mutate(id)}
+            onDismiss={(id) => dismiss.mutate(id)}
+            isActioning={isActioning}
+            onShowGraph={setGraphSignalId}
+          />
         ) : (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
             {signals.map((signal) => (
@@ -254,6 +282,14 @@ export default function SignalsInbox() {
           </div>
         )}
       </div>
+
+      {/* ── Graph modal ───────────────────────────────────────────────────── */}
+      {graphSignalId && (
+        <SignalGraph
+          signalId={graphSignalId}
+          onClose={() => setGraphSignalId(null)}
+        />
+      )}
     </div>
   )
 }

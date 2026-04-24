@@ -142,26 +142,143 @@ export default function ContentFeed() {
             }
           />
         ) : clusterView && !searchActive ? (
-          // Cluster view
-          <div className="max-w-2xl space-y-6">
+          // Cluster view — military C2 aesthetic
+          <div className="max-w-3xl space-y-3">
             {clusters.length === 0 ? (
-              <p className="text-sm text-text-muted">No clusters formed yet — more content needed.</p>
+              <EmptyState
+                icon="📊"
+                title="No clusters formed yet"
+                description="Clusters emerge when enough content is collected and analysed."
+              />
             ) : (
-              clusters.map((cluster) => (
-                <section key={cluster.id} aria-labelledby={`cluster-${cluster.id}`}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <h3 id={`cluster-${cluster.id}`} className="text-sm font-semibold text-text-primary">
-                      {cluster.label ?? `Cluster (${cluster.item_count} items)`}
-                    </h3>
-                    <span className="text-xs text-text-muted">
-                      {cluster.independent_source_count} platforms · {cluster.item_count} items
-                    </span>
-                  </div>
-                  <p className="text-xs text-text-muted mb-3">
-                    Items grouped into this narrative cluster — click to view individual articles.
-                  </p>
-                </section>
-              ))
+              <>
+                {/* Summary bar */}
+                <div className="flex items-center gap-4 text-[11px] text-text-muted mb-2 px-1">
+                  <span>{clusters.length} narrative cluster{clusters.length !== 1 ? 's' : ''}</span>
+                  <span className="text-anveshak-border">|</span>
+                  <span>{clusters.reduce((s, c) => s + c.item_count, 0)} total items</span>
+                </div>
+
+                {(() => {
+                  const maxItems = Math.max(...clusters.map((c) => c.item_count), 1)
+                  // Color scale: top clusters get brighter accents
+                  const accentColors = [
+                    { bar: '#3b82f6', border: 'rgba(59,130,246,0.35)', glow: 'rgba(59,130,246,0.08)' },
+                    { bar: '#8b5cf6', border: 'rgba(139,92,246,0.30)', glow: 'rgba(139,92,246,0.06)' },
+                    { bar: '#06b6d4', border: 'rgba(6,182,212,0.30)', glow: 'rgba(6,182,212,0.06)' },
+                    { bar: '#10b981', border: 'rgba(16,185,129,0.25)', glow: 'rgba(16,185,129,0.05)' },
+                    { bar: '#f59e0b', border: 'rgba(245,158,11,0.25)', glow: 'rgba(245,158,11,0.05)' },
+                  ]
+
+                  return clusters.map((cluster, idx) => {
+                    const barPct = Math.max(6, (cluster.item_count / maxItems) * 100)
+                    const label = cluster.label ?? 'Unclassified cluster'
+                    const sources = cluster.sources ?? []
+                    const isc = cluster.independent_source_count
+                    const accent = accentColors[idx % accentColors.length]
+                    const isTop = idx < 3
+
+                    return (
+                      <article
+                        key={cluster.id}
+                        className="relative overflow-hidden rounded-lg border transition-all duration-300 cursor-pointer group hover:scale-[1.008] hover:shadow-lg"
+                        style={{
+                          borderColor: accent.border,
+                          backgroundColor: accent.glow,
+                        }}
+                        onClick={() => {/* TODO: expand to show items */}}
+                      >
+                        {/* Left accent bar */}
+                        <div
+                          className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg"
+                          style={{ backgroundColor: accent.bar, opacity: isTop ? 0.9 : 0.5 }}
+                        />
+
+                        {/* Subtle top glow for top clusters */}
+                        {isTop && (
+                          <div
+                            className="absolute top-0 left-0 right-0 h-px"
+                            style={{
+                              background: `linear-gradient(90deg, transparent 0%, ${accent.bar}60 30%, ${accent.bar}80 50%, ${accent.bar}60 70%, transparent 100%)`,
+                            }}
+                          />
+                        )}
+
+                        <div className="pl-4 pr-4 py-3.5">
+                          {/* Top row: label + item count badge */}
+                          <div className="flex items-start justify-between gap-3 mb-1">
+                            <h3 className="text-[13px] font-semibold text-text-primary leading-snug group-hover:text-white transition-colors flex-1 min-w-0">
+                              {label}
+                            </h3>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
+                                style={{
+                                  backgroundColor: `${accent.bar}20`,
+                                  color: accent.bar,
+                                }}
+                              >
+                                {cluster.item_count}
+                              </span>
+                              <span className="text-[10px] text-text-muted">
+                                {isc} src{isc !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Size bar */}
+                          <div className="w-full h-[3px] bg-white/[0.04] rounded-full mb-2.5 overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-700 ease-out"
+                              style={{
+                                width: `${barPct}%`,
+                                background: `linear-gradient(90deg, ${accent.bar}90, ${accent.bar}40)`,
+                                boxShadow: isTop ? `0 0 8px ${accent.bar}40` : undefined,
+                              }}
+                            />
+                          </div>
+
+                          {/* Executive summary */}
+                          {cluster.executive_summary && (
+                            <p className="text-[11px] text-text-secondary/80 leading-relaxed line-clamp-2 mb-2">
+                              {cluster.executive_summary}
+                            </p>
+                          )}
+
+                          {/* Source chips */}
+                          {sources.length > 0 && (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {sources.map((src, i) => {
+                                const credColor =
+                                  src.credibility_score >= 70 ? 'text-cred-high' :
+                                  src.credibility_score >= 40 ? 'text-signal-med' :
+                                  'text-signal-high'
+                                return (
+                                  <span
+                                    key={i}
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] border border-white/[0.06]"
+                                    style={{ backgroundColor: 'rgba(255,255,255,0.03)' }}
+                                  >
+                                    <span className="font-bold text-text-muted">
+                                      {src.platform.toUpperCase()}
+                                    </span>
+                                    <span className="text-text-muted/70 truncate max-w-[90px]">
+                                      {src.source_name.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
+                                    </span>
+                                    <span className={`font-mono font-bold ${credColor}`}>
+                                      {Math.round(src.credibility_score)}
+                                    </span>
+                                  </span>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </article>
+                    )
+                  })
+                })()}
+              </>
             )}
           </div>
         ) : (

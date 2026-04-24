@@ -125,6 +125,17 @@ async def cluster_loop(pool: asyncpg.Pool):
                             topic_id=topic_id,
                             clusters=len(cluster_ids),
                         )
+                        # Generate labels for stale/new clusters
+                        from .labeller import check_label_staleness, generate_label_for_cluster
+                        for cid in cluster_ids:
+                            try:
+                                if await check_label_staleness(cid, pool):
+                                    label = await generate_label_for_cluster(cid, pool)
+                                    log.info("analyst.cluster_loop.label_generated",
+                                             cluster_id=cid, label=label)
+                            except Exception as label_exc:
+                                log.warning("analyst.cluster_loop.label_failed",
+                                            cluster_id=cid, error=str(label_exc))
                 except Exception as exc:
                     log.warning(
                         "analyst.cluster_loop.topic_failed",

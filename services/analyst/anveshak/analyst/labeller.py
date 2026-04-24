@@ -31,6 +31,7 @@ SQL_CLUSTER_SAMPLE_TEXTS = """
     FROM content_items ci
     LEFT JOIN extracted_entities ee ON ee.content_item_id = ci.id
     WHERE ci.narrative_cluster_id = $1
+      AND COALESCE(ci.content_quality, 'good') != 'low_quality'
     ORDER BY ci.captured_at DESC
     LIMIT 10
 """
@@ -39,7 +40,8 @@ SQL_UPDATE_CLUSTER_LABEL = """
     UPDATE narrative_clusters
     SET label = $1, updated_at = NOW(),
         label_generated_at = NOW(),
-        label_item_hash = $3
+        label_item_hash = $3,
+        executive_summary = $4
     WHERE id = $2
 """
 
@@ -69,6 +71,7 @@ class ClusterLabel(BaseModel):
     model_config = ConfigDict(strict=True)
 
     label: str
+    summary: str = ""
     confidence: float  # 0.0–1.0
 
 
@@ -77,9 +80,18 @@ class ClusterLabel(BaseModel):
 # ---------------------------------------------------------------------------
 
 _SYSTEM_PROMPT = (
-    "You are an intelligence analyst. Summarise the common narrative theme of "
-    "the following news/social media excerpts in a short label (5–10 words). "
-    'Respond with JSON only: {"label": "<short label>", "confidence": <float 0-1>}. '
+    "You are an intelligence analyst writing for military/law enforcement decision-makers. "
+    "Analyse the following news/social media excerpts and produce:\n"
+    "1. A short label (5–10 words) capturing the narrative theme.\n"
+    "2. An executive summary (2–3 sentences) stating: what is happening, "
+    "which actors are involved, and why it matters for security.\n"
+    "Rules:\n"
+    "- Only use facts present in the provided excerpts.\n"
+    "- If a fact is not in the excerpts, do not infer or speculate.\n"
+    "- Be specific: name countries, organisations, and locations mentioned.\n"
+    "Respond with JSON only:\n"
+    '{"label": "<short label>", "summary": "<2-3 sentence executive summary>", '
+    '"confidence": <float 0-1>}\n'
     "Do not include any other text."
 )
 
@@ -106,7 +118,7 @@ async def call_ollama_label(prompt: str) -> str:
     Model and host come from settings — never hardcoded (hardware rule).
     Timeout: 30s for cluster labelling (patterns.md).
     """
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=300.0) as client:
         resp = await client.post(
             f"{settings.ollama_host}/api/generate",
             json={
@@ -137,11 +149,23 @@ def parse_label(raw: str) -> ClusterLabel:
     return ClusterLabel.model_validate(json.loads(raw[start:end]))
 
 
-def fallback_label(cluster_seq: int, top_entity: str | None) -> str:
-    """Fallback label when Ollama fails — never NULL (criteria 2.8)."""
-    if top_entity:
-        return f"Cluster {cluster_seq}: {top_entity}"
-    return f"Cluster {cluster_seq}"
+SQL_CLUSTER_TOP_ENTITIES = """
+    SELECT ee.entity_text, COUNT(*) AS cnt
+    FROM extracted_entities ee
+    JOIN content_items ci ON ci.id = ee.content_item_id
+    WHERE ci.narrative_cluster_id = $1
+      AND ee.entity_type IN ('GPE', 'ORG', 'PERSON', 'EVENT')
+    GROUP BY ee.entity_text
+    ORDER BY cnt DESC
+    LIMIT 3
+"""
+
+
+def fallback_label(top_entities: list[str]) -> str:
+    """Fallback label when Ollama fails — uses top entities, never NULL (criteria 2.8)."""
+    if top_entities:
+        return " — ".join(top_entities[:3])
+    return "Unclassified cluster"
 
 
 # ---------------------------------------------------------------------------
@@ -194,22 +218,21 @@ async def check_label_staleness(cluster_id: str, pool: asyncpg.Pool) -> bool:
 # ---------------------------------------------------------------------------
 
 async def generate_label_for_cluster(cluster_id: str, pool: asyncpg.Pool) -> str:
-    """Generate and persist a label for a narrative cluster.
+    """Generate and persist a label + executive summary for a narrative cluster.
 
     Returns the label string (either LLM-generated or fallback).
     """
     async with pool.acquire() as conn:
         rows = await conn.fetch(SQL_CLUSTER_SAMPLE_TEXTS, cluster_id)
-        seq = await conn.fetchval(SQL_GET_CLUSTER_SEQUENCE, cluster_id) or 1
+        entity_rows = await conn.fetch(SQL_CLUSTER_TOP_ENTITIES, cluster_id)
 
     texts = [r["clean_text"] for r in rows if r["clean_text"]]
-    top_entity = next(
-        (r["entity_text"] for r in rows if r["entity_text"]), None
-    )
+    top_entities = [r["entity_text"] for r in entity_rows]
 
     label: str
+    summary: str | None = None
     if not texts:
-        label = fallback_label(seq, top_entity)
+        label = fallback_label(top_entities)
         log.info("labeller.no_texts_fallback", cluster_id=cluster_id, label=label)
     else:
         prompt = build_label_prompt(texts)
@@ -217,14 +240,16 @@ async def generate_label_for_cluster(cluster_id: str, pool: asyncpg.Pool) -> str
             raw = await call_ollama_label(prompt)
             parsed = parse_label(raw)
             label = parsed.label
+            summary = parsed.summary or None
             log.info(
                 "labeller.ollama_success",
                 cluster_id=cluster_id,
                 label=label,
+                summary=summary[:80] if summary else None,
                 confidence=parsed.confidence,
             )
         except (httpx.HTTPError, httpx.TimeoutException) as exc:
-            label = fallback_label(seq, top_entity)
+            label = fallback_label(top_entities)
             log.warning(
                 "labeller.ollama_http_error",
                 cluster_id=cluster_id,
@@ -232,7 +257,7 @@ async def generate_label_for_cluster(cluster_id: str, pool: asyncpg.Pool) -> str
                 fallback=label,
             )
         except (ValidationError, ValueError, KeyError) as exc:
-            label = fallback_label(seq, top_entity)
+            label = fallback_label(top_entities)
             log.warning(
                 "labeller.ollama_parse_error",
                 cluster_id=cluster_id,
@@ -245,6 +270,6 @@ async def generate_label_for_cluster(cluster_id: str, pool: asyncpg.Pool) -> str
         item_rows = await conn.fetch(SQL_GET_CLUSTER_ITEM_IDS, cluster_id)
         item_ids = [r["id"] for r in item_rows]
         item_hash = compute_item_hash(item_ids) if item_ids else ""
-        await conn.execute(SQL_UPDATE_CLUSTER_LABEL, label, cluster_id, item_hash)
+        await conn.execute(SQL_UPDATE_CLUSTER_LABEL, label, cluster_id, item_hash, summary)
 
     return label

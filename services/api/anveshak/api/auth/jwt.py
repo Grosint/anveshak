@@ -22,11 +22,15 @@ pwd_context = _BcryptContext()
 bearer_scheme = HTTPBearer()
 
 
-def create_access_token(subject: str, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(
+    subject: str,
+    username: str = "",
+    expires_delta: Optional[timedelta] = None,
+) -> str:
     expire = datetime.now(UTC) + (
         expires_delta or timedelta(minutes=settings.jwt_expire_minutes)
     )
-    payload = {"sub": subject, "exp": expire, "iat": datetime.now(UTC)}
+    payload = {"sub": subject, "username": username, "exp": expire, "iat": datetime.now(UTC)}
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Signal } from '../../api/signals'
+import { Signal, SignalSource } from '../../api/signals'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { formatDistanceToNow } from 'date-fns'
@@ -11,13 +11,45 @@ const severityVariantMap: Record<string, 'danger' | 'warning' | 'success' | 'def
   LOW:    'success',
 }
 
+const platformIcons: Record<string, string> = {
+  web: 'WEB',
+  rss: 'RSS',
+  telegram: 'TG',
+  reddit: 'RDT',
+  bluesky: 'BSK',
+  x: 'X',
+}
+
 function inferSeverity(signal: Signal): string {
-  // signal_type or description may contain severity hint
+  const isc = signal.independent_source_count ?? 0
+  if (isc >= 3) return 'HIGH'
+  if (isc >= 2) return 'MEDIUM'
   const t = signal.signal_type.toUpperCase()
   if (t.includes('HIGH') || t.includes('CRITICAL')) return 'HIGH'
-  if (t.includes('MED')) return 'MED'
+  if (t.includes('MED')) return 'MEDIUM'
   if (t.includes('LOW')) return 'LOW'
-  return 'HIGH' // default — an alert is always significant
+  return 'HIGH'
+}
+
+function SourceChip({ source }: { source: SignalSource }) {
+  const credColor =
+    source.credibility_score >= 70 ? 'text-cred-high' :
+    source.credibility_score >= 40 ? 'text-signal-med' :
+    'text-signal-high'
+
+  return (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-anveshak-muted text-[11px]">
+      <span className="font-semibold text-text-secondary">
+        {platformIcons[source.platform] ?? source.platform.toUpperCase()}
+      </span>
+      <span className="text-text-muted truncate max-w-[120px]" title={source.source_name}>
+        {source.source_name.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
+      </span>
+      <span className={`font-mono font-semibold ${credColor}`}>
+        {Math.round(source.credibility_score)}
+      </span>
+    </span>
+  )
 }
 
 interface SignalCardProps {
@@ -32,57 +64,53 @@ export function SignalCard({ signal, onAcknowledge, onDismiss, isActioning }: Si
   const severity = inferSeverity(signal)
   const severityVariant = severityVariantMap[severity] ?? 'default'
   const isNew = signal.status === 'new'
+  const sources = signal.sources ?? []
+  const itemCount = signal.cluster_item_count ?? 0
 
   function handleCardClick() {
     navigate(`/topics/${signal.topic_id}/feed`)
   }
 
+  const timelineText = (() => {
+    if (!signal.first_seen) return null
+    const first = formatDistanceToNow(new Date(signal.first_seen), { addSuffix: true })
+    if (!signal.last_seen || signal.first_seen === signal.last_seen) {
+      return `First seen ${first}`
+    }
+    const last = formatDistanceToNow(new Date(signal.last_seen), { addSuffix: true })
+    return `${first} — latest ${last}`
+  })()
+
   return (
     <article
-      className={`h-full bg-anveshak-card border rounded-lg p-4 transition-all animate-fade-in cursor-pointer hover:border-anveshak-accent/50 ${
+      className={`h-full bg-anveshak-card border rounded-lg transition-all animate-fade-in cursor-pointer hover:border-anveshak-accent/50 ${
         isNew
           ? 'border-anveshak-accent/60 shadow-[0_0_0_1px_rgba(59,130,246,0.2)]'
           : 'border-anveshak-border'
       }`}
-      aria-label={`Signal: ${signal.signal_type} — click to view topic feed`}
+      aria-label={`Signal: ${signal.cluster_label || signal.signal_type} — click to view topic feed`}
       onClick={handleCardClick}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && handleCardClick()}
     >
-      <div className="flex items-start justify-between gap-3">
-        {/* Left: content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1.5">
-            {isNew && <span className="w-2 h-2 rounded-full bg-anveshak-accent shrink-0" aria-label="Unread" />}
-            <Badge variant={severityVariant}>{severity}</Badge>
-            <Badge variant="ghost">{signal.signal_type.replace(/_/g, ' ')}</Badge>
-            {signal.status !== 'new' && (
-              <Badge variant="default">{signal.status}</Badge>
-            )}
-          </div>
-
-          <p className="text-sm text-text-primary font-medium line-clamp-2">
-            {signal.description || 'Signal triggered — review cluster for details.'}
-          </p>
-
-          {signal.cluster_label && (
-            <p className="text-xs text-anveshak-accent mt-1 truncate" title={signal.cluster_label}>
-              Cluster: {signal.cluster_label}
-              {signal.independent_source_count != null && (
-                <span className="ml-2 text-text-muted">
-                  ({signal.independent_source_count} independent sources)
-                </span>
-              )}
-            </p>
+      {/* Header row */}
+      <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          {isNew && <span className="w-2 h-2 rounded-full bg-anveshak-accent shrink-0" aria-label="Unread" />}
+          <Badge variant={severityVariant}>{severity}</Badge>
+          <Badge variant="ghost">{signal.signal_type.replace(/_/g, ' ')}</Badge>
+          {signal.status !== 'new' && (
+            <Badge variant="default">{signal.status}</Badge>
           )}
-
-          <p className="text-xs text-text-muted mt-1">
-            {formatDistanceToNow(new Date(signal.created_at), { addSuffix: true })}
-          </p>
+          {signal.topic_name && (
+            <span className="text-xs text-text-muted truncate" title={signal.topic_name}>
+              {signal.topic_name}
+            </span>
+          )}
         </div>
 
-        {/* Right: actions — stop propagation so clicks don't navigate */}
+        {/* Actions */}
         {signal.status !== 'dismissed' && (
           <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
             {signal.status === 'new' && (
@@ -107,6 +135,51 @@ export function SignalCard({ signal, onAcknowledge, onDismiss, isActioning }: Si
             </Button>
           </div>
         )}
+      </div>
+
+      {/* Narrative label — the headline the analyst scans */}
+      <div className="px-4 pb-1">
+        <p className="text-sm text-text-primary font-medium leading-snug">
+          {signal.cluster_label || signal.description || 'Signal triggered — review cluster for details.'}
+        </p>
+      </div>
+
+      {/* Executive summary — the key intelligence */}
+      {signal.executive_summary && (
+        <div className="px-4 pb-2">
+          <p className="text-xs text-text-secondary leading-relaxed line-clamp-3">
+            {signal.executive_summary}
+          </p>
+        </div>
+      )}
+
+      {/* Source breakdown */}
+      {sources.length > 0 && (
+        <div className="px-4 pb-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] text-text-muted font-medium">
+              {signal.independent_source_count ?? sources.length} platforms:
+            </span>
+            {sources.map((src, i) => (
+              <SourceChip key={i} source={src} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Footer: timeline + item count */}
+      <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-1 border-t border-anveshak-border/50">
+        <div className="flex items-center gap-3 text-[11px] text-text-muted">
+          {timelineText && <span>{timelineText}</span>}
+          {itemCount > 0 && (
+            <span className="flex items-center gap-1">
+              <span className="font-semibold text-text-secondary">{itemCount}</span> items in cluster
+            </span>
+          )}
+        </div>
+        <span className="text-[11px] text-text-muted">
+          {formatDistanceToNow(new Date(signal.created_at), { addSuffix: true })}
+        </span>
       </div>
     </article>
   )

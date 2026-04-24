@@ -1,0 +1,279 @@
+"""Unit tests for post-extraction text cleaner.
+
+pytest.mark.unit — no external dependencies, no DB, no network.
+"""
+import pytest
+from anveshak.scraper.clean import clean_extracted_text
+
+
+class TestMarkdownLinkRemoval:
+    """Markdown [text](url) syntax should be converted to plain text."""
+
+    def test_simple_link(self):
+        assert clean_extracted_text("[Click here](https://example.com)") == "Click here"
+
+    def test_link_in_context(self):
+        result = clean_extracted_text(
+            "Read the [full report](https://example.com/report) for details."
+        )
+        assert result == "Read the full report for details."
+
+    def test_multiple_links(self):
+        text = "[China](https://scmp.com/china) [Military](https://scmp.com/military)"
+        result = clean_extracted_text(text)
+        assert "China" in result
+        assert "Military" in result
+        assert "https://" not in result
+
+    def test_empty_link_text(self):
+        result = clean_extracted_text("[](https://example.com)")
+        assert "https://" not in result
+
+
+class TestMarkdownImageRemoval:
+    """Markdown ![alt](url) should be stripped entirely."""
+
+    def test_simple_image(self):
+        result = clean_extracted_text('![GlobalSecurity.org](https://example.com/img.png)')
+        assert "https://" not in result
+
+    def test_image_with_title(self):
+        result = clean_extracted_text(
+            '![GlobalSecurity.org](https://www.globalsecurity.org/index.html "GlobalSecurity.org")'
+        )
+        assert "https://" not in result
+        assert "index.html" not in result
+
+    def test_image_in_context(self):
+        text = 'See ![photo](https://example.com/photo.jpg) for reference. Real content here.'
+        result = clean_extracted_text(text)
+        assert "Real content here." in result
+        assert "https://" not in result
+
+
+class TestBoilerplateRemoval:
+    """Common boilerplate phrases on their own lines should be removed."""
+
+    def test_advertisement_lines(self):
+        text = "Real content here.\nAdvertisement\nMore real content."
+        result = clean_extracted_text(text)
+        assert "Advertisement" not in result
+        assert "Real content here." in result
+        assert "More real content." in result
+
+    def test_sign_in(self):
+        text = "Article text.\nSIGN IN\nMore article text."
+        result = clean_extracted_text(text)
+        assert "SIGN IN" not in result
+
+    def test_cookie_policy(self):
+        text = "Content.\nCookie Policy\nMore content."
+        result = clean_extracted_text(text)
+        assert "Cookie Policy" not in result
+
+    def test_boilerplate_mid_sentence_preserved(self):
+        """Boilerplate phrase within a real sentence should NOT be removed."""
+        text = "The advertisement campaign reached millions."
+        result = clean_extracted_text(text)
+        assert "advertisement campaign" in result
+
+    def test_log_in_register(self):
+        text = "Article.\nLog in Register\nContent."
+        result = clean_extracted_text(text)
+        assert "Log in Register" not in result
+
+
+class TestAsteriskNavRemoval:
+    """Asterisk-separated navigation should be removed."""
+
+    def test_asterisk_nav(self):
+        text = "* My Account * Sign In * Subscribe * Sign Out * More"
+        result = clean_extracted_text(text)
+        assert "My Account" not in result
+
+    def test_globalsecurity_nav(self):
+        nav = "* Military Menu * Introduction * Systems * Facilities * Agencies * Industry"
+        text = f"Real article content.\n{nav}\nMore content."
+        result = clean_extracted_text(text)
+        assert "Military Menu" not in result
+        assert "Real article content." in result
+
+
+class TestBreadcrumbRemoval:
+    """Breadcrumb separators like 'Home :: Military :: Systems' should be removed."""
+
+    def test_double_colon_breadcrumb(self):
+        text = "Home :: Military :: * Military Menu"
+        result = clean_extracted_text(text)
+        assert "Home :: Military" not in result
+
+
+class TestCamelCaseNavRemoval:
+    """CamelCase-concatenated navigation like 'ChinaEconomyAsiaWorldSport'."""
+
+    def test_long_camel_nav(self):
+        text = "Real content. ChinaEconomyAsiaWorldSportLifestyle More real content."
+        result = clean_extracted_text(text)
+        assert "ChinaEconomyAsiaWorldSportLifestyle" not in result
+        assert "Real content." in result
+        assert "More real content." in result
+
+    def test_short_camel_preserved(self):
+        """Short CamelCase like 'SouthChina' should be preserved."""
+        text = "The SouthChina Morning Post reported."
+        result = clean_extracted_text(text)
+        assert "SouthChina" in result
+
+
+class TestInlineJunkRemoval:
+    """Inline junk phrases should be stripped from within lines."""
+
+    def test_inline_log_in_register(self):
+        text = "Thursday, April 23, 2026 Log in Register What's new By: Content here."
+        result = clean_extracted_text(text)
+        assert "Log in Register" not in result.title()
+
+    def test_app_install_instructions(self):
+        text = "How to install the app on iOS Follow along with the video below to see how to install our site as a web app on your home screen. Real content."
+        result = clean_extracted_text(text)
+        assert "install the app" not in result
+        assert "Real content." in result
+
+    def test_pages_left(self):
+        text = "2 pages left * My Account * Sign In"
+        result = clean_extracted_text(text)
+        assert "pages left" not in result
+
+    def test_edition_international(self):
+        text = "Edition: International HIGHLIGHTS some content here."
+        result = clean_extracted_text(text)
+        assert "Edition: International" not in result
+
+
+class TestNavigationLineRemoval:
+    """Lines that look like navigation menus should be removed."""
+
+    def test_scmp_style_nav(self):
+        nav = "Latest China Economy Hong Kong Asia Business Tech Lifestyle People Culture"
+        text = f"Real headline here.\n{nav}\nReal article content."
+        result = clean_extracted_text(text)
+        assert nav not in result
+        assert "Real headline here." in result
+        assert "Real article content." in result
+
+    def test_short_lines_preserved(self):
+        text = "This is a normal sentence.\nAnother normal sentence."
+        result = clean_extracted_text(text)
+        assert "This is a normal sentence." in result
+
+
+class TestBareUrlRemoval:
+    """Lines that are just URLs should be removed."""
+
+    def test_bare_url_line(self):
+        text = "Article text.\nhttps://example.com/page\nMore text."
+        result = clean_extracted_text(text)
+        assert "https://example.com" not in result
+
+    def test_url_in_sentence_preserved(self):
+        text = "Visit https://example.com for more."
+        result = clean_extracted_text(text)
+        assert "https://example.com" in result
+
+
+class TestRepeatedBlockRemoval:
+    """Blocks appearing 2+ times (headers/footers) should be removed."""
+
+    def test_repeated_header(self):
+        header = "SCMP PLUS Latest China Economy Hong Kong Asia"
+        text = f"{header}\nArticle one text.\n{header}\nArticle two text."
+        result = clean_extracted_text(text)
+        assert "Article one text." in result
+        assert "Article two text." in result
+
+
+class TestWhitespaceCollapse:
+    def test_multiple_blank_lines(self):
+        text = "Paragraph one.\n\n\n\n\nParagraph two."
+        result = clean_extracted_text(text)
+        assert "\n\n\n" not in result
+        assert "Paragraph one." in result
+        assert "Paragraph two." in result
+
+
+class TestMarkdownBold:
+    def test_bold_to_plain(self):
+        text = "**Note:** This is important content."
+        result = clean_extracted_text(text)
+        assert "**" not in result
+        assert "Note:" in result
+
+
+class TestEdgeCases:
+    def test_empty_string(self):
+        assert clean_extracted_text("") == ""
+
+    def test_none_like_empty(self):
+        assert clean_extracted_text("") == ""
+
+    def test_real_article_preserved(self):
+        article = (
+            "China conducted military exercises near Taiwan on Wednesday, "
+            "involving naval and air assets in a display that analysts said "
+            "was intended to signal displeasure with recent diplomatic moves."
+        )
+        result = clean_extracted_text(article)
+        assert result == article
+
+    def test_scmp_garbage_input(self):
+        """Realistic SCMP-style garbage from Crawl4AI."""
+        garbage = (
+            "Edition: International [](https://www.scmp.com/mynews) "
+            "HIGHLIGHTS [Donald Trump's China policyNEW]"
+            "(https://www.scmp.com/topics/donald-trumps-china-policy?"
+            "module=hamburger_menu&pgtype=section)[US-China relations]...\n"
+            "Advertisement Advertisement SCMP PLUS Latest China Economy "
+            "Hong Kong Asia Business Tech Lifestyle People Culture World "
+            "Opinion Video Sport\n"
+            "Advertisement\n"
+            "SIGN IN\n"
+            "# China\n"
+            "+ FOLLOW\n"
+            "The actual article content about military exercises near Taiwan."
+        )
+        result = clean_extracted_text(garbage)
+        assert "The actual article content about military exercises near Taiwan." in result
+        assert "Advertisement" not in result
+        assert "SIGN IN" not in result
+        assert "https://www.scmp.com" not in result
+
+    def test_globalsecurity_garbage(self):
+        """Realistic GlobalSecurity.org garbage from screenshot."""
+        garbage = (
+            "* * 2 pages left * My Account * Sign In * Subscribe * Sign Out "
+            "![GlobalSecurity.org](https://www.globalsecurity.org/index.html "
+            '"GlobalSecurity.org") Home :: Military :: * Military Menu '
+            "* Introduction * Systems * Facilities * Agencies * Industry "
+            "* Operations * Countries * Hot Topics"
+        )
+        result = clean_extracted_text(garbage)
+        assert "My Account" not in result
+        assert "Sign In" not in result
+        assert "globalsecurity.org" not in result.lower()
+        assert "Military Menu" not in result
+
+    def test_defence_pk_garbage(self):
+        """Realistic defence.pk forum garbage from screenshot."""
+        garbage = (
+            "Thursday, April 23, 2026 Log in Register What's new By: "
+            "How to install the app on iOS Follow along with the video "
+            "below to see how to install our site as a web app on your "
+            "home screen. **Note:** This feature may not be available "
+            "in some browsers. * Home * Forums New threads New posts "
+            "Real forum post content about military developments."
+        )
+        result = clean_extracted_text(garbage)
+        assert "Real forum post content about military developments." in result
+        assert "Log in Register" not in result
+        assert "install the app" not in result
+        assert "New threads" not in result

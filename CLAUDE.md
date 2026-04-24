@@ -5,11 +5,12 @@ Read this before touching anything. These rules are non-negotiable.
 ## WHAT ANVESHAK IS
 
 Anveshak is a standalone, sovereign AI-OSINT analysis and monitoring platform built
-for iDEX ADITI 4.0 PS-18 (IAF). It is a separate product from Drishti.
+for defence forces and law enforcement agencies (LEAs). Originally developed under
+iDEX ADITI 4.0 PS-18. It is a separate product from Drishti.
 
 **Product strategy:** Sell Anveshak first. Drishti is the upsell.
 Anveshak deploys standalone — no Redpanda, no AGE, no Vault required.
-Every IAF wing intelligence officer should be able to run it on one machine.
+Every intelligence officer should be able to run it on one machine.
 
 ## TECH STACK — CANONICAL (DO NOT DEVIATE)
 
@@ -147,7 +148,7 @@ See hardware.md for full current vs upgrade matrix.
 
 ## REPORT IMMUTABILITY — EVIDENCE CHAIN
 
-Reports are Anveshak's court-admissible output. Immutability is non-negotiable:
+Reports are Anveshak's auditable, traceable output. Immutability is non-negotiable:
 - generated_at is set ONCE on first write
 - source_snapshot captures credibility scores AT generation time
 - If a source is later downgraded: report_source_warnings is inserted — report itself is NOT modified

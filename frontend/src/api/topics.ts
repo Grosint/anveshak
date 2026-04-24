@@ -16,11 +16,19 @@ export interface Topic {
   scheduled_report_type?: string | null
 }
 
+export interface ClusterSource {
+  source_name: string
+  platform: string
+  credibility_score: number
+}
+
 export interface Cluster {
   id: string
   label: string | null
   item_count: number
   independent_source_count: number
+  executive_summary: string | null
+  sources: ClusterSource[]
   created_at: string
 }
 

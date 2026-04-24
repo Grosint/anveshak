@@ -130,6 +130,16 @@ async def list_signals(
     return await signals_db.list_signals(db, status)
 
 
+@router.get("/{signal_id}/connections")
+async def get_signal_connections(
+    signal_id: str,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Return graph data (nodes + edges) for a signal's connections."""
+    return await signals_db.get_signal_connections(db, signal_id)
+
+
 @router.patch("/{signal_id}/acknowledge")
 async def acknowledge_signal(
     signal_id: str,

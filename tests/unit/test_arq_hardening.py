@@ -147,4 +147,4 @@ def test_worker_settings_have_job_timeout():
 
     assert ReporterWorker.job_timeout == 600  # 8C.4 — LLM report generation ceiling on CPU
     assert AnalystWorker.job_timeout == 300   # 8C.2 — increased from 180s: NLLB translation adds ~30s per article on CPU
-    assert ScraperWorker.job_timeout == 120   # 8C.5
+    assert ScraperWorker.job_timeout == 300   # 8C.5 — increased for recursive scraping + link following

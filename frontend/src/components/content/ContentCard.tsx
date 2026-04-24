@@ -15,6 +15,10 @@ export function ContentCard({ item, onClick }: ContentCardProps) {
     catch { return item.url }
   })()
 
+  const displayTitle = item.title || (item.translated_text ?? item.clean_text)
+  const displayBody = item.title ? (item.translated_text ?? item.clean_text) : null
+  const dupCount = (item.duplicate_count ?? 1) - 1
+
   return (
     <article
       className="bg-anveshak-card border border-anveshak-border rounded-lg p-4 hover:border-anveshak-accent/40 hover:shadow-card-hover transition-all cursor-pointer group animate-fade-in"
@@ -39,12 +43,24 @@ export function ContentCard({ item, onClick }: ContentCardProps) {
         {item.backfilled && (
           <Badge variant="default" className="text-[10px]">backfill</Badge>
         )}
+        {dupCount > 0 && (
+          <Badge variant="ghost" className="text-[10px]">
+            +{dupCount} duplicate{dupCount > 1 ? 's' : ''}
+          </Badge>
+        )}
       </div>
 
-      {/* Text preview — show translation when available */}
-      <p className="text-sm text-text-primary line-clamp-3 group-hover:text-white transition-colors">
-        {item.translated_text ?? item.clean_text}
+      {/* Title — primary display */}
+      <p className="text-sm text-text-primary font-medium line-clamp-2 group-hover:text-white transition-colors">
+        {displayTitle}
       </p>
+
+      {/* Body excerpt — secondary, only shown when title is available */}
+      {displayBody && (
+        <p className="text-xs text-text-muted mt-1 line-clamp-2">
+          {displayBody}
+        </p>
+      )}
 
       {/* Footer */}
       <div className="flex items-center justify-between mt-3 text-xs text-text-muted">

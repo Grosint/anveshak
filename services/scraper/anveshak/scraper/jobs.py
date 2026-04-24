@@ -20,6 +20,7 @@ from arq.connections import RedisSettings
 
 from anveshak.media.downloader import download_media_asset
 
+from .clean import clean_extracted_text, compute_clean_hash, score_content_quality, extract_title
 from .fetch import fetch_url, fetch_url_with_crawler, create_shared_crawler, fetch_html, extract_article_links
 from .health import run_all_health_checks
 from .rss import fetch_rss_items
@@ -57,9 +58,11 @@ SQL_INSERT_CONTENT = """
     INSERT INTO content_items (
         id, topic_id, source_id, raw_text, clean_text, language,
         content_hash, url, captured_at, credibility_score_at_capture,
-        created_at, updated_at, labels
+        created_at, updated_at, labels,
+        content_quality, clean_hash, title
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+            $14, $15, $16)
     ON CONFLICT(content_hash) DO NOTHING
     RETURNING id
 """
@@ -144,10 +147,15 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
     counter: dict[str, int] = {"inserted": 0}
 
     async def _insert_content(
-        clean_text: str, url: str, source_id: str, credibility_score: float,
+        raw_text: str, url: str, source_id: str, credibility_score: float,
     ) -> Optional[str]:
         """Insert a content item, return content_item_id or None if dedup hit."""
-        content_hash = compute_content_hash(clean_text)
+        content_hash = compute_content_hash(raw_text)
+        cleaned = clean_extracted_text(raw_text)
+        effective_clean = cleaned or raw_text
+        quality = score_content_quality(raw_text, effective_clean)
+        c_hash = compute_clean_hash(effective_clean)
+        title = extract_title(effective_clean)
         now = datetime.now(UTC)
         async with db_pool.acquire() as conn:
             result = await conn.fetchrow(
@@ -155,8 +163,8 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
                 str(uuid.uuid4()),
                 topic_id,
                 source_id,
-                clean_text,
-                clean_text,
+                raw_text,
+                effective_clean,
                 "en",
                 content_hash,
                 url,
@@ -165,6 +173,9 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
                 now,
                 now,
                 _LABELS_JSON,
+                quality,
+                c_hash,
+                title,
             )
         if result is not None:
             counter["inserted"] += 1
@@ -183,15 +194,15 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
                 import time as _time
                 _t0 = _time.monotonic()
                 # Per-URL timeout so one slow URL doesn't block others
-                clean_text = await asyncio.wait_for(
+                fetched_text = await asyncio.wait_for(
                     fetch_url_with_crawler(url, crawler, run_cfg),
                     timeout=settings.scraper_request_timeout_s,
                 )
                 scraper_fetch_duration_seconds.observe(_time.monotonic() - _t0)
-                if not clean_text:
+                if not fetched_text:
                     return
 
-                content_item_id = await _insert_content(clean_text, url, source_id, cred_score)
+                content_item_id = await _insert_content(fetched_text, url, source_id, cred_score)
 
                 if content_item_id and settings.media_download_enabled:
                     await _download_page_media(
@@ -209,12 +220,12 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
                         article_links = extract_article_links(html, url)
                         for link_url in article_links:
                             try:
-                                link_text = await asyncio.wait_for(
+                                link_fetched = await asyncio.wait_for(
                                     fetch_url_with_crawler(link_url, crawler, run_cfg),
                                     timeout=settings.scraper_request_timeout_s,
                                 )
-                                if link_text:
-                                    await _insert_content(link_text, link_url, source_id, cred_score)
+                                if link_fetched:
+                                    await _insert_content(link_fetched, link_url, source_id, cred_score)
                             except asyncio.TimeoutError:
                                 log.debug("scraper.link_timeout", url=link_url)
                             except Exception as exc:
@@ -240,10 +251,10 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
             async with semaphore:
                 url = source["url_or_handle"]
                 try:
-                    clean_text = await fetch_url(url)
-                    if clean_text:
+                    fetched_text = await fetch_url(url)
+                    if fetched_text:
                         await _insert_content(
-                            clean_text, url, source["id"],
+                            fetched_text, url, source["id"],
                             float(source["credibility_score"]),
                         )
                 except Exception as exc:
@@ -290,6 +301,11 @@ async def poll_rss_sources(ctx: dict, topic_id: str) -> int:
                 for item in items:
                     try:
                         content_hash = compute_content_hash(item.raw_text)
+                        cleaned = clean_extracted_text(item.raw_text)
+                        effective_clean = cleaned or item.raw_text
+                        quality = score_content_quality(item.raw_text, effective_clean)
+                        c_hash = compute_clean_hash(effective_clean)
+                        title = extract_title(effective_clean)
                         now = datetime.now(UTC)
 
                         async with db_pool.acquire() as conn:
@@ -298,8 +314,8 @@ async def poll_rss_sources(ctx: dict, topic_id: str) -> int:
                                 str(uuid.uuid4()),
                                 topic_id,
                                 source["id"],
-                                item.raw_text,      # raw_text
-                                item.raw_text,      # clean_text
+                                item.raw_text,              # raw_text (preserved as-is)
+                                effective_clean,            # clean_text (cleaned)
                                 "en",               # language — updated by analyst NLP
                                 content_hash,
                                 item.url,
@@ -308,6 +324,9 @@ async def poll_rss_sources(ctx: dict, topic_id: str) -> int:
                                 now,                # created_at
                                 now,                # updated_at
                                 _LABELS_JSON,
+                                quality,
+                                c_hash,
+                                title,
                             )
 
                         if result is not None:

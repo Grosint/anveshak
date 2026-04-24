@@ -102,7 +102,7 @@ export default function Layout() {
               aria-label="Sign out"
             >
               <span className="w-4 h-4 shrink-0" aria-hidden="true"><LogOutIcon /></span>
-              <span className="truncate text-xs">{user.sub}</span>
+              <span className="truncate text-xs">{user.username || user.sub}</span>
             </button>
           )}
         </div>

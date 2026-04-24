@@ -26,5 +26,5 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
         )
-    token = create_access_token(subject=str(row["id"]))
+    token = create_access_token(subject=str(row["id"]), username=req.username)
     return {"access_token": token, "token_type": "bearer"}

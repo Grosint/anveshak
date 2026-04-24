@@ -3,6 +3,7 @@ import api from './client'
 export interface ContentItem {
   id: string
   url: string
+  title?: string | null
   clean_text: string
   translated_text?: string | null
   translation_model?: string | null
@@ -10,6 +11,7 @@ export interface ContentItem {
   credibility_score_at_capture: number
   captured_at: string
   backfilled: boolean
+  duplicate_count?: number
   // Detail-only fields (GET /api/v1/content/{id})
   source_name?: string
   platform?: string

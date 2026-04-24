@@ -208,11 +208,11 @@ async def run_clustering(ctx: dict, topic_id: str) -> None:
     from .labeller import check_label_staleness
     for cluster_id in cluster_ids:
         if await check_label_staleness(cluster_id, db_pool):
-            await redis.enqueue_job("generate_cluster_label", cluster_id)
+            await redis.enqueue_job("generate_cluster_label", cluster_id, _queue_name="arq:analyst")
 
     # Enqueue cross-verification boost for this topic (7.1)
     if cluster_ids:
-        await redis.enqueue_job("run_cross_verification", topic_id)
+        await redis.enqueue_job("run_cross_verification", topic_id, _queue_name="arq:analyst")
 
     analyst_clusters_created_total.labels(topic_id=topic_id).inc(len(cluster_ids))
     log.info("jobs.run_clustering.done", topic_id=topic_id, clusters=len(cluster_ids))

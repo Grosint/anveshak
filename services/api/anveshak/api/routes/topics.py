@@ -105,10 +105,11 @@ async def get_topic_content(
     offset: int = 0,
     has_embedding: Optional[bool] = None,
     platform: Optional[str] = None,
+    include_low_quality: bool = False,
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    return await topics_db.get_topic_content(db, topic_id, limit, offset, has_embedding, platform)
+    return await topics_db.get_topic_content(db, topic_id, limit, offset, has_embedding, platform, include_low_quality)
 
 
 @router.get("/{topic_id}/entities")
