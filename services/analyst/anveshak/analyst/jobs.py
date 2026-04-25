@@ -23,6 +23,7 @@ from .settings import settings
 from .keywords import extract_keywords
 from .sentiment import analyse_sentiment
 from .translation import needs_translation, translate_to_english
+from .content_quality import is_quality_content
 
 log = structlog.get_logger(__name__)
 
@@ -90,6 +91,16 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
         return
 
     clean_text: str = row["clean_text"]
+
+    # --- Quality gate: skip embedding for boilerplate/nav text ---
+    if not is_quality_content(clean_text):
+        log.info(
+            "analyst.content_skipped_quality",
+            content_item_id=content_item_id,
+            text_len=len(clean_text),
+        )
+        analyst_nlp_jobs_total.labels(status="skipped").inc()
+        return
 
     try:
         # --- Step 1: Language detection (criteria 1.12, 1.13) ---

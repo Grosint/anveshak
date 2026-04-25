@@ -45,9 +45,17 @@ COPY services/api/migrations/ migrations/
 COPY services/api/alembic.ini alembic.ini
 
 # --------------------------------------------------------------------------
+# Pre-download sentence-transformers model for /search endpoint
+# --------------------------------------------------------------------------
+ARG EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+ENV HF_HOME=/app/models
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${EMBEDDING_MODEL}')"
+
+# --------------------------------------------------------------------------
 # Non-root user for security
 # --------------------------------------------------------------------------
-RUN addgroup --system anveshak && adduser --system --ingroup anveshak anveshak
+RUN addgroup --system anveshak && adduser --system --ingroup anveshak anveshak \
+    && chown -R anveshak:anveshak /app/models
 USER anveshak
 
 EXPOSE 8000

@@ -23,7 +23,9 @@ _BROWSER_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
-_PAYWALL_PATTERNS = {"subscribe", "paywall", "premium content", "sign in to read", "create an account"}
+# Only strong paywall indicators — "subscribe" triggers false positives on
+# virtually every news site (nav-bar / footer links).
+_PAYWALL_PATTERNS = {"paywall", "premium content", "sign in to read", "create an account", "subscribers only"}
 
 
 class CreateSourceRequest(BaseModel):
@@ -61,8 +63,12 @@ async def _probe_rss(url: str) -> tuple[bool, Optional[str]]:
         return False, str(exc)
 
 
-async def _probe_web(url: str) -> tuple[str, Optional[str]]:
-    """Returns (health_status, error_message). Soft check — warns but never blocks."""
+async def _probe_web(url: str) -> tuple[str, Optional[str], bool]:
+    """Returns (health_status, error_message, hard_failure).
+
+    Soft warnings (paywall heuristic, short content) return hard_failure=False
+    so they don't accumulate toward 'down' status.
+    """
     try:
         async with httpx.AsyncClient(
             timeout=15, follow_redirects=True,
@@ -72,14 +78,14 @@ async def _probe_web(url: str) -> tuple[str, Optional[str]]:
             resp.raise_for_status()
             text = resp.text.lower()
             if any(p in text for p in _PAYWALL_PATTERNS):
-                return "degraded", "Possible paywall detected — content may be incomplete"
+                return "degraded", "Possible paywall detected — content may be incomplete", False
             if len(resp.text) < 200:
-                return "degraded", f"Response too short ({len(resp.text)} chars) — may be blocked"
-            return "healthy", None
+                return "degraded", f"Response too short ({len(resp.text)} chars) — may be blocked", True
+            return "healthy", None, False
     except httpx.HTTPStatusError as exc:
-        return "degraded", f"HTTP {exc.response.status_code}"
+        return "degraded", f"HTTP {exc.response.status_code}", True
     except Exception as exc:
-        return "degraded", str(exc)
+        return "degraded", str(exc), True
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +112,7 @@ async def create_source(
         initial_health = "healthy"
 
     elif req.platform == "web":
-        health_status, err = await _probe_web(req.url_or_handle)
+        health_status, err, _hard = await _probe_web(req.url_or_handle)
         initial_health = health_status
         if err:
             health_error = err
@@ -174,9 +180,13 @@ async def check_source_health(
             health_error = err
 
     elif platform == "web":
-        health_status, err = await _probe_web(url)
+        health_status, err, hard_failure = await _probe_web(url)
         if health_status == "healthy":
             failures, health_error = 0, None
+        elif not hard_failure:
+            # Soft warning (paywall heuristic) — don't increment failure counter
+            failures = prev_failures
+            health_error = err
         else:
             failures = prev_failures + 1
             health_status = "down" if failures >= 3 else "degraded"

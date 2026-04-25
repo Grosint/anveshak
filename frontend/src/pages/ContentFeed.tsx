@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { topicsApi } from '../api/topics'
+import { ManageSourcesModal } from '../components/topics/ManageSourcesModal'
 import { contentApi, ContentFilters, ContentItem } from '../api/content'
 import { useInfiniteContent } from '../hooks/useInfiniteContent'
 import { ContentCard } from '../components/content/ContentCard'
@@ -20,6 +21,7 @@ export default function ContentFeed() {
   const [selectedId, setSelectedId]     = useState<string | null>(null)
   const [searchQ, setSearchQ]           = useState('')
   const [searchActive, setSearchActive] = useState(false)
+  const [showSources, setShowSources]   = useState(false)
 
   // Topic meta
   const { data: topic } = useQuery({
@@ -60,25 +62,40 @@ export default function ContentFeed() {
     <div className="h-full flex flex-col relative">
       {/* Header */}
       <div className="px-6 pt-5 pb-3 border-b border-anveshak-border">
-        <div className="flex items-center gap-2 mb-1">
-          <button
-            onClick={() => navigate('/topics')}
-            className="text-text-muted hover:text-text-primary transition-colors"
-            aria-label="Back to topics"
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <button
+                onClick={() => navigate('/topics')}
+                className="text-text-muted hover:text-text-primary transition-colors"
+                aria-label="Back to topics"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
+                  <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
+                </svg>
+              </button>
+              <h1 className="text-xl font-semibold text-text-primary truncate">
+                {topic?.name ?? 'Content Feed'}
+              </h1>
+            </div>
+            <p className="text-sm text-text-muted">
+              {searchActive
+                ? `${searchResults.length} semantic search results`
+                : `${items.length} items loaded`}
+            </p>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowSources(true)}
+            aria-label="Manage topic sources"
           >
             <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
-              <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
+              <path d="M3.5 3A1.5 1.5 0 002 4.5v3.793a1.5 1.5 0 00.44 1.06l7.5 7.5a1.5 1.5 0 002.12 0l3.793-3.793a1.5 1.5 0 000-2.122l-7.5-7.5A1.5 1.5 0 007.293 3H3.5zM5 6a1 1 0 100-2 1 1 0 000 2z" />
             </svg>
-          </button>
-          <h1 className="text-xl font-semibold text-text-primary truncate">
-            {topic?.name ?? 'Content Feed'}
-          </h1>
+            Manage Sources
+          </Button>
         </div>
-        <p className="text-sm text-text-muted">
-          {searchActive
-            ? `${searchResults.length} semantic search results`
-            : `${items.length} items loaded`}
-        </p>
       </div>
 
       {/* Search bar */}
@@ -307,6 +324,16 @@ export default function ContentFeed() {
       {/* Detail slide-over */}
       {selectedId && (
         <ContentDetail contentId={selectedId} onClose={() => setSelectedId(null)} />
+      )}
+
+      {/* Manage sources modal */}
+      {topicId && (
+        <ManageSourcesModal
+          open={showSources}
+          onClose={() => setShowSources(false)}
+          topicId={topicId}
+          topicName={topic?.name ?? ''}
+        />
       )}
     </div>
   )

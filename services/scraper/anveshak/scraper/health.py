@@ -5,10 +5,14 @@ Health status transitions:
   1–2 failures            → degraded
   3+ failures             → down
   New / non-HTTP source   → unverified (unchanged)
+
+Only *hard* failures (connection errors, HTTP errors, empty responses) increment
+the consecutive failure counter.  Soft warnings (paywall heuristic, short content)
+set status to ``degraded`` but do NOT accumulate toward ``down``.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 import httpx
@@ -24,8 +28,10 @@ _BROWSER_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
+# Only patterns that strongly indicate a hard paywall gate — generic nav-bar
+# words like "subscribe" cause false positives on almost every news site.
 _PAYWALL_PATTERNS = frozenset({
-    "subscribe", "paywall", "premium content",
+    "paywall", "premium content",
     "sign in to read", "create an account", "subscribers only",
 })
 
@@ -50,6 +56,7 @@ SQL_UPDATE_HEALTH = """
 class HealthResult:
     status: str           # healthy | degraded | down
     error: Optional[str]  # None when healthy
+    hard_failure: bool = field(default=True)  # False for soft warnings (paywall heuristic)
 
 
 async def check_rss_health(url: str) -> HealthResult:
@@ -84,22 +91,29 @@ async def check_web_health(url: str) -> HealthResult:
     try:
         text = await fetch_url(url)
         if not text:
-            return HealthResult("degraded", "Fetch returned no content — may be blocked or paywalled")
+            return HealthResult("degraded", "Fetch returned no content — may be blocked or paywalled", hard_failure=True)
         if len(text) < 200:
-            return HealthResult("degraded", f"Content too short ({len(text)} chars) — possible paywall")
+            return HealthResult("degraded", f"Content too short ({len(text)} chars) — possible paywall", hard_failure=False)
         lower = text.lower()
         for pattern in _PAYWALL_PATTERNS:
             if pattern in lower:
-                return HealthResult("degraded", f"Possible paywall detected: '{pattern}' found in content")
+                return HealthResult("degraded", f"Possible paywall detected: '{pattern}' found in content", hard_failure=False)
         return HealthResult("healthy", None)
     except Exception as exc:
-        return HealthResult("degraded", str(exc)[:200])
+        return HealthResult("degraded", str(exc)[:200], hard_failure=True)
 
 
 def _next_status(result: HealthResult, prev_failures: int) -> tuple[str, int]:
-    """Compute new health_status and consecutive_failures from a check result."""
+    """Compute new health_status and consecutive_failures from a check result.
+
+    Soft warnings (paywall heuristic, short content) stay at ``degraded`` but
+    do NOT increment the failure counter, so they can never escalate to ``down``.
+    """
     if result.status == "healthy":
         return "healthy", 0
+    if not result.hard_failure:
+        # Soft warning — report degraded but don't accumulate toward down
+        return "degraded", prev_failures
     failures = prev_failures + 1
     return ("down" if failures >= 3 else "degraded"), failures
 

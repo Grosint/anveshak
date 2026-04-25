@@ -43,6 +43,18 @@ export interface CreateTopicPayload {
   scheduled_report_type?: string | null
 }
 
+export interface TopicSource {
+  id: string
+  name: string
+  url_or_handle: string
+  platform: string
+  credibility_score: number
+  is_active: boolean
+  health_status: string
+  added_at: string
+  item_count: number
+}
+
 export const topicsApi = {
   list: () =>
     api.get<Topic[]>('/api/v1/topics').then((r) => r.data),
@@ -58,4 +70,17 @@ export const topicsApi = {
 
   listClusters: (topicId: string) =>
     api.get<Cluster[]>(`/api/v1/topics/${topicId}/clusters`).then((r) => r.data),
+
+  listSources: (topicId: string) =>
+    api.get<TopicSource[]>(`/api/v1/topics/${topicId}/sources`).then((r) => r.data),
+
+  linkSource: (topicId: string, sourceId: string) =>
+    api.post<{ topic_id: string; source_id: string; status: string }>(
+      `/api/v1/topics/${topicId}/sources/${sourceId}`,
+    ).then((r) => r.data),
+
+  unlinkSource: (topicId: string, sourceId: string) =>
+    api.delete<{ topic_id: string; source_id: string; status: string }>(
+      `/api/v1/topics/${topicId}/sources/${sourceId}`,
+    ).then((r) => r.data),
 }

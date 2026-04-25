@@ -52,6 +52,11 @@ class AnalystSettings(BaseSettings):
     credibility_noise_ratio_threshold: float = 0.6    # fraction of unclustered items to trigger drop
     credibility_contradiction_min_items: int = 5      # source must have >= N items to be evaluated
 
+    # Content quality gate — skip embedding for boilerplate/nav text
+    content_min_length: int = 100           # min clean_text chars to embed
+    content_min_unique_word_ratio: float = 0.4  # unique words / total words
+    content_max_punctuation_ratio: float = 0.3  # punctuation chars / total chars
+
     # Near-duplicate detection (semantic dedup)
     near_duplicate_similarity_threshold: float = 0.95  # cosine similarity floor
     near_duplicate_batch_size: int = 200  # max items to compare per topic per run
