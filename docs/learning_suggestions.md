@@ -112,47 +112,49 @@ Improvements identified during codebase deep-dive. Will implement after learning
 
 ---
 
-## 4. Surface Sentiment & Keywords in Frontend (Analytics Value)
+## 4. Surface Sentiment & Keywords in Frontend (Analytics Value) — DONE (2026-04-29)
 
-**Problem:** VADER sentiment and YAKE keywords are computed for every content_item and stored in `content_items.labels` JSONB, but nothing in the API or frontend reads them. They're dead data costing CPU cycles with zero user value.
+**Status:** IMPLEMENTED — commit `902ce36`
 
-**Current behavior:**
-- `analyse_content()` in `services/analyst/anveshak/analyst/jobs.py` runs VADER + YAKE on every item
-- Results stored in labels: `{"sentiment": {"compound": -0.78, ...}, "keywords": ["term1", ...]}`
-- No API endpoint exposes them
-- Frontend never reads them
+**What was implemented:**
 
-**Suggested fix (4 features):**
+### 4a. Content Feed: Sentiment Filter + Badge ✅
+- `SentimentBadge` component on each `ContentCard` (green=Positive, grey=Neutral, red=Negative)
+- Sentiment dropdown in `FilterBar`: All / Positive / Neutral / Negative (server-side filtering)
+- `labels` JSONB column added to content listing CTE; `sentiment` and `keywords` extracted as top-level API response fields
+- `sentiment` query param on `GET /api/v1/topics/{id}/content`
 
-### 4a. Content Feed: Sentiment Filter + Badge
-- Add sentiment badge on each `ContentCard` (green=positive, grey=neutral, red=negative based on compound score)
-- Add filter dropdown in `FilterBar`: "All / Positive / Neutral / Negative"
-- API: Add `sentiment` query param to `GET /api/v1/topics/{id}/content` that filters by `labels->'sentiment'->>'compound'` range
+### 4b. Sentiment Trend Chart ✅
+- `SentimentTrend.tsx` — recharts `LineChart` with daily avg compound, day selector (7/14/30/90)
+- `GET /api/v1/topics/{id}/sentiment-trend?days=30` endpoint
+- Accessible via "Analytics" toggle button in ContentFeed header
 
-**Files:** `services/api/anveshak/api/routes/topics.py`, `services/api/anveshak/api/db/content.py`, `frontend/src/components/content/ContentCard.tsx`, `frontend/src/components/content/FilterBar.tsx`
+### 4c. Trending Keywords Widget ✅
+- `TrendingKeywords.tsx` — ranked keyword list with frequency bars, day selector (3/7/14/30)
+- `GET /api/v1/topics/{id}/trending-keywords?days=7&limit=15` endpoint
+- Uses `jsonb_array_elements_text(labels->'keywords')` for SQL unnesting
 
-### 4b. Topic Dashboard: Sentiment Trend Chart
-- New component `SentimentTrend.tsx` — line chart showing compound sentiment over time (daily average)
-- API: New endpoint `GET /api/v1/topics/{id}/sentiment-trend?days=30` that aggregates sentiment by day
-- SQL: `SELECT DATE(captured_at), AVG((labels->'sentiment'->>'compound')::float) FROM content_items WHERE topic_id=$1 GROUP BY DATE(captured_at) ORDER BY 1`
-- Helps analyst see: "coverage of this topic turned hostile 3 days ago"
+### 4d. Sentiment Shift Signal ✅
+- `SENTIMENT_SHIFT` added to `SignalType` enum in `sdk/anveshak/models/signal.py`
+- `check_sentiment_shifts()` in `signal_engine.py` — runs alongside cluster threshold checks
+- Settings: `sentiment_shift_threshold=0.3`, `sentiment_shift_window_hours=24`, `sentiment_shift_baseline_days=7`
+- 24h dedup per topic; fires MEDIUM-severity signal via WebSocket
 
-**Files:** `services/api/anveshak/api/routes/topics.py`, `frontend/src/components/topics/SentimentTrend.tsx`, `frontend/src/pages/TopicsDashboard.tsx`
-
-### 4c. Topic Dashboard: Trending Keywords Widget
-- New component `TrendingKeywords.tsx` — shows top 10-15 keywords extracted from recent content (last 7 days)
-- API: New endpoint `GET /api/v1/topics/{id}/trending-keywords?days=7&limit=15`
-- SQL: unnest the keywords array from labels JSONB, count frequency, return top N
-- Helps analyst see: "Chinese submarine" appeared 47 times this week, up from 12 last week
-
-**Files:** `services/api/anveshak/api/routes/topics.py`, `frontend/src/components/topics/TrendingKeywords.tsx`, `frontend/src/pages/TopicsDashboard.tsx`
-
-### 4d. Sentiment Shift Signal (New Signal Type)
-- New signal type: `sentiment_shift` — fires when average sentiment for a topic drops sharply (e.g., compound drops >0.3 within 24h window vs previous 7-day average)
-- Analyst gets alert: "Sentiment on 'India-China border' shifted from neutral (0.1) to strongly negative (-0.6) in last 24 hours"
-- Implementation: Add check in `signal_engine.py` alongside the existing cluster threshold check
-
-**Files:** `services/analyst/anveshak/analyst/signal_engine.py`, `sdk/anveshak/models/signal.py` (add SENTIMENT_SHIFT to SignalType enum)
+**Files changed (14):**
+- `services/api/anveshak/api/db/topics.py` — labels in CTE, sentiment filter, 2 new query functions
+- `services/api/anveshak/api/routes/topics.py` — sentiment param + 2 new endpoints
+- `frontend/src/api/content.ts` — SentimentScore type, ContentItem + ContentFilters extension
+- `frontend/src/api/topics.ts` — sentimentTrend + trendingKeywords API functions
+- `frontend/src/components/content/SentimentBadge.tsx` — new component
+- `frontend/src/components/content/ContentCard.tsx` — added SentimentBadge
+- `frontend/src/components/content/FilterBar.tsx` — sentiment dropdown
+- `frontend/src/hooks/useInfiniteContent.ts` — pass sentiment to API
+- `frontend/src/pages/ContentFeed.tsx` — Analytics toggle + panel with SentimentTrend + TrendingKeywords
+- `frontend/src/components/topics/SentimentTrend.tsx` — new component (recharts)
+- `frontend/src/components/topics/TrendingKeywords.tsx` — new component
+- `sdk/anveshak/models/signal.py` — SENTIMENT_SHIFT enum value
+- `services/analyst/anveshak/analyst/settings.py` — 3 sentiment shift settings
+- `services/analyst/anveshak/analyst/signal_engine.py` — sentiment shift detection + loop integration
 
 ---
 
