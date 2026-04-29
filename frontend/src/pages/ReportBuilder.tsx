@@ -201,12 +201,13 @@ export default function ReportBuilder() {
             </Button>
           </section>
 
-          {/* ── Report output ───────────────────────────────────────────────── */}
-          {currentReportId && (
+          {/* ── Tabs ──────────────────────────────────────────────────────────── */}
+          {(currentReportId || selectedTopicId) && (
             <section aria-labelledby="report-output-heading">
               <h2 id="report-output-heading" className="sr-only">Report output</h2>
 
-              {/* Progress tracker */}
+              {/* Progress tracker — only when a report is selected */}
+              {currentReportId && (
               <div className="mb-4">
                 <ReportProgress
                   status={report?.generation_status ?? 'queued'}
@@ -232,6 +233,7 @@ export default function ReportBuilder() {
                   </div>
                 )}
               </div>
+              )}
 
               {/* Tabs */}
               <div className="flex border-b border-anveshak-border mb-4" role="tablist">
@@ -256,15 +258,21 @@ export default function ReportBuilder() {
                 {/* Report tab */}
                 {activeTab === 'report' && (
                   <div className="space-y-4">
-                    {report?.source_warnings && (
-                      <SourceWarningsBanner warnings={report.source_warnings} />
-                    )}
-                    {report?.content_md && (
-                      <div className="bg-anveshak-card border border-anveshak-border rounded-lg p-6 prose-anveshak">
-                        <ReactMarkdown rehypePlugins={[rehypeSanitize]}>
-                          {report.content_md}
-                        </ReactMarkdown>
-                      </div>
+                    {!currentReportId ? (
+                      <EmptyState icon="📄" title="Generate a report or select one from History" />
+                    ) : (
+                      <>
+                        {report?.source_warnings && (
+                          <SourceWarningsBanner warnings={report.source_warnings} />
+                        )}
+                        {report?.content_md && (
+                          <div className="bg-anveshak-card border border-anveshak-border rounded-lg p-6 prose-anveshak">
+                            <ReactMarkdown rehypePlugins={[rehypeSanitize]}>
+                              {report.content_md}
+                            </ReactMarkdown>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
@@ -273,7 +281,7 @@ export default function ReportBuilder() {
                 {activeTab === 'gis' && (
                   <div>
                     {!isDone ? (
-                      <p className="text-sm text-text-muted">Report must be complete to view GIS output.</p>
+                      <p className="text-sm text-text-muted">{!currentReportId ? 'Select a report first.' : 'Report must be complete to view GIS output.'}</p>
                     ) : (
                       <Suspense fallback={<Spinner label="Loading map…" />}>
                         <GeoMap

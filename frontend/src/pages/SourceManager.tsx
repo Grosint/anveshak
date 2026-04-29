@@ -83,7 +83,7 @@ function FilterBar({ active, onChange, counts }: FilterBarProps) {
             {f.label}
             {count !== undefined && count > 0 && (
               <span
-                className={`text-[10px] font-bold px-1 py-0.5 rounded-full ${
+                className={`text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full ${
                   isDown && !isActive
                     ? 'bg-signal-high text-white'
                     : isActive
@@ -126,6 +126,11 @@ function SourceRow({ source, onSelect, isSelected, warningCount }: SourceRowProp
         <div className="flex items-center gap-1.5 flex-wrap min-w-0">
           <PlatformBadge platform={source.platform} />
           <HealthBadge status={source.health_status} />
+          {source.topic_links_count === 0 && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-yellow-400/20 text-yellow-400" title="Not linked to any topic — this source will not be scraped">
+              No topics
+            </span>
+          )}
           {warningCount > 0 && (
             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-signal-high/20 text-signal-high">
               ⚠ {warningCount}
@@ -303,6 +308,11 @@ function DetailPanel({
         <div className="flex items-center gap-2 mb-1 flex-wrap">
           <PlatformBadge platform={source.platform} />
           <HealthBadge status={source.health_status} />
+          {source.topic_links_count === 0 && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-yellow-400/20 text-yellow-400">
+              Not linked to any topic
+            </span>
+          )}
           {warningCount > 0 && (
             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-signal-high/20 text-signal-high">
               ⚠ {warningCount} report warning{warningCount > 1 ? 's' : ''}

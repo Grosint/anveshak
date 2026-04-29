@@ -73,7 +73,7 @@ export default function Layout() {
               <span className="flex-1">{item.label}</span>
               {item.to === '/sources' && downCount > 0 && (
                 <span
-                  className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-signal-high text-white shrink-0"
+                  className="text-[10px] font-bold min-w-[20px] h-[20px] flex items-center justify-center rounded-full bg-signal-high text-white shrink-0"
                   aria-label={`${downCount} source${downCount > 1 ? 's' : ''} down`}
                 >
                   {downCount}
