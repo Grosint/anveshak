@@ -221,6 +221,10 @@ export function CreateTopicModal({ open, onClose, onSubmit }: CreateTopicModalPr
           tags={clipCats}
           onChange={setClipCats}
         />
+        <p className="text-xs text-text-secondary -mt-1">
+          CLIP works best with broad categories (e.g. &quot;military vehicle&quot;, &quot;fighter aircraft&quot;, &quot;naval vessel&quot;).
+          Specific model numbers (e.g. &quot;Su-30MKI&quot;) will produce low-confidence results — use your own expertise for fine-grained identification.
+        </p>
 
         {error && (
           <p role="alert" className="text-signal-high text-xs bg-signal-high/10 border border-signal-high/20 rounded px-3 py-2">

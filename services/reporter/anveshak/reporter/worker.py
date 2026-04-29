@@ -145,13 +145,25 @@ async def generate_report(ctx: dict, report_id: str) -> None:
     source_ids = list({c["source_id"] for c in chunks if c.get("source_id")})
     sources = await db.fetch_sources_for_snapshot(pool, source_ids)
 
-    # --- 7. Geocode locations from executive summary + findings ---
+    # --- 7. Geocode locations (3-layer: NER entities → regex fallback → custom overlay) ---
+    # Layer 1: High-quality NER entities from the analyst pipeline
+    ner_entities = await db.fetch_topic_location_entities(pool, topic_id)
+    # Layer 2: Regex extraction from LLM output (catches synthesized locations)
     combined_text = " ".join(
         [report_content.executive_summary]
         + report_content.key_findings
         + report_content.recommendations
     )
-    location_names = extract_locations_from_text(combined_text)
+    regex_names = extract_locations_from_text(combined_text)
+    # Merge (NER first, regex adds any extras) — dedup by lowercase key
+    seen_lower: set[str] = set()
+    location_names: list[str] = []
+    for name in ner_entities + regex_names:
+        key = name.lower().strip()
+        if key not in seen_lower:
+            seen_lower.add(key)
+            location_names.append(name)
+    # Layer 3: custom overlay is handled inside geocode_locations()
     locations = geocode_locations(location_names)
     geojson = build_geojson(locations)
 

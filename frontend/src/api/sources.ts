@@ -15,6 +15,7 @@ export interface Source {
   consecutive_failures: number
   health_error: string | null
   last_checked_at: string | null
+  topic_links_count: number
 }
 
 export interface HealthCheckResult {
@@ -40,6 +41,7 @@ export interface CreateSourcePayload {
   url_or_handle: string
   platform: Platform
   credibility_score?: number
+  topic_ids?: string[]
 }
 
 export interface UpdateSourcePayload {

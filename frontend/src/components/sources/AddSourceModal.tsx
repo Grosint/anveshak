@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Modal } from '../ui/Modal'
 import { Button } from '../ui/Button'
 import { CreateSourcePayload, Platform } from '../../api/sources'
+import { topicsApi, Topic } from '../../api/topics'
 
 const PLATFORMS: { value: Platform; label: string }[] = [
   { value: 'web',      label: 'Web (URL)' },
@@ -23,8 +25,15 @@ export function AddSourceModal({ open, onClose, onSubmit }: AddSourceModalProps)
   const [handle, setHandle]         = useState('')
   const [platform, setPlatform]     = useState<Platform>('web')
   const [credibility, setCredibility] = useState(50)
+  const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]           = useState('')
+
+  const { data: topics = [] } = useQuery<Topic[]>({
+    queryKey: ['topics'],
+    queryFn: topicsApi.list,
+    staleTime: 60_000,
+  })
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -32,8 +41,14 @@ export function AddSourceModal({ open, onClose, onSubmit }: AddSourceModalProps)
     setError('')
     setSubmitting(true)
     try {
-      await onSubmit({ name: name.trim(), url_or_handle: handle.trim(), platform, credibility_score: credibility })
-      setName(''); setHandle(''); setPlatform('web'); setCredibility(50)
+      await onSubmit({
+        name: name.trim(),
+        url_or_handle: handle.trim(),
+        platform,
+        credibility_score: credibility,
+        ...(selectedTopicIds.length > 0 ? { topic_ids: selectedTopicIds } : {}),
+      })
+      setName(''); setHandle(''); setPlatform('web'); setCredibility(50); setSelectedTopicIds([])
       onClose()
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -116,6 +131,36 @@ export function AddSourceModal({ open, onClose, onSubmit }: AddSourceModalProps)
             <span>0 (untrusted)</span><span>50</span><span>100 (trusted)</span>
           </div>
         </div>
+
+        {topics.length > 0 && (
+          <div>
+            <label className="block text-xs font-medium text-text-secondary mb-1.5">
+              Link to topics
+            </label>
+            <div className="space-y-1 max-h-32 overflow-y-auto border border-anveshak-border rounded p-2">
+              {topics.filter((t) => t.status === 'active').map((t) => (
+                <label key={t.id} className="flex items-center gap-2 cursor-pointer text-sm text-text-primary hover:bg-anveshak-muted/50 rounded px-1 py-0.5">
+                  <input
+                    type="checkbox"
+                    checked={selectedTopicIds.includes(t.id)}
+                    onChange={(e) => {
+                      setSelectedTopicIds((prev) =>
+                        e.target.checked ? [...prev, t.id] : prev.filter((id) => id !== t.id)
+                      )
+                    }}
+                    className="accent-anveshak-accent"
+                  />
+                  {t.name}
+                </label>
+              ))}
+            </div>
+            {selectedTopicIds.length === 0 && (
+              <p className="text-[10px] text-yellow-400 mt-1">
+                Sources not linked to any topic will not be scraped.
+              </p>
+            )}
+          </div>
+        )}
 
         {error && (
           <p role="alert" className="text-signal-high text-xs bg-signal-high/10 border border-signal-high/20 rounded px-3 py-2">

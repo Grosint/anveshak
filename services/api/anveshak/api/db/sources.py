@@ -16,9 +16,16 @@ SQL_INSERT_SOURCE = """
 """
 
 SQL_LIST_SOURCES = """
-    SELECT id, name, url_or_handle, platform, credibility_score, is_active,
-           health_status, consecutive_failures, health_error, last_checked_at
-    FROM sources ORDER BY credibility_score DESC
+    SELECT s.id, s.name, s.url_or_handle, s.platform, s.credibility_score, s.is_active,
+           s.health_status, s.consecutive_failures, s.health_error, s.last_checked_at,
+           COALESCE(tc.topic_links_count, 0) AS topic_links_count
+    FROM sources s
+    LEFT JOIN (
+        SELECT source_id, COUNT(*) AS topic_links_count
+        FROM topic_sources
+        GROUP BY source_id
+    ) tc ON tc.source_id = s.id
+    ORDER BY s.credibility_score DESC
 """
 
 SQL_GET_SOURCE_SCORE = "SELECT credibility_score FROM sources WHERE id = $1"
@@ -53,11 +60,17 @@ SQL_GET_AUDIT_LOG = """
 """
 
 SQL_LIST_SOURCES_BELOW = """
-    SELECT id, name, url_or_handle, platform, credibility_score, is_active,
-           health_status, consecutive_failures, health_error, last_checked_at
-    FROM sources
-    WHERE credibility_score < $1
-    ORDER BY credibility_score ASC
+    SELECT s.id, s.name, s.url_or_handle, s.platform, s.credibility_score, s.is_active,
+           s.health_status, s.consecutive_failures, s.health_error, s.last_checked_at,
+           COALESCE(tc.topic_links_count, 0) AS topic_links_count
+    FROM sources s
+    LEFT JOIN (
+        SELECT source_id, COUNT(*) AS topic_links_count
+        FROM topic_sources
+        GROUP BY source_id
+    ) tc ON tc.source_id = s.id
+    WHERE s.credibility_score < $1
+    ORDER BY s.credibility_score ASC
 """
 
 SQL_UPDATE_SOURCE_HEALTH = """

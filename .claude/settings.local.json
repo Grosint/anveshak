@@ -190,7 +190,13 @@
       "Bash(echo \"EXIT_CODE=$?\")",
       "Bash(PGPASSWORD=\"change-me-in-production\" psql -h localhost -p 5433 -U anveshak -d anveshak -c \"\nSELECT r.id, r.topic_id, t.name AS topic_name, r.report_type, r.status,\n       r.generated_at, LEFT\\(r.executive_summary, 100\\) AS summary_preview\nFROM reports r\nJOIN topics t ON t.id = r.topic_id\nORDER BY r.created_at DESC\nLIMIT 5;\n\" 2>&1)",
       "Bash(PGPASSWORD=\"change-me-in-production\" psql -h localhost -p 5433 -U anveshak -d anveshak -c \"\\\\d reports\" 2>&1)",
-      "Bash(PGPASSWORD=\"change-me-in-production\" psql -h localhost -p 5433 -U anveshak -d anveshak -c \"\nSELECT r.id, t.name AS topic, r.report_type,\n       r.generated_at, r.generation_error,\n       r.content_item_count,\n       r.confidence_score,\n       CASE WHEN r.content_md IS NOT NULL THEN LENGTH\\(r.content_md\\) ELSE 0 END AS md_length,\n       CASE WHEN r.pdf_path IS NOT NULL THEN r.pdf_path ELSE 'no pdf' END AS pdf\nFROM reports r\nJOIN topics t ON t.id = r.topic_id\nORDER BY r.created_at DESC\nLIMIT 5;\n\" 2>&1)"
+      "Bash(PGPASSWORD=\"change-me-in-production\" psql -h localhost -p 5433 -U anveshak -d anveshak -c \"\nSELECT r.id, t.name AS topic, r.report_type,\n       r.generated_at, r.generation_error,\n       r.content_item_count,\n       r.confidence_score,\n       CASE WHEN r.content_md IS NOT NULL THEN LENGTH\\(r.content_md\\) ELSE 0 END AS md_length,\n       CASE WHEN r.pdf_path IS NOT NULL THEN r.pdf_path ELSE 'no pdf' END AS pdf\nFROM reports r\nJOIN topics t ON t.id = r.topic_id\nORDER BY r.created_at DESC\nLIMIT 5;\n\" 2>&1)",
+      "Bash(make test:*)",
+      "Bash(find /Users/navitas28/Work/anveshak/frontend/src -type f -name *[Ss]idebar* -o -name *[Nn]avigation* -o -name *[Ll]ayout* -o -name *[Nn]av*)",
+      "Bash(find /Users/navitas28/Work/anveshak -path */services/api/* -type f)",
+      "Bash(find /Users/navitas28/Work/anveshak -type f \\\\\\(-name *.sql -o -name *migration* -o -name *schema* \\\\\\))",
+      "Bash(/tmp/report_summary.txt:*)",
+      "Read(//tmp/**)"
     ]
   }
 }

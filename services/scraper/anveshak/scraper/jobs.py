@@ -145,6 +145,7 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
 
     semaphore = asyncio.Semaphore(settings.scraper_concurrency)  # criteria 1.8
     counter: dict[str, int] = {"inserted": 0}
+    seen_media_urls: set[str] = set()  # URL-level dedup across pages in this job
 
     async def _insert_content(
         raw_text: str, url: str, source_id: str, credibility_score: float,
@@ -211,6 +212,7 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
                         content_item_id=content_item_id,
                         db_pool=db_pool,
                         redis=redis,
+                        seen_media_urls=seen_media_urls,
                     )
 
                 # Recursive scraping: follow article links (depth-1)
@@ -363,6 +365,7 @@ async def _download_page_media(
     content_item_id: str,
     db_pool: asyncpg.Pool,
     redis,
+    seen_media_urls: set[str] | None = None,
 ) -> None:
     """Download images/videos linked from a scraped page.
 
@@ -389,6 +392,10 @@ async def _download_page_media(
         return
 
     for media_url in media_urls:
+        if seen_media_urls is not None:
+            if media_url in seen_media_urls:
+                continue
+            seen_media_urls.add(media_url)
         try:
             dl = await download_media_asset(
                 url=media_url,

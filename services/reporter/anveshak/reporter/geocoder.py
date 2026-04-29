@@ -1,11 +1,14 @@
 """Geocoding helpers for the reporter service.
 
-Uses geonamescache (bundled offline data — no network calls, no API key required).
+Uses geonamescache (bundled offline data — no network calls, no API key required)
+plus a custom overlay for defence-relevant locations.
 CLAUDE.md hardware independence: no ML model here.
 """
 from __future__ import annotations
 
+import json
 import re
+from pathlib import Path
 from typing import Any
 
 import geonamescache
@@ -21,6 +24,7 @@ _gc = geonamescache.GeonamesCache()
 # Pre-build lookup indices for fast case-insensitive matching
 _CITIES_BY_NAME: dict[str, dict[str, Any]] = {}
 _COUNTRIES_BY_NAME: dict[str, dict[str, Any]] = {}
+_CUSTOM_LOCATIONS: dict[str, tuple[float, float]] = {}
 
 
 def _build_indices() -> None:
@@ -40,7 +44,27 @@ def _build_indices() -> None:
         _COUNTRIES_BY_NAME[name_lower] = {"name": country["name"], "capital": capital}
 
 
+def _load_custom_locations() -> None:
+    """Load custom_locations.json overlay for defence-specific locations."""
+    candidates = [
+        Path("/app/infra/configs/geocoder/custom_locations.json"),
+        Path(__file__).resolve().parents[5] / "infra" / "configs" / "geocoder" / "custom_locations.json",
+    ]
+    for path in candidates:
+        if path.is_file():
+            try:
+                data = json.loads(path.read_text())
+                for name, coords in data.items():
+                    _CUSTOM_LOCATIONS[name.lower()] = (float(coords[0]), float(coords[1]))
+                log.info("geocoder.custom_locations_loaded", count=len(data), path=str(path))
+                return
+            except Exception as exc:
+                log.warning("geocoder.custom_locations_error", path=str(path), error=str(exc))
+    log.debug("geocoder.no_custom_locations_file")
+
+
 _build_indices()
+_load_custom_locations()
 
 # Capitalised word / phrase pattern for candidate extraction
 _CAPS_PATTERN = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b")
@@ -53,12 +77,15 @@ _CAPS_PATTERN = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b")
 def geocode_locations(location_names: list[str]) -> dict[str, tuple[float, float]]:
     """Return {name: (lat, lon)} for each recognised location.
 
-    Matching is case-insensitive. Unknown locations are silently skipped.
+    Matching order: custom overlay → geonamescache cities → geonamescache countries.
+    Case-insensitive. Unknown locations are silently skipped.
     """
     result: dict[str, tuple[float, float]] = {}
     for name in location_names:
         key = name.lower().strip()
-        if key in _CITIES_BY_NAME:
+        if key in _CUSTOM_LOCATIONS:
+            result[name] = _CUSTOM_LOCATIONS[key]
+        elif key in _CITIES_BY_NAME:
             city = _CITIES_BY_NAME[key]
             result[name] = (float(city["latitude"]), float(city["longitude"]))
         elif key in _COUNTRIES_BY_NAME:
@@ -100,10 +127,10 @@ def extract_locations_from_text(text: str) -> list[str]:
 
     Strategy:
     1. Find all capitalised words/phrases via regex.
-    2. Filter to those known in geonamescache (city or country).
+    2. Filter to those known in geonamescache or custom overlay.
 
-    This is a lightweight heuristic — not NER-quality, but sufficient for the
-    reporter service which does not have spaCy available.
+    This is a lightweight heuristic — not NER-quality, but sufficient as a
+    fallback for LLM-synthesized locations not present in extracted_entities.
     """
     if not text:
         return []
@@ -117,7 +144,7 @@ def extract_locations_from_text(text: str) -> list[str]:
         if key in seen:
             continue
         seen.add(key)
-        if key in _CITIES_BY_NAME or key in _COUNTRIES_BY_NAME:
+        if key in _CUSTOM_LOCATIONS or key in _CITIES_BY_NAME or key in _COUNTRIES_BY_NAME:
             found.append(candidate)
 
     return found

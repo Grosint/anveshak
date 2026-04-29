@@ -32,7 +32,7 @@ def test_list_sources_below_sql_filters_credibility():
 def test_list_sources_below_sql_orders_ascending():
     """Worst sources should appear first (ASC)."""
     normalised = " ".join(SQL_LIST_SOURCES_BELOW.split()).upper()
-    assert "ORDER BY CREDIBILITY_SCORE ASC" in normalised
+    assert "CREDIBILITY_SCORE ASC" in normalised
 
 
 # ---------------------------------------------------------------------------

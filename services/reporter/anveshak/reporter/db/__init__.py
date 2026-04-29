@@ -115,6 +115,15 @@ SQL_LIST_TOPIC_REPORTS = """
     ORDER BY created_at DESC
 """
 
+SQL_FETCH_TOPIC_LOCATION_ENTITIES = """
+    SELECT DISTINCT ee.entity_text
+    FROM extracted_entities ee
+    JOIN content_items ci ON ee.content_item_id = ci.id
+    WHERE ci.topic_id = $1
+      AND ee.entity_type IN ('GPE', 'LOC', 'FACILITY')
+      AND ee.confidence >= 0.8
+"""
+
 
 # ---------------------------------------------------------------------------
 # Pool management
@@ -299,6 +308,20 @@ async def list_topic_reports(
     async with pool.acquire() as conn:
         rows = await conn.fetch(SQL_LIST_TOPIC_REPORTS, topic_id)
     return [dict(r) for r in rows]
+
+
+async def fetch_topic_location_entities(
+    pool: asyncpg.Pool,
+    topic_id: str,
+) -> list[str]:
+    """Return distinct location entity names from the analyst NER pipeline.
+
+    Queries extracted_entities for GPE/LOC/FACILITY with confidence >= 0.8.
+    These are higher quality than regex extraction since they come from spaCy NER.
+    """
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(SQL_FETCH_TOPIC_LOCATION_ENTITIES, topic_id)
+    return [row["entity_text"] for row in rows]
 
 
 async def update_job_status(

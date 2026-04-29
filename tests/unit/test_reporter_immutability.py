@@ -89,6 +89,7 @@ class TestGenerateReportIdempotency:
             mock_db_mod.fetch_topic = AsyncMock(return_value=mock_topic)
             mock_db_mod.fetch_rag_chunks = AsyncMock(return_value=mock_chunks)
             mock_db_mod.fetch_sources_for_snapshot = AsyncMock(return_value={})
+            mock_db_mod.fetch_topic_location_entities = AsyncMock(return_value=[])
             # Return False → already generated (WHERE generated_at IS NULL guard failed)
             mock_db_mod.set_report_generated = AsyncMock(return_value=False)
             mock_db_mod.update_job_status = AsyncMock()
@@ -188,6 +189,7 @@ class TestGenerateReportIdempotency:
             mock_db_mod.fetch_topic = AsyncMock(return_value=mock_topic)
             mock_db_mod.fetch_rag_chunks = AsyncMock(return_value=mock_chunks)
             mock_db_mod.fetch_sources_for_snapshot = AsyncMock(return_value={})
+            mock_db_mod.fetch_topic_location_entities = AsyncMock(return_value=[])
             mock_db_mod.update_job_status = AsyncMock()
             mock_db_mod.set_report_generated = AsyncMock()
             mock_db_mod.set_report_failed = AsyncMock()
@@ -248,6 +250,7 @@ class TestGenerateReportIdempotency:
             mock_db_mod.fetch_topic = AsyncMock(return_value=mock_topic)
             mock_db_mod.fetch_rag_chunks = AsyncMock(return_value=mock_chunks)
             mock_db_mod.fetch_sources_for_snapshot = AsyncMock(return_value={"src-1": {"name": "Reuters", "credibility_score": 80.0}})
+            mock_db_mod.fetch_topic_location_entities = AsyncMock(return_value=[])
             mock_db_mod.set_report_generated = AsyncMock(return_value=True)
             mock_db_mod.update_job_status = AsyncMock()
 

@@ -35,6 +35,7 @@ class CreateSourceRequest(BaseModel):
     platform: str  # web|telegram|twitter|reddit|bluesky|rss|upload
     credibility_score: float = 50.0
     topic_id: Optional[str] = None  # if provided, auto-link source to this topic
+    topic_ids: Optional[list[str]] = None  # link to multiple topics at creation
 
 
 # ---------------------------------------------------------------------------
@@ -127,9 +128,14 @@ async def create_source(
     # Write initial health status
     await sources_db.update_source_health(db, source_id, initial_health, 0, health_error, now)
 
-    # Auto-link to topic if topic_id provided
+    # Auto-link to topic(s) if provided
+    link_ids: set[str] = set()
     if req.topic_id:
-        await sources_db.add_topic_source(db, req.topic_id, source_id)
+        link_ids.add(req.topic_id)
+    if req.topic_ids:
+        link_ids.update(req.topic_ids)
+    for tid in link_ids:
+        await sources_db.add_topic_source(db, tid, source_id)
 
     log.info(
         "sources.created",

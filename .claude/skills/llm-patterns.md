@@ -3,6 +3,7 @@
 ## When to load: any task involving Ollama, report generation, or LLM inference
 
 > See also: `learned/phase-check-pitfalls.md` — transient LLM-output Pydantic models and the labels rule
+> See also: `learned/new-db-func-mock-all-callers.md` — adding new db functions requires updating all test mocks that patch the db module
 > See also: `learned/analysis-jobs-db-source-of-truth.md` — analysis_jobs table is authoritative; don't rely on ARQ Redis for completed jobs
 > See also: `learned/passlib-bcrypt-incompatibility.md` — replace passlib with direct bcrypt wrapper (passlib 1.7 + bcrypt>=4 broken)
 > See also: `learned/asyncpg-repository-pattern.md` — SQL constants + typed db/ functions; why not ORM
