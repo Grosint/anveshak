@@ -83,4 +83,14 @@ export const topicsApi = {
     api.delete<{ topic_id: string; source_id: string; status: string }>(
       `/api/v1/topics/${topicId}/sources/${sourceId}`,
     ).then((r) => r.data),
+
+  sentimentTrend: (topicId: string, days = 30) =>
+    api.get<{ date: string; avg_compound: number; item_count: number }[]>(
+      `/api/v1/topics/${topicId}/sentiment-trend`, { params: { days } },
+    ).then((r) => r.data),
+
+  trendingKeywords: (topicId: string, days = 7, limit = 15) =>
+    api.get<{ keyword: string; frequency: number }[]>(
+      `/api/v1/topics/${topicId}/trending-keywords`, { params: { days, limit } },
+    ).then((r) => r.data),
 }

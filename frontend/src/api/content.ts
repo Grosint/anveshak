@@ -1,5 +1,12 @@
 import api from './client'
 
+export interface SentimentScore {
+  compound: number
+  positive: number
+  negative: number
+  neutral: number
+}
+
 export interface ContentItem {
   id: string
   url: string
@@ -12,6 +19,8 @@ export interface ContentItem {
   captured_at: string
   backfilled: boolean
   duplicate_count?: number
+  sentiment?: SentimentScore | null
+  keywords?: string[] | null
   // Detail-only fields (GET /api/v1/content/{id})
   source_name?: string
   platform?: string
@@ -40,12 +49,15 @@ export interface ContentFilters {
   date_from?: string
   date_to?: string
   has_embedding?: boolean
+  sentiment?: 'positive' | 'negative' | 'neutral'
 }
 
 export const contentApi = {
-  list: (topicId: string, offset = 0, limit = 50) =>
+  list: (topicId: string, offset = 0, limit = 50, sentiment?: string) =>
     api
-      .get<ContentItem[]>(`/api/v1/topics/${topicId}/content`, { params: { offset, limit } })
+      .get<ContentItem[]>(`/api/v1/topics/${topicId}/content`, {
+        params: { offset, limit, ...(sentiment ? { sentiment } : {}) },
+      })
       .then((r) => r.data),
 
   get: (contentId: string) =>

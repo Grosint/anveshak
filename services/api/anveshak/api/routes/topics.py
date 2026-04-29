@@ -106,10 +106,42 @@ async def get_topic_content(
     has_embedding: Optional[bool] = None,
     platform: Optional[str] = None,
     include_low_quality: bool = False,
+    sentiment: Optional[str] = None,
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    return await topics_db.get_topic_content(db, topic_id, limit, offset, has_embedding, platform, include_low_quality)
+    if sentiment and sentiment not in ("positive", "negative", "neutral"):
+        raise HTTPException(status_code=422, detail="sentiment must be positive|negative|neutral")
+    return await topics_db.get_topic_content(
+        db, topic_id, limit, offset, has_embedding, platform, include_low_quality, sentiment,
+    )
+
+
+@router.get("/{topic_id}/sentiment-trend")
+async def get_sentiment_trend(
+    topic_id: str,
+    days: int = 30,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    if days < 1 or days > 365:
+        raise HTTPException(status_code=422, detail="days must be 1-365")
+    return await topics_db.get_sentiment_trend(db, topic_id, days)
+
+
+@router.get("/{topic_id}/trending-keywords")
+async def get_trending_keywords(
+    topic_id: str,
+    days: int = 7,
+    limit: int = 15,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    if days < 1 or days > 365:
+        raise HTTPException(status_code=422, detail="days must be 1-365")
+    if limit < 1 or limit > 50:
+        raise HTTPException(status_code=422, detail="limit must be 1-50")
+    return await topics_db.get_trending_keywords(db, topic_id, days, limit)
 
 
 @router.get("/{topic_id}/entities")

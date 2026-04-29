@@ -31,6 +31,19 @@ export function FilterBar({ filters, onChange, clusterView, onToggleCluster }: F
         ))}
       </select>
 
+      {/* Sentiment */}
+      <select
+        value={filters.sentiment ?? ''}
+        onChange={(e) => onChange({ ...filters, sentiment: (e.target.value || undefined) as ContentFilters['sentiment'] })}
+        className="bg-anveshak-card border border-anveshak-border rounded px-2 py-1.5 text-xs text-text-primary focus:outline-none focus:border-anveshak-accent"
+        aria-label="Filter by sentiment"
+      >
+        <option value="">All sentiment</option>
+        <option value="positive">Positive</option>
+        <option value="neutral">Neutral</option>
+        <option value="negative">Negative</option>
+      </select>
+
       {/* Min credibility */}
       <div className="flex items-center gap-1.5">
         <label htmlFor="cred-filter" className="text-xs text-text-muted">Cred ≥</label>
@@ -75,7 +88,7 @@ export function FilterBar({ filters, onChange, clusterView, onToggleCluster }: F
       </div>
 
       {/* Clear */}
-      {(filters.language || filters.credibility_min || filters.date_from || filters.date_to) && (
+      {(filters.language || filters.sentiment || filters.credibility_min || filters.date_from || filters.date_to) && (
         <button
           onClick={() => onChange({})}
           className="text-xs text-signal-high hover:underline"

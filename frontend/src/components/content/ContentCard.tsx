@@ -1,5 +1,6 @@
 import { ContentItem } from '../../api/content'
 import { CredibilityBadge } from './CredibilityBadge'
+import { SentimentBadge } from './SentimentBadge'
 import { PlatformBadge } from './PlatformBadge'
 import { Badge } from '../ui/Badge'
 import { formatDistanceToNow } from 'date-fns'
@@ -32,6 +33,7 @@ export function ContentCard({ item, onClick }: ContentCardProps) {
       <div className="flex items-center gap-2 flex-wrap mb-2">
         {item.platform && <PlatformBadge platform={item.platform} />}
         <CredibilityBadge score={item.credibility_score_at_capture} />
+        {item.sentiment && <SentimentBadge compound={item.sentiment.compound} />}
         {item.language && item.language !== 'en' && (
           <Badge variant="ghost">{item.language.toUpperCase()}</Badge>
         )}

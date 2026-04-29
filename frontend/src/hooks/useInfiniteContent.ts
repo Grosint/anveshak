@@ -17,7 +17,7 @@ function applyClientFilters(items: ContentItem[], filters: ContentFilters): Cont
 export function useInfiniteContent(topicId: string, filters: ContentFilters = {}) {
   const query = useInfiniteQuery({
     queryKey: ['content', topicId, filters],
-    queryFn: ({ pageParam }) => contentApi.list(topicId, pageParam as number, PAGE_SIZE),
+    queryFn: ({ pageParam }) => contentApi.list(topicId, pageParam as number, PAGE_SIZE, filters.sentiment),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
       if (!lastPage || lastPage.length < PAGE_SIZE) return undefined

@@ -71,6 +71,33 @@ SQL_MISSED_SIGNALS = """
 
 _SIGNAL_TYPE_MULTI_SOURCE = "multi_source_convergence"
 _SIGNAL_TYPE_CROSS_TOPIC = "cross_topic_convergence"
+_SIGNAL_TYPE_SENTIMENT_SHIFT = "sentiment_shift"
+
+SQL_ACTIVE_TOPICS = "SELECT id FROM topics WHERE status = 'active'"
+
+SQL_SENTIMENT_BASELINE = """
+    SELECT AVG((labels->'sentiment'->>'compound')::float) AS baseline_avg
+    FROM content_items
+    WHERE topic_id = $1
+      AND captured_at >= NOW() - make_interval(days => $2)
+      AND labels->'sentiment' IS NOT NULL
+"""
+
+SQL_SENTIMENT_RECENT = """
+    SELECT AVG((labels->'sentiment'->>'compound')::float) AS recent_avg
+    FROM content_items
+    WHERE topic_id = $1
+      AND captured_at >= NOW() - make_interval(hours => $2)
+      AND labels->'sentiment' IS NOT NULL
+"""
+
+SQL_DUPLICATE_TOPIC_SIGNAL_CHECK = """
+    SELECT id FROM signals
+    WHERE topic_id = $1
+      AND signal_type = $2
+      AND created_at > NOW() - INTERVAL '24 hours'
+    LIMIT 1
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -217,6 +244,96 @@ async def check_signals(
 
 
 # ---------------------------------------------------------------------------
+# Sentiment shift detection
+# ---------------------------------------------------------------------------
+
+
+async def check_sentiment_shifts(
+    pool: asyncpg.Pool,
+    broadcast: BroadcastFn,
+) -> int:
+    """Check all active topics for sentiment shifts. Returns count of signals fired."""
+    fired = 0
+    async with pool.acquire() as conn:
+        topics = await conn.fetch(SQL_ACTIVE_TOPICS)
+        for topic_row in topics:
+            topic_id: str = topic_row["id"]
+
+            # Dedup: skip if sentiment_shift already fired for this topic in 24h
+            existing = await conn.fetchrow(
+                SQL_DUPLICATE_TOPIC_SIGNAL_CHECK,
+                topic_id, _SIGNAL_TYPE_SENTIMENT_SHIFT,
+            )
+            if existing:
+                continue
+
+            baseline = await conn.fetchrow(
+                SQL_SENTIMENT_BASELINE,
+                topic_id, settings.sentiment_shift_baseline_days,
+            )
+            recent = await conn.fetchrow(
+                SQL_SENTIMENT_RECENT,
+                topic_id, settings.sentiment_shift_window_hours,
+            )
+
+            if not baseline or not recent:
+                continue
+            baseline_avg = baseline["baseline_avg"]
+            recent_avg = recent["recent_avg"]
+            if baseline_avg is None or recent_avg is None:
+                continue
+
+            drop = baseline_avg - recent_avg
+            if drop < settings.sentiment_shift_threshold:
+                continue
+
+            signal_id = str(uuid.uuid4())
+            now = datetime.now(UTC)
+            description = (
+                f"Sentiment dropped {drop:.2f} in last "
+                f"{settings.sentiment_shift_window_hours}h "
+                f"(baseline: {baseline_avg:.2f}, recent: {recent_avg:.2f})"
+            )
+            evidence = json.dumps({
+                "baseline_avg": round(baseline_avg, 4),
+                "recent_avg": round(recent_avg, 4),
+                "drop": round(drop, 4),
+                "window_hours": settings.sentiment_shift_window_hours,
+                "baseline_days": settings.sentiment_shift_baseline_days,
+            })
+
+            await conn.execute(
+                SQL_INSERT_SIGNAL,
+                signal_id, topic_id, None,
+                _SIGNAL_TYPE_SENTIMENT_SHIFT,
+                description, evidence, now,
+            )
+            analyst_signals_fired_total.labels(severity="MEDIUM").inc()
+
+            payload = {
+                "type": "signal",
+                "signal_id": signal_id,
+                "topic_id": topic_id,
+                "cluster_id": None,
+                "cluster_label": None,
+                "severity": "MEDIUM",
+                "signal_type": _SIGNAL_TYPE_SENTIMENT_SHIFT,
+                "description": description,
+            }
+            try:
+                await broadcast(payload)
+            except Exception as exc:
+                log.warning(
+                    "signal_engine.sentiment_broadcast_failed",
+                    signal_id=signal_id,
+                    error=str(exc),
+                )
+            fired += 1
+
+    return fired
+
+
+# ---------------------------------------------------------------------------
 # Polling loop (long-running — called from main.py)
 # ---------------------------------------------------------------------------
 
@@ -234,8 +351,14 @@ async def signal_engine_loop(pool: asyncpg.Pool, broadcast: BroadcastFn) -> None
     while True:
         try:
             fired = await check_signals(pool, broadcast)
-            if fired:
-                log.info("signal_engine.cycle_complete", signals_fired=fired)
+            sentiment_fired = await check_sentiment_shifts(pool, broadcast)
+            total = fired + sentiment_fired
+            if total:
+                log.info(
+                    "signal_engine.cycle_complete",
+                    signals_fired=fired,
+                    sentiment_signals=sentiment_fired,
+                )
         except Exception as exc:
             log.error("signal_engine.cycle_error", error=str(exc))
 

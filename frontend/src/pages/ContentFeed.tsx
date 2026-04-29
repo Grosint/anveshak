@@ -8,6 +8,8 @@ import { useInfiniteContent } from '../hooks/useInfiniteContent'
 import { ContentCard } from '../components/content/ContentCard'
 import { ContentDetail } from '../components/content/ContentDetail'
 import { FilterBar } from '../components/content/FilterBar'
+import { SentimentTrend } from '../components/topics/SentimentTrend'
+import { TrendingKeywords } from '../components/topics/TrendingKeywords'
 import { Spinner } from '../components/ui/Spinner'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Button } from '../components/ui/Button'
@@ -22,6 +24,7 @@ export default function ContentFeed() {
   const [searchQ, setSearchQ]           = useState('')
   const [searchActive, setSearchActive] = useState(false)
   const [showSources, setShowSources]   = useState(false)
+  const [showAnalytics, setShowAnalytics] = useState(false)
 
   // Topic meta
   const { data: topic } = useQuery({
@@ -84,17 +87,31 @@ export default function ContentFeed() {
                 : `${items.length} items loaded`}
             </p>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setShowSources(true)}
-            aria-label="Manage topic sources"
-          >
-            <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
-              <path d="M3.5 3A1.5 1.5 0 002 4.5v3.793a1.5 1.5 0 00.44 1.06l7.5 7.5a1.5 1.5 0 002.12 0l3.793-3.793a1.5 1.5 0 000-2.122l-7.5-7.5A1.5 1.5 0 007.293 3H3.5zM5 6a1 1 0 100-2 1 1 0 000 2z" />
-            </svg>
-            Manage Sources
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant={showAnalytics ? 'primary' : 'secondary'}
+              size="sm"
+              onClick={() => setShowAnalytics((v) => !v)}
+              aria-label="Toggle analytics panel"
+              aria-pressed={showAnalytics}
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
+                <path d="M15.5 2A1.5 1.5 0 0014 3.5v13a1.5 1.5 0 001.5 1.5h1a1.5 1.5 0 001.5-1.5v-13A1.5 1.5 0 0016.5 2h-1zM9.5 6A1.5 1.5 0 008 7.5v9A1.5 1.5 0 009.5 18h1a1.5 1.5 0 001.5-1.5v-9A1.5 1.5 0 0010.5 6h-1zM3.5 10A1.5 1.5 0 002 11.5v5A1.5 1.5 0 003.5 18h1A1.5 1.5 0 006 16.5v-5A1.5 1.5 0 004.5 10h-1z" />
+              </svg>
+              Analytics
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowSources(true)}
+              aria-label="Manage topic sources"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
+                <path d="M3.5 3A1.5 1.5 0 002 4.5v3.793a1.5 1.5 0 00.44 1.06l7.5 7.5a1.5 1.5 0 002.12 0l3.793-3.793a1.5 1.5 0 000-2.122l-7.5-7.5A1.5 1.5 0 007.293 3H3.5zM5 6a1 1 0 100-2 1 1 0 000 2z" />
+              </svg>
+              Manage Sources
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -140,6 +157,16 @@ export default function ContentFeed() {
           clusterView={clusterView}
           onToggleCluster={() => setClusterView((v) => !v)}
         />
+      )}
+
+      {/* Analytics panel */}
+      {showAnalytics && !searchActive && (
+        <div className="px-6 py-4 border-b border-anveshak-border">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <SentimentTrend topicId={topicId} />
+            <TrendingKeywords topicId={topicId} />
+          </div>
+        </div>
       )}
 
       {/* Content area */}

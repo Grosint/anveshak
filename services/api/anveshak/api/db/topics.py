@@ -1,6 +1,7 @@
 """Topic repository — all SQL for the topics domain."""
 from __future__ import annotations
 
+import json
 from typing import Any, Optional
 
 import asyncpg
@@ -142,6 +143,7 @@ async def get_topic_content(
     has_embedding: Optional[bool],
     platform: Optional[str],
     include_low_quality: bool = False,
+    sentiment: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     if has_embedding is True:
         emb_clause = "AND ci.embedding IS NOT NULL"
@@ -152,6 +154,19 @@ async def get_topic_content(
 
     quality_clause = "" if include_low_quality else "AND COALESCE(ci.content_quality, 'good') != 'low_quality'"
     platform_clause = "AND s.platform = $4" if platform else ""
+
+    if sentiment == "positive":
+        sentiment_clause = "AND (ci.labels->'sentiment'->>'compound')::float >= 0.05"
+    elif sentiment == "negative":
+        sentiment_clause = "AND (ci.labels->'sentiment'->>'compound')::float <= -0.05"
+    elif sentiment == "neutral":
+        sentiment_clause = (
+            "AND (ci.labels->'sentiment'->>'compound')::float > -0.05"
+            " AND (ci.labels->'sentiment'->>'compound')::float < 0.05"
+        )
+    else:
+        sentiment_clause = ""
+
     params: list[Any] = [topic_id, limit, offset]
     if platform:
         params.append(platform)
@@ -169,6 +184,7 @@ async def get_topic_content(
                    ci.credibility_score_at_capture,
                    ci.captured_at,
                    ci.clean_hash,
+                   ci.labels,
                    s.name AS source_name,
                    s.platform,
                    FALSE AS backfilled
@@ -178,6 +194,7 @@ async def get_topic_content(
               {quality_clause}
               {emb_clause}
               {platform_clause}
+              {sentiment_clause}
 
             UNION ALL
 
@@ -190,6 +207,7 @@ async def get_topic_content(
                    ci.credibility_score_at_capture,
                    ci.captured_at,
                    ci.clean_hash,
+                   ci.labels,
                    s.name AS source_name,
                    s.platform,
                    TRUE AS backfilled
@@ -200,12 +218,13 @@ async def get_topic_content(
               {quality_clause}
               {emb_clause}
               {platform_clause}
+              {sentiment_clause}
         ),
         deduped AS (
             SELECT DISTINCT ON (COALESCE(clean_hash, id))
                    id, url, title, clean_text, translated_text,
                    language, credibility_score_at_capture, captured_at,
-                   clean_hash, source_name, platform, backfilled
+                   clean_hash, labels, source_name, platform, backfilled
             FROM all_items
             ORDER BY COALESCE(clean_hash, id), captured_at DESC
         ),
@@ -221,13 +240,73 @@ async def get_topic_content(
         )
         SELECT id, url, title, clean_text, translated_text,
                language, credibility_score_at_capture, captured_at,
-               source_name, platform, backfilled, duplicate_count
+               source_name, platform, backfilled, duplicate_count, labels
         FROM with_counts
         ORDER BY captured_at DESC
         LIMIT $2 OFFSET $3
     """  # nosec B608 — clauses are internal strings, not user input; platform is parameterized as $4
     rows = await conn.fetch(sql, *params)
-    return [dict(r) for r in rows]
+    results = []
+    for r in rows:
+        d = dict(r)
+        labels = d.pop("labels", None) or {}
+        if isinstance(labels, str):
+            labels = json.loads(labels)
+        d["sentiment"] = labels.get("sentiment")
+        d["keywords"] = labels.get("keywords", [])
+        results.append(d)
+    return results
+
+
+SQL_SENTIMENT_TREND = """
+    SELECT DATE(captured_at) AS date,
+           AVG((labels->'sentiment'->>'compound')::float) AS avg_compound,
+           COUNT(*) AS item_count
+    FROM content_items
+    WHERE topic_id = $1
+      AND captured_at >= NOW() - make_interval(days => $2)
+      AND labels->'sentiment' IS NOT NULL
+    GROUP BY DATE(captured_at)
+    ORDER BY date ASC
+"""
+
+SQL_TRENDING_KEYWORDS = """
+    SELECT kw, COUNT(*) AS frequency
+    FROM content_items,
+         jsonb_array_elements_text(labels->'keywords') AS kw
+    WHERE topic_id = $1
+      AND captured_at >= NOW() - make_interval(days => $2)
+      AND labels->'keywords' IS NOT NULL
+    GROUP BY kw
+    ORDER BY frequency DESC
+    LIMIT $3
+"""
+
+
+async def get_sentiment_trend(
+    conn: asyncpg.Connection,
+    topic_id: str,
+    days: int = 30,
+) -> list[dict[str, Any]]:
+    rows = await conn.fetch(SQL_SENTIMENT_TREND, topic_id, days)
+    return [
+        {
+            "date": str(r["date"]),
+            "avg_compound": round(float(r["avg_compound"]), 4),
+            "item_count": r["item_count"],
+        }
+        for r in rows
+    ]
+
+
+async def get_trending_keywords(
+    conn: asyncpg.Connection,
+    topic_id: str,
+    days: int = 7,
+    limit: int = 15,
+) -> list[dict[str, Any]]:
+    rows = await conn.fetch(SQL_TRENDING_KEYWORDS, topic_id, days, limit)
+    return [{"keyword": r["kw"], "frequency": r["frequency"]} for r in rows]
 
 
 async def get_topic_entities(

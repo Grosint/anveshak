@@ -68,6 +68,11 @@ class AnalystSettings(BaseSettings):
     # Signal engine
     signal_check_interval_s: int = 300  # check every 5 minutes
 
+    # Sentiment shift signal — fires when avg compound drops sharply
+    sentiment_shift_threshold: float = 0.3    # min compound drop to trigger signal
+    sentiment_shift_window_hours: int = 24    # recent window to compare
+    sentiment_shift_baseline_days: int = 7    # baseline average window
+
     # Cross-topic cluster convergence
     cross_topic_similarity_threshold: float = 0.85  # centroid cosine similarity
     cross_topic_check_interval_s: int = 900         # 15 minutes (0 = disabled)
