@@ -26,6 +26,8 @@ CHINESE_TEXT = (
     "中国人民解放军在南海举行大规模军事演习，"
     "习近平主席视察了参演部队并发表重要讲话。"
     "此次演习被外界认为是针对台湾局势的重要信号。"
+    "多国对此表示关注，美国国防部发言人在记者会上对演习规模表示关切，"
+    "日本防卫省也发布了紧急声明。分析人士认为这将加剧地区紧张局势。"
 )
 
 EXPECTED_TRANSLATION = (
@@ -235,7 +237,14 @@ class TestAnalyseContentWithTranslation:
         from unittest.mock import AsyncMock, MagicMock, patch, call
 
         content_id = "test-zh-001"
-        fake_row = {"id": content_id, "clean_text": CHINESE_TEXT}
+        fake_row = {
+            "id": content_id,
+            "clean_text": CHINESE_TEXT,
+            "topic_id": "topic-zh-test",
+            "topic_name": "South China Sea",
+            "topic_keywords": ["PLA", "military", "exercises"],
+            "topic_relevance_threshold": None,
+        }
 
         # Mock DB pool
         mock_conn = AsyncMock()
@@ -266,6 +275,7 @@ class TestAnalyseContentWithTranslation:
             patch("anveshak.analyst.jobs.translate_to_english", return_value=EXPECTED_TRANSLATION),
             patch("anveshak.analyst.jobs.parse_entities", return_value=[fake_entity]) as mock_ner,
             patch("anveshak.analyst.jobs.encode_text", return_value=[0.1] * 384),
+            patch("anveshak.analyst.jobs.build_topic_query_embedding", return_value=[0.1] * 384),
             patch("anveshak.analyst.jobs.settings") as mock_settings,
         ):
             mock_settings.translation_enabled = True

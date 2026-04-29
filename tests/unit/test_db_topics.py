@@ -115,9 +115,13 @@ async def test_get_topic_entities_returns_list(mock_conn):
 async def test_get_topic_clusters_returns_list(mock_conn):
     from anveshak.api.db.topics import get_topic_clusters  # type: ignore[import]
 
-    mock_conn.fetch.return_value = [
-        {"id": "c1", "label": "Naval ops", "item_count": 10, "independent_source_count": 3}
+    mock_conn.fetch.side_effect = [
+        # First call: SQL_GET_TOPIC_CLUSTERS → cluster rows
+        [{"id": "c1", "label": "Naval ops", "item_count": 10, "independent_source_count": 3}],
+        # Second call: SQL_CLUSTER_SOURCES for cluster "c1" → source rows
+        [{"source_name": "reuters.com", "platform": "web", "credibility_score": 72.0}],
     ]
     result = await get_topic_clusters(mock_conn, "t1")
     assert len(result) == 1
     assert result[0]["label"] == "Naval ops"
+    assert result[0]["sources"][0]["source_name"] == "reuters.com"

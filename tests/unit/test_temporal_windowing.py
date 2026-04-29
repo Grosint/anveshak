@@ -38,7 +38,7 @@ async def test_windowed_query_uses_filtered_sql():
 
     assert result == []
     mock_conn.fetch.assert_called_once_with(
-        SQL_TOPIC_EMBEDDINGS_WINDOWED, "topic-1", 30,
+        SQL_TOPIC_EMBEDDINGS_WINDOWED, "topic-1", 0.0, 30,
     )
 
 
@@ -61,7 +61,7 @@ async def test_unwindowed_query_uses_original_sql():
 
     assert result == []
     mock_conn.fetch.assert_called_once_with(
-        SQL_TOPIC_EMBEDDINGS, "topic-1",
+        SQL_TOPIC_EMBEDDINGS, "topic-1", 0.0,
     )
 
 
@@ -81,7 +81,7 @@ async def test_default_window_is_zero():
     mock_pool.acquire.return_value = mock_acq
 
     await load_embeddings("topic-1", mock_pool)  # no window_days arg
-    mock_conn.fetch.assert_called_once_with(SQL_TOPIC_EMBEDDINGS, "topic-1")
+    mock_conn.fetch.assert_called_once_with(SQL_TOPIC_EMBEDDINGS, "topic-1", 0.0)
 
 
 # ---------------------------------------------------------------------------

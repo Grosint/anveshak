@@ -57,6 +57,12 @@ class AnalystSettings(BaseSettings):
     content_min_unique_word_ratio: float = 0.4  # unique words / total words
     content_max_punctuation_ratio: float = 0.3  # punctuation chars / total chars
 
+    # Topic relevance gate — filter irrelevant content before clustering
+    # Cosine similarity floor between content embedding and topic query embedding.
+    # Calibrated from real data: relevant clusters avg 0.45+, junk scores 0.30–0.40.
+    # Per-topic override via topics.topic_relevance_threshold.
+    topic_relevance_threshold: float = 0.42
+
     # Near-duplicate detection (semantic dedup)
     near_duplicate_similarity_threshold: float = 0.95  # cosine similarity floor
     near_duplicate_batch_size: int = 200  # max items to compare per topic per run

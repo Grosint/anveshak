@@ -34,6 +34,7 @@ SQL_TOPIC_EMBEDDINGS = """
     JOIN sources s ON ci.source_id = s.id
     WHERE ci.topic_id = $1
       AND ci.embedding IS NOT NULL
+      AND (ci.topic_relevance_score IS NULL OR ci.topic_relevance_score >= $2)
     ORDER BY ci.captured_at ASC
 """
 
@@ -45,7 +46,8 @@ SQL_TOPIC_EMBEDDINGS_WINDOWED = """
     JOIN sources s ON ci.source_id = s.id
     WHERE ci.topic_id = $1
       AND ci.embedding IS NOT NULL
-      AND ci.captured_at >= NOW() - MAKE_INTERVAL(days => $2)
+      AND (ci.topic_relevance_score IS NULL OR ci.topic_relevance_score >= $2)
+      AND ci.captured_at >= NOW() - MAKE_INTERVAL(days => $3)
     ORDER BY ci.captured_at ASC
 """
 
@@ -112,16 +114,21 @@ async def load_embeddings(
     topic_id: str,
     pool: asyncpg.Pool,
     window_days: int = 0,
+    relevance_threshold: float = 0.0,
 ) -> list[EmbeddingRow]:
     """Fetch content_item embeddings for a topic (criteria 2.2).
 
     When window_days > 0, only items captured within that window are loaded.
+    Items with topic_relevance_score below relevance_threshold are excluded.
+    Items with NULL score (pre-feature) are always included for backward compat.
     """
     async with pool.acquire() as conn:
         if window_days > 0:
-            rows = await conn.fetch(SQL_TOPIC_EMBEDDINGS_WINDOWED, topic_id, window_days)
+            rows = await conn.fetch(
+                SQL_TOPIC_EMBEDDINGS_WINDOWED, topic_id, relevance_threshold, window_days,
+            )
         else:
-            rows = await conn.fetch(SQL_TOPIC_EMBEDDINGS, topic_id)
+            rows = await conn.fetch(SQL_TOPIC_EMBEDDINGS, topic_id, relevance_threshold)
 
     result = []
     for row in rows:
@@ -266,12 +273,27 @@ async def upsert_cluster(
 # Top-level orchestrator (called from ARQ job)
 # ---------------------------------------------------------------------------
 
+SQL_GET_TOPIC_RELEVANCE_THRESHOLD = """
+    SELECT topic_relevance_threshold FROM topics WHERE id = $1
+"""
+
+
 async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
     """Full clustering run for a topic. Returns list of cluster_ids created/updated.
 
     Criteria 2.1–2.5, 2.9.
     """
-    rows = await load_embeddings(topic_id, pool, window_days=settings.clustering_window_days)
+    # Resolve per-topic or global relevance threshold for pre-clustering filter
+    from .relevance import resolve_threshold
+    async with pool.acquire() as conn:
+        per_topic = await conn.fetchval(SQL_GET_TOPIC_RELEVANCE_THRESHOLD, topic_id)
+    threshold = resolve_threshold(per_topic)
+
+    rows = await load_embeddings(
+        topic_id, pool,
+        window_days=settings.clustering_window_days,
+        relevance_threshold=threshold,
+    )
     if not rows:
         log.info("clustering.no_embeddings", topic_id=topic_id)
         return []

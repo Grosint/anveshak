@@ -48,6 +48,14 @@ analyst_credibility_changes_total = Counter(
     registry=REGISTRY,
 )
 
+# Topic relevance score distribution — calibrate threshold via histogram
+analyst_relevance_score = Histogram(
+    "analyst_topic_relevance_score",
+    "Topic relevance score distribution",
+    buckets=[0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50, 0.70, 0.90, 1.0],
+    registry=REGISTRY,
+)
+
 # 8A.19 — ARQ job failures
 arq_jobs_failed_total = Counter(
     "arq_jobs_failed_total",

@@ -17,13 +17,14 @@ from .clustering import run_clustering as _run_clustering
 from .credibility import run_credibility_update, run_cross_verification_update, run_contradiction_update
 from .embeddings import encode_text, load_encoder
 from .labeller import generate_label_for_cluster
-from .metrics import analyst_nlp_jobs_total, analyst_nlp_duration_seconds, analyst_clusters_created_total, arq_jobs_failed_total
+from .metrics import analyst_nlp_jobs_total, analyst_nlp_duration_seconds, analyst_clusters_created_total, analyst_relevance_score, arq_jobs_failed_total
 from .nlp import detect_language, load_models, parse_entities
 from .settings import settings
 from .keywords import extract_keywords
 from .sentiment import analyse_sentiment
 from .translation import needs_translation, translate_to_english
 from .content_quality import is_quality_content
+from .relevance import compute_topic_relevance, build_topic_query_embedding
 
 log = structlog.get_logger(__name__)
 
@@ -32,20 +33,24 @@ log = structlog.get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 SQL_GET_CONTENT = """
-    SELECT id, clean_text
-    FROM content_items
-    WHERE id = $1
+    SELECT ci.id, ci.clean_text, ci.topic_id,
+           t.name AS topic_name, t.keywords AS topic_keywords,
+           t.topic_relevance_threshold
+    FROM content_items ci
+    JOIN topics t ON ci.topic_id = t.id
+    WHERE ci.id = $1
 """
 
 SQL_UPDATE_CONTENT_NLP = """
     UPDATE content_items
-    SET embedding          = $1::vector,
-        language           = $2,
-        translated_text    = $3,
-        translation_model  = $4,
-        labels             = $5::jsonb,
-        updated_at         = $6
-    WHERE id = $7
+    SET embedding              = $1::vector,
+        language               = $2,
+        translated_text        = $3,
+        translation_model      = $4,
+        labels                 = $5::jsonb,
+        updated_at             = $6,
+        topic_relevance_score  = $7
+    WHERE id = $8
 """
 
 SQL_INSERT_ENTITY = """
@@ -142,6 +147,13 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
         # pgvector expects "[x1,x2,...]" string when using $1::vector cast in asyncpg
         embedding_str = "[" + ",".join(f"{x:.8f}" for x in embedding) + "]"
 
+        # --- Step 4a: Topic relevance score ---
+        topic_query_emb = build_topic_query_embedding(
+            row["topic_name"], list(row["topic_keywords"] or []),
+        )
+        relevance_score = compute_topic_relevance(embedding, topic_query_emb)
+        analyst_relevance_score.observe(relevance_score)
+
         # --- Step 4b: Sentiment + keyword extraction (CPU-only, no extra ML) ---
         sentiment = analyse_sentiment(work_text)
         kw_results = extract_keywords(work_text, language="en", max_keywords=10)
@@ -169,7 +181,7 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
                 await conn.execute(
                     SQL_UPDATE_CONTENT_NLP,
                     embedding_str, lang, translated_text, translation_model_used,
-                    labels_json, now, content_item_id,
+                    labels_json, now, relevance_score, content_item_id,
                 )
                 for ent in entities:
                     await conn.execute(
@@ -192,6 +204,7 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
             language=lang,
             translated=translated_text is not None,
             entities=len(entities),
+            topic_relevance_score=round(relevance_score, 4),
         )
     except Exception:
         analyst_nlp_jobs_total.labels(status="failed").inc()
@@ -281,6 +294,77 @@ async def run_contradiction_scoring(ctx: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
+# One-time backfill: score existing content items that have embeddings but
+# no topic_relevance_score (populated after migration 009).
+# ---------------------------------------------------------------------------
+
+SQL_UNSCORED_ITEMS_BY_TOPIC = """
+    SELECT ci.id, ci.embedding::text AS embedding_text, ci.topic_id,
+           t.name AS topic_name, t.keywords AS topic_keywords
+    FROM content_items ci
+    JOIN topics t ON ci.topic_id = t.id
+    WHERE ci.embedding IS NOT NULL
+      AND ci.topic_relevance_score IS NULL
+    ORDER BY ci.topic_id, ci.captured_at ASC
+    LIMIT $1
+"""
+
+SQL_UPDATE_RELEVANCE_SCORE = """
+    UPDATE content_items SET topic_relevance_score = $1, updated_at = $2
+    WHERE id = $3
+"""
+
+
+async def backfill_relevance_scores(ctx: dict) -> None:
+    """One-time job: compute topic_relevance_score for existing content items.
+
+    Groups by topic_id to compute each topic query embedding once.
+    Processes in batches of 500 to avoid OOM.
+    """
+    db_pool: asyncpg.Pool = ctx["db_pool"]
+    batch_size = 500
+    total_scored = 0
+
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch(SQL_UNSCORED_ITEMS_BY_TOPIC, batch_size)
+
+    if not rows:
+        log.info("backfill_relevance.nothing_to_score")
+        return
+
+    # Cache topic query embeddings to avoid recomputing per item
+    topic_cache: dict[str, list[float]] = {}
+    now = datetime.now(UTC)
+
+    async with db_pool.acquire() as conn:
+        async with conn.transaction():
+            for row in rows:
+                tid = row["topic_id"]
+                if tid not in topic_cache:
+                    topic_cache[tid] = build_topic_query_embedding(
+                        row["topic_name"], list(row["topic_keywords"] or []),
+                    )
+
+                from .clustering import _parse_pgvector
+                content_vec = _parse_pgvector(row["embedding_text"]).tolist()
+                score = compute_topic_relevance(content_vec, topic_cache[tid])
+
+                await conn.execute(
+                    SQL_UPDATE_RELEVANCE_SCORE, score, now, row["id"],
+                )
+                total_scored += 1
+
+    log.info("backfill_relevance.done", scored=total_scored)
+
+    # If there are more items, re-enqueue self
+    if total_scored >= batch_size:
+        from arq import create_pool
+        redis = await create_pool(WorkerSettings.redis_settings)
+        await redis.enqueue_job("backfill_relevance_scores", _queue_name="arq:analyst")
+        log.info("backfill_relevance.re_enqueued", reason="more items remaining")
+
+
+# ---------------------------------------------------------------------------
 # ARQ worker lifecycle
 # ---------------------------------------------------------------------------
 
@@ -322,6 +406,7 @@ class WorkerSettings:
         update_source_credibility,
         backfill_topic_job,
         arq.func(run_cross_verification, max_tries=2),
+        backfill_relevance_scores,
     ]
     cron_jobs = [
         arq.cron(run_contradiction_scoring, hour={2}),  # 7.2 — daily at 02:00 UTC
