@@ -9,6 +9,12 @@
 > See also: `learned/llm-validated-output-retry.md` — JSON fence stripping, ReportContent schema, progressive retry pattern
 > See also: `learned/idempotent-cron-insert.md` — UNIQUE index + ON CONFLICT DO NOTHING for cron jobs that write event/warning rows repeatedly
 > See also: `learned/bidirectional-auto-scoring.md` — separate min-threshold settings for score boosts vs drops; mandatory invariant test
+> See also: `learned/jsonb-labels-api-surfacing.md` — threading labels through CTE UNION ALL + DISTINCT ON dedup; post-processing to extract sentiment/keywords
+> See also: `learned/git-stash-pop-silent-data-loss.md` — stash pop failure silently reverts files; never stash to test hypotheses, use worktrees instead
+> See also: `learned/post-embedding-relevance-gate.md` — cosine similarity gate between content and topic query embeddings; threshold calibration from histogram
+> See also: `learned/mock-sequential-db-calls.md` — use side_effect for functions making multiple sequential DB fetches; expand fake_row when SQL JOINs change
+> See also: `learned/scheduler-worker-split.md` — split monolithic service into lightweight scheduler (124 MiB) + ARQ ML worker (6 GiB); import safety rules
+> See also: `learned/orphan-sweep-safety-net.md` — periodic sweep for content_items missed by scraper enqueue; runs in scheduler every 5 min
 
 ---
 

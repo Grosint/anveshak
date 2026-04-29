@@ -17,6 +17,9 @@
 > See also: `learned/compose-overlay-core-feature-trap.md` — core features must be in base compose.yml; overlays only for GPU/optional services
 > See also: `learned/nginx-dynamic-dns-resolver.md` — resolver 127.0.0.11 + set $upstream to avoid 502s after container restarts
 > See also: `learned/volume-mounted-models-silent-failure.md` — empty volume = silent 0.0 scores; need make download-models + health check
+> See also: `learned/post-embedding-relevance-gate.md` — filter off-topic scraped content via topic query embedding similarity before clustering
+> See also: `learned/orphan-sweep-safety-net.md` — safety net for content_items where enqueue_job("analyse_content") failed after DB insert
+> See also: `learned/scheduler-worker-split.md` — analyst split into scheduler (clustering/signals) + ARQ worker (NLP/embedding); import chain safety
 
 ---
 

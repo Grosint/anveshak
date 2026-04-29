@@ -158,9 +158,37 @@ Improvements identified during codebase deep-dive. Will implement after learning
 
 ---
 
-## 5. Analyst Hybrid Architecture: ARQ Workers + Lightweight Scheduler
+## 5. Analyst Hybrid Architecture: ARQ Workers + Lightweight Scheduler — DONE (2026-04-29)
 
-**Problem:** The analyst service runs 6 async loops in a single process via `asyncio.gather()`. This has four issues:
+**Status:** IMPLEMENTED
+
+**What was implemented:**
+
+The analyst service was split from a single 6 GB monolithic process into two containers:
+
+### analyst-scheduler (lightweight, single instance, 512 MB)
+- Runs 4 loops: `cluster_loop`, `signal_check_loop`, `convergence_loop`, `orphan_sweep`
+- Does NOT load spaCy, sentence-transformers, NLLB, VADER, or YAKE
+- Enqueues `generate_cluster_label` and `run_cross_verification` to ARQ instead of calling Ollama inline
+- `orphan_sweep` (NEW): catches content_items with NULL embedding missed by scraper enqueue — safety net
+- Memory: ~124 MiB in production
+
+### analyst-worker (ARQ, horizontally scalable, 6 GB per replica)
+- Runs all ARQ jobs: `analyse_content`, `run_clustering`, `generate_cluster_label`, `update_source_credibility`, `backfill_topic_job`, `backfill_all_topics`, `run_cross_verification`, `backfill_relevance_scores`
+- Cron jobs: `run_contradiction_scoring` (daily 02:00), `update_source_credibility` (daily 03:00), `backfill_all_topics` (every 6h)
+- Scales via `ANALYST_WORKER_REPLICAS` env var (default: 1)
+- Loads all ML models once at startup via ARQ `on_startup`
+
+**Files changed (5):**
+- `services/analyst/anveshak/analyst/scheduler.py` — new file, 4 lightweight loops
+- `services/analyst/anveshak/analyst/main.py` — stripped to thin wrapper calling scheduler.main()
+- `services/analyst/anveshak/analyst/jobs.py` — added `backfill_all_topics` job + 2 new cron entries
+- `infra/compose.yml` — replaced `analyst` with `analyst-scheduler` + `analyst-worker`
+- `.env.example` — added `ANALYST_WORKER_REPLICAS=1`
+
+---
+
+**Original problem:** The analyst service runs 6 async loops in a single process via `asyncio.gather()`. This has four issues:
 1. **NLP blocks everything** — CPU-heavy ML work (spaCy, NLLB, sentence-transformer) blocks the event loop. While processing 50 items (~25 min with translation), clustering and signal checks wait.
 2. **No horizontal scaling** — 500 unprocessed items = 83 min on 1 core. Can't add more workers.
 3. **No failure isolation** — crashed items are logged and skipped. No retry count, no dead letter queue, no visibility into backlog.

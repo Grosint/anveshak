@@ -13,7 +13,8 @@ The CLAUDE.md hardware independence rule requires all settings to be env-var dri
 | IAF production | RTX 4090 (24GB), 64GB RAM, 2TB NVMe | ~₹3–4L | ~10K articles/day, 10s/report, 72b LLM |
 
 **Critical CPU-only constraints (measured 2026-04-17):**
-- Analyst service needs **6GB RAM** (3 spaCy models + sentence-transformers + NLLB-200)
+- Analyst worker needs **6GB RAM** (3 spaCy models + sentence-transformers + NLLB-200)
+- Analyst scheduler needs only **512MB RAM** (no ML models — just asyncpg + numpy + hdbscan)
 - NLLB translation: **~4 min per article on CPU** — production bottleneck for >50 articles/day
 - NLLB model cold-load: ~25s on CPU (cached in Docker volume after first load)
 - `TRANSLATION_MAX_CHARS=1500` required on CPU (Chinese chars ≈ 1 token, NLLB max 1024)
@@ -21,7 +22,33 @@ The CLAUDE.md hardware independence rule requires all settings to be env-var dri
 
 ---
 
-## NLP Models — `analyst` service
+## Analyst Service — Scheduler/Worker Split (2026-04-29)
+
+The analyst service is split into two containers from the same Docker image:
+
+| Container | Role | Memory | Scaling |
+|-----------|------|--------|---------|
+| `analyst-scheduler` | Clustering, signals, convergence, orphan sweep | 124 MiB (limit: 512m) | Always 1 instance |
+| `analyst-worker` | NLP, embedding, label gen, credibility, backfill | 1.5 GiB idle / 5.6 GiB with NLLB (limit: 6g) | `ANALYST_WORKER_REPLICAS` (default: 1) |
+
+**Scaling guide:**
+
+| Tier | Worker Replicas | Total Worker RAM | Throughput |
+|------|----------------|-----------------|------------|
+| CPU-only (dev) | 1 | 6 GB | ~50 articles/day |
+| Demo/eval | 2 | 12 GB | ~100 articles/day |
+| IAF production | 4 | 24 GB | ~400 articles/day |
+
+**Config change:**
+```
+ANALYST_WORKER_REPLICAS=1  →  ANALYST_WORKER_REPLICAS=4
+```
+
+**Code change:** Zero. ARQ Redis BLPOP guarantees each job goes to exactly one worker.
+
+---
+
+## NLP Models — `analyst-worker` service
 
 **Current implementation:**
 - English: `en_core_web_md` (43MB, ~85-90% NER F1)

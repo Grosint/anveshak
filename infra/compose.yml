@@ -121,7 +121,7 @@ services:
       API_ALLOWED_ORIGINS: ${API_ALLOWED_ORIGINS:-http://localhost:3000}
       SCRAPER_SERVICE_URL: http://scraper:8001
       SOCIAL_SERVICE_URL: http://social:8002
-      ANALYST_SERVICE_URL: http://analyst:8004
+      ANALYST_SERVICE_URL: http://analyst-scheduler:8007
       REPORTER_SERVICE_URL: http://reporter:8005
       VISION_SERVICE_URL: http://vision:8003
     ports:
@@ -234,15 +234,44 @@ services:
     networks:
       - anveshak-net
 
-  analyst:
+  # Analyst is split into scheduler (lightweight loops) + worker (ARQ ML pipeline).
+  # Scheduler: clustering, signals, convergence, orphan sweep — 512 MB, no ML models.
+  # Worker: NLP, embedding, label gen, credibility — 6 GB, horizontally scalable.
+
+  analyst-scheduler:
+    build:
+      context: ..
+      dockerfile: services/analyst/Dockerfile
+    restart: unless-stopped
+    mem_limit: 512m
+    command: ["python", "-m", "anveshak.analyst.scheduler"]
+    environment:
+      <<: *common-env
+      ANALYST_PORT: 8007
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2:7b}
+      HF_HOME: /app/models
+    ports:
+      - "8007:8007"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
+      <<: *healthcheck-defaults
+    networks:
+      - anveshak-net
+
+  analyst-worker:
     build:
       context: ..
       dockerfile: services/analyst/Dockerfile
     restart: unless-stopped
     mem_limit: 6g
+    command: ["python", "-m", "arq", "anveshak.analyst.jobs.WorkerSettings"]
     environment:
       <<: *common-env
-      ANALYST_PORT: 8004
       SPACY_EN_MODEL: ${SPACY_EN_MODEL:-en_core_web_md}
       SPACY_RU_MODEL: ${SPACY_RU_MODEL:-ru_core_news_md}
       SPACY_ZH_MODEL: ${SPACY_ZH_MODEL:-zh_core_web_md}
@@ -256,8 +285,8 @@ services:
       HF_HOME: /app/models
     volumes:
       - analyst_models:/app/models
-    ports:
-      - "8004:8004"
+    deploy:
+      replicas: ${ANALYST_WORKER_REPLICAS:-1}
     depends_on:
       postgres:
         condition: service_healthy
@@ -268,6 +297,7 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "kill -0 1 || exit 1"]
       <<: *healthcheck-defaults
+      start_period: 120s
     networks:
       - anveshak-net
 

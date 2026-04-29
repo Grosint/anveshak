@@ -51,16 +51,26 @@ Anveshak (Sanskrit: investigator, seeker) is a standalone, sovereign AI-OSINT an
                             │
          ┌──────────────────┼──────────────────────┐
          │                  │                      │
-   ┌─────▼──────┐    ┌─────▼──────┐       ┌───────▼────────┐
-   │  analyst   │    │  vision    │       │   reporter     │
-   │            │    │            │       │   + worker     │
-   │ spaCy NLP  │    │ YOLOv8    │       │ RAG + Ollama   │
-   │ NLLB trans │    │ deepfake  │       │ PDF export     │
-   │ HDBSCAN    │    │ CLIP      │       │ GeoJSON        │
-   │ sentiment  │    │ EXIF/pHash│       │ scheduled cron │
-   │ YAKE keys  │    └────────────┘       └───────┬────────┘
-   │ signals    │                                 │
-   └─────┬──────┘                                 │
+   ┌──────▼───────┐   ┌─────▼──────┐       ┌───────▼────────┐
+   │  analyst-    │   │  vision    │       │   reporter     │
+   │  scheduler   │   │            │       │   + worker     │
+   │  (512 MB)    │   │ YOLOv8    │       │ RAG + Ollama   │
+   │ HDBSCAN      │   │ deepfake  │       │ PDF export     │
+   │ signals      │   │ CLIP      │       │ GeoJSON        │
+   │ convergence  │   │ EXIF/pHash│       │ scheduled cron │
+   │ orphan sweep │   └────────────┘       └───────┬────────┘
+   └──────┬───────┘                                │
+          │ enqueues to ARQ                        │
+   ┌──────▼───────┐                                │
+   │  analyst-    │                                │
+   │  worker (×N) │                                │
+   │  (6 GB)      │                                │
+   │ spaCy NLP    │                                │
+   │ NLLB trans   │                                │
+   │ embeddings   │                                │
+   │ sentiment    │                                │
+   │ labels       │                                │
+   └──────┬───────┘                                │
          │          signals + reports              │
          └──────────────────┬──────────────────────┘
                             │
@@ -100,7 +110,7 @@ Anveshak (Sanskrit: investigator, seeker) is a standalone, sovereign AI-OSINT an
 
 ## Container Map
 
-Anveshak runs as **17 containers** (+ 1 optional) on a single Docker network (`anveshak-net`). Here is every container, what it does, why it exists, and how it connects to the rest of the system.
+Anveshak runs as **19 containers** (+ 1 optional) on a single Docker network (`anveshak-net`). Here is every container, what it does, why it exists, and how it connects to the rest of the system.
 
 ### At a Glance
 
@@ -113,9 +123,12 @@ Anveshak runs as **17 containers** (+ 1 optional) on a single Docker network (`a
 | `scraper` | anveshak-scraper | 8001 | 768 MB | Web crawl scheduler |
 | `scraper-worker` | anveshak-scraper | — | 1 GB | Web crawl job executor |
 | `social` | anveshak-social | 8002 | 512 MB | Social media poller |
-| `analyst` | anveshak-analyst | 8004 | 6 GB | NLP + clustering + signals |
+| `analyst-scheduler` | anveshak-analyst | 8007 | 512 MB | Clustering + signals + convergence |
+| `analyst-worker` | anveshak-analyst | — | 6 GB | NLP + embedding + labelling (ARQ) |
 | `reporter` | anveshak-reporter | 8005 | 512 MB | Report API |
 | `reporter-worker` | anveshak-reporter | 8006 | 1 GB | LLM report generator |
+| `vision` | anveshak-vision | 8003 | 512 MB | Vision API |
+| `vision-worker` | anveshak-vision | — | 6 GB | YOLO + CLIP + deepfake (ARQ) |
 | `frontend` | anveshak-frontend | 3000 | 256 MB | Analyst workbench UI |
 | `prometheus` | prom/prometheus | 9090 | 512 MB | Metrics collection |
 | `grafana` | grafana/grafana | 3001 | 256 MB | Dashboards |
@@ -283,45 +296,73 @@ Anveshak runs as **17 containers** (+ 1 optional) on a single Docker network (`a
 
 ---
 
-### Analyst (`analyst`)
+### Analyst Scheduler (`analyst-scheduler`)
 
-**What it does:** The intelligence processing engine. Runs seven concurrent async loops that transform raw content into structured intelligence:
+**What it does:** Lightweight coordination service that runs batch operations needing global state. Does NOT load ML models (spaCy, NLLB, sentence-transformers). Memory: ~124 MiB.
 
-1. **NLP Loop** (every 30s) — picks up content items without embeddings, runs:
-   - Language detection
-   - spaCy NLP pipeline (NER, POS tagging) — separate models for English, Russian, Chinese
-   - NLLB-200 machine translation (non-English → English)
-   - Sentence-transformer embedding generation (384 dimensions)
-   - VADER sentiment analysis (compound/positive/negative/neutral scores)
-   - YAKE keyword extraction (unsupervised, statistical)
-   - Results stored in `content_items.embedding`, `content_items.labels`, `extracted_entities`
+Runs four concurrent async loops:
 
-2. **Clustering Loop** (every 5 min) — runs near-duplicate detection, then HDBSCAN clustering on embeddings per topic. Creates/updates `narrative_clusters` with item counts and source diversity metrics. Excludes near-duplicate items from `independent_source_count` to prevent false signals. Archives stale clusters older than `cluster_archive_after_days`. Only clusters content within a configurable temporal window (`clustering_window_days`).
+1. **Clustering Loop** (every 5 min) — runs near-duplicate detection, then HDBSCAN clustering on embeddings per topic. Creates/updates `narrative_clusters` with item counts and source diversity metrics. Excludes near-duplicate items from `independent_source_count` to prevent false signals. Archives stale clusters older than `cluster_archive_after_days`. After clustering, **enqueues** `generate_cluster_label` and `run_cross_verification` to the analyst-worker via ARQ (never calls Ollama directly). Label staleness tracked via `label_item_hash` — re-enqueues label generation when cluster composition changes by >30%.
 
-3. **Signal Check Loop** — monitors clusters for corroboration threshold: when `independent_source_count >= topic.signal_threshold`, fires a signal (inserts into `signals` table). Excludes archived clusters.
+2. **Signal Check Loop** (every 5 min) — monitors clusters for corroboration threshold: when `independent_source_count >= topic.signal_threshold`, fires a signal (inserts into `signals` table). Also checks for sentiment shifts (compound score drops >0.3 over 24h baseline).
 
-4. **Credibility Update Loop** — auto-downgrades source credibility when a source consistently amplifies content flagged as deepfake
+3. **Convergence Loop** (every 15 min) — detects when two different topics surface the same narrative by comparing cluster centroids across topics. Fires `cross_topic_convergence` signals when centroid similarity exceeds threshold.
 
-5. **Backfill Loop** (every 10 min) — continuously discovers content from other topics that semantically matches each active topic's keywords. Uses pgvector cosine similarity search. Idempotent via `ON CONFLICT DO NOTHING`.
-
-6. **Convergence Loop** (every 15 min) — detects when two different topics surface the same narrative by comparing cluster centroids across topics. Fires `cross_topic_convergence` signals when centroid similarity exceeds threshold. Enables analysts to spot intelligence connections across monitoring topics.
-
-7. **Label Staleness Loop** — integrated into the clustering job. Tracks cluster composition via `label_item_hash` (SHA-256 of sorted item IDs). When cluster composition changes by more than 30%, re-enqueues Ollama label generation to keep cluster names accurate.
-
-**Why it's needed:** This is the core intelligence value-add. Raw scraped text is useless to an analyst — they need entities, clusters, trends, and alerts. The analyst service transforms raw data into actionable intelligence.
+4. **Orphan Sweep** (every 5 min) — safety net for content items where the scraper/social enqueue to ARQ failed after DB insert. Finds `content_items WHERE embedding IS NULL AND created_at > NOW() - 1 hour` and re-enqueues them to the analyst-worker.
 
 **Key details:**
 
-- Memory limit: 6 GB (3 spaCy models + NLLB translation model + embedding model)
-- Models cached in `analyst_models` volume
-- Cluster labels generated via Ollama (qwen2:7b)
-- All NLP model names come from environment variables (hardware independence)
+- Memory limit: 512 MB (no ML models — just asyncpg, numpy, hdbscan, arq)
+- Port 8007 for Prometheus metrics
+- Does NOT depend on Ollama
+- Always runs as a single instance (clustering needs global state)
+
+**Connects to:**
+
+- `postgres` — reads embeddings/clusters, writes cluster results and signals
+- `redis` — enqueues jobs to `arq:analyst` queue for the worker
+
+---
+
+### Analyst Worker (`analyst-worker`)
+
+**What it does:** ARQ-based ML inference worker that processes per-item NLP jobs. Loads all ML models once at startup. Horizontally scalable via `ANALYST_WORKER_REPLICAS`.
+
+Registered ARQ jobs:
+
+1. **`analyse_content`** — full NLP pipeline per content item:
+   - Language detection (langdetect)
+   - NLLB-200 translation (non-English → English)
+   - spaCy NER (English, Russian, Chinese models)
+   - Sentence-transformer embedding (384 dimensions, all-MiniLM-L6-v2)
+   - VADER sentiment analysis + YAKE keyword extraction
+   - Topic relevance scoring (cosine similarity vs topic query embedding)
+   - Results stored in `content_items.embedding`, `content_items.labels`, `extracted_entities`
+
+2. **`generate_cluster_label`** — Ollama LLM call to generate human-readable cluster labels
+
+3. **`run_cross_verification`** — boosts credibility of sources confirmed by multi-platform clusters
+
+4. **`backfill_all_topics`** (cron, every 6h) — pgvector cosine similarity search to discover historical content matching active topic keywords
+
+5. **`update_source_credibility`** (cron, daily 03:00) — auto-downgrades source credibility for deepfake amplification
+
+6. **`run_contradiction_scoring`** (cron, daily 02:00) — reduces credibility for sources with high noise-item ratio
+
+**Why the split:** The old monolithic analyst ran NLP inline in an asyncio loop, blocking clustering and signal checks during CPU-heavy work (~10s/item with translation). The split allows the scheduler to run clustering/signals unblocked while workers process NLP in parallel. Scaling from 1 to 4 workers multiplies NLP throughput without duplicating scheduler work.
+
+**Key details:**
+
+- Memory limit: 6 GB per replica (3 spaCy models + NLLB + embedding model)
+- Models cached in `analyst_models` volume (shared across restarts)
+- Scalable: `ANALYST_WORKER_REPLICAS=1` (laptop) to `4` (production)
+- ARQ Redis BLPOP guarantees exactly-once job delivery across replicas
 
 **Connects to:**
 
 - `postgres` — reads content items, writes embeddings/entities/clusters/signals
-- `redis` — ARQ job coordination
-- `ollama` — cluster label generation
+- `redis` — picks up jobs from `arq:analyst` queue
+- `ollama` — cluster label generation (qwen2:7b)
 
 ---
 
@@ -439,7 +480,7 @@ Workers are separate container processes that execute heavy background jobs disp
 
 **Why it's needed:** Without metrics, you can't know if the system is healthy. Prometheus collects request rates, latencies, job success/failure counts, queue depths, and ML inference times from every service.
 
-**Scrape targets:** api (8000), scraper (8001), social (8002), vision (8003), analyst (8004), reporter (8005), reporter-worker (8006), ollama (11434), postgres-exporter (9187), redis-exporter (9121), loki (3100)
+**Scrape targets:** api (8000), scraper (8001), social (8002), vision (8003), analyst-scheduler (8007), reporter (8005), reporter-worker (8006), ollama (11434), postgres-exporter (9187), redis-exporter (9121), loki (3100)
 
 **Alerting rules (13 rules):**
 

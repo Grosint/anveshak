@@ -293,6 +293,25 @@ async def run_contradiction_scoring(ctx: dict) -> None:
     log.info("jobs.run_contradiction_scoring.done", updated=updated)
 
 
+async def backfill_all_topics(ctx: dict) -> None:
+    """Periodic backfill for all active topics (replaces backfill_loop in main.py).
+
+    Registered as an ARQ cron job — runs every 6 hours.
+    """
+    db_pool: asyncpg.Pool = ctx["db_pool"]
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("SELECT id FROM topics WHERE status = 'active'")
+    for row in rows:
+        try:
+            inserted = await _backfill_topic(row["id"], db_pool)
+            if inserted:
+                log.info("jobs.backfill_all.topic_done",
+                         topic_id=row["id"], inserted=inserted)
+        except Exception as exc:
+            log.warning("jobs.backfill_all.topic_failed",
+                        topic_id=row["id"], error=str(exc))
+
+
 # ---------------------------------------------------------------------------
 # One-time backfill: score existing content items that have embeddings but
 # no topic_relevance_score (populated after migration 009).
@@ -405,11 +424,14 @@ class WorkerSettings:
         arq.func(generate_cluster_label, max_tries=3),
         update_source_credibility,
         backfill_topic_job,
+        backfill_all_topics,
         arq.func(run_cross_verification, max_tries=2),
         backfill_relevance_scores,
     ]
     cron_jobs = [
-        arq.cron(run_contradiction_scoring, hour={2}),  # 7.2 — daily at 02:00 UTC
+        arq.cron(run_contradiction_scoring, hour={2}),       # 7.2 — daily at 02:00 UTC
+        arq.cron(update_source_credibility, hour={3}),       # 2.21 — daily at 03:00 UTC
+        arq.cron(backfill_all_topics, hour={0, 6, 12, 18}),  # 2.9 — every 6 hours
     ]
     on_startup = on_startup
     on_shutdown = on_shutdown

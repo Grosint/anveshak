@@ -33,12 +33,17 @@ platform) is the upsell. Anveshak NEVER depends on Drishti.
 │  │          │  │ X/Twitter│  │ EXIF     │  │          │       │
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘       │
 │       └──────────────┴──────┬───────┴──────────────┘             │
-│                    ┌────────▼────────┐                           │
-│                    │    ANALYST      │                           │
-│                    │ M1: Credibility │                           │
-│                    │ M2: NLP+Cluster │                           │
-│                    │ Signals Engine  │                           │
-│                    └────────┬────────┘                           │
+│              ┌──────────────▼──────────────┐                     │
+│              │ ANALYST-SCHEDULER (512 MB)  │                     │
+│              │ Clustering + Signals +      │                     │
+│              │ Convergence + Orphan Sweep  │                     │
+│              └──────────────┬──────────────┘                     │
+│                      enqueues to ARQ                             │
+│              ┌──────────────▼──────────────┐                     │
+│              │ ANALYST-WORKER (6 GB, ×N)   │                     │
+│              │ NLP + Embedding + Labels +  │                     │
+│              │ Credibility + Backfill      │                     │
+│              └──────────────┬──────────────┘                     │
 │       ┌─────────────────────┼─────────────────────┐             │
 │  ┌────▼─────┐      ┌───────▼───────┐     ┌───────▼──────┐     │
 │  │PostgreSQL│      │    Redis      │     │   Ollama     │     │
@@ -232,13 +237,13 @@ Training: 1 billion sentence pairs taught it that similar meanings → nearby ve
 ## Every Timer in the System
 
 Every 5s: API signal_delivery_loop (WebSocket push).
-Every 30s: analyst nlp_loop (SELECT WHERE embedding IS NULL).
-Every 5min: analyst cluster_loop + signal_check_loop.
-Every 10min: analyst backfill_loop.
-Every 15min: scraper + social enqueue active topics; reporter check_scheduled_reports.
+Every 5min: analyst-scheduler cluster_loop + signal_check_loop + orphan_sweep.
+Every 6h: analyst-worker backfill_all_topics (ARQ cron).
+Every 15min: analyst-scheduler convergence_loop; scraper + social enqueue active topics; reporter check_scheduled_reports.
 Every 6h: reporter check_source_warnings.
-Every 24h: analyst credibility_update_loop (deepfake drop).
-Daily 02:00 UTC: scraper check_all_source_health; analyst contradiction_scoring.
+Daily 02:00 UTC: scraper check_all_source_health; analyst-worker contradiction_scoring (ARQ cron).
+Daily 03:00 UTC: analyst-worker update_source_credibility (ARQ cron).
+NLP jobs: analyst-worker processes analyse_content on-demand via ARQ (enqueued by scraper/social after insert; orphan_sweep catches misses).
 All intervals configurable via env vars.
 
 ## How Keywords Are Used Per Platform
@@ -393,8 +398,8 @@ All 4 adapters (Telegram/Reddit/Bluesky/X) yield RawItem objects → ingest_raw_
 normalises, dedupes, inserts into content_items, enqueues analyse_content to arq:analyst,
 downloads media attachments.
 
-**Key difference from scraper:** social explicitly enqueues analyse_content after insert.
-Scraper does NOT — relies on analyst's nlp_loop polling WHERE embedding IS NULL every 30s.
+**Enqueue flow:** Both scraper and social enqueue analyse_content to arq:analyst after insert.
+The analyst-scheduler's orphan_sweep (every 5 min) catches any items where the enqueue failed.
 
 ### Source Health Circuit Breaker
 
@@ -406,15 +411,28 @@ Can recover when health check succeeds again.
 
 # TOPIC 6: ANALYSIS PIPELINE
 
-## The 6 Loops (Current Architecture)
+## Scheduler/Worker Split (Current Architecture)
 
-analyst main.py runs asyncio.gather() with 6 coroutines in ONE process:
-nlp_loop (30s), cluster_loop (5min), signal_check_loop (5min),
-credibility_update_loop (24h), backfill_loop (10min), convergence_loop (15min).
-These are NOT separate workers — they're coroutines sharing one event loop.
+The analyst is split into two containers from the same Docker image:
 
-**Problem:** CPU-heavy NLP blocks clustering. Can't scale horizontally.
-See suggestion #5 (hybrid ARQ architecture) for the improvement plan.
+**analyst-scheduler** (512 MB, single instance, port 8007):
+Runs 4 async loops via asyncio.gather() — no ML models loaded:
+- cluster_loop (5min) — HDBSCAN clustering, then enqueues label gen + cross-verification to ARQ
+- signal_check_loop (5min) — threshold checks + sentiment shift detection
+- convergence_loop (15min) — cross-topic centroid comparison
+- orphan_sweep (5min) — re-enqueues content_items missed by scraper's enqueue
+
+**analyst-worker** (6 GB, scalable via ANALYST_WORKER_REPLICAS):
+ARQ worker processing all ML-heavy jobs on-demand:
+- analyse_content — NLP pipeline (enqueued by scraper/social after insert)
+- generate_cluster_label — Ollama call (enqueued by scheduler after clustering)
+- run_cross_verification — credibility boost (enqueued by scheduler after clustering)
+- backfill_all_topics — cron every 6h
+- update_source_credibility — cron daily 03:00
+- run_contradiction_scoring — cron daily 02:00
+
+**Why the split:** NLP (~10s/item with translation) blocked clustering and signal checks.
+Now the scheduler runs unblocked while N workers process NLP in parallel.
 
 ## NLP Pipeline (analyse_content)
 
@@ -682,14 +700,15 @@ Infinite scroll via useInfiniteContent hook + Intersection Observer sentinel.
 
 # TOPIC 10: INFRASTRUCTURE & DEVOPS
 
-## 18 Containers
+## 19 Containers
 
 Data stores (3): postgres (pgvector:pg16, :5433, 1GB), redis (7-alpine, :6379, 256MB),
 ollama (latest, :11434, 8GB).
 
-Application (11): api (:8000, 512MB), scraper (:8001, 768MB), scraper-worker (1GB),
-social (:8002, 512MB), analyst (:8004, 6GB), reporter (:8005, 512MB),
-reporter-worker (:8006, 1GB), vision (:8003, 4GB), vision-worker (6GB), frontend (:3000, 256MB).
+Application (12): api (:8000, 512MB), scraper (:8001, 768MB), scraper-worker (1GB),
+social (:8002, 512MB), analyst-scheduler (:8007, 512MB), analyst-worker (6GB),
+reporter (:8005, 512MB), reporter-worker (:8006, 1GB), vision (:8003, 4GB),
+vision-worker (6GB), frontend (:3000, 256MB).
 
 Observability (5+): prometheus (:9090, 512MB), grafana (:3001, 256MB), loki (:3100, 512MB),
 promtail (128MB), postgres-exporter (:9187, 64MB), redis-exporter (:9121, 64MB),
@@ -706,7 +725,8 @@ Jaeger only with --profile tracing.
 
 vision_media is shared between scraper, social, vision, vision-worker. Scraper writes,
 vision reads. Without this volume → FileNotFoundError on every vision job.
-analyst_models persists HuggingFace model downloads across restarts.
+analyst_models persists HuggingFace model downloads across restarts. Mounted by analyst-worker
+(scheduler does not need ML models).
 
 ## Observability Stack
 
