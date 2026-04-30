@@ -102,6 +102,15 @@ _BOILERPLATE_PHRASES = [
     "new threads new posts",
     "forums",
     "hot topics",
+    "you are logged in",
+    "logout",
+    "loading...",
+    "premium content",
+    "premium member",
+    "subscribers only",
+    "subscriber only",
+    "sign in to read",
+    "create an account to read",
 ]
 
 _RE_BOILERPLATE_LINE = re.compile(
@@ -304,6 +313,48 @@ def clean_extracted_text(raw: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Paywall / login-wall detection
+# ---------------------------------------------------------------------------
+
+_PAYWALL_INDICATORS = [
+    "you are logged in",
+    "you don't have any active subscription",
+    "no active subscription",
+    "active subscription",
+    "subscribed with another email",
+    "account subscription benefits",
+    "premium content",
+    "premium member",
+    "subscribers only",
+    "subscriber only",
+    "sign in to read",
+    "sign in to continue",
+    "create an account to read",
+    "subscribe to read",
+    "subscribe to continue",
+    "login to continue",
+    "logout and login",
+    "your active subscription",
+]
+
+_PAYWALL_THRESHOLD = 3  # need 3+ indicators to flag as paywall page
+
+
+def is_paywall_page(text: str) -> bool:
+    """Detect when extracted text is a login/subscription paywall page.
+
+    Returns True if the text contains 3+ distinct paywall indicator phrases.
+    Designed for whole-page detection — individual boilerplate lines are
+    handled separately by _RE_BOILERPLATE_LINE.
+    """
+    if not text:
+        return False
+    lower = text.lower()
+    hits = sum(1 for indicator in _PAYWALL_INDICATORS if indicator in lower)
+    return hits >= _PAYWALL_THRESHOLD
+
+
+# ---------------------------------------------------------------------------
 # Quality scoring + clean_hash
 # ---------------------------------------------------------------------------
 
@@ -326,8 +377,12 @@ def score_content_quality(raw_text: str, clean_text: str) -> str:
 
     A page where 85%+ of content is stripped as boilerplate is not useful.
     A page with <100 chars of clean text has no real article content.
+    A page that is a paywall/login wall is not useful.
     """
     if not clean_text or len(clean_text) < _MIN_CLEAN_CHARS:
+        return "low_quality"
+
+    if is_paywall_page(raw_text) or is_paywall_page(clean_text):
         return "low_quality"
 
     if not raw_text:

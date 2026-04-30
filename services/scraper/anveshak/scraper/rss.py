@@ -17,6 +17,7 @@ from typing import Optional
 import httpx
 import structlog
 
+from .clean import is_paywall_page
 from .fetch import fetch_url
 from .settings import settings
 
@@ -122,13 +123,17 @@ async def fetch_rss_items(feed_url: str) -> list[RssItem]:
         try:
             full_text = await fetch_url(item.url)
             if full_text and len(full_text.strip()) >= settings.rss_full_text_min_chars:
-                enriched.append(RssItem(
-                    url=item.url,
-                    title=item.title,
-                    raw_text=full_text.strip(),
-                    published_at=item.published_at,
-                ))
-                continue
+                stripped = full_text.strip()
+                if is_paywall_page(stripped):
+                    log.warning("rss.paywall_detected", url=item.url)
+                else:
+                    enriched.append(RssItem(
+                        url=item.url,
+                        title=item.title,
+                        raw_text=stripped,
+                        published_at=item.published_at,
+                    ))
+                    continue
         except Exception as exc:
             log.debug("rss.full_fetch_failed", url=item.url, error=str(exc))
 

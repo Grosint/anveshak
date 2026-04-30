@@ -16,6 +16,7 @@
 > See also: `learned/mock-sequential-db-calls.md` — use side_effect for functions making multiple sequential DB fetches; expand fake_row when SQL JOINs change
 > See also: `learned/scheduler-worker-split.md` — split monolithic service into lightweight scheduler (124 MiB) + ARQ ML worker (6 GiB); import safety rules
 > See also: `learned/orphan-sweep-safety-net.md` — periodic sweep for content_items missed by scraper enqueue; runs in scheduler every 5 min
+> See also: `learned/quality-gate-all-consumers.md` — relevance score must filter at display AND clustering; NULL-safe SQL pattern
 
 ---
 

@@ -3,7 +3,7 @@
 pytest.mark.unit — no external dependencies, no DB, no network.
 """
 import pytest
-from anveshak.scraper.clean import clean_extracted_text
+from anveshak.scraper.clean import clean_extracted_text, is_paywall_page, score_content_quality
 
 
 class TestMarkdownLinkRemoval:
@@ -277,3 +277,61 @@ class TestEdgeCases:
         assert "Log in Register" not in result
         assert "install the app" not in result
         assert "New threads" not in result
+
+
+class TestPaywallDetection:
+    """is_paywall_page should detect login/subscription wall pages."""
+
+    THEHINDU_PAYWALL = (
+        "You are logged in\n"
+        "Loading...\n"
+        "LOGOUT\n"
+        "You don't have any Active Subscription.\n"
+        "\n"
+        "Subscribed with another email? Logout and Login with that one.\n"
+        "Your active subscription(s) Account subscription benefits alongside Premium..."
+    )
+
+    def test_thehindu_paywall_detected(self):
+        assert is_paywall_page(self.THEHINDU_PAYWALL) is True
+
+    def test_real_article_not_flagged(self):
+        article = (
+            "China conducted military exercises near Taiwan on Wednesday, "
+            "involving naval and air assets in a display that analysts said "
+            "was intended to signal displeasure with recent diplomatic moves. "
+            "The PLA Eastern Theatre Command confirmed the drills."
+        )
+        assert is_paywall_page(article) is False
+
+    def test_empty_text(self):
+        assert is_paywall_page("") is False
+
+    def test_generic_paywall(self):
+        text = (
+            "Subscribe to read the full article.\n"
+            "Premium content is available to subscribers only.\n"
+            "Sign in to read this premium member exclusive."
+        )
+        assert is_paywall_page(text) is True
+
+    def test_article_mentioning_subscription_not_flagged(self):
+        """An article about subscriptions should not be flagged."""
+        text = (
+            "Netflix announced new subscription tiers today, with premium content "
+            "being made available to a wider audience. The company said subscribers "
+            "would benefit from lower prices across all regions."
+        )
+        assert is_paywall_page(text) is False
+
+    def test_score_content_quality_paywall(self):
+        """Paywall pages should be marked low_quality by score_content_quality."""
+        assert score_content_quality(self.THEHINDU_PAYWALL, self.THEHINDU_PAYWALL) == "low_quality"
+
+    def test_score_content_quality_real_article(self):
+        article = (
+            "The Indian Air Force conducted a major exercise in the western sector "
+            "involving Rafale and Sukhoi-30MKI fighter jets. The exercise tested "
+            "integrated air defence operations across multiple airbases."
+        )
+        assert score_content_quality(article, article) == "good"

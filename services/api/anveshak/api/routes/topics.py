@@ -112,8 +112,11 @@ async def get_topic_content(
 ):
     if sentiment and sentiment not in ("positive", "negative", "neutral"):
         raise HTTPException(status_code=422, detail="sentiment must be positive|negative|neutral")
+    topic = await topics_db.get_topic(db, topic_id)
+    relevance_threshold = topic.get("topic_relevance_threshold") if topic else None
     return await topics_db.get_topic_content(
         db, topic_id, limit, offset, has_embedding, platform, include_low_quality, sentiment,
+        relevance_threshold=relevance_threshold,
     )
 
 

@@ -135,6 +135,9 @@ async def update_topic_status(
     await conn.execute(SQL_UPDATE_TOPIC_STATUS, status, now, topic_id)
 
 
+_DEFAULT_RELEVANCE_THRESHOLD = 0.42
+
+
 async def get_topic_content(
     conn: asyncpg.Connection,
     topic_id: str,
@@ -144,6 +147,7 @@ async def get_topic_content(
     platform: Optional[str],
     include_low_quality: bool = False,
     sentiment: Optional[str] = None,
+    relevance_threshold: Optional[float] = None,
 ) -> list[dict[str, Any]]:
     if has_embedding is True:
         emb_clause = "AND ci.embedding IS NOT NULL"
@@ -153,7 +157,22 @@ async def get_topic_content(
         emb_clause = ""
 
     quality_clause = "" if include_low_quality else "AND COALESCE(ci.content_quality, 'good') != 'low_quality'"
-    platform_clause = "AND s.platform = $4" if platform else ""
+
+    # Build positional params: $1=topic_id, $2=limit, $3=offset, then dynamic
+    params: list[Any] = [topic_id, limit, offset]
+    next_param = 4
+
+    if platform:
+        platform_clause = f"AND s.platform = ${next_param}"
+        params.append(platform)
+        next_param += 1
+    else:
+        platform_clause = ""
+
+    threshold = relevance_threshold if relevance_threshold is not None else _DEFAULT_RELEVANCE_THRESHOLD
+    relevance_clause = f"AND (ci.topic_relevance_score IS NULL OR ci.topic_relevance_score >= ${next_param})"
+    params.append(threshold)
+    next_param += 1
 
     if sentiment == "positive":
         sentiment_clause = "AND (ci.labels->'sentiment'->>'compound')::float >= 0.05"
@@ -166,10 +185,6 @@ async def get_topic_content(
         )
     else:
         sentiment_clause = ""
-
-    params: list[Any] = [topic_id, limit, offset]
-    if platform:
-        params.append(platform)
 
     # Use a CTE to dedup on clean_hash — show newest item per unique clean_hash,
     # with a count of how many duplicates were collapsed.
@@ -194,6 +209,7 @@ async def get_topic_content(
               {quality_clause}
               {emb_clause}
               {platform_clause}
+              {relevance_clause}
               {sentiment_clause}
 
             UNION ALL
@@ -218,6 +234,7 @@ async def get_topic_content(
               {quality_clause}
               {emb_clause}
               {platform_clause}
+              {relevance_clause}
               {sentiment_clause}
         ),
         deduped AS (
