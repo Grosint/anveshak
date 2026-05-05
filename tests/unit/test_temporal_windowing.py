@@ -102,6 +102,6 @@ def test_breaching_clusters_sql_excludes_archived():
 @pytest.mark.unit
 def test_archive_sql_uses_make_interval():
     """Archival SQL should use MAKE_INTERVAL for day-based comparison."""
-    from anveshak.analyst.main import SQL_ARCHIVE_OLD_CLUSTERS
+    from anveshak.analyst.scheduler import SQL_ARCHIVE_OLD_CLUSTERS
     assert "MAKE_INTERVAL" in SQL_ARCHIVE_OLD_CLUSTERS
     assert "archived_at IS NULL" in SQL_ARCHIVE_OLD_CLUSTERS
