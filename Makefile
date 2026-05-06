@@ -425,7 +425,7 @@ health:
 	$(call header,Service Health Check)
 	@printf "  %-20s %s\n" "SERVICE" "STATUS"
 	@printf "  %-20s %s\n" "───────────────────" "──────────────────────────"
-	@for svc in api:8000 scraper:8001 social:8002 vision:8003 analyst:8004 reporter:8005; do \
+	@for svc in api:8000 scraper:8001 social:8002 vision:8003 analyst:8007 reporter:8005; do \
 		name=$$(echo $$svc | cut -d: -f1); \
 		port=$$(echo $$svc | cut -d: -f2); \
 		if curl -sf http://localhost:$$port/health > /dev/null 2>&1; then \

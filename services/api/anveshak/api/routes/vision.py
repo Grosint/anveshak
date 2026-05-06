@@ -127,13 +127,14 @@ async def analyse_image(
 async def get_vision_job(
     job_id: str,
     request: Request,
+    db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
     """Poll vision job status. Returns results when complete.
 
     Criteria 4.29: returns job status + results when complete.
-    Vision jobs are ARQ (Redis-backed); query via arq Job.result().
-    Client should poll every 2–5s until status != 'queued'/'in_progress'.
+    Checks ARQ Redis first for in-flight jobs, then falls back to
+    analysis_jobs DB table (authoritative for completed jobs).
     """
     from arq.jobs import Job, JobStatus
 
@@ -141,28 +142,42 @@ async def get_vision_job(
     job = Job(job_id, arq_pool, _queue_name="arq:vision")
 
     status = await job.status()
-    if status == JobStatus.not_found:
+
+    # ARQ Redis found the job — return from Redis
+    if status != JobStatus.not_found:
+        result = None
+        error = None
+        if status == JobStatus.complete:
+            try:
+                info = await job.result_info()
+                if info:
+                    if info.success:
+                        result = info.result
+                    else:
+                        error = str(info.result)
+            except Exception:
+                pass
+        return {
+            "job_id": job_id,
+            "status": status.value,
+            "result": result,
+            "error": error,
+        }
+
+    # Fallback: analysis_jobs DB is authoritative for completed jobs
+    # (ARQ keys expire from Redis but DB rows persist)
+    row = await db.fetchrow(
+        "SELECT status, result, error FROM analysis_jobs WHERE id = $1",
+        job_id,
+    )
+    if row is None:
         raise HTTPException(status_code=404, detail="Job not found")
-
-    result = None
-    error = None
-
-    if status == JobStatus.complete:
-        try:
-            info = await job.result_info()
-            if info:
-                if info.success:
-                    result = info.result
-                else:
-                    error = str(info.result)
-        except Exception:
-            pass
 
     return {
         "job_id": job_id,
-        "status": status.value,
-        "result": result,
-        "error": error,
+        "status": row["status"],
+        "result": row["result"],
+        "error": row["error"],
     }
 
 

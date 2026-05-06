@@ -6,9 +6,8 @@ Criteria 1.24: similarity_score float in search results
 """
 from __future__ import annotations
 
-from typing import Optional
-
 import asyncpg
+import httpx
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -20,26 +19,20 @@ from ..settings import settings
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["content"])
 
+
 # ---------------------------------------------------------------------------
-# Lazy-loaded encoder — sentence-transformers loaded on first /search call
+# Embedding via analyst service — avoids PyTorch dependency in API image
 # ---------------------------------------------------------------------------
 
-_encoder = None
-
-
-def _get_encoder():
-    global _encoder
-    if _encoder is None:
-        from sentence_transformers import SentenceTransformer
-        _encoder = SentenceTransformer(settings.embedding_model)
-        log.info("search.encoder_loaded", model=settings.embedding_model)
-    return _encoder
-
-
-def _embed_query(query: str) -> str:
-    """Encode a search query to pgvector literal string."""
-    encoder = _get_encoder()
-    vec = encoder.encode(query, normalize_embeddings=True).tolist()
+async def _embed_query(query: str) -> str:
+    """Encode a search query to pgvector literal string via analyst service."""
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            f"{settings.analyst_service_url}/internal/embed",
+            json={"texts": [query]},
+        )
+        resp.raise_for_status()
+        vec = resp.json()["embeddings"][0]
     return "[" + ",".join(f"{x:.8f}" for x in vec) + "]"
 
 
@@ -70,7 +63,7 @@ async def search_content(
 ):
     """pgvector cosine similarity search within a topic (criteria 1.23, 1.24)."""
     try:
-        query_vec_str = _embed_query(q)
+        query_vec_str = await _embed_query(q)
     except Exception as exc:
         log.error("search.embed_failed", query=q, error=str(exc))
         raise HTTPException(status_code=503, detail="Embedding service unavailable")

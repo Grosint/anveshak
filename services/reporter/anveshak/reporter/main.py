@@ -18,7 +18,6 @@ from .metrics import REGISTRY as REPORTER_REGISTRY
 
 from . import db as db_module
 from .pdf import generate_pdf
-from .rag import get_embedding_model
 from .settings import settings
 
 log = structlog.get_logger(__name__)
@@ -37,13 +36,6 @@ async def lifespan(app: FastAPI):
     app.state.arq_pool = await arq_create_pool(
         RedisSettings.from_dsn(settings.redis_url)
     )
-
-    # Pre-warm embedding model to avoid cold-start during first report request
-    try:
-        get_embedding_model(settings.embedding_model)
-        log.info("reporter.embedding_model_warmed", model=settings.embedding_model)
-    except Exception as exc:
-        log.warning("reporter.embedding_warmup_failed", error=str(exc))
 
     log.info("reporter.ready")
     yield

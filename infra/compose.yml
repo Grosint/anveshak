@@ -110,6 +110,7 @@ services:
   # ---------------------------------------------------------------------------
 
   api:
+    image: anveshak-api:latest
     build:
       context: ..
       dockerfile: services/api/Dockerfile
@@ -140,6 +141,7 @@ services:
       - anveshak-net
 
   scraper:
+    image: anveshak-scraper:latest
     build:
       context: ..
       dockerfile: services/scraper/Dockerfile
@@ -172,9 +174,7 @@ services:
 
   # ARQ worker for scrape_topic, poll_rss_sources, check_all_source_health jobs
   scraper-worker:
-    build:
-      context: ..
-      dockerfile: services/scraper/Dockerfile
+    image: anveshak-scraper:latest
     restart: unless-stopped
     mem_limit: 1g
     environment:
@@ -202,6 +202,7 @@ services:
     command: ["python", "-m", "arq", "anveshak.scraper.jobs.WorkerSettings"]
 
   social:
+    image: anveshak-social:latest
     build:
       context: ..
       dockerfile: services/social/Dockerfile
@@ -237,8 +238,24 @@ services:
   # Analyst is split into scheduler (lightweight loops) + worker (ARQ ML pipeline).
   # Scheduler: clustering, signals, convergence, orphan sweep — 512 MB, no ML models.
   # Worker: NLP, embedding, label gen, credibility — 6 GB, horizontally scalable.
+  # Init: downloads ML models to shared volume on first run (NLLB, sentence-transformers).
+
+  analyst-init:
+    image: anveshak-analyst:latest
+    command: ["python", "-m", "anveshak.analyst.download_models"]
+    environment:
+      <<: *common-env
+      TRANSLATION_ENABLED: ${TRANSLATION_ENABLED:-true}
+      TRANSLATION_MODEL: ${TRANSLATION_MODEL:-facebook/nllb-200-distilled-600M}
+      HF_HOME: /app/models
+    volumes:
+      - analyst_models:/app/models
+    restart: "no"
+    networks:
+      - anveshak-net
 
   analyst-scheduler:
+    image: anveshak-analyst:latest
     build:
       context: ..
       dockerfile: services/analyst/Dockerfile
@@ -248,6 +265,7 @@ services:
     environment:
       <<: *common-env
       ANALYST_PORT: 8007
+      METRICS_PORT: 8007
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2:7b}
       HDBSCAN_MIN_CLUSTER_SIZE: ${HDBSCAN_MIN_CLUSTER_SIZE:-3}
       HDBSCAN_MIN_SAMPLES: ${HDBSCAN_MIN_SAMPLES:-2}
@@ -263,15 +281,13 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:8007/health || exit 1"]
       <<: *healthcheck-defaults
     networks:
       - anveshak-net
 
   analyst-worker:
-    build:
-      context: ..
-      dockerfile: services/analyst/Dockerfile
+    image: anveshak-analyst:latest
     restart: unless-stopped
     mem_limit: 6g
     command: ["python", "-m", "arq", "anveshak.analyst.jobs.WorkerSettings"]
@@ -298,6 +314,8 @@ services:
     deploy:
       replicas: ${ANALYST_WORKER_REPLICAS:-1}
     depends_on:
+      analyst-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -312,6 +330,7 @@ services:
       - anveshak-net
 
   reporter:
+    image: anveshak-reporter:latest
     build:
       context: ..
       dockerfile: services/reporter/Dockerfile
@@ -322,6 +341,7 @@ services:
       REPORTER_PORT: 8005
       REPORT_OUTPUT_DIR: /app/reports
       REPORT_TEMPLATE_DIR: /app/templates
+      ANALYST_SERVICE_URL: http://analyst-scheduler:8007
     volumes:
       - reporter_output:/app/reports
     ports:
@@ -342,9 +362,7 @@ services:
   # ARQ worker for generate_report jobs — separate process from FastAPI
   # Handles RAG retrieval, Ollama LLM calls, geocoding, and DB writes
   reporter-worker:
-    build:
-      context: ..
-      dockerfile: services/reporter/Dockerfile
+    image: anveshak-reporter:latest
     restart: unless-stopped
     mem_limit: 1g
     environment:
@@ -352,9 +370,7 @@ services:
       REPORT_OUTPUT_DIR: /app/reports
       REPORT_TEMPLATE_DIR: /app/templates
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2:7b}
-      HOME: /tmp
-      HF_HOME: /tmp/hf_cache
-      TRANSFORMERS_CACHE: /tmp/hf_cache
+      ANALYST_SERVICE_URL: http://analyst-scheduler:8007
       OLLAMA_REPORT_TIMEOUT_S: ${OLLAMA_REPORT_TIMEOUT_S:-540}
       METRICS_PORT: 8006
     volumes:
@@ -383,6 +399,7 @@ services:
   # ---------------------------------------------------------------------------
 
   vision:
+    image: anveshak-vision:latest
     build:
       context: ..
       dockerfile: services/vision/Dockerfile
@@ -413,9 +430,7 @@ services:
   # ARQ worker for vision analysis jobs (run_vision_analysis)
   # Separate process from FastAPI so uploads don't block ML inference
   vision-worker:
-    build:
-      context: ..
-      dockerfile: services/vision/Dockerfile
+    image: anveshak-vision:latest
     restart: unless-stopped
     mem_limit: 6g
     environment:

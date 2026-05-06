@@ -1,17 +1,42 @@
 # Anveshak Scraper service
 # Headless browser web collection — port 8001
 # Build context: project root (../../ from compose.yml)
+#
+# Multi-stage build: builder (compile C extensions) → runtime (Chromium + Playwright).
 
-FROM python:3.12-slim AS base
+# ===== Stage 1: builder — compile C extensions, install wheels =====
+FROM python:3.12-slim AS builder
 
-# --------------------------------------------------------------------------
-# System deps — Playwright requires a full browser dependency chain
-# --------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
     libpq-dev \
     gcc \
-    # Playwright / Chromium system libraries
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_NO_CACHE=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+COPY pyproject.toml /workspace/pyproject.toml
+COPY sdk/ /workspace/sdk/
+RUN uv pip install --system /workspace/sdk/
+
+WORKDIR /workspace/services/scraper
+COPY services/scraper/pyproject.toml .
+COPY services/scraper/anveshak/ anveshak/
+RUN uv pip install --system .
+
+# Install Chromium browser (pinned via Playwright version)
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN python -m playwright install chromium --with-deps
+
+# ===== Stage 2: runtime — Playwright + Chromium, no build tools =====
+FROM python:3.12-slim AS runtime
+
+# Runtime system deps — Playwright / Chromium dependency chain
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    libpq5 \
     libnss3 \
     libnspr4 \
     libatk1.0-0 \
@@ -30,39 +55,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpangocairo-1.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# --------------------------------------------------------------------------
-# uv
-# --------------------------------------------------------------------------
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-ENV UV_SYSTEM_PYTHON=1 \
-    UV_NO_CACHE=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
+# Copy installed Python packages + SDK source from builder
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder /workspace/sdk /workspace/sdk
+
+# Copy Chromium installation from builder
+COPY --from=builder /ms-playwright /ms-playwright
+
+# Copy service source
+COPY --from=builder /workspace/services/scraper /workspace/services/scraper
+WORKDIR /workspace/services/scraper
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-# --------------------------------------------------------------------------
-# Workspace setup — install SDK first, then service
-# --------------------------------------------------------------------------
-COPY pyproject.toml /workspace/pyproject.toml
-COPY sdk/ /workspace/sdk/
-RUN uv pip install --system /workspace/sdk/
-
-# --------------------------------------------------------------------------
-# Service source + dependencies
-# --------------------------------------------------------------------------
-WORKDIR /workspace/services/scraper
-COPY services/scraper/pyproject.toml .
-COPY services/scraper/anveshak/ anveshak/
-RUN uv pip install --system .
-
-# --------------------------------------------------------------------------
-# Install Chromium browser (pinned via Playwright version)
-# --------------------------------------------------------------------------
-RUN python -m playwright install chromium --with-deps
-
-# --------------------------------------------------------------------------
 # Non-root user
-# --------------------------------------------------------------------------
 RUN addgroup --system anveshak && adduser --system --ingroup anveshak anveshak \
     && chown -R anveshak:anveshak /ms-playwright 2>/dev/null || true
 USER anveshak

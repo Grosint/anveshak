@@ -99,7 +99,7 @@ async def generate_report(ctx: dict, report_id: str) -> None:
     report_type: str = report.get("report_type", "intelligence_brief")
 
     # --- 2. Generate query embedding ---
-    query_embedding = generate_query_embedding(topic_name, keywords, s.embedding_model)
+    query_embedding = await generate_query_embedding(topic_name, keywords)
 
     # --- 3. Fetch RAG chunks ---
     chunks = await db.fetch_rag_chunks(
