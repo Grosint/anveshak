@@ -48,6 +48,36 @@ ANALYST_WORKER_REPLICAS=1  →  ANALYST_WORKER_REPLICAS=4
 
 ---
 
+## Clustering — `analyst-scheduler` service (2026-05-06)
+
+**Current implementation:**
+- Mode: Incremental assignment + HDBSCAN fallback
+- Distance: 70% cosine + 30% entity MinHash (precomputed, `metric="precomputed"`)
+- Adaptive min_cluster_size: `max(2, min(default, N//5))`
+- Entity fingerprint: datasketch MinHash (128 permutations, BIGINT[] in PostgreSQL)
+- Cost per cycle: O(new_items × existing_clusters) — not O(N²)
+- Full HDBSCAN only runs on truly unassigned items or fresh topics
+
+**Scaling bottleneck:** At 1000+ topics × 500+ items, even incremental clustering adds up. The scheduler runs clustering sequentially per topic.
+
+**Upgrade path:**
+- Parallelize clustering across topics (asyncio.gather or thread pool)
+- GPU-accelerated HDBSCAN via cuML (RAPIDS) for full re-cluster cycles
+- Hardware needed: NVIDIA GPU with RAPIDS support (RTX 3080+ for cuML)
+
+**Config change:**
+```
+HDBSCAN_MIN_CLUSTER_SIZE=3           # production default
+HDBSCAN_MIN_SAMPLES=2                # density core point definition
+CLUSTER_ASSIGN_THRESHOLD=0.75        # cosine sim for incremental assignment
+ENTITY_BLEND_WEIGHT=0.3              # 0=embedding only, 1=entity only
+TOPIC_RELEVANCE_THRESHOLD=0.35       # pre-clustering filter
+```
+
+**Code change:** Zero for config tuning. GPU acceleration requires cuML dependency swap.
+
+---
+
 ## NLP Models — `analyst-worker` service
 
 **Current implementation:**

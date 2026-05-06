@@ -17,6 +17,11 @@
 > See also: `learned/scheduler-worker-split.md` — split monolithic service into lightweight scheduler (124 MiB) + ARQ ML worker (6 GiB); import safety rules
 > See also: `learned/orphan-sweep-safety-net.md` — periodic sweep for content_items missed by scraper enqueue; runs in scheduler every 5 min
 > See also: `learned/quality-gate-all-consumers.md` — relevance score must filter at display AND clustering; NULL-safe SQL pattern
+> See also: `learned/incremental-clustering-centroid-assign.md` — O(new×clusters) instead of O(N²); preserves cluster_id stability
+> See also: `learned/entity-minhash-clustering-boost.md` — blend entity Jaccard into HDBSCAN distance; BIGINT[] not INTEGER[]; NULL-safe mask
+> See also: `learned/hdbscan-cosine-precomputed.md` — HDBSCAN 0.8.x needs precomputed float64 matrix; metric="cosine" not supported
+> See also: `learned/benchmark-arq-dedup-flush.md` — flush arq:job:* Redis keys before benchmark re-runs; production uses unique UUIDs
+> See also: `learned/quality-gate-unicode-ranges.md` — word regex must cover Devanagari \u0900-\u097f; silent failure drops Hindi content
 
 ---
 
