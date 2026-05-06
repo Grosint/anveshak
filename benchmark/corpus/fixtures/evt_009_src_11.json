@@ -1,0 +1,7 @@
+{
+  "raw_text": "Analysis: The AIIMS Delhi ransomware incident exposes critical gaps in India's healthcare cybersecurity posture. Our investigation reveals that AIIMS was running Windows Server 2008 on several key systems — an OS that reached end-of-life in January 2020. The hospital's IT infrastructure lacked proper network segmentation, allowing the ransomware to propagate from administrative systems to clinical databases. Healthcare institutions in India spend less than 2% of their IT budget on cybersecurity, compared to 6-8% globally. This attack should serve as a wake-up call for the entire Indian public health system.",
+  "clean_text": "AIIMS Delhi ransomware incident exposes critical gaps in India's healthcare cybersecurity posture. AIIMS was running Windows Server 2008 on key systems an OS that reached end-of-life January 2020. Hospital IT infrastructure lacked proper network segmentation allowing ransomware to propagate from administrative to clinical databases. Healthcare institutions in India spend less than 2% of IT budget on cybersecurity compared to 6-8% globally.",
+  "language": "en",
+  "url": "https://www.healthcareit-security.com/analysis/aiims-delhi-ransomware-india-healthcare-cybersecurity-gaps",
+  "captured_at": "2022-11-23T08:00:00Z"
+}

@@ -1,0 +1,55 @@
+id: "evt-040"
+name: "Iran Cyber Influence Operation — Chabahar Port Narratives"
+category: "information_operations"
+languages: ["en"]
+earliest_osint_signal: "2024-05-20T06:00:00Z"
+mainstream_media_date: "2024-05-24T10:00:00Z"
+description: >
+  Iranian-linked accounts conducted an influence operation to shape narratives
+  around the Chabahar port agreement, framing India as undermining US sanctions
+  and positioning Iran as a reliable strategic partner. The campaign targeted
+  Western think-tank audiences and Indian strategic affairs commentators.
+keywords: ["Iran", "Chabahar", "sanctions", "influence operation", "India-Iran relations", "port"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_040_src_01.json"
+    platform: "telegram"
+    source_name: "Iran Strategic Desk"
+    credibility: 20.0
+    published_at: "2024-05-20T06:00:00Z"
+  - fixture: "evt_040_src_02.json"
+    platform: "x"
+    source_name: "@PressTV"
+    credibility: 25.0
+    published_at: "2024-05-20T09:00:00Z"
+  - fixture: "evt_040_src_03.json"
+    platform: "web"
+    source_name: "Press TV"
+    credibility: 22.0
+    published_at: "2024-05-20T12:00:00Z"
+  - fixture: "evt_040_src_04.json"
+    platform: "reddit"
+    source_name: "r/MiddleEasternPolitics"
+    credibility: 30.0
+    published_at: "2024-05-21T04:00:00Z"
+  - fixture: "evt_040_src_05.json"
+    platform: "web"
+    source_name: "Tehran Times"
+    credibility: 20.0
+    published_at: "2024-05-21T10:00:00Z"
+  - fixture: "evt_040_src_06.json"
+    platform: "bluesky"
+    source_name: "@middleeastwatch.bsky.social"
+    credibility: 18.0
+    published_at: "2024-05-22T03:00:00Z"
+  - fixture: "evt_040_src_07.json"
+    platform: "rss"
+    source_name: "Carnegie Endowment RSS"
+    credibility: 85.0
+    published_at: "2024-05-23T14:00:00Z"
+  - fixture: "evt_040_src_08.json"
+    platform: "web"
+    source_name: "Mint"
+    credibility: 70.0
+    published_at: "2024-05-24T10:00:00Z"

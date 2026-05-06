@@ -1,0 +1,55 @@
+id: "evt-037"
+name: "Khalistan Referendum Social Media Amplification — SFJ Campaign"
+category: "information_operations"
+languages: ["en", "hi"]
+earliest_osint_signal: "2024-07-10T05:00:00Z"
+mainstream_media_date: "2024-07-14T08:00:00Z"
+description: >
+  Sikhs for Justice (SFJ) orchestrated a multi-platform social media amplification
+  campaign ahead of planned Khalistan referendums in diaspora cities. The operation
+  used bot networks to inflate engagement, coordinated hashtag campaigns, and
+  targeted Indian diaspora communities in Canada, UK, and Australia.
+keywords: ["Khalistan", "SFJ", "referendum", "Sikh diaspora", "bot network", "Canada"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_037_src_01.json"
+    platform: "telegram"
+    source_name: "Khalistan Zindabad Official"
+    credibility: 10.0
+    published_at: "2024-07-10T05:00:00Z"
+  - fixture: "evt_037_src_02.json"
+    platform: "x"
+    source_name: "@SFJ_Official"
+    credibility: 15.0
+    published_at: "2024-07-10T08:00:00Z"
+  - fixture: "evt_037_src_03.json"
+    platform: "reddit"
+    source_name: "r/Sikh"
+    credibility: 35.0
+    published_at: "2024-07-11T03:00:00Z"
+  - fixture: "evt_037_src_04.json"
+    platform: "web"
+    source_name: "The Quint"
+    credibility: 65.0
+    published_at: "2024-07-11T10:00:00Z"
+  - fixture: "evt_037_src_05.json"
+    platform: "telegram"
+    source_name: "Diaspora United Channel"
+    credibility: 12.0
+    published_at: "2024-07-12T01:00:00Z"
+  - fixture: "evt_037_src_06.json"
+    platform: "bluesky"
+    source_name: "@freedomkhalsa.bsky.social"
+    credibility: 10.0
+    published_at: "2024-07-12T09:30:00Z"
+  - fixture: "evt_037_src_07.json"
+    platform: "rss"
+    source_name: "BBC South Asia RSS"
+    credibility: 80.0
+    published_at: "2024-07-13T14:00:00Z"
+  - fixture: "evt_037_src_08.json"
+    platform: "web"
+    source_name: "Times of India"
+    credibility: 68.0
+    published_at: "2024-07-14T08:00:00Z"

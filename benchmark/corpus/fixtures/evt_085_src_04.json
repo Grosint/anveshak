@@ -1,0 +1,7 @@
+{
+  "raw_text": "Dragos has identified a new ICS-specific malware framework targeting Siemens S7 programmable logic controllers in the Indian chemical sector. Designated CHEMLOCK by our analysis team, the malware demonstrates capabilities for process variable manipulation, safety instrumented system bypass, and historian data falsification. The attack methodology shows significant evolution from earlier PLC-targeting frameworks. Our full technical report with IOCs is available to OT Defender community members.",
+  "clean_text": "Dragos identifies new ICS malware CHEMLOCK targeting Siemens S7 PLCs in Indian chemical sector. Capabilities include process manipulation, SIS bypass, and historian data falsification.",
+  "language": "en",
+  "url": "https://www.dragos.com/blog/industry-news/chemlock-plc-malware-india-chemical",
+  "captured_at": "2024-08-20T06:00:00Z"
+}

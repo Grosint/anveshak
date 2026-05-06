@@ -1,0 +1,7 @@
+{
+  "raw_text": "Recorded Future threat intelligence has identified the ransomware strain used in the Indian oil pipeline attack as a modified variant of BlackCat/ALPHV. Our analysis links the initial access broker activity to a known threat actor tracked as UNC3944. The command and control infrastructure overlaps with previously documented campaigns targeting energy sector OT networks. Full IOC package available to subscribers.",
+  "clean_text": "Recorded Future identifies ransomware as BlackCat/ALPHV variant. Initial access linked to UNC3944 threat actor. C2 infrastructure overlaps with previous energy sector OT campaigns.",
+  "language": "en",
+  "url": "https://www.recordedfuture.com/research/indian-pipeline-ransomware-analysis-2024",
+  "captured_at": "2024-06-12T09:00:00Z"
+}

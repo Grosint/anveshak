@@ -1,0 +1,7 @@
+{
+  "raw_text": "Major BSNL data breach reported. Threat actor \"kiberphant0m\" on dark web forum claims 278 GB of exfiltrated data including IMSI numbers, SIM card details, and HLR data for millions of subscribers. If verified, this compromises the core subscriber identity infrastructure. DoT will need to issue emergency directives. #BSNL #DataBreach #Telecom",
+  "clean_text": "BSNL data breach by kiberphant0m claims 278 GB including IMSI, SIM, and HLR data for millions. Compromises core subscriber identity infrastructure. DoT directives expected.",
+  "language": "en",
+  "url": "https://x.com/ThreatIntelIN/status/1803456789012345678",
+  "captured_at": "2024-06-20T03:30:00Z"
+}

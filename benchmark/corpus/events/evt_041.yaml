@@ -1,0 +1,56 @@
+id: "evt-041"
+name: "North Korea Lazarus Group India Crypto Theft — Attribution"
+category: "information_operations"
+languages: ["en"]
+earliest_osint_signal: "2024-04-22T01:00:00Z"
+mainstream_media_date: "2024-04-26T08:00:00Z"
+description: >
+  North Korean Lazarus Group conducted a major cryptocurrency theft targeting
+  Indian exchange WazirX, stealing approximately $230M in digital assets. The
+  attribution combined on-chain forensics with social engineering indicators.
+  DPRK-affiliated accounts simultaneously ran counter-narratives attributing
+  the theft to insider fraud to obfuscate state-sponsored attribution.
+keywords: ["Lazarus Group", "North Korea", "WazirX", "crypto theft", "DPRK", "attribution", "on-chain forensics"]
+should_fire_signal: true
+expected_isc: 4
+sources:
+  - fixture: "evt_041_src_01.json"
+    platform: "telegram"
+    source_name: "Crypto Threat Intel"
+    credibility: 35.0
+    published_at: "2024-04-22T01:00:00Z"
+  - fixture: "evt_041_src_02.json"
+    platform: "x"
+    source_name: "@ZachXBT"
+    credibility: 60.0
+    published_at: "2024-04-22T03:30:00Z"
+  - fixture: "evt_041_src_03.json"
+    platform: "reddit"
+    source_name: "r/CryptoCurrency"
+    credibility: 40.0
+    published_at: "2024-04-22T06:00:00Z"
+  - fixture: "evt_041_src_04.json"
+    platform: "web"
+    source_name: "Elliptic Blog"
+    credibility: 80.0
+    published_at: "2024-04-23T10:00:00Z"
+  - fixture: "evt_041_src_05.json"
+    platform: "web"
+    source_name: "Chainalysis Research"
+    credibility: 82.0
+    published_at: "2024-04-23T14:00:00Z"
+  - fixture: "evt_041_src_06.json"
+    platform: "bluesky"
+    source_name: "@cryptosec.bsky.social"
+    credibility: 30.0
+    published_at: "2024-04-24T02:00:00Z"
+  - fixture: "evt_041_src_07.json"
+    platform: "rss"
+    source_name: "Mandiant Threat Intel RSS"
+    credibility: 90.0
+    published_at: "2024-04-25T12:00:00Z"
+  - fixture: "evt_041_src_08.json"
+    platform: "web"
+    source_name: "Economic Times"
+    credibility: 68.0
+    published_at: "2024-04-26T08:00:00Z"

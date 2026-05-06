@@ -1,0 +1,7 @@
+{
+  "raw_text": "The Pune Smart City IoT attack is a case study in what happens when basic security hygiene is ignored. An unauthenticated MQTT broker gave attackers control over 2,000+ streetlights and 150 traffic controllers. This caused real-world harm with rush hour accidents. Every Indian smart city project needs to audit their IoT security immediately. PMC has rightly disconnected everything.",
+  "clean_text": "Pune IoT attack highlights failure of basic security hygiene. Unauthenticated MQTT broker enabled citywide infrastructure control. Real-world harm from rush hour accidents.",
+  "language": "en",
+  "url": "https://bsky.app/profile/iotsec.bsky.social/post/3kx9n7p2q4r6s",
+  "captured_at": "2024-07-09T08:00:00Z"
+}

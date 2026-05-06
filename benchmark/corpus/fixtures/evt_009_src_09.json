@@ -1,0 +1,7 @@
+{
+  "raw_text": "AIIMS Delhi ransomware attack: Five servers compromised, data of 3-4 crore patients at risk. The Economic Times has learned that the attack encrypted five main servers hosting approximately 1.3 terabytes of data. The hospital's e-Hospital application, which manages OPD registrations, admissions, and lab reports, remains non-functional for the second consecutive day. Officials confirmed that the attackers demanded cryptocurrency as ransom. NIC and CERT-In teams are working to restore systems from backup data, but the process is expected to take several more days.",
+  "clean_text": "AIIMS Delhi ransomware attack compromised five servers with data of 3-4 crore patients at risk. Attack encrypted five main servers hosting approximately 1.3 terabytes of data. e-Hospital application managing OPD registrations admissions and lab reports remains non-functional for second consecutive day. Attackers demanded cryptocurrency as ransom. NIC and CERT-In teams working to restore systems from backup data.",
+  "language": "en",
+  "url": "https://economictimes.indiatimes.com/tech/technology/aiims-delhi-ransomware-attack-five-servers-compromised/articleshow/95698742.cms",
+  "captured_at": "2022-11-23T06:00:00Z"
+}

@@ -1,0 +1,56 @@
+id: "evt-098"
+name: "Indian Embassy Cyber Attack — APT28 Attribution"
+category: "critical_infrastructure"
+languages: ["en", "ru"]
+earliest_osint_signal: "2024-10-05T14:00:00Z"
+mainstream_media_date: "2024-10-06T08:00:00Z"
+description: >
+  Multiple Indian diplomatic missions in Europe experienced coordinated
+  spear-phishing attacks attributed to APT28 (Fancy Bear). The campaign
+  used weaponised PDF documents mimicking MEA circulars. CERT-In issued
+  an advisory after forensic analysis confirmed GRU-linked infrastructure.
+  Exfiltrated data included diplomatic cables and visa processing records.
+keywords: ["APT28", "Fancy Bear", "embassy", "spear-phishing", "GRU", "CERT-In", "diplomatic", "MEA", "cyber espionage"]
+should_fire_signal: true
+expected_isc: 4
+sources:
+  - fixture: "evt_098_src_01.json"
+    platform: "x"
+    source_name: "vaborshov_threatintel"
+    credibility: 60.0
+    published_at: "2024-10-05T14:00:00Z"
+  - fixture: "evt_098_src_02.json"
+    platform: "web"
+    source_name: "Mandiant Threat Report"
+    credibility: 90.0
+    published_at: "2024-10-05T18:00:00Z"
+  - fixture: "evt_098_src_03.json"
+    platform: "telegram"
+    source_name: "CyberWarfare Monitor"
+    credibility: 40.0
+    published_at: "2024-10-05T15:00:00Z"
+  - fixture: "evt_098_src_04.json"
+    platform: "reddit"
+    source_name: "r/cybersecurity"
+    credibility: 45.0
+    published_at: "2024-10-05T16:00:00Z"
+  - fixture: "evt_098_src_05.json"
+    platform: "web"
+    source_name: "CERT-In Advisory Portal"
+    credibility: 95.0
+    published_at: "2024-10-06T06:00:00Z"
+  - fixture: "evt_098_src_06.json"
+    platform: "rss"
+    source_name: "The Record by Recorded Future"
+    credibility: 82.0
+    published_at: "2024-10-06T08:00:00Z"
+  - fixture: "evt_098_src_07.json"
+    platform: "x"
+    source_name: "ShadowServerFnd"
+    credibility: 75.0
+    published_at: "2024-10-05T20:00:00Z"
+  - fixture: "evt_098_src_08.json"
+    platform: "web"
+    source_name: "Kaspersky GReAT Blog"
+    credibility: 78.0
+    published_at: "2024-10-05T22:00:00Z"

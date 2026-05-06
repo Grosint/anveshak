@@ -1,0 +1,7 @@
+{
+  "raw_text": "Satellite imagery analysis thread: The 'Chinese base in Ladakh' image is definitively fake. I ran it through multiple GAN detection models and all flagged it. Key findings: (1) repeating texture tiles in the terrain, (2) shadow angles at ~35 degrees when sun position at the claimed time would produce ~52 degree shadows, (3) no temporal consistency with any prior or subsequent imagery of the area.",
+  "clean_text": "GAN detection analysis of Chinese base imagery confirms fabrication. Repeating texture tiles, incorrect shadow angles for claimed acquisition time, and no temporal consistency with existing imagery.",
+  "language": "en",
+  "url": "https://bsky.app/profile/satintanalysis.bsky.social/post/3kvq9y0a5fv5n",
+  "captured_at": "2024-08-20T08:00:00Z"
+}

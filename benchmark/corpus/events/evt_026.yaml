@@ -1,0 +1,55 @@
+id: "evt-026"
+name: "Russian Disinfo Campaign on India — RT Narratives"
+category: "information_operations"
+languages: ["en", "ru"]
+earliest_osint_signal: "2024-02-05T10:00:00Z"
+mainstream_media_date: "2024-02-08T07:00:00Z"
+description: >
+  Coordinated Russian state media campaign via RT and Sputnik pushing narratives
+  designed to strain India-US defense ties. Articles amplified through bot networks
+  framed US military partnerships as neo-colonial and promoted Russian arms as
+  superior alternatives. The campaign targeted Indian defense forums and social media.
+keywords: ["RT", "Sputnik", "disinformation", "India-US", "defense ties", "bot network", "state media", "influence"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_026_src_01.json"
+    platform: "web"
+    source_name: "RT English"
+    credibility: 25.0
+    published_at: "2024-02-05T10:00:00Z"
+  - fixture: "evt_026_src_02.json"
+    platform: "telegram"
+    source_name: "SputnikIndia"
+    credibility: 22.0
+    published_at: "2024-02-05T11:00:00Z"
+  - fixture: "evt_026_src_03.json"
+    platform: "x"
+    source_name: "@DisinfoTracker"
+    credibility: 68.0
+    published_at: "2024-02-06T08:00:00Z"
+  - fixture: "evt_026_src_04.json"
+    platform: "reddit"
+    source_name: "r/IndianDefense"
+    credibility: 40.0
+    published_at: "2024-02-05T14:00:00Z"
+  - fixture: "evt_026_src_05.json"
+    platform: "web"
+    source_name: "EU DisinfoLab"
+    credibility: 82.0
+    published_at: "2024-02-07T12:00:00Z"
+  - fixture: "evt_026_src_06.json"
+    platform: "rss"
+    source_name: "DFRLab Atlantic Council"
+    credibility: 85.0
+    published_at: "2024-02-08T07:00:00Z"
+  - fixture: "evt_026_src_07.json"
+    platform: "telegram"
+    source_name: "NarrativeWarfare"
+    credibility: 50.0
+    published_at: "2024-02-06T06:00:00Z"
+  - fixture: "evt_026_src_08.json"
+    platform: "bluesky"
+    source_name: "@disinforesearch.bsky.social"
+    credibility: 55.0
+    published_at: "2024-02-06T15:00:00Z"

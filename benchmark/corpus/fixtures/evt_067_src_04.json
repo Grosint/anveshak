@@ -1,0 +1,7 @@
+{
+  "raw_text": "India's Unified Payments Interface experienced a massive outage during peak morning hours on Monday, with transaction failures reported across major banks including SBI, HDFC, and ICICI. Sources familiar with the matter told Medianama that a distributed denial-of-service attack sustaining approximately 3.2 Tbps of traffic targeted NPCI's core payment gateway. The attack traffic was traced to a botnet operating from Eastern European IP ranges.",
+  "clean_text": "UPI experienced massive outage from DDoS attack sustaining 3.2 Tbps targeting NPCI gateway. Attack traced to Eastern European botnet. Major banks affected during peak hours.",
+  "language": "en",
+  "url": "https://www.medianama.com/2024/01/upi-npci-ddos-attack-payment-outage/",
+  "captured_at": "2024-01-15T04:00:00Z"
+}

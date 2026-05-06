@@ -1,0 +1,7 @@
+{
+  "raw_text": "New MuddyWater campaign targeting Indian critical infrastructure. Found Atera agent installers being delivered via compromised Indian government domains (.gov.in). Phishing lures themed as power grid maintenance advisories. C2 infrastructure resolves to IRGC-linked hosting in Tehran. Samples uploaded to VT. IOCs in thread. #APT #MuddyWater #Iran",
+  "clean_text": "New MuddyWater campaign targeting Indian critical infrastructure via compromised government domains delivering Atera agent installers. C2 infrastructure traced to IRGC-linked hosting in Tehran.",
+  "language": "en",
+  "url": "https://x.com/MalwareHunterTeam/status/1782345678901234567",
+  "captured_at": "2024-04-22T11:00:00Z"
+}

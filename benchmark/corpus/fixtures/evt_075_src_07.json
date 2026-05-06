@@ -1,0 +1,7 @@
+{
+  "raw_text": "Recorded Future's analysis of the North Eastern grid attack confirms a sophisticated cyber-physical operation. Malware found in two Bongaigaon substation SCADA systems was designed to manipulate relay protection settings, creating artificial frequency deviations that triggered cascading load-shedding. The malware exhibited similarities to tools used in previous grid attacks globally. POSOCO's emergency islanding response successfully contained the cascading failure.",
+  "clean_text": "Recorded Future confirms sophisticated cyber-physical attack on NE grid. Malware at Bongaigaon SCADA manipulated relays causing cascading failure. POSOCO islanding contained the attack.",
+  "language": "en",
+  "url": "https://www.recordedfuture.com/blog/india-ne-grid-cyber-physical-attack-analysis",
+  "captured_at": "2024-08-18T08:00:00Z"
+}

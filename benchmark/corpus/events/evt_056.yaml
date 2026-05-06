@@ -1,0 +1,57 @@
+id: "evt-056"
+name: "CAA Protests NE India — Telegram Coordination"
+category: "protest_civil_unrest"
+languages: ["en", "hi"]
+earliest_osint_signal: "2024-03-12T04:00:00Z"
+mainstream_media_date: "2024-03-12T12:00:00Z"
+description: >
+  Large-scale protests erupted across Northeast India following the
+  implementation of the Citizenship Amendment Act. Telegram groups were
+  used to coordinate bandh calls, share protest routes, and disseminate
+  instructions for disrupting road and rail networks. OSINT monitoring
+  detected coordinated messaging patterns across 40+ regional Telegram
+  groups within a three-hour window.
+keywords: ["CAA", "citizenship amendment act", "northeast india", "protest", "telegram coordination", "bandh", "assam", "tripura"]
+should_fire_signal: true
+expected_isc: 4
+sources:
+  - fixture: "evt_056_src_01.json"
+    platform: "telegram"
+    source_name: "AssamProtestFront"
+    credibility: 35.0
+    published_at: "2024-03-12T04:00:00Z"
+  - fixture: "evt_056_src_02.json"
+    platform: "telegram"
+    source_name: "NEIndiaUpdates"
+    credibility: 38.0
+    published_at: "2024-03-12T04:30:00Z"
+  - fixture: "evt_056_src_03.json"
+    platform: "x"
+    source_name: "@NortheastWatch"
+    credibility: 50.0
+    published_at: "2024-03-12T05:30:00Z"
+  - fixture: "evt_056_src_04.json"
+    platform: "reddit"
+    source_name: "r/NorthEastIndia"
+    credibility: 42.0
+    published_at: "2024-03-12T06:00:00Z"
+  - fixture: "evt_056_src_05.json"
+    platform: "web"
+    source_name: "The Indian Express"
+    credibility: 85.0
+    published_at: "2024-03-12T12:00:00Z"
+  - fixture: "evt_056_src_06.json"
+    platform: "web"
+    source_name: "Northeast Now"
+    credibility: 70.0
+    published_at: "2024-03-12T08:00:00Z"
+  - fixture: "evt_056_src_07.json"
+    platform: "rss"
+    source_name: "The Hindu"
+    credibility: 85.0
+    published_at: "2024-03-12T13:00:00Z"
+  - fixture: "evt_056_src_08.json"
+    platform: "bluesky"
+    source_name: "@neindiaosint.bsky.social"
+    credibility: 48.0
+    published_at: "2024-03-12T07:00:00Z"

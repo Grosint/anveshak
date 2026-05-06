@@ -1,0 +1,55 @@
+id: "evt-086"
+name: "Satire Article About Indian Military — Fauji Times Parody"
+category: "information_operations"
+languages: ["en"]
+earliest_osint_signal: "2024-04-01T06:00:00Z"
+mainstream_media_date: "2024-04-01T06:00:00Z"
+description: >
+  A satirical article from "Fauji Times" (a parody site) claiming India deployed
+  robot soldiers along the LoC went viral. Multiple accounts reshared it without
+  the satire disclaimer, triggering false alarm keywords. Content is fictional
+  humor, not actionable intelligence.
+keywords: ["fauji times", "satire", "robot soldiers", "LoC", "parody", "Indian Army"]
+should_fire_signal: false
+expected_isc: 1
+sources:
+  - fixture: "evt_086_src_01.json"
+    platform: "web"
+    source_name: "Fauji Times Parody"
+    credibility: 5.0
+    published_at: "2024-04-01T06:00:00Z"
+  - fixture: "evt_086_src_02.json"
+    platform: "x"
+    source_name: "DefenceHumor"
+    credibility: 10.0
+    published_at: "2024-04-01T07:00:00Z"
+  - fixture: "evt_086_src_03.json"
+    platform: "x"
+    source_name: "MilitaryMemes_IN"
+    credibility: 5.0
+    published_at: "2024-04-01T07:30:00Z"
+  - fixture: "evt_086_src_04.json"
+    platform: "reddit"
+    source_name: "r/IndianDefense"
+    credibility: 25.0
+    published_at: "2024-04-01T08:00:00Z"
+  - fixture: "evt_086_src_05.json"
+    platform: "telegram"
+    source_name: "Defence Memes India"
+    credibility: 5.0
+    published_at: "2024-04-01T08:30:00Z"
+  - fixture: "evt_086_src_06.json"
+    platform: "web"
+    source_name: "Fact Check India"
+    credibility: 75.0
+    published_at: "2024-04-01T12:00:00Z"
+  - fixture: "evt_086_src_07.json"
+    platform: "x"
+    source_name: "Random Viral Account"
+    credibility: 5.0
+    published_at: "2024-04-01T09:00:00Z"
+  - fixture: "evt_086_src_08.json"
+    platform: "web"
+    source_name: "AltNews Debunk"
+    credibility: 80.0
+    published_at: "2024-04-01T14:00:00Z"

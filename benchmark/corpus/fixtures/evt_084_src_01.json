@@ -1,0 +1,7 @@
+{
+  "raw_text": "New listing on dark web marketplace: Initial access broker selling SCADA credentials for major Indian oil pipeline operator. Credentials include VPN access to OT network. Asking price 15 BTC. Listing appeared 48 hours ago. Seller reputation score indicates previous successful transactions in critical infrastructure sector. This matches a ransomware group's known procurement pattern.",
+  "clean_text": "Dark web listing selling SCADA credentials for Indian oil pipeline operator. VPN access to OT network offered at 15 BTC. Matches known ransomware group procurement pattern.",
+  "language": "en",
+  "url": "https://darkwebintel.io/alerts/2024/06/indian-pipeline-scada-listing",
+  "captured_at": "2024-06-12T04:30:00Z"
+}

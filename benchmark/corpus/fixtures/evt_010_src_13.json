@@ -1,0 +1,7 @@
+{
+  "raw_text": "Deep analysis of ShadowPad samples recovered from Indian power sector intrusions. The malware uses a modular plugin architecture with at least 17 identified modules including keylogger, screen capture, file manager, and network discovery. The C2 communication is encrypted using a custom protocol over DNS and HTTP. Notably, the samples targeting Indian infrastructure include a kill-switch date check that would have allowed coordinated activation. The compilation timestamps and debug strings confirm Chinese-language development environment. ShadowPad has been shared among at least five Chinese APT groups since 2017.",
+  "clean_text": "Deep analysis of ShadowPad samples from Indian power sector intrusions. Malware uses modular plugin architecture with 17 identified modules including keylogger screen capture file manager and network discovery. C2 communication encrypted using custom protocol over DNS and HTTP. Samples include kill-switch date check allowing coordinated activation. Compilation timestamps and debug strings confirm Chinese-language development environment.",
+  "language": "en",
+  "url": "https://darkweb-intel.example.onion/analysis/shadowpad-india-power-grid-2021",
+  "captured_at": "2021-02-28T16:00:00Z"
+}

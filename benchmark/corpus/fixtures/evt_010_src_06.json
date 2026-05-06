@@ -1,0 +1,7 @@
+{
+  "raw_text": "r/netsec — Recorded Future just dropped their RedEcho report and the IOCs are really interesting. ShadowPad C2 domains resolving to AXIOMATICASYMPTOTE infrastructure. Here are the key indicators: 5 DDNS domains used for C2, IPs in 154.210.x.x range. The targeting is very specific — 4 out of 5 Regional Load Despatch Centres which control the power grid in real-time. This is pre-positioning, not espionage. If they wanted data they would have exfiltrated and left. Instead they maintained persistent access for months.",
+  "clean_text": "Recorded Future RedEcho report shows ShadowPad C2 domains resolving to AXIOMATICASYMPTOTE infrastructure. Key indicators include 5 DDNS domains for C2 with IPs in 154.210.x.x range. Targeting is specific 4 out of 5 Regional Load Despatch Centres controlling power grid in real-time. This is pre-positioning not espionage. Attackers maintained persistent access for months.",
+  "language": "en",
+  "url": "https://www.reddit.com/r/netsec/comments/luyq8f/redecho_china_linked_apt_targeting_indian_power",
+  "captured_at": "2021-02-28T09:00:00Z"
+}

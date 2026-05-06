@@ -1,0 +1,55 @@
+id: "evt-068"
+name: "Oil India Limited Pipeline Sabotage — Assam"
+category: "critical_infrastructure"
+languages: ["en", "hi"]
+earliest_osint_signal: "2024-02-08T04:00:00Z"
+mainstream_media_date: "2024-02-08T13:00:00Z"
+description: >
+  Suspected militants sabotaged an Oil India Limited crude oil pipeline in Tinsukia
+  district, Assam, causing a major spill affecting 12 hectares of wetland. The attack
+  used improvised explosive devices placed at two valve stations along the Duliajan-Numaligarh
+  corridor. ULFA-I claimed responsibility through a Telegram channel.
+keywords: ["Oil India", "pipeline", "sabotage", "Tinsukia", "Assam", "ULFA", "IED", "crude oil", "Duliajan"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_068_src_01.json"
+    platform: "telegram"
+    source_name: "ULFA-I Official Channel"
+    credibility: 25.0
+    published_at: "2024-02-08T04:00:00Z"
+  - fixture: "evt_068_src_02.json"
+    platform: "telegram"
+    source_name: "Assam Security Watch"
+    credibility: 42.0
+    published_at: "2024-02-08T04:30:00Z"
+  - fixture: "evt_068_src_03.json"
+    platform: "x"
+    source_name: "@NortheastSecurity"
+    credibility: 48.0
+    published_at: "2024-02-08T05:00:00Z"
+  - fixture: "evt_068_src_04.json"
+    platform: "web"
+    source_name: "Northeast Now"
+    credibility: 60.0
+    published_at: "2024-02-08T06:30:00Z"
+  - fixture: "evt_068_src_05.json"
+    platform: "rss"
+    source_name: "The Sentinel Assam"
+    credibility: 68.0
+    published_at: "2024-02-08T07:00:00Z"
+  - fixture: "evt_068_src_06.json"
+    platform: "reddit"
+    source_name: "r/NorthEastIndia"
+    credibility: 34.0
+    published_at: "2024-02-08T08:00:00Z"
+  - fixture: "evt_068_src_07.json"
+    platform: "web"
+    source_name: "Energy World India"
+    credibility: 64.0
+    published_at: "2024-02-08T10:00:00Z"
+  - fixture: "evt_068_src_08.json"
+    platform: "rss"
+    source_name: "NDTV India"
+    credibility: 74.0
+    published_at: "2024-02-08T13:00:00Z"

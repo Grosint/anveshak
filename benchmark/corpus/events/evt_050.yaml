@@ -1,0 +1,56 @@
+id: "evt-050"
+name: "Deepfake Celebrity Endorsement — PM Candidate"
+category: "deepfake_manipulated_media"
+languages: ["en", "hi"]
+earliest_osint_signal: "2024-04-12T07:00:00Z"
+mainstream_media_date: "2024-04-12T16:30:00Z"
+description: >
+  A deepfake video showing a popular Bollywood actor endorsing a PM candidate
+  went viral on social media platforms days before a key election phase. The
+  actor publicly denied the endorsement. Forensic analysis revealed lip-sync
+  mismatches and inconsistent lighting on the face relative to the background,
+  consistent with face-swap deepfake techniques.
+keywords: ["deepfake", "celebrity endorsement", "election", "bollywood", "PM candidate", "face swap", "political manipulation"]
+should_fire_signal: true
+expected_isc: 4
+sources:
+  - fixture: "evt_050_src_01.json"
+    platform: "telegram"
+    source_name: "BollywoodPolitics"
+    credibility: 20.0
+    published_at: "2024-04-12T07:00:00Z"
+  - fixture: "evt_050_src_02.json"
+    platform: "x"
+    source_name: "@ViralVideoIndia"
+    credibility: 25.0
+    published_at: "2024-04-12T07:45:00Z"
+  - fixture: "evt_050_src_03.json"
+    platform: "reddit"
+    source_name: "r/BollywoodGossip"
+    credibility: 30.0
+    published_at: "2024-04-12T09:00:00Z"
+  - fixture: "evt_050_src_04.json"
+    platform: "telegram"
+    source_name: "ElectionWatchIndia"
+    credibility: 40.0
+    published_at: "2024-04-12T08:30:00Z"
+  - fixture: "evt_050_src_05.json"
+    platform: "web"
+    source_name: "The Quint"
+    credibility: 80.0
+    published_at: "2024-04-12T16:30:00Z"
+  - fixture: "evt_050_src_06.json"
+    platform: "web"
+    source_name: "Factly"
+    credibility: 78.0
+    published_at: "2024-04-12T12:00:00Z"
+  - fixture: "evt_050_src_07.json"
+    platform: "bluesky"
+    source_name: "@deepfakewatch.bsky.social"
+    credibility: 60.0
+    published_at: "2024-04-12T11:00:00Z"
+  - fixture: "evt_050_src_08.json"
+    platform: "rss"
+    source_name: "Hindustan Times"
+    credibility: 82.0
+    published_at: "2024-04-12T17:00:00Z"

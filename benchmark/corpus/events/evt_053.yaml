@@ -1,0 +1,57 @@
+id: "evt-053"
+name: "Doctored Document — Fake MoD Circular on Social Media"
+category: "deepfake_manipulated_media"
+languages: ["en", "hi"]
+earliest_osint_signal: "2024-07-14T04:00:00Z"
+mainstream_media_date: "2024-07-14T14:30:00Z"
+description: >
+  A fabricated Ministry of Defence circular announcing emergency troop
+  mobilization along the northern border was shared as a photograph on
+  social media. The document used an outdated MoD letterhead, incorrect
+  file numbering format, and contained typographic errors inconsistent
+  with official communications. Error Level Analysis confirmed pixel-level
+  manipulation around the signature block.
+keywords: ["fake document", "MoD circular", "ministry of defence", "fabricated", "troop mobilization", "border", "manipulated document"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_053_src_01.json"
+    platform: "telegram"
+    source_name: "GovtLeaksDesi"
+    credibility: 10.0
+    published_at: "2024-07-14T04:00:00Z"
+  - fixture: "evt_053_src_02.json"
+    platform: "x"
+    source_name: "@BreakingDefenceIN"
+    credibility: 22.0
+    published_at: "2024-07-14T04:45:00Z"
+  - fixture: "evt_053_src_03.json"
+    platform: "telegram"
+    source_name: "ArmyAlertIndia"
+    credibility: 18.0
+    published_at: "2024-07-14T05:30:00Z"
+  - fixture: "evt_053_src_04.json"
+    platform: "reddit"
+    source_name: "r/IndiaNews"
+    credibility: 40.0
+    published_at: "2024-07-14T07:00:00Z"
+  - fixture: "evt_053_src_05.json"
+    platform: "web"
+    source_name: "PIB Fact Check"
+    credibility: 95.0
+    published_at: "2024-07-14T14:30:00Z"
+  - fixture: "evt_053_src_06.json"
+    platform: "web"
+    source_name: "India Today Fact Check"
+    credibility: 82.0
+    published_at: "2024-07-14T10:00:00Z"
+  - fixture: "evt_053_src_07.json"
+    platform: "rss"
+    source_name: "Mint"
+    credibility: 80.0
+    published_at: "2024-07-14T15:00:00Z"
+  - fixture: "evt_053_src_08.json"
+    platform: "bluesky"
+    source_name: "@govdocverify.bsky.social"
+    credibility: 55.0
+    published_at: "2024-07-14T09:00:00Z"

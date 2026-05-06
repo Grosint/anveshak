@@ -1,0 +1,7 @@
+{
+  "raw_text": "Just saw the VT analysis of the new Siemens S7 PLC malware from India. This is genuinely scary stuff. The malware modifies ladder logic to alter process control parameters while displaying normal values to operators. Very Stuxnet-like approach. Anyone know which chemical plant was affected? The sophistication level suggests a state-sponsored actor.",
+  "clean_text": "Analysis of Siemens S7 PLC malware from India. Modifies ladder logic while displaying normal values to operators. Stuxnet-like approach. State-sponsored actor suspected.",
+  "language": "en",
+  "url": "https://www.reddit.com/r/netsec/comments/1exf3j8/stuxnet_like_plc_malware_indian_chemical_plant",
+  "captured_at": "2024-08-20T04:00:00Z"
+}

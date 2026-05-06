@@ -1,0 +1,55 @@
+id: "evt-034"
+name: "Russian Troll Farm Targeting Indian Defence Procurement"
+category: "information_operations"
+languages: ["en", "ru"]
+earliest_osint_signal: "2024-06-01T04:00:00Z"
+mainstream_media_date: "2024-06-05T11:00:00Z"
+description: >
+  Russian-linked information operation designed to influence Indian defence
+  procurement decisions in favour of Russian platforms over Western alternatives.
+  Coordinated accounts seeded narratives about unreliability of French Rafale
+  maintenance and US ITAR restrictions while promoting S-400 and Su-57 capabilities.
+keywords: ["Russia", "defence procurement", "S-400", "Rafale", "troll farm", "ITAR", "Su-57"]
+should_fire_signal: true
+expected_isc: 4
+sources:
+  - fixture: "evt_034_src_01.json"
+    platform: "telegram"
+    source_name: "Defence Insider Russia"
+    credibility: 20.0
+    published_at: "2024-06-01T04:00:00Z"
+  - fixture: "evt_034_src_02.json"
+    platform: "x"
+    source_name: "@RussiaDefenceWatch"
+    credibility: 15.0
+    published_at: "2024-06-01T07:30:00Z"
+  - fixture: "evt_034_src_03.json"
+    platform: "reddit"
+    source_name: "r/IndianDefense"
+    credibility: 35.0
+    published_at: "2024-06-02T02:00:00Z"
+  - fixture: "evt_034_src_04.json"
+    platform: "web"
+    source_name: "RT (Russia Today)"
+    credibility: 20.0
+    published_at: "2024-06-02T06:00:00Z"
+  - fixture: "evt_034_src_05.json"
+    platform: "web"
+    source_name: "Sputnik International"
+    credibility: 18.0
+    published_at: "2024-06-02T10:00:00Z"
+  - fixture: "evt_034_src_06.json"
+    platform: "bluesky"
+    source_name: "@milanalyst.bsky.social"
+    credibility: 30.0
+    published_at: "2024-06-03T08:15:00Z"
+  - fixture: "evt_034_src_07.json"
+    platform: "rss"
+    source_name: "Janes Defence RSS"
+    credibility: 85.0
+    published_at: "2024-06-04T13:00:00Z"
+  - fixture: "evt_034_src_08.json"
+    platform: "web"
+    source_name: "The Print Defence"
+    credibility: 70.0
+    published_at: "2024-06-05T11:00:00Z"

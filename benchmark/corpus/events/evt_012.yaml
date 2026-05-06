@@ -1,0 +1,63 @@
+id: "evt-012"
+name: "Chinese Type 055 Destroyer in Indian Ocean — PLAN Deployment"
+category: "cross_border_security"
+languages: ["en", "zh"]
+earliest_osint_signal: "2024-06-02T06:00:00Z"
+mainstream_media_date: "2024-06-02T14:00:00Z"
+description: >
+  A Chinese People's Liberation Army Navy Type 055 guided-missile destroyer
+  was tracked transiting the Strait of Malacca into the Indian Ocean.
+  Indian Navy P-8I Poseidon maritime patrol aircraft deployed for
+  surveillance. The deployment coincides with a PLAN task group exercise
+  in the eastern Indian Ocean.
+keywords:
+  - Type 055
+  - PLAN
+  - Indian Ocean
+  - Strait of Malacca
+  - P-8I Poseidon
+  - Chinese navy
+  - maritime surveillance
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_012_src_01.json"
+    platform: "telegram"
+    source_name: "OSINT Naval Tracker"
+    credibility: 50.0
+    published_at: "2024-06-02T06:00:00Z"
+  - fixture: "evt_012_src_02.json"
+    platform: "x"
+    source_name: "@IndoPacificNews"
+    credibility: 60.0
+    published_at: "2024-06-02T07:30:00Z"
+  - fixture: "evt_012_src_03.json"
+    platform: "web"
+    source_name: "The Hindu Defence"
+    credibility: 78.0
+    published_at: "2024-06-02T10:00:00Z"
+  - fixture: "evt_012_src_04.json"
+    platform: "rss"
+    source_name: "Naval News"
+    credibility: 82.0
+    published_at: "2024-06-02T14:00:00Z"
+  - fixture: "evt_012_src_05.json"
+    platform: "reddit"
+    source_name: "r/LessCredibleDefence"
+    credibility: 35.0
+    published_at: "2024-06-02T08:15:00Z"
+  - fixture: "evt_012_src_06.json"
+    platform: "telegram"
+    source_name: "South China Sea Monitor"
+    credibility: 55.0
+    published_at: "2024-06-02T06:45:00Z"
+  - fixture: "evt_012_src_07.json"
+    platform: "web"
+    source_name: "South China Morning Post"
+    credibility: 70.0
+    published_at: "2024-06-02T12:30:00Z"
+  - fixture: "evt_012_src_08.json"
+    platform: "bluesky"
+    source_name: "@navalwatcher.bsky.social"
+    credibility: 40.0
+    published_at: "2024-06-02T09:00:00Z"

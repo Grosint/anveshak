@@ -1,0 +1,7 @@
+{
+  "raw_text": "Iran's MuddyWater Hackers Target Indian Power Grid and Ports in Cyber Campaign. An Iranian state-sponsored hacking group known as MuddyWater has been caught targeting Indian critical infrastructure including power grid operators and port management systems, according to cybersecurity firm Mandiant and India's CERT-In. The attackers used compromised Indian government websites to deliver remote access tools, with command infrastructure traced to IRGC-linked hosting providers in Iran.",
+  "clean_text": "Iranian MuddyWater group targeted Indian power grid and ports using compromised government websites to deliver remote access tools. Command infrastructure traced to IRGC-linked hosting providers according to Mandiant and CERT-In.",
+  "language": "en",
+  "url": "https://therecord.media/iran-muddywater-india-power-grid-cyber-attack-2024",
+  "captured_at": "2024-04-25T08:00:00Z"
+}

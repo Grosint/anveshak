@@ -1,0 +1,7 @@
+{
+  "raw_text": "Breaking: Ransomware attack on Indian oil pipeline SCADA systems confirmed by multiple sources. Fuel distribution halted in Maharashtra, Gujarat, and Rajasthan. Attack vector appears to be compromised VPN credentials. Ransomware variant linked to BlackCat/ALPHV group. CERT-In response team deployed. More updates coming.",
+  "clean_text": "Ransomware attack on Indian pipeline SCADA confirmed. Fuel halted in Maharashtra, Gujarat, Rajasthan. Attack via compromised VPN credentials. BlackCat/ALPHV linked.",
+  "language": "en",
+  "url": "https://t.me/indiancyberwatch/3456",
+  "captured_at": "2024-06-12T05:30:00Z"
+}

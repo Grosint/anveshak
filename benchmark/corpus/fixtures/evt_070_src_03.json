@@ -1,0 +1,7 @@
+{
+  "raw_text": "Recorded Future's Insikt Group has identified a persistent cyber intrusion targeting the Kudankulam Nuclear Power Plant in Tamil Nadu, India. The malware, a variant of tools previously attributed to the Lazarus Group, was found in the plant's administrative network targeting human resources and procurement systems. NPCIL has confirmed that operational technology networks remained air-gapped and uncompromised. India's Department of Atomic Energy has ordered a comprehensive security audit across all nuclear installations.",
+  "clean_text": "Recorded Future identifies Lazarus Group malware variant at Kudankulam admin network. HR and procurement targeted. OT air-gapped. DAE ordered audit of all nuclear facilities.",
+  "language": "en",
+  "url": "https://www.recordedfuture.com/blog/kudankulam-nuclear-plant-lazarus-intrusion",
+  "captured_at": "2023-11-14T04:00:00Z"
+}

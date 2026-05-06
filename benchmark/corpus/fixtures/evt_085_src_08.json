@@ -1,0 +1,7 @@
+{
+  "raw_text": "Mandiant has completed analysis of the PLC-targeting malware discovered in an Indian chemical facility. The malware, which we track as INCONTROLLER.V2, represents the most sophisticated ICS-specific attack tool discovered since TRITON/TRISIS. Attribution analysis with moderate confidence links the development to a state-sponsored threat actor. The malware's capability to bypass safety instrumented systems poses significant risk of physical damage or hazardous material release.",
+  "clean_text": "Mandiant analysis of PLC malware INCONTROLLER.V2 from Indian chemical facility. Most sophisticated ICS tool since TRITON. Moderate-confidence state-sponsored attribution. Can bypass safety systems.",
+  "language": "en",
+  "url": "https://www.mandiant.com/resources/blog/incontroller-v2-indian-chemical-plc-malware",
+  "captured_at": "2024-08-20T14:00:00Z"
+}

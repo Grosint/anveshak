@@ -1,0 +1,7 @@
+{
+  "raw_text": "NCIIPC Critical Advisory NCI-2024-0034: Unauthorized access detected at Mumbai Port Trust targeting vessel traffic management system and cargo scheduling infrastructure. A zero-day vulnerability in legacy SCADA interface was exploited. All major Indian port authorities are directed to conduct immediate security assessments of SCADA and industrial control systems, implement network segmentation for legacy systems, and report any suspicious activity.",
+  "clean_text": "NCIIPC critical advisory following Mumbai Port intrusion. All Indian ports directed to assess SCADA security, implement network segmentation, and report suspicious activity.",
+  "language": "en",
+  "url": "https://www.nciipc.gov.in/advisory/NCI-2024-0034",
+  "captured_at": "2024-03-28T07:00:00Z"
+}

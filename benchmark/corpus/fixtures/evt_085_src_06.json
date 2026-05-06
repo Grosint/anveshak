@@ -1,0 +1,7 @@
+{
+  "raw_text": "CERT-In Advisory CIAD-2024-0112: A sophisticated malware targeting programmable logic controllers (PLCs) in industrial control systems has been identified in the chemical manufacturing sector. The malware targets Siemens S7-300 and S7-400 series controllers and is capable of modifying process control parameters. All organizations operating Siemens PLCs in critical sectors are advised to implement emergency firmware verification procedures and network isolation measures detailed in this advisory.",
+  "clean_text": "CERT-In advisory confirms PLC malware targeting Siemens S7-300/400 in chemical manufacturing. Capable of modifying process control. Emergency firmware verification and network isolation advised.",
+  "language": "en",
+  "url": "https://www.cert-in.org.in/advisory/CIAD-2024-0112",
+  "captured_at": "2024-08-20T10:00:00Z"
+}

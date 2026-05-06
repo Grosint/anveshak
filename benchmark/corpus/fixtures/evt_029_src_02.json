@@ -1,0 +1,7 @@
+{
+  "raw_text": "URGENT: Iranian APT MuddyWater conducting active campaign against Indian power grid operators and port management systems. Attack vector is phishing emails from compromised .gov.in domains with Atera remote access tool payloads. Multiple Indian energy sector organizations targeted. C2 callbacks to known IRGC-affiliated infrastructure. This is a significant escalation of Iranian cyber operations against India.",
+  "clean_text": "Iranian APT MuddyWater conducting active campaign against Indian power grid and port systems. Phishing from compromised .gov.in domains delivering Atera payloads. C2 callbacks to IRGC-affiliated infrastructure.",
+  "language": "en",
+  "url": "https://t.me/CyberThreatIntel/5678",
+  "captured_at": "2024-04-22T12:30:00Z"
+}

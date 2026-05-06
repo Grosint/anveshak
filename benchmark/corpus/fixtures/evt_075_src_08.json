@@ -1,0 +1,7 @@
+{
+  "raw_text": "A coordinated cyber-physical attack caused severe frequency deviations in India's North Eastern Regional Grid on Sunday, triggering cascading load-shedding across Assam, Meghalaya, and Tripura. Investigators found malware in the SCADA systems of two substations near Bongaigaon that had manipulated relay protection settings. POSOCO activated emergency islanding protocols to prevent a complete grid collapse. The Power Ministry has described the attack as one of the most serious threats to Indian power infrastructure and has ordered comprehensive security audits across all grid facilities.",
+  "clean_text": "Cyber-physical attack on NE grid caused cascading load-shedding across three states. SCADA malware at Bongaigaon substations. POSOCO prevented collapse. Power Ministry ordered nationwide grid security audit.",
+  "language": "en",
+  "url": "https://www.ndtv.com/india-news/north-east-power-grid-cyber-attack-scada-malware-bongaigaon-6012345",
+  "captured_at": "2024-08-18T11:00:00Z"
+}

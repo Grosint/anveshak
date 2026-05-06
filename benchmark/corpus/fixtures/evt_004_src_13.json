@@ -1,0 +1,7 @@
+{
+  "raw_text": "OSINT analysis of the viral Modi-Xi handshake image. Reverse image search returns zero results prior to September 8, 2023. Earliest upload traced to a Telegram channel with 12K subscribers at 10:47 IST. Within 2 hours it had been cross-posted to 37 WhatsApp-linked Telegram channels. The image metadata contains no EXIF data — consistent with AI generation rather than camera capture. CLIP interrogation returns: 'two men in suits shaking hands, photorealistic, detailed, professional photography' which aligns with a likely text-to-image prompt. Error Level Analysis shows uniform noise distribution inconsistent with JPEG camera output. This is definitively AI-generated content, not a photograph.",
+  "clean_text": "OSINT analysis of the viral Modi-Xi handshake image. Reverse image search returns zero results prior to September 8, 2023. Earliest upload traced to a Telegram channel with 12K subscribers at 10:47 IST. Within 2 hours it had been cross-posted to 37 WhatsApp-linked Telegram channels. The image metadata contains no EXIF data — consistent with AI generation rather than camera capture. CLIP interrogation returns: 'two men in suits shaking hands, photorealistic, detailed, professional photography' which aligns with a likely text-to-image prompt. Error Level Analysis shows uniform noise distribution inconsistent with JPEG camera output. This is definitively AI-generated content, not a photograph.",
+  "language": "en",
+  "url": "https://t.me/OSINTCommunity/27481",
+  "captured_at": "2023-09-08T14:30:00Z"
+}

@@ -1,0 +1,7 @@
+{
+  "raw_text": "NetBlocks — Bangladesh Internet Shutdown Report, July 16, 2024. Real-time network data confirms a near-total internet shutdown in Bangladesh beginning at approximately 21:00 UTC on July 15. Mobile data services from Grameenphone, Robi, and Banglalink dropped to near-zero throughput. Fixed-line broadband via BTCL showed intermittent connectivity at roughly 15% of normal capacity. Social media platforms including Facebook, WhatsApp, and Telegram were blocked at the DNS and IP level prior to the full shutdown. The disruption pattern is consistent with a government-ordered shutdown rather than infrastructure failure. Connectivity remains severely degraded as of this report.",
+  "clean_text": "NetBlocks real-time network data confirms a near-total internet shutdown in Bangladesh beginning at approximately 21:00 UTC on July 15. Mobile data services from Grameenphone, Robi, and Banglalink dropped to near-zero throughput. Fixed-line broadband via BTCL showed intermittent connectivity at roughly 15% of normal capacity. Social media platforms including Facebook, WhatsApp, and Telegram were blocked at the DNS and IP level prior to the full shutdown. The disruption pattern is consistent with a government-ordered shutdown rather than infrastructure failure.",
+  "language": "en",
+  "url": "https://netblocks.org/reports/internet-disrupted-in-bangladesh-amid-protests-july-2024",
+  "captured_at": "2024-07-16T06:00:00Z"
+}

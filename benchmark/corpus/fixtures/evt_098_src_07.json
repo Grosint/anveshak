@@ -1,0 +1,7 @@
+{
+  "raw_text": "Shadowserver Foundation has sinkholed C2 domains associated with the APT28 campaign targeting Indian diplomatic missions. Our analysis confirms 7 unique C2 domains, 12 IP addresses linked to GRU-operated infrastructure, and victim connections from at least 4 European countries. Domain registration patterns consistent with APT28 operational security practices. Full domain list shared with national CERTs.",
+  "clean_text": "Shadowserver sinkholed APT28 C2 domains from Indian embassy campaign. Seven C2 domains, 12 IPs linked to GRU infrastructure. Victim connections from 4 European countries.",
+  "language": "en",
+  "url": "https://x.com/shadowserverfnd/status/1842678901234",
+  "captured_at": "2024-10-05T20:00:00Z"
+}

@@ -1,0 +1,7 @@
+{
+  "raw_text": "CERT-In Advisory CIAD-2024-0089: Targeted Phishing Campaign Against Indian Critical Infrastructure. CERT-In has received reports of a targeted phishing and watering-hole campaign affecting Indian power grid operators and port management systems. The campaign uses compromised Indian government domains to deliver remote access tools. Organizations in the energy and maritime sectors are advised to audit for unauthorized remote management software and block indicators of compromise listed in the appendix.",
+  "clean_text": "CERT-In advisory on targeted phishing campaign against Indian power grid and port systems using compromised government domains. Energy and maritime sectors advised to audit for unauthorized remote management software.",
+  "language": "en",
+  "url": "https://www.cert-in.org.in/advisory/CIAD-2024-0089",
+  "captured_at": "2024-04-24T06:00:00Z"
+}

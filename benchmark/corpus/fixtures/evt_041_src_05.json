@@ -1,0 +1,7 @@
+{
+  "raw_text": "Chainalysis Research: Attribution of WazirX Hack to DPRK Lazarus Group. Chainalysis has confirmed with high confidence that the $230 million theft from Indian cryptocurrency exchange WazirX was conducted by North Korea's Lazarus Group. Our on-chain analysis identified wallet addresses previously used in Lazarus operations, characteristic mixing patterns through Tornado Cash, and social engineering indicators targeting exchange employees. Simultaneously, DPRK-affiliated accounts promoted counter-narratives attributing the theft to insider fraud.",
+  "clean_text": "Chainalysis confirms with high confidence WazirX $230M theft attributed to Lazarus Group. Wallet addresses match previous operations with characteristic Tornado Cash mixing. DPRK accounts promoted insider fraud counter-narratives.",
+  "language": "en",
+  "url": "https://www.chainalysis.com/blog/wazirx-hack-lazarus-group-attribution-2024",
+  "captured_at": "2024-04-23T14:00:00Z"
+}

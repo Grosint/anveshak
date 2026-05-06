@@ -1,0 +1,7 @@
+{
+  "raw_text": "A persistent cyber intrusion attributed to a Lazarus Group malware variant has been detected at India's Kudankulam Nuclear Power Plant. The malware was found in the plant's administrative IT network, specifically targeting human resources and procurement systems. The Nuclear Power Corporation of India Limited confirmed operational technology networks remained air-gapped and unaffected. India's Department of Atomic Energy has ordered a comprehensive security audit of all nuclear installations.",
+  "clean_text": "Lazarus Group intrusion at Kudankulam targeting admin IT network. NPCIL confirms OT air-gapped. DAE ordered security audit of all nuclear installations.",
+  "language": "en",
+  "url": "https://www.darkreading.com/threat-intelligence/lazarus-group-kudankulam-nuclear-india",
+  "captured_at": "2023-11-14T06:00:00Z"
+}

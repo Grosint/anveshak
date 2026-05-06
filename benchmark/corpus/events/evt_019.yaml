@@ -1,0 +1,64 @@
+id: "evt-019"
+name: "Bangladesh-Myanmar Rohingya Border Tensions"
+category: "cross_border_security"
+languages: ["en", "hi"]
+earliest_osint_signal: "2024-05-12T03:30:00Z"
+mainstream_media_date: "2024-05-12T11:00:00Z"
+description: >
+  Renewed clashes between Myanmar military and Arakan Army near the
+  Bangladesh border drove fresh Rohingya refugee flows into Cox's Bazar.
+  Bangladesh Border Guard fired warning shots as crowds attempted
+  crossing. Indian agencies monitoring potential spillover into Tripura
+  and Mizoram via secondary migration routes.
+keywords:
+  - Rohingya
+  - Bangladesh-Myanmar border
+  - Arakan Army
+  - Cox's Bazar
+  - refugee flow
+  - Tripura
+  - Mizoram
+  - border tension
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_019_src_01.json"
+    platform: "telegram"
+    source_name: "Rohingya Crisis Updates"
+    credibility: 38.0
+    published_at: "2024-05-12T03:30:00Z"
+  - fixture: "evt_019_src_02.json"
+    platform: "x"
+    source_name: "@BangladeshDefence"
+    credibility: 52.0
+    published_at: "2024-05-12T04:45:00Z"
+  - fixture: "evt_019_src_03.json"
+    platform: "web"
+    source_name: "Dhaka Tribune"
+    credibility: 68.0
+    published_at: "2024-05-12T07:00:00Z"
+  - fixture: "evt_019_src_04.json"
+    platform: "rss"
+    source_name: "Al Jazeera South Asia"
+    credibility: 75.0
+    published_at: "2024-05-12T11:00:00Z"
+  - fixture: "evt_019_src_05.json"
+    platform: "reddit"
+    source_name: "r/Bangladesh"
+    credibility: 32.0
+    published_at: "2024-05-12T05:30:00Z"
+  - fixture: "evt_019_src_06.json"
+    platform: "telegram"
+    source_name: "NE India Security Watch"
+    credibility: 42.0
+    published_at: "2024-05-12T04:00:00Z"
+  - fixture: "evt_019_src_07.json"
+    platform: "web"
+    source_name: "The Wire"
+    credibility: 66.0
+    published_at: "2024-05-12T09:15:00Z"
+  - fixture: "evt_019_src_08.json"
+    platform: "bluesky"
+    source_name: "@rohingyawatch.bsky.social"
+    credibility: 34.0
+    published_at: "2024-05-12T06:00:00Z"

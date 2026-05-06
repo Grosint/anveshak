@@ -1,0 +1,55 @@
+id: "evt-061"
+name: "Assam NRC Exclusion Protests — Bengali Community"
+category: "protest_civil_unrest"
+languages: ["en", "hi"]
+earliest_osint_signal: "2024-03-12T06:30:00Z"
+mainstream_media_date: "2024-03-12T14:00:00Z"
+description: >
+  Large-scale protests erupted across Assam's Barak Valley after the publication of
+  supplementary NRC exclusion lists disproportionately affecting Bengali-speaking communities.
+  Demonstrators blocked NH-6 and rail lines near Silchar, demanding immediate review of
+  the exclusion criteria and reinstatement of affected families.
+keywords: ["NRC", "Assam", "Bengali", "Barak Valley", "Silchar", "exclusion list", "citizenship", "protest"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_061_src_01.json"
+    platform: "telegram"
+    source_name: "Barak Valley News Channel"
+    credibility: 45.0
+    published_at: "2024-03-12T06:30:00Z"
+  - fixture: "evt_061_src_02.json"
+    platform: "telegram"
+    source_name: "Assam Protest Updates"
+    credibility: 40.0
+    published_at: "2024-03-12T06:45:00Z"
+  - fixture: "evt_061_src_03.json"
+    platform: "web"
+    source_name: "Northeast Live"
+    credibility: 65.0
+    published_at: "2024-03-12T08:00:00Z"
+  - fixture: "evt_061_src_04.json"
+    platform: "rss"
+    source_name: "The Sentinel Assam"
+    credibility: 70.0
+    published_at: "2024-03-12T09:15:00Z"
+  - fixture: "evt_061_src_05.json"
+    platform: "reddit"
+    source_name: "r/india"
+    credibility: 35.0
+    published_at: "2024-03-12T10:00:00Z"
+  - fixture: "evt_061_src_06.json"
+    platform: "x"
+    source_name: "@BarakValleyWatch"
+    credibility: 50.0
+    published_at: "2024-03-12T07:30:00Z"
+  - fixture: "evt_061_src_07.json"
+    platform: "web"
+    source_name: "East Mojo"
+    credibility: 60.0
+    published_at: "2024-03-12T11:00:00Z"
+  - fixture: "evt_061_src_08.json"
+    platform: "rss"
+    source_name: "NDTV Northeast"
+    credibility: 75.0
+    published_at: "2024-03-12T14:00:00Z"

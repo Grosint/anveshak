@@ -1,0 +1,56 @@
+id: "evt-049"
+name: "AI-Generated Protest Photos — Farmer Movement Fake Crowd"
+category: "deepfake_manipulated_media"
+languages: ["en", "hi"]
+earliest_osint_signal: "2024-03-05T04:30:00Z"
+mainstream_media_date: "2024-03-05T13:00:00Z"
+description: >
+  AI-generated images showing massive crowds at farmer protest sites were
+  circulated to exaggerate turnout during the Delhi march. The images featured
+  telltale generative artifacts including distorted hands, inconsistent shadows,
+  and duplicated facial patterns. Reverse image search confirmed no matching
+  source photographs existed in any news archive.
+keywords: ["farmer protest", "AI generated", "fake crowd", "manipulated photos", "delhi", "agriculture", "synthetic images"]
+should_fire_signal: true
+expected_isc: 4
+sources:
+  - fixture: "evt_049_src_01.json"
+    platform: "telegram"
+    source_name: "KisanAndolanUpdates"
+    credibility: 30.0
+    published_at: "2024-03-05T04:30:00Z"
+  - fixture: "evt_049_src_02.json"
+    platform: "x"
+    source_name: "@FarmerVoiceIndia"
+    credibility: 25.0
+    published_at: "2024-03-05T05:15:00Z"
+  - fixture: "evt_049_src_03.json"
+    platform: "telegram"
+    source_name: "PunjabNewsNetwork"
+    credibility: 35.0
+    published_at: "2024-03-05T06:00:00Z"
+  - fixture: "evt_049_src_04.json"
+    platform: "reddit"
+    source_name: "r/india"
+    credibility: 45.0
+    published_at: "2024-03-05T07:30:00Z"
+  - fixture: "evt_049_src_05.json"
+    platform: "web"
+    source_name: "India Today"
+    credibility: 82.0
+    published_at: "2024-03-05T13:00:00Z"
+  - fixture: "evt_049_src_06.json"
+    platform: "web"
+    source_name: "Vishvas News"
+    credibility: 78.0
+    published_at: "2024-03-05T10:00:00Z"
+  - fixture: "evt_049_src_07.json"
+    platform: "bluesky"
+    source_name: "@factcheck.in.bsky.social"
+    credibility: 58.0
+    published_at: "2024-03-05T09:00:00Z"
+  - fixture: "evt_049_src_08.json"
+    platform: "rss"
+    source_name: "Scroll.in"
+    credibility: 75.0
+    published_at: "2024-03-05T14:00:00Z"

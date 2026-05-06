@@ -1,0 +1,57 @@
+id: "evt-059"
+name: "Nagaland Tribal Protest — NSCN-IM Ceasefire Breakdown"
+category: "protest_civil_unrest"
+languages: ["en"]
+earliest_osint_signal: "2024-06-20T05:00:00Z"
+mainstream_media_date: "2024-06-20T14:00:00Z"
+description: >
+  Tensions escalated in Nagaland following reports of a potential breakdown
+  in the NSCN-IM ceasefire agreement. Tribal organizations called for a
+  total shutdown across multiple districts. OSINT monitoring detected
+  early coordination through encrypted Telegram channels and Facebook
+  community groups, with protest logistics including road blockade
+  locations shared six hours before the first mainstream report.
+keywords: ["nagaland", "NSCN-IM", "ceasefire", "tribal protest", "shutdown", "northeast", "naga", "armed forces"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_059_src_01.json"
+    platform: "telegram"
+    source_name: "NagaTribalForum"
+    credibility: 35.0
+    published_at: "2024-06-20T05:00:00Z"
+  - fixture: "evt_059_src_02.json"
+    platform: "telegram"
+    source_name: "NagalandAlerts"
+    credibility: 38.0
+    published_at: "2024-06-20T05:30:00Z"
+  - fixture: "evt_059_src_03.json"
+    platform: "x"
+    source_name: "@NagaUpdates"
+    credibility: 45.0
+    published_at: "2024-06-20T06:30:00Z"
+  - fixture: "evt_059_src_04.json"
+    platform: "reddit"
+    source_name: "r/NorthEastIndia"
+    credibility: 40.0
+    published_at: "2024-06-20T07:00:00Z"
+  - fixture: "evt_059_src_05.json"
+    platform: "web"
+    source_name: "Morung Express"
+    credibility: 72.0
+    published_at: "2024-06-20T14:00:00Z"
+  - fixture: "evt_059_src_06.json"
+    platform: "web"
+    source_name: "Eastern Mirror Nagaland"
+    credibility: 70.0
+    published_at: "2024-06-20T10:00:00Z"
+  - fixture: "evt_059_src_07.json"
+    platform: "rss"
+    source_name: "The Hindu Northeast"
+    credibility: 82.0
+    published_at: "2024-06-20T15:00:00Z"
+  - fixture: "evt_059_src_08.json"
+    platform: "bluesky"
+    source_name: "@neconflict.bsky.social"
+    credibility: 48.0
+    published_at: "2024-06-20T08:00:00Z"

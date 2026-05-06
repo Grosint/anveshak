@@ -1,0 +1,7 @@
+{
+  "raw_text": "THREAD: A video circulating on Pakistani Twitter claims to show an IAF pilot making political statements against the Indian government. This is FAKE. Analysis: 1) Lip sync is off by ~200ms (typical of deepfake generation). 2) Facial texture around jawline shows smoothing artefacts. 3) Background is from a 2019 press conference (reverse image match). 4) Audio spectrogram shows splicing at 0:14 and 0:38. 5) No official IAF channels have shared this. Assessment: Likely generated using face-swap AI, distributed to influence Indian elections. First appeared on ISPR-adjacent accounts.",
+  "clean_text": "A video circulating on Pakistani Twitter claims to show an IAF pilot making political statements against the Indian government. This is FAKE. Lip sync is off by 200ms typical of deepfake generation. Facial texture around jawline shows smoothing artefacts. Background is from a 2019 press conference. Audio spectrogram shows splicing. No official IAF channels have shared this. Likely generated using face-swap AI distributed to influence Indian elections. First appeared on ISPR-adjacent accounts.",
+  "language": "en",
+  "url": "https://x.com/IndiaOSINT/status/1773456789012345678",
+  "captured_at": "2024-03-28T10:30:00Z"
+}

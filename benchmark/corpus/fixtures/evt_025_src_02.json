@@ -1,0 +1,7 @@
+{
+  "raw_text": "ALERT: Yuan Wang 5 (MMSI 413270005) entered Indian EEZ without prior notification. Vessel classified as space and satellite tracking ship but widely assessed as SIGINT collection platform. AIS gaps of 6-12 hours observed. Indian Navy has deployed INS Sahyadri to shadow the vessel. This is third Yuan Wang-class incursion into Indian Ocean Region this year.",
+  "clean_text": "Yuan Wang 5 entered Indian EEZ without notification. Classified as satellite tracking ship but assessed as SIGINT platform. AIS gaps of 6-12 hours observed. Indian Navy INS Sahyadri deployed to shadow.",
+  "language": "en",
+  "url": "https://t.me/NavalIntelChannel/5678",
+  "captured_at": "2024-01-15T03:00:00Z"
+}

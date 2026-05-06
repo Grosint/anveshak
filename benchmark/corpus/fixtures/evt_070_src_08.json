@@ -1,0 +1,7 @@
+{
+  "raw_text": "A persistent cyber intrusion was detected in the administrative network of the Kudankulam Nuclear Power Plant in Tamil Nadu, with the malware attributed to a variant used by the Lazarus Group, a threat actor linked to North Korea. The malware targeted the plant's HR and procurement systems. NPCIL confirmed that operational technology networks remained air-gapped and unaffected. The Department of Atomic Energy has ordered a comprehensive security audit across all nuclear installations in the country.",
+  "clean_text": "Lazarus Group malware detected at Kudankulam admin network targeting HR and procurement. OT air-gapped. DAE ordered comprehensive audit of all nuclear installations.",
+  "language": "en",
+  "url": "https://www.thehindu.com/news/national/kudankulam-nuclear-plant-cyber-intrusion-lazarus-group/article67456789.ece",
+  "captured_at": "2023-11-14T12:00:00Z"
+}

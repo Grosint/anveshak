@@ -1,0 +1,7 @@
+{
+  "raw_text": "Mumbai Port Trust hit by a serious cyber intrusion. The attackers exploited a zero-day in their legacy SCADA system to access vessel traffic management and cargo scheduling. Maritime traffic has been diverted to JNPT. NCIIPC has issued alerts to all major ports. The use of legacy SCADA with internet connectivity is a known risk that has been flagged repeatedly.",
+  "clean_text": "Mumbai Port cyber intrusion via legacy SCADA zero-day. Vessel traffic and cargo compromised, diverted to JNPT. NCIIPC alerts issued. Legacy SCADA internet exposure flagged as known risk.",
+  "language": "en",
+  "url": "https://www.reddit.com/r/IndiaDefence/comments/1bt9k7m/mumbai_port_cyber_intrusion_scada/",
+  "captured_at": "2024-03-28T06:00:00Z"
+}

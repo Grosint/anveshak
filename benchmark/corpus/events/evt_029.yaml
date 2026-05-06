@@ -1,0 +1,55 @@
+id: "evt-029"
+name: "Iran-backed Cyber Campaign Against Indian Infrastructure"
+category: "information_operations"
+languages: ["en"]
+earliest_osint_signal: "2024-04-22T11:00:00Z"
+mainstream_media_date: "2024-04-25T08:00:00Z"
+description: >
+  Iranian APT group MuddyWater conducted a phishing and watering-hole campaign
+  targeting Indian power grid operators and port management systems. The campaign
+  used compromised legitimate Indian government domains to deliver Atera remote
+  access agents, with C2 infrastructure traced to IRGC-linked hosting providers.
+keywords: ["MuddyWater", "APT", "Iran", "IRGC", "power grid", "phishing", "cyber attack", "critical infrastructure"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_029_src_01.json"
+    platform: "x"
+    source_name: "@MalwareHunterTeam"
+    credibility: 78.0
+    published_at: "2024-04-22T11:00:00Z"
+  - fixture: "evt_029_src_02.json"
+    platform: "telegram"
+    source_name: "CyberThreatIntel"
+    credibility: 60.0
+    published_at: "2024-04-22T12:30:00Z"
+  - fixture: "evt_029_src_03.json"
+    platform: "web"
+    source_name: "Mandiant Blog"
+    credibility: 92.0
+    published_at: "2024-04-24T14:00:00Z"
+  - fixture: "evt_029_src_04.json"
+    platform: "reddit"
+    source_name: "r/netsec"
+    credibility: 55.0
+    published_at: "2024-04-22T16:00:00Z"
+  - fixture: "evt_029_src_05.json"
+    platform: "rss"
+    source_name: "CERT-In Advisory"
+    credibility: 88.0
+    published_at: "2024-04-24T06:00:00Z"
+  - fixture: "evt_029_src_06.json"
+    platform: "web"
+    source_name: "The Record by Recorded Future"
+    credibility: 80.0
+    published_at: "2024-04-25T08:00:00Z"
+  - fixture: "evt_029_src_07.json"
+    platform: "telegram"
+    source_name: "APTNotesChannel"
+    credibility: 62.0
+    published_at: "2024-04-22T13:00:00Z"
+  - fixture: "evt_029_src_08.json"
+    platform: "bluesky"
+    source_name: "@cyberthreat.bsky.social"
+    credibility: 50.0
+    published_at: "2024-04-22T18:00:00Z"

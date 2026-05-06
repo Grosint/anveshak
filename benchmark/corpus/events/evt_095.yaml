@@ -1,0 +1,56 @@
+id: "evt-095"
+name: "War Gaming Scenario Post Mistaken for Intel"
+category: "cross_border_security"
+languages: ["en"]
+earliest_osint_signal: "2024-07-08T12:00:00Z"
+mainstream_media_date: "2024-07-09T06:00:00Z"
+description: >
+  A detailed war gaming scenario post on a defence forum described a
+  hypothetical PLA amphibious assault on the Andaman Islands. The post
+  was clearly labelled as fiction and part of a strategy game thread, but
+  screenshots were extracted and shared on Telegram and X without context,
+  causing brief alarm among OSINT watchers.
+keywords: ["war game", "andaman", "PLA", "amphibious", "fiction", "scenario", "defence forum", "hypothetical"]
+should_fire_signal: false
+expected_isc: 1
+sources:
+  - fixture: "evt_095_src_01.json"
+    platform: "web"
+    source_name: "IndianDefenceForum.com"
+    credibility: 40.0
+    published_at: "2024-07-08T12:00:00Z"
+  - fixture: "evt_095_src_02.json"
+    platform: "telegram"
+    source_name: "OSINT_AsiaPacific"
+    credibility: 25.0
+    published_at: "2024-07-08T14:00:00Z"
+  - fixture: "evt_095_src_03.json"
+    platform: "x"
+    source_name: "IndoPac_MilWatch"
+    credibility: 30.0
+    published_at: "2024-07-08T14:30:00Z"
+  - fixture: "evt_095_src_04.json"
+    platform: "x"
+    source_name: "NavalAnalyst_TW"
+    credibility: 35.0
+    published_at: "2024-07-08T15:00:00Z"
+  - fixture: "evt_095_src_05.json"
+    platform: "reddit"
+    source_name: "r/CredibleDefense"
+    credibility: 55.0
+    published_at: "2024-07-08T16:00:00Z"
+  - fixture: "evt_095_src_06.json"
+    platform: "telegram"
+    source_name: "BreakingDefence_IN"
+    credibility: 20.0
+    published_at: "2024-07-08T15:30:00Z"
+  - fixture: "evt_095_src_07.json"
+    platform: "web"
+    source_name: "The Diplomat"
+    credibility: 80.0
+    published_at: "2024-07-09T06:00:00Z"
+  - fixture: "evt_095_src_08.json"
+    platform: "rss"
+    source_name: "Defence News Asia"
+    credibility: 65.0
+    published_at: "2024-07-09T04:00:00Z"

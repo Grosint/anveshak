@@ -1,0 +1,7 @@
+{
+  "raw_text": "RedEcho: A China-linked group targets the Indian power sector amid heightened border tensions. Recorded Future's Insikt Group has identified a campaign conducted by a China-linked threat activity group we track as RedEcho targeting the Indian power sector. The group compromised 10 Indian power sector organizations, including 4 of 5 Regional Load Despatch Centres (RLDCs) responsible for the operation of India's power grid, 2 State Load Despatch Centres, and other entities. The campaign used ShadowPad command-and-control infrastructure — a modular backdoor shared among several Chinese-sponsored groups. The targeting of Indian critical infrastructure raises concerns about potential pre-positioning for destructive attacks during geopolitical escalation. The intrusions appear to have begun in mid-2020, correlating with the LAC standoff.",
+  "clean_text": "RedEcho: China-linked group targets Indian power sector amid border tensions. Insikt Group identified campaign by RedEcho targeting 10 Indian power sector organizations including 4 of 5 Regional Load Despatch Centres. Campaign used ShadowPad command-and-control infrastructure a modular backdoor shared among Chinese groups. Targeting raises concerns about pre-positioning for destructive attacks during geopolitical escalation. Intrusions began mid-2020 correlating with LAC standoff.",
+  "language": "en",
+  "url": "https://www.recordedfuture.com/redecho-targeting-indian-power-sector",
+  "captured_at": "2021-02-28T06:00:00Z"
+}

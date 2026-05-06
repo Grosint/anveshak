@@ -1,0 +1,7 @@
+{
+  "raw_text": "DFRAC Analysis: The drone footage claiming to show Indian soldiers crossing the LoC is manipulated. Our forensic examination identified frame-rate inconsistencies (switching between 24fps and 30fps), EXIF metadata pointing to stock footage provider Shutterstock, and pixel-level artifacts around the inserted military figures consistent with video compositing software.",
+  "clean_text": "DFRAC forensic analysis confirms LoC crossing drone footage is manipulated. Frame-rate inconsistencies, stock footage EXIF metadata, and compositing artifacts identified.",
+  "language": "en",
+  "url": "https://dfrac.org/en/2024/05/18/loc-drone-footage-manipulation-analysis/",
+  "captured_at": "2024-05-18T10:00:00Z"
+}

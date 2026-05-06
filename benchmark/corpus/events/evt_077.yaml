@@ -1,0 +1,54 @@
+id: "evt-077"
+name: "Ukraine Kherson Dam Destruction — Satellite Detection"
+category: "cross_border_security"
+languages: ["en", "ru"]
+earliest_osint_signal: "2023-06-06T00:30:00Z"
+mainstream_media_date: "2023-06-06T06:00:00Z"
+description: >
+  The Kakhovka Dam in Kherson Oblast was destroyed on June 6, 2023, causing
+  catastrophic flooding. Satellite imagery analysts detected structural damage
+  and water level changes hours before official confirmation.
+keywords: ["kakhovka", "dam", "kherson", "flooding", "nova kakhovka", "dnipro", "satellite"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_077_src_01.json"
+    platform: "telegram"
+    source_name: "Ukraine NOW"
+    credibility: 50.0
+    published_at: "2023-06-06T00:45:00Z"
+  - fixture: "evt_077_src_02.json"
+    platform: "x"
+    source_name: "Brady Africk Satellite"
+    credibility: 65.0
+    published_at: "2023-06-06T01:30:00Z"
+  - fixture: "evt_077_src_03.json"
+    platform: "web"
+    source_name: "Copernicus EMS"
+    credibility: 90.0
+    published_at: "2023-06-06T03:00:00Z"
+  - fixture: "evt_077_src_04.json"
+    platform: "reddit"
+    source_name: "r/UkraineConflict"
+    credibility: 30.0
+    published_at: "2023-06-06T01:15:00Z"
+  - fixture: "evt_077_src_05.json"
+    platform: "web"
+    source_name: "Maxar Technologies"
+    credibility: 85.0
+    published_at: "2023-06-06T04:00:00Z"
+  - fixture: "evt_077_src_06.json"
+    platform: "rss"
+    source_name: "AP News Wire"
+    credibility: 90.0
+    published_at: "2023-06-06T06:00:00Z"
+  - fixture: "evt_077_src_07.json"
+    platform: "telegram"
+    source_name: "Kherson Regional Admin"
+    credibility: 60.0
+    published_at: "2023-06-06T02:00:00Z"
+  - fixture: "evt_077_src_08.json"
+    platform: "x"
+    source_name: "GeoConfirmed"
+    credibility: 70.0
+    published_at: "2023-06-06T02:30:00Z"

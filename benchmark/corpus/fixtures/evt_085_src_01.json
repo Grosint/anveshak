@@ -1,0 +1,7 @@
+{
+  "raw_text": "New malware sample uploaded to VirusTotal from India targeting Siemens S7 PLCs. SHA256: a3f7b2c... Detection rate currently 4/72. Behavioral analysis shows it attempts to modify PLC ladder logic for process control manipulation. Code structure shares similarities with Stuxnet-era payloads. Sample appears to have been extracted from a live ICS environment. Community analysis ongoing.",
+  "clean_text": "New malware on VirusTotal from India targeting Siemens S7 PLCs. Low detection rate. Modifies PLC ladder logic. Code similarities with Stuxnet. Extracted from live ICS environment.",
+  "language": "en",
+  "url": "https://www.virustotal.com/gui/file/a3f7b2c/community",
+  "captured_at": "2024-08-20T02:30:00Z"
+}

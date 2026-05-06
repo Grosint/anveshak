@@ -1,0 +1,56 @@
+id: "evt-030"
+name: "Chinese State Media COVID Origin Blame-India Campaign"
+category: "information_operations"
+languages: ["en", "zh"]
+earliest_osint_signal: "2023-11-10T05:00:00Z"
+mainstream_media_date: "2023-11-13T07:00:00Z"
+description: >
+  Chinese state media outlets CGTN and Global Times published a series of articles
+  and social media posts suggesting COVID-19 may have originated from sewage
+  samples in India, citing misrepresented preprint studies. The campaign was
+  amplified by Spamouflage-linked accounts across multiple platforms targeting
+  South Asian audiences.
+keywords: ["COVID origin", "CGTN", "Global Times", "Spamouflage", "disinformation", "sewage samples", "India blame", "state media"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_030_src_01.json"
+    platform: "web"
+    source_name: "Global Times"
+    credibility: 20.0
+    published_at: "2023-11-10T05:00:00Z"
+  - fixture: "evt_030_src_02.json"
+    platform: "telegram"
+    source_name: "CGTNOfficial"
+    credibility: 22.0
+    published_at: "2023-11-10T06:00:00Z"
+  - fixture: "evt_030_src_03.json"
+    platform: "x"
+    source_name: "@DisinfoResearch"
+    credibility: 74.0
+    published_at: "2023-11-10T10:00:00Z"
+  - fixture: "evt_030_src_04.json"
+    platform: "reddit"
+    source_name: "r/Coronavirus"
+    credibility: 40.0
+    published_at: "2023-11-10T12:00:00Z"
+  - fixture: "evt_030_src_05.json"
+    platform: "rss"
+    source_name: "ProPublica"
+    credibility: 88.0
+    published_at: "2023-11-12T14:00:00Z"
+  - fixture: "evt_030_src_06.json"
+    platform: "web"
+    source_name: "India Today"
+    credibility: 68.0
+    published_at: "2023-11-13T07:00:00Z"
+  - fixture: "evt_030_src_07.json"
+    platform: "telegram"
+    source_name: "ChinaPropWatch"
+    credibility: 56.0
+    published_at: "2023-11-10T08:00:00Z"
+  - fixture: "evt_030_src_08.json"
+    platform: "bluesky"
+    source_name: "@healthdisinfo.bsky.social"
+    credibility: 48.0
+    published_at: "2023-11-10T14:00:00Z"

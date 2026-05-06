@@ -1,0 +1,55 @@
+id: "evt-027"
+name: "Chinese Influence Operation — Taiwan Election Interference"
+category: "information_operations"
+languages: ["en", "zh"]
+earliest_osint_signal: "2024-01-08T04:00:00Z"
+mainstream_media_date: "2024-01-11T06:00:00Z"
+description: >
+  Coordinated Chinese influence operation targeting Taiwan's January 2024
+  presidential election through deepfake videos, fabricated polls, and
+  Spamouflage-linked social media accounts. The campaign promoted KMT candidates
+  and spread fear narratives about DPP cross-strait policies triggering war.
+keywords: ["Taiwan election", "Spamouflage", "deepfake", "DPP", "KMT", "influence operation", "cross-strait", "CCP"]
+should_fire_signal: true
+expected_isc: 4
+sources:
+  - fixture: "evt_027_src_01.json"
+    platform: "telegram"
+    source_name: "TaiwanFactCheck"
+    credibility: 70.0
+    published_at: "2024-01-08T04:00:00Z"
+  - fixture: "evt_027_src_02.json"
+    platform: "x"
+    source_name: "@DoubleThinkLab"
+    credibility: 75.0
+    published_at: "2024-01-08T06:00:00Z"
+  - fixture: "evt_027_src_03.json"
+    platform: "web"
+    source_name: "Taipei Times"
+    credibility: 72.0
+    published_at: "2024-01-09T02:00:00Z"
+  - fixture: "evt_027_src_04.json"
+    platform: "reddit"
+    source_name: "r/taiwan"
+    credibility: 42.0
+    published_at: "2024-01-08T10:00:00Z"
+  - fixture: "evt_027_src_05.json"
+    platform: "rss"
+    source_name: "ASPI Strategist"
+    credibility: 84.0
+    published_at: "2024-01-10T08:00:00Z"
+  - fixture: "evt_027_src_06.json"
+    platform: "web"
+    source_name: "The Record by Recorded Future"
+    credibility: 80.0
+    published_at: "2024-01-11T06:00:00Z"
+  - fixture: "evt_027_src_07.json"
+    platform: "telegram"
+    source_name: "ChinaDigitalTimes"
+    credibility: 65.0
+    published_at: "2024-01-08T05:30:00Z"
+  - fixture: "evt_027_src_08.json"
+    platform: "bluesky"
+    source_name: "@chinainfowars.bsky.social"
+    credibility: 50.0
+    published_at: "2024-01-08T12:00:00Z"

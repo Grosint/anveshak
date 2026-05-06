@@ -1,0 +1,7 @@
+{
+  "raw_text": "CERT-In Advisory CIAD-2021-0011: Advanced Persistent Threat targeting Indian power sector organizations. CERT-In has received reports of sophisticated intrusions affecting multiple power sector entities. Organizations are advised to immediately scan for indicators of compromise associated with ShadowPad malware framework. All power sector entities must implement network segmentation between IT and OT environments. DNS logging should be enabled and monitored for connections to known malicious DDNS providers. Incident response teams should be placed on heightened alert.",
+  "clean_text": "CERT-In Advisory CIAD-2021-0011: Advanced Persistent Threat targeting Indian power sector organizations. Reports of sophisticated intrusions affecting multiple power sector entities. Organizations advised to scan for ShadowPad malware IOCs. Power sector entities must implement network segmentation between IT and OT environments. DNS logging should be enabled and monitored for malicious DDNS providers.",
+  "language": "en",
+  "url": "https://www.cert-in.org.in/s2cMainServlet?pageid=PUBVLNOTES&SESSION_ID=advisory_2021_0011",
+  "captured_at": "2021-03-02T06:00:00Z"
+}

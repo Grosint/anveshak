@@ -1,0 +1,7 @@
+{
+  "raw_text": "Mumbai Port Trust detected unauthorized access to its vessel traffic management system and cargo scheduling database after attackers exploited a zero-day vulnerability in the port's legacy SCADA interface. Maritime traffic was temporarily rerouted to JNPT while incident response teams isolated affected systems. The National Critical Information Infrastructure Protection Centre issued a critical alert to all major Indian ports. Port operations are expected to resume fully within 48 hours.",
+  "clean_text": "Mumbai Port SCADA zero-day intrusion compromised vessel traffic and cargo systems. Traffic rerouted to JNPT. NCIIPC critical alert to all ports. Full operations expected within 48 hours.",
+  "language": "en",
+  "url": "https://www.business-standard.com/india-news/mumbai-port-cyber-attack-scada-vulnerability-nciipc-124032800345_1.html",
+  "captured_at": "2024-03-28T12:00:00Z"
+}

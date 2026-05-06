@@ -1,0 +1,7 @@
+{
+  "raw_text": "Ran the viral Supreme Court judge video through our media forensics pipeline. Detection results: face-swap probability 0.94, voice synthesis probability 0.89. The face region shows GAN-typical checkerboard artifacts in the frequency domain. Audio spectral analysis reveals formant patterns inconsistent with natural speech. This is a high-quality deepfake but detectable with proper forensic tools. The temporal artifacts become obvious at 2x playback speed.",
+  "clean_text": "Media forensics analysis of Supreme Court deepfake: face-swap probability 0.94, voice synthesis 0.89. GAN checkerboard artifacts and unnatural formant patterns detected. High-quality but detectable.",
+  "language": "en",
+  "url": "https://bsky.app/profile/mediaforensics.bsky.social/post/4m6n8p0q3r",
+  "captured_at": "2024-11-20T11:00:00Z"
+}

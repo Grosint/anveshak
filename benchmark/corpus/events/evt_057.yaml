@@ -1,0 +1,57 @@
+id: "evt-057"
+name: "Kashmir Internet Shutdown — Protest Coordination Detection"
+category: "protest_civil_unrest"
+languages: ["en", "ur"]
+earliest_osint_signal: "2024-04-08T03:30:00Z"
+mainstream_media_date: "2024-04-08T14:00:00Z"
+description: >
+  Following a contested encounter in South Kashmir, protest calls spread
+  rapidly on social media before authorities imposed an internet shutdown.
+  OSINT analysis detected coordination patterns including timed message
+  bursts across Telegram and X, use of coded language for rally points, and
+  VPN-tunneled posts continuing after the shutdown. The protest escalated
+  to stone-pelting incidents at three locations.
+keywords: ["kashmir", "internet shutdown", "protest", "encounter", "coordination", "stone pelting", "VPN", "south kashmir"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_057_src_01.json"
+    platform: "telegram"
+    source_name: "KashmirVoiceUnheard"
+    credibility: 28.0
+    published_at: "2024-04-08T03:30:00Z"
+  - fixture: "evt_057_src_02.json"
+    platform: "x"
+    source_name: "@KashmirDispatches"
+    credibility: 40.0
+    published_at: "2024-04-08T04:00:00Z"
+  - fixture: "evt_057_src_03.json"
+    platform: "telegram"
+    source_name: "AwamKashmir"
+    credibility: 25.0
+    published_at: "2024-04-08T04:30:00Z"
+  - fixture: "evt_057_src_04.json"
+    platform: "reddit"
+    source_name: "r/Kashmir"
+    credibility: 38.0
+    published_at: "2024-04-08T06:00:00Z"
+  - fixture: "evt_057_src_05.json"
+    platform: "web"
+    source_name: "Greater Kashmir"
+    credibility: 65.0
+    published_at: "2024-04-08T14:00:00Z"
+  - fixture: "evt_057_src_06.json"
+    platform: "web"
+    source_name: "Scroll.in"
+    credibility: 78.0
+    published_at: "2024-04-08T10:00:00Z"
+  - fixture: "evt_057_src_07.json"
+    platform: "rss"
+    source_name: "Kashmir Observer"
+    credibility: 60.0
+    published_at: "2024-04-08T15:00:00Z"
+  - fixture: "evt_057_src_08.json"
+    platform: "bluesky"
+    source_name: "@kashmirwatch.bsky.social"
+    credibility: 45.0
+    published_at: "2024-04-08T07:30:00Z"

@@ -1,0 +1,55 @@
+id: "evt-087"
+name: "Old 2019 LoC Video Reshared as Breaking 2024"
+category: "cross_border_security"
+languages: ["en"]
+earliest_osint_signal: "2024-05-10T08:00:00Z"
+mainstream_media_date: "2024-05-10T08:00:00Z"
+description: >
+  A 2019 video showing artillery exchanges along the Line of Control was
+  reshared across social media in May 2024 with captions claiming it was a
+  "breaking" new escalation. Reverse image search and metadata analysis
+  confirmed the footage was from the 2019 Balakot era.
+keywords: ["LoC", "old video", "recycled", "2019", "Balakot", "breaking news", "fake"]
+should_fire_signal: false
+expected_isc: 1
+sources:
+  - fixture: "evt_087_src_01.json"
+    platform: "x"
+    source_name: "BreakingAlerts_IN"
+    credibility: 10.0
+    published_at: "2024-05-10T08:00:00Z"
+  - fixture: "evt_087_src_02.json"
+    platform: "telegram"
+    source_name: "India Defence Updates"
+    credibility: 15.0
+    published_at: "2024-05-10T08:30:00Z"
+  - fixture: "evt_087_src_03.json"
+    platform: "x"
+    source_name: "PakMilWatch"
+    credibility: 10.0
+    published_at: "2024-05-10T09:00:00Z"
+  - fixture: "evt_087_src_04.json"
+    platform: "reddit"
+    source_name: "r/IndianDefense"
+    credibility: 25.0
+    published_at: "2024-05-10T09:30:00Z"
+  - fixture: "evt_087_src_05.json"
+    platform: "telegram"
+    source_name: "Viral Military Clips"
+    credibility: 5.0
+    published_at: "2024-05-10T08:15:00Z"
+  - fixture: "evt_087_src_06.json"
+    platform: "web"
+    source_name: "BOOM FactCheck"
+    credibility: 80.0
+    published_at: "2024-05-10T12:00:00Z"
+  - fixture: "evt_087_src_07.json"
+    platform: "web"
+    source_name: "AltNews Debunk"
+    credibility: 80.0
+    published_at: "2024-05-10T13:00:00Z"
+  - fixture: "evt_087_src_08.json"
+    platform: "x"
+    source_name: "Concerned Citizen 2024"
+    credibility: 5.0
+    published_at: "2024-05-10T10:00:00Z"

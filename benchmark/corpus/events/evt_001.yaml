@@ -1,0 +1,93 @@
+id: "evt-001"
+name: "Chinese PLA Bridge Construction at Pangong Tso — Satellite Detection"
+category: "cross_border_security"
+languages: ["en", "zh"]
+earliest_osint_signal: "2024-01-15T04:00:00Z"
+mainstream_media_date: "2024-01-17T08:00:00Z"
+description: >
+  Open-source satellite imagery analysts on Twitter/X detected new bridge
+  construction by PLA at Pangong Tso (Finger 8 area) 48 hours before
+  Indian mainstream media reported it. Chinese military forums discussed
+  logistics preparations in Mandarin days earlier.
+keywords: ["Pangong Tso", "PLA", "bridge", "LAC", "Finger 8", "infrastructure"]
+should_fire_signal: true
+expected_isc: 4
+sources:
+  - fixture: "evt_001_src_01.json"
+    platform: "x"
+    source_name: "detresfa_ (OSINT analyst)"
+    credibility: 72.0
+    published_at: "2024-01-15T04:30:00Z"
+  - fixture: "evt_001_src_02.json"
+    platform: "web"
+    source_name: "The War Zone"
+    credibility: 78.0
+    published_at: "2024-01-15T14:00:00Z"
+  - fixture: "evt_001_src_03.json"
+    platform: "telegram"
+    source_name: "Intel Crab"
+    credibility: 65.0
+    published_at: "2024-01-15T06:00:00Z"
+  - fixture: "evt_001_src_04.json"
+    platform: "rss"
+    source_name: "NDTV"
+    credibility: 68.0
+    published_at: "2024-01-17T08:00:00Z"
+  - fixture: "evt_001_src_05.json"
+    platform: "web"
+    source_name: "SinoDefence Forum"
+    credibility: 45.0
+    published_at: "2024-01-14T10:00:00Z"
+    language: "zh"
+  - fixture: "evt_001_src_06.json"
+    platform: "reddit"
+    source_name: "r/CredibleDefense"
+    credibility: 55.0
+    published_at: "2024-01-15T08:00:00Z"
+  - fixture: "evt_001_src_07.json"
+    platform: "web"
+    source_name: "Bellingcat"
+    credibility: 89.0
+    published_at: "2024-01-15T12:00:00Z"
+  - fixture: "evt_001_src_08.json"
+    platform: "rss"
+    source_name: "Indian Express"
+    credibility: 72.0
+    published_at: "2024-01-16T06:00:00Z"
+  - fixture: "evt_001_src_09.json"
+    platform: "web"
+    source_name: "Dainik Jagran"
+    credibility: 62.0
+    published_at: "2024-01-16T08:00:00Z"
+    language: "hi"
+  - fixture: "evt_001_src_10.json"
+    platform: "web"
+    source_name: "PLA Daily Blog"
+    credibility: 30.0
+    published_at: "2024-01-14T14:00:00Z"
+    language: "zh"
+  - fixture: "evt_001_src_11.json"
+    platform: "bluesky"
+    source_name: "OSINT Bluesky"
+    credibility: 60.0
+    published_at: "2024-01-15T07:00:00Z"
+  - fixture: "evt_001_src_12.json"
+    platform: "web"
+    source_name: "Jane's Defence Weekly"
+    credibility: 91.0
+    published_at: "2024-01-16T10:00:00Z"
+  - fixture: "evt_001_src_13.json"
+    platform: "web"
+    source_name: "Indian MoD"
+    credibility: 85.0
+    published_at: "2024-01-17T12:00:00Z"
+  - fixture: "evt_001_src_14.json"
+    platform: "rss"
+    source_name: "Al Jazeera"
+    credibility: 75.0
+    published_at: "2024-01-17T06:00:00Z"
+  - fixture: "evt_001_src_15.json"
+    platform: "web"
+    source_name: "Defence.pk Forum"
+    credibility: 42.0
+    published_at: "2024-01-16T04:00:00Z"

@@ -1,0 +1,7 @@
+{
+  "raw_text": "Statement from the Ministry of Power, Government of India: The Government is aware of reports regarding cyber intrusions in the power sector. The Power Ministry wishes to clarify that there has been no impact on any power supply operations in the country. CERT-In and NCIIPC have been monitoring the situation and appropriate defensive measures have been taken. The Indian power grid operates with multiple layers of redundancy and manual override capabilities. All power sector organizations have been directed to conduct comprehensive cyber security audits and implement recommendations from NCIIPC.",
+  "clean_text": "Power Ministry statement acknowledging reports of cyber intrusions in power sector. No impact on power supply operations. CERT-In and NCIIPC monitoring situation with appropriate defensive measures taken. Indian power grid operates with multiple layers of redundancy and manual override capabilities. Power sector organizations directed to conduct cyber security audits and implement NCIIPC recommendations.",
+  "language": "en",
+  "url": "https://pib.gov.in/PressReleasePage.aspx?PRID=1702018",
+  "captured_at": "2021-03-01T14:00:00Z"
+}

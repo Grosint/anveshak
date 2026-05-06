@@ -1,0 +1,7 @@
+{
+  "raw_text": "Regarding the ISRO breach claims: I work in infosec and these screenshots are clearly fabricated. The 'telemetry dashboard' they posted is just the publicly available ISRO website mission status page with inspect element modifications. You can see the browser dev tools artifacts in the bottom-left corner of screenshot 3. Also NavIC encryption keys are not stored on internet-facing servers — that is air-gapped infrastructure. This is a script kiddie attention grab, nothing more.",
+  "clean_text": "Infosec professional debunks ISRO breach claims. Screenshots identified as modified ISRO public website using browser dev tools. Browser artifacts visible. NavIC keys stored on air-gapped infrastructure not internet-facing servers. Assessed as script kiddie attention grab.",
+  "language": "en",
+  "url": "https://reddit.com/r/netsec/comments/ghi789",
+  "captured_at": "2024-04-22T18:00:00Z"
+}

@@ -1,0 +1,55 @@
+id: "evt-083"
+name: "Russian Nuclear Rhetoric — Escalation Signals"
+category: "information_operations"
+languages: ["en", "ru"]
+earliest_osint_signal: "2024-02-15T06:00:00Z"
+mainstream_media_date: "2024-02-15T14:00:00Z"
+description: >
+  In early 2024, Russian state media and officials intensified nuclear rhetoric
+  as part of strategic messaging. OSINT analysts tracked coordinated amplification
+  across Telegram, state-controlled news, and social media bots to assess whether
+  signals indicated genuine escalation or information warfare.
+keywords: ["nuclear", "russia", "escalation", "rhetoric", "tactical nuclear", "putin", "deterrence", "strategic"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_083_src_01.json"
+    platform: "telegram"
+    source_name: "Russia State TV Monitor"
+    credibility: 35.0
+    published_at: "2024-02-15T06:30:00Z"
+  - fixture: "evt_083_src_02.json"
+    platform: "web"
+    source_name: "TASS English"
+    credibility: 25.0
+    published_at: "2024-02-15T07:00:00Z"
+  - fixture: "evt_083_src_03.json"
+    platform: "x"
+    source_name: "Nuclear Threat Initiative OSINT"
+    credibility: 70.0
+    published_at: "2024-02-15T08:00:00Z"
+  - fixture: "evt_083_src_04.json"
+    platform: "web"
+    source_name: "Arms Control Wonk"
+    credibility: 80.0
+    published_at: "2024-02-15T10:00:00Z"
+  - fixture: "evt_083_src_05.json"
+    platform: "reddit"
+    source_name: "r/CredibleDefense"
+    credibility: 40.0
+    published_at: "2024-02-15T09:00:00Z"
+  - fixture: "evt_083_src_06.json"
+    platform: "telegram"
+    source_name: "Solovyov Live"
+    credibility: 15.0
+    published_at: "2024-02-15T06:15:00Z"
+  - fixture: "evt_083_src_07.json"
+    platform: "rss"
+    source_name: "BBC News Wire"
+    credibility: 85.0
+    published_at: "2024-02-15T14:00:00Z"
+  - fixture: "evt_083_src_08.json"
+    platform: "web"
+    source_name: "Bulletin of Atomic Scientists"
+    credibility: 90.0
+    published_at: "2024-02-16T09:00:00Z"

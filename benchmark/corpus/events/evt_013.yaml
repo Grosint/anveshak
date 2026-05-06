@@ -1,0 +1,63 @@
+id: "evt-013"
+name: "Myanmar Junta Airstrike Near Indian Border — Chin State"
+category: "cross_border_security"
+languages: ["en"]
+earliest_osint_signal: "2023-11-08T04:15:00Z"
+mainstream_media_date: "2023-11-08T11:00:00Z"
+description: >
+  Myanmar military junta conducted airstrikes in Chin State within
+  5 kilometres of the Indian border in Mizoram. Explosions were
+  heard in Champhai district. Indian Army units along the border
+  placed on heightened alert. Refugee influx into Mizoram reported
+  by local NGOs.
+keywords:
+  - Myanmar airstrike
+  - Chin State
+  - Mizoram border
+  - Tatmadaw
+  - Champhai
+  - refugee influx
+  - India-Myanmar border
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_013_src_01.json"
+    platform: "telegram"
+    source_name: "Myanmar Conflict Monitor"
+    credibility: 45.0
+    published_at: "2023-11-08T04:15:00Z"
+  - fixture: "evt_013_src_02.json"
+    platform: "x"
+    source_name: "@MyanmarNowEN"
+    credibility: 55.0
+    published_at: "2023-11-08T05:00:00Z"
+  - fixture: "evt_013_src_03.json"
+    platform: "web"
+    source_name: "The Irrawaddy"
+    credibility: 72.0
+    published_at: "2023-11-08T07:00:00Z"
+  - fixture: "evt_013_src_04.json"
+    platform: "rss"
+    source_name: "India Today Northeast"
+    credibility: 76.0
+    published_at: "2023-11-08T11:00:00Z"
+  - fixture: "evt_013_src_05.json"
+    platform: "reddit"
+    source_name: "r/Myanmar"
+    credibility: 30.0
+    published_at: "2023-11-08T06:20:00Z"
+  - fixture: "evt_013_src_06.json"
+    platform: "telegram"
+    source_name: "Chin Resistance Updates"
+    credibility: 40.0
+    published_at: "2023-11-08T04:45:00Z"
+  - fixture: "evt_013_src_07.json"
+    platform: "web"
+    source_name: "East Mojo"
+    credibility: 65.0
+    published_at: "2023-11-08T09:30:00Z"
+  - fixture: "evt_013_src_08.json"
+    platform: "bluesky"
+    source_name: "@southeastasiawatch.bsky.social"
+    credibility: 38.0
+    published_at: "2023-11-08T06:50:00Z"

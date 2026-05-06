@@ -1,0 +1,7 @@
+{
+  "raw_text": "THREAD: We analyzed the viral CM audio clip and found multiple indicators of AI voice cloning. The pitch transitions are unnaturally smooth, there are no natural breathing sounds or hesitation markers, and spectral analysis shows uniform formant patterns inconsistent with natural speech. This appears to be generated using a TTS model trained on the CM's public speeches.",
+  "clean_text": "Analysis of viral CM audio reveals AI voice cloning indicators: unnatural pitch transitions, no breathing sounds, uniform formant patterns inconsistent with natural speech.",
+  "language": "en",
+  "url": "https://x.com/FactCheckIndia/status/1749382918",
+  "captured_at": "2024-01-22T09:15:00Z"
+}

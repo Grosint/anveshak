@@ -1,0 +1,7 @@
+{
+  "raw_text": "Thread on the ISPR deepfake video metadata analysis. The video was uploaded from an IP range associated with Rawalpindi. EXIF data stripped but container metadata reveals Adobe Premiere Pro 2024 with Wav2Lip plugin artifacts. The original face-swap model appears to be based on SimSwap architecture. Frame-level analysis shows temporal inconsistencies at 24fps that are characteristic of GAN-generated facial reenactment. The audio track was separately generated using voice cloning, likely VALL-E or a similar zero-shot TTS model. Distribution pattern shows coordinated amplification across 47 accounts created within the same 72-hour window.",
+  "clean_text": "Thread on the ISPR deepfake video metadata analysis. The video was uploaded from an IP range associated with Rawalpindi. EXIF data stripped but container metadata reveals Adobe Premiere Pro 2024 with Wav2Lip plugin artifacts. The original face-swap model appears to be based on SimSwap architecture. Frame-level analysis shows temporal inconsistencies at 24fps that are characteristic of GAN-generated facial reenactment. The audio track was separately generated using voice cloning, likely VALL-E or a similar zero-shot TTS model. Distribution pattern shows coordinated amplification across 47 accounts created within the same 72-hour window.",
+  "language": "en",
+  "url": "https://bsky.app/profile/osintanalyst.bsky.social/post/3kn7x9v2m4s",
+  "captured_at": "2024-03-28T11:00:00Z"
+}

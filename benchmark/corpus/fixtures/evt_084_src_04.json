@@ -1,0 +1,7 @@
+{
+  "raw_text": "CERT-In Advisory CIAD-2024-0087: A critical ransomware incident has been identified affecting SCADA/ICS systems in the oil and gas sector. Organizations in the energy sector are advised to immediately audit remote access pathways, disable unnecessary RDP services, and implement network segmentation between IT and OT environments. IOCs and YARA rules are provided in the technical annex. Incident response coordination is underway.",
+  "clean_text": "CERT-In advisory confirms critical ransomware incident affecting oil and gas SCADA/ICS systems. Organizations advised to audit remote access and segment IT/OT networks. IOCs and YARA rules provided.",
+  "language": "en",
+  "url": "https://www.cert-in.org.in/advisory/CIAD-2024-0087",
+  "captured_at": "2024-06-12T08:00:00Z"
+}

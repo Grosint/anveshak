@@ -1,0 +1,55 @@
+id: "evt-022"
+name: "Galwan Valley Anniversary Buildup"
+category: "cross_border_security"
+languages: ["en", "zh"]
+earliest_osint_signal: "2024-06-10T03:45:00Z"
+mainstream_media_date: "2024-06-13T06:00:00Z"
+description: >
+  Satellite imagery and ground reports indicate PLA reinforcements moving toward
+  the Galwan Valley sector ahead of the June 15 anniversary of the 2020 clash.
+  New prefabricated structures and vehicle staging areas detected at Aksai Chin
+  forward positions.
+keywords: ["Galwan", "PLA", "LAC", "Aksai Chin", "reinforcements", "satellite imagery", "border buildup"]
+should_fire_signal: true
+expected_isc: 4
+sources:
+  - fixture: "evt_022_src_01.json"
+    platform: "x"
+    source_name: "@detaboringblog"
+    credibility: 72.0
+    published_at: "2024-06-10T03:45:00Z"
+  - fixture: "evt_022_src_02.json"
+    platform: "telegram"
+    source_name: "IntelCrab"
+    credibility: 60.0
+    published_at: "2024-06-10T05:00:00Z"
+  - fixture: "evt_022_src_03.json"
+    platform: "web"
+    source_name: "Indian Express"
+    credibility: 75.0
+    published_at: "2024-06-12T04:30:00Z"
+  - fixture: "evt_022_src_04.json"
+    platform: "reddit"
+    source_name: "r/geopolitics"
+    credibility: 45.0
+    published_at: "2024-06-10T09:20:00Z"
+  - fixture: "evt_022_src_05.json"
+    platform: "rss"
+    source_name: "SCMP Asia"
+    credibility: 70.0
+    published_at: "2024-06-11T08:00:00Z"
+  - fixture: "evt_022_src_06.json"
+    platform: "web"
+    source_name: "NDTV"
+    credibility: 68.0
+    published_at: "2024-06-13T06:00:00Z"
+  - fixture: "evt_022_src_07.json"
+    platform: "telegram"
+    source_name: "SinoDefenseTracker"
+    credibility: 50.0
+    published_at: "2024-06-10T04:15:00Z"
+  - fixture: "evt_022_src_08.json"
+    platform: "bluesky"
+    source_name: "@indopacific.bsky.social"
+    credibility: 48.0
+    published_at: "2024-06-10T12:00:00Z"

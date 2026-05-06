@@ -1,0 +1,7 @@
+{
+  "raw_text": "Thread on the AIIMS Delhi ransomware situation: This is a textbook example of why critical infrastructure needs air-gapped backups. The attackers clearly did reconnaissance — they hit during peak OPD hours to maximize disruption. Based on the IOCs floating around in private channels, the ransomware variant shares code similarities with previously seen Chinese APT tooling, though attribution is still preliminary. The ransom demand of ~200 crore INR in crypto is unusually high, suggesting the attackers know the value of the data they have encrypted.",
+  "clean_text": "AIIMS Delhi ransomware is textbook example of why critical infrastructure needs air-gapped backups. Attackers did reconnaissance and hit during peak OPD hours to maximize disruption. IOCs show ransomware variant shares code similarities with Chinese APT tooling though attribution is preliminary. Ransom demand of approximately 200 crore INR in crypto is unusually high suggesting attackers know value of encrypted data.",
+  "language": "en",
+  "url": "https://bsky.app/profile/infosec-analyst.bsky.social/post/3jdw8k2xvcs2q",
+  "captured_at": "2022-11-22T14:00:00Z"
+}

@@ -1,0 +1,7 @@
+{
+  "raw_text": "Major ICS malware incident at Indian chemical plant. PLC malware targeting Siemens S7 controllers with Stuxnet-like capabilities. Safety systems reportedly bypassed. Plant operations suspended pending investigation. CERT-In team on site. This is the most sophisticated OT attack we have seen targeting Indian infrastructure. Sources say the malware was active for weeks before detection.",
+  "clean_text": "ICS malware at Indian chemical plant targeting Siemens S7 PLCs. Safety systems bypassed. Plant operations suspended. CERT-In team on site. Malware active for weeks before detection.",
+  "language": "en",
+  "url": "https://t.me/otthreatintel/7823",
+  "captured_at": "2024-08-20T03:30:00Z"
+}

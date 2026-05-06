@@ -1,0 +1,63 @@
+id: "evt-017"
+name: "Nepal-China Railway Agreement — Strategic Implications"
+category: "cross_border_security"
+languages: ["en", "zh"]
+earliest_osint_signal: "2023-09-25T04:00:00Z"
+mainstream_media_date: "2023-09-25T11:00:00Z"
+description: >
+  Nepal and China signed a framework agreement for a trans-Himalayan
+  railway connecting Kerung (Tibet) to Kathmandu. Indian strategic
+  analysts flagged potential dual-use infrastructure enabling rapid
+  military logistics to the India-Nepal border. The project is valued
+  at an estimated USD 3.5 billion with Chinese financing.
+keywords:
+  - Nepal-China railway
+  - trans-Himalayan
+  - Kerung
+  - Kathmandu
+  - BRI
+  - dual-use infrastructure
+  - India-Nepal border
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_017_src_01.json"
+    platform: "telegram"
+    source_name: "Himalayan Geopolitics"
+    credibility: 44.0
+    published_at: "2023-09-25T04:00:00Z"
+  - fixture: "evt_017_src_02.json"
+    platform: "x"
+    source_name: "@NepalForeignAffairs"
+    credibility: 52.0
+    published_at: "2023-09-25T05:30:00Z"
+  - fixture: "evt_017_src_03.json"
+    platform: "web"
+    source_name: "Kathmandu Post"
+    credibility: 72.0
+    published_at: "2023-09-25T07:00:00Z"
+  - fixture: "evt_017_src_04.json"
+    platform: "rss"
+    source_name: "Hindustan Times"
+    credibility: 76.0
+    published_at: "2023-09-25T11:00:00Z"
+  - fixture: "evt_017_src_05.json"
+    platform: "reddit"
+    source_name: "r/Nepal"
+    credibility: 30.0
+    published_at: "2023-09-25T06:15:00Z"
+  - fixture: "evt_017_src_06.json"
+    platform: "telegram"
+    source_name: "BRI Watch Asia"
+    credibility: 46.0
+    published_at: "2023-09-25T04:45:00Z"
+  - fixture: "evt_017_src_07.json"
+    platform: "web"
+    source_name: "Xinhua English"
+    credibility: 38.0
+    published_at: "2023-09-25T09:30:00Z"
+  - fixture: "evt_017_src_08.json"
+    platform: "bluesky"
+    source_name: "@southasiabrief.bsky.social"
+    credibility: 40.0
+    published_at: "2023-09-25T06:45:00Z"

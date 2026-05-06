@@ -1,0 +1,7 @@
+{
+  "raw_text": "More details emerging on the Pune Smart City IoT attack. The exposed MQTT broker had no authentication, completely open to the internet. Attackers sent malicious commands to 2,000+ streetlights and 150 traffic controllers. The lack of basic security on critical urban infrastructure is alarming. PMC has disconnected everything and ordered a full audit. Several smart city vendors being questioned.",
+  "clean_text": "Pune IoT attack details: MQTT broker had zero authentication. Attackers sent malicious commands to thousands of devices. PMC disconnected all systems, vendors questioned.",
+  "language": "en",
+  "url": "https://t.me/SmartCityWatchIndia/567",
+  "captured_at": "2024-07-09T04:30:00Z"
+}

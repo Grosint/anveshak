@@ -1,0 +1,58 @@
+id: "evt-058"
+name: "Farmers March to Delhi — Social Media Mobilization"
+category: "protest_civil_unrest"
+languages: ["en", "hi"]
+earliest_osint_signal: "2024-02-13T03:00:00Z"
+mainstream_media_date: "2024-02-13T10:00:00Z"
+description: >
+  Farmer unions organized a large-scale march towards Delhi demanding
+  legal guarantees for minimum support prices. Social media platforms
+  were used extensively for mobilization, with Telegram groups
+  coordinating convoy routes, supply chains, and barricade bypass
+  strategies. Real-time OSINT monitoring detected tractor convoy
+  assembly at multiple Punjab border points before mainstream media
+  coverage began.
+keywords: ["farmers march", "delhi", "MSP", "minimum support price", "punjab", "tractor convoy", "mobilization", "protest"]
+should_fire_signal: true
+expected_isc: 5
+sources:
+  - fixture: "evt_058_src_01.json"
+    platform: "telegram"
+    source_name: "KisanEktaZindabad"
+    credibility: 40.0
+    published_at: "2024-02-13T03:00:00Z"
+  - fixture: "evt_058_src_02.json"
+    platform: "telegram"
+    source_name: "PunjabFarmerUnion"
+    credibility: 45.0
+    published_at: "2024-02-13T03:30:00Z"
+  - fixture: "evt_058_src_03.json"
+    platform: "x"
+    source_name: "@FarmersProtest2024"
+    credibility: 50.0
+    published_at: "2024-02-13T04:30:00Z"
+  - fixture: "evt_058_src_04.json"
+    platform: "reddit"
+    source_name: "r/india"
+    credibility: 45.0
+    published_at: "2024-02-13T05:00:00Z"
+  - fixture: "evt_058_src_05.json"
+    platform: "web"
+    source_name: "NDTV"
+    credibility: 82.0
+    published_at: "2024-02-13T10:00:00Z"
+  - fixture: "evt_058_src_06.json"
+    platform: "web"
+    source_name: "Tribune India"
+    credibility: 78.0
+    published_at: "2024-02-13T07:00:00Z"
+  - fixture: "evt_058_src_07.json"
+    platform: "bluesky"
+    source_name: "@agriwatch.bsky.social"
+    credibility: 52.0
+    published_at: "2024-02-13T06:00:00Z"
+  - fixture: "evt_058_src_08.json"
+    platform: "rss"
+    source_name: "The Wire"
+    credibility: 75.0
+    published_at: "2024-02-13T11:00:00Z"

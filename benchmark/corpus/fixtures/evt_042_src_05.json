@@ -1,0 +1,7 @@
+{
+  "raw_text": "Alt News Investigation: Viral PM Audio on Reservations is AI-Generated Deepfake. Alt News has conducted comprehensive voice forensic analysis of the viral audio clip purportedly featuring the Indian PM making statements about abolishing reservations. The analysis confirms the audio was generated using VALL-E style zero-shot voice cloning technology. Spectral analysis reveals characteristic artifacts at 8-12kHz frequencies. The deepfake was designed to inflame caste tensions during the 2024 election cycle.",
+  "clean_text": "Alt News confirms viral PM reservations audio is AI-generated deepfake using VALL-E voice cloning. Spectral artifacts at 8-12kHz detected. Deepfake designed to inflame caste tensions during 2024 elections.",
+  "language": "en",
+  "url": "https://www.altnews.in/pm-audio-reservations-deepfake-ai-voice-cloning-2024/",
+  "captured_at": "2024-04-20T10:00:00Z"
+}

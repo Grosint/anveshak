@@ -1,0 +1,7 @@
+{
+  "raw_text": "ALERT: Bot Sentinel has identified a network of 2,000+ coordinated inauthentic accounts pushing anti-India Kashmir narratives timed to the August 5 anniversary of Article 370 abrogation. Accounts show classic bot behavior: created within 48hrs of each other, identical bio patterns, posting identical hashtags at synchronized intervals. IP analysis traces majority to Pakistani ranges. #Kashmir #Article370 #CIB",
+  "clean_text": "Bot Sentinel identified network of 2,000+ coordinated inauthentic accounts pushing anti-India Kashmir narratives timed to Article 370 anniversary. Accounts show bot behavior with synchronized posting and IP traces to Pakistani ranges.",
+  "language": "en",
+  "url": "https://x.com/BotSentinel/status/1820123456789012345",
+  "captured_at": "2024-08-04T06:00:00Z"
+}

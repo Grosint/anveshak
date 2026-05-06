@@ -1,0 +1,7 @@
+{
+  "raw_text": "Bellingcat AI Media Analysis: The viral image of a 'stealth drone over Ladakh' is confirmed to be AI-generated. Our analysis identified multiple telltale artifacts: inconsistent shadow directions, warped text on the drone body, six-fingered mountain reflections in the fuselage, and metadata showing Midjourney generation parameters. No EXIF camera data exists. This is a digital art creation, not military intelligence.",
+  "clean_text": "Bellingcat confirms stealth drone image is AI-generated. Artifacts include inconsistent shadows, warped text, and Midjourney metadata. No EXIF camera data. Digital art, not military intelligence.",
+  "language": "en",
+  "url": "https://www.bellingcat.com/resources/2024/07/15/ai-generated-drone-ladakh-image-analysis",
+  "captured_at": "2024-07-15T16:00:00Z"
+}

@@ -1,0 +1,7 @@
+{
+  "raw_text": "Kaspersky GReAT team analysis of the APT28 campaign against Indian diplomatic targets reveals a multi-stage attack chain. Initial infection via PDF exploit delivers a custom backdoor we designate as 'DiploRAT.' The malware specifically targets diplomatic communication software and encrypted email clients. Code analysis shows Russian-language debug strings and compilation timestamps consistent with Moscow working hours. Attribution to APT28 is assessed with moderate-to-high confidence.",
+  "clean_text": "Kaspersky GReAT identifies custom backdoor DiploRAT in APT28 campaign against Indian diplomats. Targets diplomatic communication software. Russian debug strings and Moscow compilation timestamps found.",
+  "language": "en",
+  "url": "https://securelist.com/apt28-indian-diplomatic-missions-diplorat/112345",
+  "captured_at": "2024-10-05T22:00:00Z"
+}

@@ -1,0 +1,7 @@
+{
+  "raw_text": "How a Deepfake Audio of the PM Almost Derailed India's Reservation Debate. A sophisticated AI-generated audio clip mimicking the Prime Minister's voice spread across WhatsApp and Telegram during the 2024 election campaign, fabricating statements about abolishing caste reservations. Multiple fact-checking organizations confirmed the clip used VALL-E style voice cloning with spectral artifacts detectable at 8-12kHz. The incident has prompted calls for regulation of AI voice synthesis tools ahead of future elections.",
+  "clean_text": "Scroll.in reports on deepfake PM audio that spread during elections fabricating reservations abolition statements. VALL-E voice cloning confirmed with 8-12kHz artifacts. Prompts calls for AI voice synthesis regulation.",
+  "language": "en",
+  "url": "https://scroll.in/article/1065432/pm-deepfake-audio-reservations-election-2024",
+  "captured_at": "2024-04-22T09:00:00Z"
+}

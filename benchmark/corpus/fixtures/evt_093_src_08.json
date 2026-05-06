@@ -1,0 +1,7 @@
+{
+  "raw_text": "CloudSEK Analysis — ISRO Breach Claim Assessment: Our threat intelligence team has analysed the CyberVandals claim. Key findings: (1) Screenshots use CSS styling from isro.gov.in public pages modified via browser developer tools. (2) The group's Telegram channel was created 72 hours before the claim with zero prior activity. (3) The 'exfiltrated data samples' contain only publicly available information from ISRO annual reports. (4) No dark web marketplace listings for ISRO data detected. (5) No indicators of compromise found in our monitoring. Assessment: FAKE claim with HIGH confidence. Threat level: NEGLIGIBLE.",
+  "clean_text": "CloudSEK analysis confirms ISRO breach claim is fake with high confidence. Screenshots modified from public CSS. Telegram channel created 72 hours prior with no history. Data samples from public annual reports. No dark web listings or IOCs detected. Threat level negligible.",
+  "language": "en",
+  "url": "https://cloudsek.com/threat-intel/isro-cybervandals-assessment-2024",
+  "captured_at": "2024-04-22T22:00:00Z"
+}

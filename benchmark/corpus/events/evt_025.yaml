@@ -1,0 +1,55 @@
+id: "evt-025"
+name: "Chinese Spy Ship in Indian EEZ — Yuan Wang 5"
+category: "cross_border_security"
+languages: ["en", "zh"]
+earliest_osint_signal: "2024-01-15T02:30:00Z"
+mainstream_media_date: "2024-01-17T05:00:00Z"
+description: >
+  Chinese space and satellite tracking vessel Yuan Wang 5 entered the Indian
+  exclusive economic zone near the Andaman and Nicobar Islands without prior
+  notification. Indian Navy deployed P-8I maritime patrol aircraft and a frigate
+  to shadow the vessel. The ship's AIS transponder was intermittently disabled.
+keywords: ["Yuan Wang 5", "EEZ", "Indian Ocean", "Andaman", "surveillance ship", "AIS", "P-8I", "Indian Navy"]
+should_fire_signal: true
+expected_isc: 4
+sources:
+  - fixture: "evt_025_src_01.json"
+    platform: "x"
+    source_name: "@IndoPacificNews"
+    credibility: 65.0
+    published_at: "2024-01-15T02:30:00Z"
+  - fixture: "evt_025_src_02.json"
+    platform: "telegram"
+    source_name: "NavalIntelChannel"
+    credibility: 58.0
+    published_at: "2024-01-15T03:00:00Z"
+  - fixture: "evt_025_src_03.json"
+    platform: "web"
+    source_name: "The Hindu"
+    credibility: 76.0
+    published_at: "2024-01-16T04:00:00Z"
+  - fixture: "evt_025_src_04.json"
+    platform: "rss"
+    source_name: "Naval News"
+    credibility: 82.0
+    published_at: "2024-01-16T10:00:00Z"
+  - fixture: "evt_025_src_05.json"
+    platform: "reddit"
+    source_name: "r/IndianNavy"
+    credibility: 38.0
+    published_at: "2024-01-15T06:00:00Z"
+  - fixture: "evt_025_src_06.json"
+    platform: "web"
+    source_name: "South China Morning Post"
+    credibility: 70.0
+    published_at: "2024-01-17T05:00:00Z"
+  - fixture: "evt_025_src_07.json"
+    platform: "telegram"
+    source_name: "MaritimeAwarenessIOR"
+    credibility: 52.0
+    published_at: "2024-01-15T04:30:00Z"
+  - fixture: "evt_025_src_08.json"
+    platform: "bluesky"
+    source_name: "@navalwatcher.bsky.social"
+    credibility: 45.0
+    published_at: "2024-01-15T08:00:00Z"

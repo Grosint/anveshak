@@ -1,0 +1,55 @@
+id: "evt-043"
+name: "Deepfake Video of Indian Army Chief — Pakistan Origin"
+category: "deepfake_manipulated_media"
+languages: ["en", "ur"]
+earliest_osint_signal: "2024-03-08T02:00:00Z"
+mainstream_media_date: "2024-03-12T08:00:00Z"
+description: >
+  A deepfake video depicting the Indian Army Chief making provocative statements
+  about Pakistan was circulated from accounts traced to Pakistani IP ranges. The
+  video used face-swap technology with lip-sync artifacts detectable via DIRE
+  analysis. Pakistan media amplified it as genuine before forensic debunking.
+keywords: ["deepfake video", "Army Chief", "face swap", "Pakistan origin", "DIRE", "lip sync"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_043_src_01.json"
+    platform: "telegram"
+    source_name: "Pak Media Watch"
+    credibility: 15.0
+    published_at: "2024-03-08T02:00:00Z"
+  - fixture: "evt_043_src_02.json"
+    platform: "x"
+    source_name: "@DefenceAlert_PK"
+    credibility: 10.0
+    published_at: "2024-03-08T05:00:00Z"
+  - fixture: "evt_043_src_03.json"
+    platform: "web"
+    source_name: "ARY News"
+    credibility: 30.0
+    published_at: "2024-03-08T08:00:00Z"
+  - fixture: "evt_043_src_04.json"
+    platform: "reddit"
+    source_name: "r/IndiaSpeaks"
+    credibility: 30.0
+    published_at: "2024-03-09T04:00:00Z"
+  - fixture: "evt_043_src_05.json"
+    platform: "telegram"
+    source_name: "Indian Army Fan Club"
+    credibility: 20.0
+    published_at: "2024-03-09T09:00:00Z"
+  - fixture: "evt_043_src_06.json"
+    platform: "bluesky"
+    source_name: "@indiadefence.bsky.social"
+    credibility: 25.0
+    published_at: "2024-03-10T03:00:00Z"
+  - fixture: "evt_043_src_07.json"
+    platform: "rss"
+    source_name: "India Today RSS"
+    credibility: 70.0
+    published_at: "2024-03-11T10:00:00Z"
+  - fixture: "evt_043_src_08.json"
+    platform: "web"
+    source_name: "The Wire"
+    credibility: 60.0
+    published_at: "2024-03-12T08:00:00Z"

@@ -1,0 +1,7 @@
+{
+  "raw_text": "A group called CyberVandals is claiming to have breached ISRO's telemetry infrastructure. Posting screenshots that appear to show internal dashboards. Worth monitoring but the screenshots look suspicious — the UI elements are inconsistent with actual ISRO ISTRAC systems. The claimed 2.3 TB exfil in a single session would also require bandwidth that should trigger IDS alerts. Waiting for CERT-In response.",
+  "clean_text": "CyberVandals claiming ISRO telemetry breach. Screenshots show apparent internal dashboards but UI elements inconsistent with actual ISTRAC systems. 2.3 TB single-session exfil would trigger IDS alerts. Awaiting CERT-In response.",
+  "language": "en",
+  "url": "https://x.com/CyberThreatIntel/status/1781234567890",
+  "captured_at": "2024-04-22T17:00:00Z"
+}

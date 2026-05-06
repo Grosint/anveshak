@@ -1,0 +1,7 @@
+{
+  "raw_text": "A threat actor going by kiberphant0m is claiming a massive BSNL breach on a popular dark web forum. 278 GB of data allegedly including IMSI numbers, SIM card details, and HLR data. Sample data looks legitimate based on the format and structure. If real, this affects millions of BSNL subscribers. Has anyone verified the sample data independently?",
+  "clean_text": "Discussion of kiberphant0m BSNL breach claim. 278 GB data including IMSI, SIM, HLR information. Sample data format appears legitimate. Verification sought.",
+  "language": "en",
+  "url": "https://www.reddit.com/r/IndianCyberSecurity/comments/1dj5k8m/bsnl_data_breach_278gb/",
+  "captured_at": "2024-06-20T04:30:00Z"
+}

@@ -1,0 +1,7 @@
+{
+  "raw_text": "Russian military intelligence hackers targeted Indian diplomatic missions across Europe in a coordinated spear-phishing campaign, according to cybersecurity researchers and an Indian government advisory. The campaign, attributed to APT28 (also known as Fancy Bear), used weaponized PDF documents disguised as internal Ministry of External Affairs communications. Sensitive diplomatic data was reportedly exfiltrated before the attack was detected.",
+  "clean_text": "Russian military intelligence hackers targeted Indian embassies in Europe via APT28 phishing campaign. Weaponized PDFs disguised as MEA communications. Diplomatic data exfiltrated before detection.",
+  "language": "en",
+  "url": "https://therecord.media/apt28-india-embassies-europe-spear-phishing-campaign",
+  "captured_at": "2024-10-06T08:00:00Z"
+}

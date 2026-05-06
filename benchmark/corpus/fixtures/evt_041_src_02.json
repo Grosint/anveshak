@@ -1,0 +1,7 @@
+{
+  "raw_text": "THREAD on WazirX hack: Traced the stolen $230M through Tornado Cash and multiple intermediate wallets. Address patterns and laundering methodology are consistent with previous Lazarus Group operations (Ronin Bridge, Harmony Horizon). Social engineering component identified - WazirX employees targeted with fake job offers on LinkedIn weeks before the exploit. This is textbook DPRK cyber theft playbook. Full on-chain breakdown below.",
+  "clean_text": "On-chain investigation traces WazirX $230M hack through Tornado Cash to Lazarus Group patterns. Social engineering via fake LinkedIn job offers identified. Consistent with DPRK Ronin Bridge and Harmony Horizon operations.",
+  "language": "en",
+  "url": "https://x.com/ZachXBT/status/1782456789012345678",
+  "captured_at": "2024-04-22T03:30:00Z"
+}

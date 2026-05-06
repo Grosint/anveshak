@@ -1,0 +1,7 @@
+{
+  "raw_text": "Janes Defence analysis confirms the satellite imagery showing an alleged Chinese military base in Indian-controlled Ladakh is synthetically generated. Our geospatial intelligence team cross-referenced the claimed location against multiple commercial satellite providers including Maxar, Planet Labs, and Airbus. No construction activity was detected. The imagery exhibits clear GAN generation artifacts in texture repetition and physically impossible shadow geometries.",
+  "clean_text": "Janes Defence confirms alleged Chinese base imagery is synthetically generated. Cross-reference with Maxar, Planet Labs, and Airbus shows no construction. GAN artifacts detected in textures and shadows.",
+  "language": "en",
+  "url": "https://www.janes.com/defence-news/intelligence-security/latest/fabricated-satellite-imagery-ladakh-chinese-base",
+  "captured_at": "2024-08-20T11:00:00Z"
+}

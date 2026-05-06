@@ -1,0 +1,7 @@
+{
+  "raw_text": "Kaspersky's GReAT team has identified a sophisticated supply chain attack targeting India's Defence Research and Development Organisation. The attackers compromised a third-party IT vendor supplying laboratory management software to DRDO facilities, embedding custom malware within a routine software update. The malware established a covert communication channel with command-and-control infrastructure. Initial analysis attributes the attack to a South Asian APT group with suspected nation-state sponsorship.",
+  "clean_text": "Kaspersky identifies supply chain attack on DRDO via compromised IT vendor. Custom malware in lab software update with covert C2 channel. Attributed to South Asian nation-state APT.",
+  "language": "en",
+  "url": "https://securelist.com/drdo-supply-chain-attack-south-asian-apt/112345/",
+  "captured_at": "2024-05-11T04:00:00Z"
+}

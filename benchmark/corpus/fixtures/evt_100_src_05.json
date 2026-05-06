@@ -1,0 +1,7 @@
+{
+  "raw_text": "Major GPS spoofing event in the Indian Ocean right now. Commercial ships near the Andaman Sea and Malacca Strait reporting their GPS positions jumping by tens of nautical miles. AIS shows phantom vessel tracks. Some people are attributing this to Chinese EW assets but I haven't seen definitive proof yet. The signal characteristics do match previous documented Chinese spoofing operations though. Anyone have SDR data from the region?",
+  "clean_text": "Reddit discussion of Indian Ocean GPS spoofing. Ships reporting position jumps of tens of nautical miles. Attribution to Chinese EW assets discussed but not definitively confirmed.",
+  "language": "en",
+  "url": "https://www.reddit.com/r/SIGINT/comments/1h3k7q2/indian_ocean_gps_spoofing_event_december_2024",
+  "captured_at": "2024-12-03T06:00:00Z"
+}

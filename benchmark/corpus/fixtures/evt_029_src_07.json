@@ -1,0 +1,7 @@
+{
+  "raw_text": "Additional IOCs for MuddyWater India campaign. New samples show Atera agent being sideloaded through DLL hijacking on legitimate Indian government software. The watering-hole pages on compromised .gov.in domains mimic power grid maintenance portals. At least three Indian state electricity boards appear to have been targeted. C2 domains registered through Iranian registrars with known IRGC connections.",
+  "clean_text": "MuddyWater campaign uses DLL hijacking on Indian government software to sideload Atera agents. Watering-hole pages mimic power grid maintenance portals. Three state electricity boards targeted with C2 through Iranian registrars.",
+  "language": "en",
+  "url": "https://t.me/APTNotesChannel/2345",
+  "captured_at": "2024-04-22T13:00:00Z"
+}

@@ -1,0 +1,7 @@
+{
+  "raw_text": "The RedEcho campaign represents a new chapter in the shadowy cyber conflict between India and China. Wired's investigation, based on interviews with Recorded Future analysts and Indian defense officials, reveals that the intrusions were detected as early as October 2020 but were not publicly disclosed for four months. The campaign targeted not just power distribution but also two Indian seaports — a detail not widely reported. ShadowPad's modular design allowed the attackers to deploy different payloads depending on the target: reconnaissance modules at ports, and grid-disruption capable modules at load despatch centres. Indian officials privately acknowledge the intrusions but insist no operational disruption occurred.",
+  "clean_text": "RedEcho campaign represents new chapter in cyber conflict between India and China. Intrusions detected as early as October 2020 but not publicly disclosed for four months. Campaign targeted power distribution and two Indian seaports. ShadowPad modular design allowed different payloads depending on target. Reconnaissance modules at ports and grid-disruption capable modules at load despatch centres. Indian officials acknowledge intrusions but insist no operational disruption occurred.",
+  "language": "en",
+  "url": "https://www.wired.com/story/china-redecho-india-power-grid-hack-investigation/",
+  "captured_at": "2021-03-02T10:00:00Z"
+}

@@ -1,0 +1,7 @@
+{
+  "raw_text": "ALERT: Major ransomware attack reported at AIIMS Delhi. Hospital staff confirming that patient database systems are completely down. Registration, appointments, and lab reports all affected. Sources inside hospital say ransom demand has been received. This appears to be a sophisticated attack — not just encryption but data exfiltration as well. Hospital has switched to manual operations. This is India's largest government hospital — 40,000+ patients affected daily. Cyber cell has been notified. More details as they emerge.",
+  "clean_text": "Major ransomware attack at AIIMS Delhi. Patient database systems completely down. Registration appointments and lab reports affected. Ransom demand received. Sophisticated attack with data exfiltration. Hospital switched to manual operations. India's largest government hospital 40000+ patients affected daily. Cyber cell notified.",
+  "language": "en",
+  "url": "https://t.me/cybersec_india_alerts/1892",
+  "captured_at": "2022-11-22T08:00:00Z"
+}

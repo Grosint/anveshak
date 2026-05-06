@@ -1,0 +1,55 @@
+id: "evt-044"
+name: "Manipulated Satellite Imagery — Chinese LAC Claims"
+category: "deepfake_manipulated_media"
+languages: ["en", "zh"]
+earliest_osint_signal: "2024-06-12T01:00:00Z"
+mainstream_media_date: "2024-06-16T09:00:00Z"
+description: >
+  Manipulated satellite imagery purporting to show Indian military construction
+  violations along the LAC was circulated by Chinese state-affiliated accounts.
+  Error level analysis (ELA) revealed splicing of structures from other locations
+  into Maxar imagery. The campaign aimed to justify PLA forward deployments.
+keywords: ["satellite imagery", "manipulation", "LAC", "China", "ELA forensics", "PLA", "Maxar"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_044_src_01.json"
+    platform: "telegram"
+    source_name: "OSINT China Border"
+    credibility: 20.0
+    published_at: "2024-06-12T01:00:00Z"
+  - fixture: "evt_044_src_02.json"
+    platform: "x"
+    source_name: "@PLAWatchdog"
+    credibility: 15.0
+    published_at: "2024-06-12T04:00:00Z"
+  - fixture: "evt_044_src_03.json"
+    platform: "web"
+    source_name: "South China Morning Post"
+    credibility: 55.0
+    published_at: "2024-06-12T08:00:00Z"
+  - fixture: "evt_044_src_04.json"
+    platform: "reddit"
+    source_name: "r/OSINT"
+    credibility: 50.0
+    published_at: "2024-06-13T06:00:00Z"
+  - fixture: "evt_044_src_05.json"
+    platform: "web"
+    source_name: "Global Times"
+    credibility: 22.0
+    published_at: "2024-06-13T10:00:00Z"
+  - fixture: "evt_044_src_06.json"
+    platform: "bluesky"
+    source_name: "@geointanalyst.bsky.social"
+    credibility: 40.0
+    published_at: "2024-06-14T02:00:00Z"
+  - fixture: "evt_044_src_07.json"
+    platform: "rss"
+    source_name: "Bellingcat RSS"
+    credibility: 90.0
+    published_at: "2024-06-15T14:00:00Z"
+  - fixture: "evt_044_src_08.json"
+    platform: "web"
+    source_name: "Hindustan Times"
+    credibility: 70.0
+    published_at: "2024-06-16T09:00:00Z"

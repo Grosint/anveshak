@@ -1,0 +1,7 @@
+{
+  "raw_text": "ALERT: Reports of fuel distribution disruption across three Indian states. Sources indicate SCADA systems controlling a major pipeline have been compromised by ransomware. Ransomware strain appears to be a variant of BlackCat/ALPHV. Multiple fuel depots reporting inability to receive shipments. This is a Colonial Pipeline-style attack on Indian critical infrastructure.",
+  "clean_text": "Fuel distribution disrupted across three Indian states. Pipeline SCADA systems compromised by BlackCat/ALPHV ransomware variant. Colonial Pipeline-style attack on Indian infrastructure.",
+  "language": "en",
+  "url": "https://x.com/cyberthreatintel/status/1800567890123",
+  "captured_at": "2024-06-12T05:00:00Z"
+}

@@ -1,0 +1,7 @@
+{
+  "raw_text": "Stuxnet-like malware found targeting Indian chemical plant's Siemens PLCs. The malware, capable of manipulating industrial processes while hiding changes from operators, was discovered during a routine security audit. Security researchers say the code shares structural similarities with the original Stuxnet worm but uses updated techniques. India's CERT-In has issued an emergency advisory for the chemical and petrochemical sectors.",
+  "clean_text": "Stuxnet-like malware found in Indian chemical plant Siemens PLCs. Manipulates processes while hiding from operators. Found during routine audit. CERT-In issued emergency advisory.",
+  "language": "en",
+  "url": "https://www.theregister.com/2024/08/20/stuxnet_like_malware_indian_chemical_plant",
+  "captured_at": "2024-08-20T12:00:00Z"
+}

@@ -1,0 +1,7 @@
+{
+  "raw_text": "FACT CHECK: AI-generated image of Modi-Xi handshake at G20. An image showing PM Modi and Chinese President Xi Jinping in an elaborate handshake is being shared as being from the G20 Delhi Summit. BOOM FactCheck analysis: 1) No such photo was released by official PMO or Xinhua feeds. 2) EXIF data is completely absent (typical of AI-generated images). 3) Hands show six fingers on one figure (common GAN artefact). 4) Background architecture does not match Bharat Mandapam venue. 5) Lighting inconsistency between subjects suggests composite. VERDICT: AI-generated, not a real photograph.",
+  "clean_text": "AI-generated image of Modi-Xi handshake at G20. An image showing PM Modi and Chinese President Xi Jinping in elaborate handshake is being shared as from G20 Delhi Summit. No such photo released by official PMO or Xinhua. EXIF data completely absent. Hands show six fingers on one figure common GAN artefact. Background does not match Bharat Mandapam. Lighting inconsistency between subjects. VERDICT: AI-generated not real photograph.",
+  "language": "en",
+  "url": "https://www.boomlive.in/fact-check/modi-xi-g20-handshake-ai-generated",
+  "captured_at": "2023-09-08T14:00:00Z"
+}

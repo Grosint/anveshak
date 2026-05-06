@@ -1,0 +1,55 @@
+id: "evt-092"
+name: "Old Kashmir Protest Video from 2016 Recirculated"
+category: "protest_civil_unrest"
+languages: ["en", "ur"]
+earliest_osint_signal: "2024-06-15T08:00:00Z"
+mainstream_media_date: "2024-06-16T06:00:00Z"
+description: >
+  A video from the 2016 Burhan Wani aftermath protests in Srinagar was
+  recirculated on Telegram and X in June 2024 with captions claiming it
+  showed a fresh crackdown. Reverse image search and metadata analysis
+  confirm the footage is from July 2016. No current unrest was occurring.
+keywords: ["kashmir", "protest", "srinagar", "recirculated", "old video", "burhan wani", "2016", "fake"]
+should_fire_signal: false
+expected_isc: 2
+sources:
+  - fixture: "evt_092_src_01.json"
+    platform: "telegram"
+    source_name: "Kashmir Freedom Watch"
+    credibility: 10.0
+    published_at: "2024-06-15T08:00:00Z"
+  - fixture: "evt_092_src_02.json"
+    platform: "x"
+    source_name: "RealKashmirNews"
+    credibility: 15.0
+    published_at: "2024-06-15T08:30:00Z"
+  - fixture: "evt_092_src_03.json"
+    platform: "telegram"
+    source_name: "Azaadi Updates"
+    credibility: 10.0
+    published_at: "2024-06-15T09:00:00Z"
+  - fixture: "evt_092_src_04.json"
+    platform: "reddit"
+    source_name: "r/Kashmir"
+    credibility: 20.0
+    published_at: "2024-06-15T10:00:00Z"
+  - fixture: "evt_092_src_05.json"
+    platform: "x"
+    source_name: "AltNewsFactCheck"
+    credibility: 80.0
+    published_at: "2024-06-15T14:00:00Z"
+  - fixture: "evt_092_src_06.json"
+    platform: "web"
+    source_name: "BoomLive Fact Check"
+    credibility: 85.0
+    published_at: "2024-06-15T16:00:00Z"
+  - fixture: "evt_092_src_07.json"
+    platform: "rss"
+    source_name: "India Today"
+    credibility: 70.0
+    published_at: "2024-06-16T06:00:00Z"
+  - fixture: "evt_092_src_08.json"
+    platform: "bluesky"
+    source_name: "DisinfoTracker.bsky"
+    credibility: 45.0
+    published_at: "2024-06-15T12:00:00Z"

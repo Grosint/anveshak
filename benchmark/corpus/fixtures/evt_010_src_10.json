@@ -1,0 +1,7 @@
+{
+  "raw_text": "IOC ALERT — RedEcho / ShadowPad targeting Indian power grid. Sharing indicators from Recorded Future Insikt Group report. C2 Domains: websencl.kozow.com, nslookupdns.site, maboronta.usa.cc. IP ranges: 154.210.12.0/24. Malware hashes (SHA-256): d4c9a532... [truncated]. These IOCs should be checked against your DNS logs immediately. ShadowPad uses DNS tunneling for C2 communication. If you are in the Indian energy sector, implement the blocks now and report any hits to CERT-In.",
+  "clean_text": "IOC alert for RedEcho ShadowPad targeting Indian power grid. C2 domains include websencl.kozow.com nslookupdns.site maboronta.usa.cc. IP ranges 154.210.12.0/24. ShadowPad uses DNS tunneling for C2 communication. Indian energy sector organizations should implement blocks immediately and report hits to CERT-In.",
+  "language": "en",
+  "url": "https://t.me/apt_tracker_iocs/891",
+  "captured_at": "2021-02-28T12:00:00Z"
+}

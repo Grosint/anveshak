@@ -1,0 +1,7 @@
+{
+  "raw_text": "Indian Railways KAVACH signaling system vulnerability disclosure is alarming. The Electronic Interlocking integration uses unencrypted serial comms that could theoretically allow signal manipulation. 4,500 stations affected. This is essentially a SCADA vulnerability in railway signaling. Railway Board reportedly rushing emergency patches for Class A routes first. Anyone have the technical details?",
+  "clean_text": "Reddit discussion on KAVACH signaling vulnerability. Unencrypted serial communications in Electronic Interlocking across 4,500 stations. SCADA-class vulnerability in railway signaling.",
+  "language": "en",
+  "url": "https://www.reddit.com/r/netsec/comments/1bu3k9m/indian_railways_kavach_signaling_vulnerability/",
+  "captured_at": "2024-04-03T07:00:00Z"
+}

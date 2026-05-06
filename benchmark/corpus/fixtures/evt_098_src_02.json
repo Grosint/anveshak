@@ -1,0 +1,7 @@
+{
+  "raw_text": "Mandiant has identified a coordinated cyber espionage campaign targeting Indian diplomatic missions across Europe, attributed with high confidence to APT28 (Fancy Bear), a threat actor associated with Russia's GRU military intelligence unit. The campaign used weaponized PDF documents designed to mimic Ministry of External Affairs internal circulars. Forensic analysis of compromised systems revealed exfiltration of diplomatic cables, visa processing records, and internal communications. The C2 infrastructure matches previously documented APT28 operations.",
+  "clean_text": "Mandiant attributes cyber espionage on Indian embassies to APT28/GRU with high confidence. Weaponized PDFs mimicked MEA circulars. Diplomatic cables and visa records exfiltrated.",
+  "language": "en",
+  "url": "https://www.mandiant.com/resources/blog/apt28-indian-diplomatic-missions-europe",
+  "captured_at": "2024-10-05T18:00:00Z"
+}

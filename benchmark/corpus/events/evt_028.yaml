@@ -1,0 +1,55 @@
+id: "evt-028"
+name: "Pakistani Twitter Bot Network — Kashmir Narratives"
+category: "information_operations"
+languages: ["en", "ur"]
+earliest_osint_signal: "2024-08-04T06:00:00Z"
+mainstream_media_date: "2024-08-07T05:00:00Z"
+description: >
+  A coordinated inauthentic behavior network traced to Pakistani IP ranges
+  amplified anti-India narratives around the August 5 anniversary of Article 370
+  abrogation. Over 2,000 bot accounts pushed hashtags, fabricated atrocity images,
+  and tagged UN human rights accounts demanding intervention.
+keywords: ["Kashmir", "bot network", "Article 370", "CIB", "Twitter", "Pakistan", "hashtag campaign", "ISPR"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_028_src_01.json"
+    platform: "x"
+    source_name: "@BotSentinel"
+    credibility: 72.0
+    published_at: "2024-08-04T06:00:00Z"
+  - fixture: "evt_028_src_02.json"
+    platform: "telegram"
+    source_name: "DisinfoAlertSA"
+    credibility: 55.0
+    published_at: "2024-08-04T07:30:00Z"
+  - fixture: "evt_028_src_03.json"
+    platform: "web"
+    source_name: "Hindustan Times"
+    credibility: 70.0
+    published_at: "2024-08-06T04:00:00Z"
+  - fixture: "evt_028_src_04.json"
+    platform: "reddit"
+    source_name: "r/IndiaSpeaks"
+    credibility: 35.0
+    published_at: "2024-08-04T10:00:00Z"
+  - fixture: "evt_028_src_05.json"
+    platform: "rss"
+    source_name: "Stanford Internet Observatory"
+    credibility: 90.0
+    published_at: "2024-08-06T16:00:00Z"
+  - fixture: "evt_028_src_06.json"
+    platform: "web"
+    source_name: "The Quint"
+    credibility: 62.0
+    published_at: "2024-08-07T05:00:00Z"
+  - fixture: "evt_028_src_07.json"
+    platform: "telegram"
+    source_name: "InfoOpsWatch"
+    credibility: 58.0
+    published_at: "2024-08-04T09:00:00Z"
+  - fixture: "evt_028_src_08.json"
+    platform: "bluesky"
+    source_name: "@osintanalysis.bsky.social"
+    credibility: 48.0
+    published_at: "2024-08-04T14:00:00Z"

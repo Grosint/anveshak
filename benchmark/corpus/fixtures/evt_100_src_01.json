@@ -1,0 +1,7 @@
+{
+  "raw_text": "SkyTruth AIS anomaly alert: Multiple commercial vessels in the Andaman Sea and near the Strait of Malacca reporting GPS position errors consistent with coordinated spoofing. AIS data shows phantom vessel tracks appearing at impossible speeds. At least 14 vessels affected in the last 6 hours. Signal pattern analysis suggests a single spoofing source. This is not normal ionospheric interference.",
+  "clean_text": "SkyTruth detects GPS spoofing affecting 14 vessels near Andaman Sea and Strait of Malacca. Phantom AIS tracks at impossible speeds. Single spoofing source suspected.",
+  "language": "en",
+  "url": "https://skytruth.org/ais-alerts/indian-ocean-gps-anomaly-december-2024",
+  "captured_at": "2024-12-03T01:00:00Z"
+}

@@ -1,0 +1,62 @@
+id: "evt-011"
+name: "LoC Ceasefire Violation Cluster — Poonch Sector"
+category: "cross_border_security"
+languages: ["en", "hi", "ur"]
+earliest_osint_signal: "2024-03-14T02:30:00Z"
+mainstream_media_date: "2024-03-14T08:00:00Z"
+description: >
+  Multiple ceasefire violations reported along the Line of Control in
+  Poonch sector, Jammu & Kashmir. Small arms fire and mortar shelling
+  targeted Indian forward posts over a 6-hour window. Local evacuations
+  ordered in three border villages.
+keywords:
+  - ceasefire violation
+  - LoC
+  - Poonch sector
+  - Line of Control
+  - mortar shelling
+  - forward posts
+  - J&K border
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_011_src_01.json"
+    platform: "telegram"
+    source_name: "J&K Border Watch"
+    credibility: 35.0
+    published_at: "2024-03-14T02:30:00Z"
+  - fixture: "evt_011_src_02.json"
+    platform: "telegram"
+    source_name: "Defence Pulse India"
+    credibility: 45.0
+    published_at: "2024-03-14T03:10:00Z"
+  - fixture: "evt_011_src_03.json"
+    platform: "x"
+    source_name: "@DefenceAnalystIN"
+    credibility: 55.0
+    published_at: "2024-03-14T04:00:00Z"
+  - fixture: "evt_011_src_04.json"
+    platform: "web"
+    source_name: "The Tribune India"
+    credibility: 75.0
+    published_at: "2024-03-14T06:30:00Z"
+  - fixture: "evt_011_src_05.json"
+    platform: "rss"
+    source_name: "NDTV Defence"
+    credibility: 80.0
+    published_at: "2024-03-14T08:00:00Z"
+  - fixture: "evt_011_src_06.json"
+    platform: "reddit"
+    source_name: "r/IndianDefence"
+    credibility: 40.0
+    published_at: "2024-03-14T05:15:00Z"
+  - fixture: "evt_011_src_07.json"
+    platform: "web"
+    source_name: "Dawn News Pakistan"
+    credibility: 50.0
+    published_at: "2024-03-14T07:45:00Z"
+  - fixture: "evt_011_src_08.json"
+    platform: "bluesky"
+    source_name: "@securityanalyst.bsky.social"
+    credibility: 45.0
+    published_at: "2024-03-14T05:50:00Z"

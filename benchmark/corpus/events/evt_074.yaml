@@ -1,0 +1,56 @@
+id: "evt-074"
+name: "Smart City Infrastructure — Pune IoT Attack"
+category: "critical_infrastructure"
+languages: ["en"]
+earliest_osint_signal: "2024-07-09T03:00:00Z"
+mainstream_media_date: "2024-07-09T12:00:00Z"
+description: >
+  Attackers compromised Pune Smart City's IoT infrastructure, taking control of over
+  2,000 smart streetlights and 150 traffic signal controllers through an exposed MQTT
+  broker. The attack caused citywide traffic signal malfunctions during morning rush hour,
+  resulting in multiple accidents. Pune Municipal Corporation disconnected all smart
+  infrastructure pending a full security audit.
+keywords: ["Pune", "smart city", "IoT", "MQTT", "traffic signals", "streetlights", "cyber attack", "PMC"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_074_src_01.json"
+    platform: "telegram"
+    source_name: "IoT Security India"
+    credibility: 44.0
+    published_at: "2024-07-09T03:00:00Z"
+  - fixture: "evt_074_src_02.json"
+    platform: "x"
+    source_name: "@PuneTrafficAlert"
+    credibility: 40.0
+    published_at: "2024-07-09T03:30:00Z"
+  - fixture: "evt_074_src_03.json"
+    platform: "reddit"
+    source_name: "r/pune"
+    credibility: 35.0
+    published_at: "2024-07-09T04:00:00Z"
+  - fixture: "evt_074_src_04.json"
+    platform: "web"
+    source_name: "Pune Mirror"
+    credibility: 60.0
+    published_at: "2024-07-09T06:00:00Z"
+  - fixture: "evt_074_src_05.json"
+    platform: "rss"
+    source_name: "Indian Express Pune"
+    credibility: 70.0
+    published_at: "2024-07-09T07:00:00Z"
+  - fixture: "evt_074_src_06.json"
+    platform: "telegram"
+    source_name: "Smart City Watch India"
+    credibility: 38.0
+    published_at: "2024-07-09T04:30:00Z"
+  - fixture: "evt_074_src_07.json"
+    platform: "bluesky"
+    source_name: "@iotsec.bsky.social"
+    credibility: 32.0
+    published_at: "2024-07-09T08:00:00Z"
+  - fixture: "evt_074_src_08.json"
+    platform: "web"
+    source_name: "NDTV Technology"
+    credibility: 72.0
+    published_at: "2024-07-09T12:00:00Z"

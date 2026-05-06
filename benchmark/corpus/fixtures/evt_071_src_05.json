@@ -1,0 +1,7 @@
+{
+  "raw_text": "A threat actor using the handle kiberphant0m has claimed to have breached BSNL servers and exfiltrated 278 GB of sensitive data including IMSI numbers, SIM card details, and HLR data affecting millions of Indian subscribers. The data was listed for sale on a prominent dark web marketplace. India's Department of Telecommunications has issued emergency directives to BSNL for immediate containment measures and subscriber notification protocols.",
+  "clean_text": "Kiberphant0m claims 278 GB BSNL breach with IMSI, SIM, HLR data. Listed on dark web marketplace. DoT issued emergency directives for containment and subscriber notification.",
+  "language": "en",
+  "url": "https://thehackernews.com/2024/06/bsnl-data-breach-278gb-subscriber-data.html",
+  "captured_at": "2024-06-20T07:00:00Z"
+}

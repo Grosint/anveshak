@@ -1,0 +1,55 @@
+id: "evt-065"
+name: "Myanmar Resistance Movement — PDF Activity Near Border"
+category: "protest_civil_unrest"
+languages: ["en"]
+earliest_osint_signal: "2024-01-22T03:00:00Z"
+mainstream_media_date: "2024-01-22T12:00:00Z"
+description: >
+  People's Defence Force (PDF) units launched coordinated attacks on junta outposts
+  near the India-Myanmar border in Sagaing Region. The offensive displaced approximately
+  5,000 civilians towards Manipur border crossings. Indian security forces heightened
+  surveillance along the Moreh-Tamu corridor following reports of weapons movement.
+keywords: ["Myanmar", "PDF", "Sagaing", "India border", "Manipur", "resistance", "junta", "Moreh"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_065_src_01.json"
+    platform: "telegram"
+    source_name: "Myanmar Resistance Watch"
+    credibility: 40.0
+    published_at: "2024-01-22T03:00:00Z"
+  - fixture: "evt_065_src_02.json"
+    platform: "telegram"
+    source_name: "Sagaing Frontline Reports"
+    credibility: 38.0
+    published_at: "2024-01-22T03:30:00Z"
+  - fixture: "evt_065_src_03.json"
+    platform: "x"
+    source_name: "@MyanmarNowEN"
+    credibility: 52.0
+    published_at: "2024-01-22T04:00:00Z"
+  - fixture: "evt_065_src_04.json"
+    platform: "web"
+    source_name: "The Irrawaddy"
+    credibility: 66.0
+    published_at: "2024-01-22T06:00:00Z"
+  - fixture: "evt_065_src_05.json"
+    platform: "reddit"
+    source_name: "r/myanmar"
+    credibility: 36.0
+    published_at: "2024-01-22T07:00:00Z"
+  - fixture: "evt_065_src_06.json"
+    platform: "rss"
+    source_name: "Mizzima News"
+    credibility: 60.0
+    published_at: "2024-01-22T08:00:00Z"
+  - fixture: "evt_065_src_07.json"
+    platform: "web"
+    source_name: "East Mojo Manipur"
+    credibility: 58.0
+    published_at: "2024-01-22T09:00:00Z"
+  - fixture: "evt_065_src_08.json"
+    platform: "rss"
+    source_name: "Reuters Myanmar"
+    credibility: 80.0
+    published_at: "2024-01-22T12:00:00Z"

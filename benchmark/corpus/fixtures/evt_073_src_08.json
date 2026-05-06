@@ -1,0 +1,7 @@
+{
+  "raw_text": "A state-sponsored APT group attempted to breach the Defence Research and Development Organisation's internal research network through a supply chain attack targeting a third-party IT vendor. The attackers deployed custom malware disguised as a software update for laboratory management systems used across DRDO facilities. The National Investigation Agency has launched a probe after initial forensic analysis pointed to a South Asian threat actor with nation-state backing. CERT-In has issued advisories to all defence research organizations.",
+  "clean_text": "APT supply chain attack on DRDO via compromised vendor with malware in lab software update. NIA investigating South Asian nation-state actor. CERT-In advisory to defence organizations.",
+  "language": "en",
+  "url": "https://timesofindia.indiatimes.com/india/drdo-network-breach-attempt-supply-chain-attack/articleshow/110234567.cms",
+  "captured_at": "2024-05-11T13:00:00Z"
+}

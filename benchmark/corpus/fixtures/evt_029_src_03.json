@@ -1,0 +1,7 @@
+{
+  "raw_text": "MuddyWater Targets Indian Critical Infrastructure in Sophisticated Phishing Campaign. Mandiant has identified an active campaign by Iranian threat actor MuddyWater (UNC2428) targeting Indian power grid operators and port management systems. The attackers compromised legitimate Indian government domains to host watering-hole pages and deliver Atera remote access agents. Command-and-control infrastructure was traced to hosting providers with documented ties to Iran's Islamic Revolutionary Guard Corps. The campaign represents a notable expansion of MuddyWater's targeting beyond their traditional Middle Eastern focus.",
+  "clean_text": "Mandiant identified active MuddyWater campaign targeting Indian power grid operators and port systems. Attackers compromised Indian government domains for watering-hole attacks delivering Atera agents. C2 traced to IRGC-linked hosting providers.",
+  "language": "en",
+  "url": "https://www.mandiant.com/resources/blog/muddywater-india-infrastructure-2024",
+  "captured_at": "2024-04-24T14:00:00Z"
+}

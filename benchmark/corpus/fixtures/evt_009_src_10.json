@@ -1,0 +1,7 @@
+{
+  "raw_text": "UPDATE on AIIMS attack: Our contacts inside NIC confirm this is far worse than initially reported. The ransomware has spread beyond the primary e-Hospital servers to backup systems as well. Attackers had lateral movement across the network for at least 5-7 days before deploying the encryption payload. The initial access point appears to be a phishing email opened by a staff member. Manual patient management is causing dangerous delays in emergency care. Blood bank and pharmacy systems also affected.",
+  "clean_text": "AIIMS attack update: ransomware spread beyond primary e-Hospital servers to backup systems. Attackers had lateral movement across network for at least 5-7 days before deploying encryption payload. Initial access point appears to be phishing email opened by staff member. Manual patient management causing dangerous delays in emergency care. Blood bank and pharmacy systems also affected.",
+  "language": "en",
+  "url": "https://t.me/cyber_india_updates/2047",
+  "captured_at": "2022-11-22T16:00:00Z"
+}

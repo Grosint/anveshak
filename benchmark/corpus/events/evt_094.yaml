@@ -1,0 +1,56 @@
+id: "evt-094"
+name: "Political Meme Generator Output Shared as Real"
+category: "deepfake_manipulated_media"
+languages: ["en", "hi"]
+earliest_osint_signal: "2024-05-02T10:00:00Z"
+mainstream_media_date: "2024-05-03T08:00:00Z"
+description: >
+  AI-generated satirical images of Indian political figures were created
+  using a publicly available meme generator app. Several accounts shared
+  them without the satire label, claiming they were real photographs from
+  a secret meeting. The images had visible AI artefacts and watermarks
+  from the generator tool.
+keywords: ["deepfake", "meme generator", "political", "AI generated", "satire", "fake photo", "election"]
+should_fire_signal: false
+expected_isc: 1
+sources:
+  - fixture: "evt_094_src_01.json"
+    platform: "x"
+    source_name: "PoliticalBuzz_IN"
+    credibility: 10.0
+    published_at: "2024-05-02T10:00:00Z"
+  - fixture: "evt_094_src_02.json"
+    platform: "telegram"
+    source_name: "BJP Exposed Channel"
+    credibility: 5.0
+    published_at: "2024-05-02T10:30:00Z"
+  - fixture: "evt_094_src_03.json"
+    platform: "x"
+    source_name: "ViralFactsIN"
+    credibility: 15.0
+    published_at: "2024-05-02T11:00:00Z"
+  - fixture: "evt_094_src_04.json"
+    platform: "reddit"
+    source_name: "r/IndianPoliticalMemes"
+    credibility: 10.0
+    published_at: "2024-05-02T12:00:00Z"
+  - fixture: "evt_094_src_05.json"
+    platform: "web"
+    source_name: "Alt News Fact Check"
+    credibility: 85.0
+    published_at: "2024-05-02T18:00:00Z"
+  - fixture: "evt_094_src_06.json"
+    platform: "web"
+    source_name: "Vishvas News"
+    credibility: 80.0
+    published_at: "2024-05-02T20:00:00Z"
+  - fixture: "evt_094_src_07.json"
+    platform: "rss"
+    source_name: "NDTV Tech"
+    credibility: 75.0
+    published_at: "2024-05-03T08:00:00Z"
+  - fixture: "evt_094_src_08.json"
+    platform: "bluesky"
+    source_name: "DigitalForensics.bsky"
+    credibility: 50.0
+    published_at: "2024-05-02T15:00:00Z"

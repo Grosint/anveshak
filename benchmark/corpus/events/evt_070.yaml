@@ -1,0 +1,56 @@
+id: "evt-070"
+name: "Nuclear Power Corporation Kudankulam Cyber Probe"
+category: "critical_infrastructure"
+languages: ["en"]
+earliest_osint_signal: "2023-11-14T01:00:00Z"
+mainstream_media_date: "2023-11-14T12:00:00Z"
+description: >
+  A persistent cyber intrusion was detected in the administrative network of Kudankulam
+  Nuclear Power Plant in Tamil Nadu. The malware, attributed to a Lazarus Group variant,
+  targeted the plant's HR and procurement systems. NPCIL confirmed operational technology
+  networks remained air-gapped and unaffected. DAE ordered a comprehensive security audit
+  across all nuclear installations.
+keywords: ["Kudankulam", "NPCIL", "nuclear", "cyber", "Lazarus", "malware", "DAE", "Tamil Nadu"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_070_src_01.json"
+    platform: "telegram"
+    source_name: "Nuclear Threat Intel"
+    credibility: 44.0
+    published_at: "2023-11-14T01:00:00Z"
+  - fixture: "evt_070_src_02.json"
+    platform: "x"
+    source_name: "@CyberThreatIntel"
+    credibility: 56.0
+    published_at: "2023-11-14T01:30:00Z"
+  - fixture: "evt_070_src_03.json"
+    platform: "web"
+    source_name: "Recorded Future Blog"
+    credibility: 74.0
+    published_at: "2023-11-14T04:00:00Z"
+  - fixture: "evt_070_src_04.json"
+    platform: "reddit"
+    source_name: "r/cybersecurity"
+    credibility: 45.0
+    published_at: "2023-11-14T05:00:00Z"
+  - fixture: "evt_070_src_05.json"
+    platform: "rss"
+    source_name: "Dark Reading"
+    credibility: 70.0
+    published_at: "2023-11-14T06:00:00Z"
+  - fixture: "evt_070_src_06.json"
+    platform: "telegram"
+    source_name: "Indian Defence Cyber Watch"
+    credibility: 40.0
+    published_at: "2023-11-14T02:00:00Z"
+  - fixture: "evt_070_src_07.json"
+    platform: "bluesky"
+    source_name: "@nuclearsec.bsky.social"
+    credibility: 30.0
+    published_at: "2023-11-14T07:00:00Z"
+  - fixture: "evt_070_src_08.json"
+    platform: "web"
+    source_name: "The Hindu National"
+    credibility: 78.0
+    published_at: "2023-11-14T12:00:00Z"

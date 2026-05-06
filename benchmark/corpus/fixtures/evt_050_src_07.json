@@ -1,0 +1,7 @@
+{
+  "raw_text": "Thread on the deepfake Bollywood endorsement video circulating in India. I've done frame-by-frame analysis and the face-swap artifacts are clearly visible at 0.5x speed. The lighting direction on the face is approximately 40 degrees off from the ambient scene lighting. This is a textbook case of political deepfake deployed at scale during an election cycle. Indian Election Commission should mandate deepfake detection tools.",
+  "clean_text": "Frame-by-frame analysis of Bollywood deepfake endorsement video. Face-swap artifacts visible, facial lighting 40 degrees off from scene. Textbook political deepfake during election cycle.",
+  "language": "en",
+  "url": "https://bsky.app/profile/deepfakewatch.bsky.social/post/3kp8xyz",
+  "captured_at": "2024-04-12T11:00:00Z"
+}

@@ -1,0 +1,7 @@
+{
+  "raw_text": "India's AIIMS hospital hit by ransomware attack, patient services disrupted. The All India Institute of Medical Sciences (AIIMS) in New Delhi, one of India's premier government hospitals, has been hit by a ransomware attack that has disrupted patient care services since Wednesday morning. The hospital's servers have been down since 7 AM, affecting outpatient and inpatient digital services including smart lab, billing, report generation, and appointment scheduling. The National Informatics Centre (NIC) and Indian Computer Emergency Response Team (CERT-In) are investigating the incident. Hospital administration has switched to manual processes for patient registration. Sources say the attackers have demanded cryptocurrency as ransom. AIIMS handles approximately 1.5 million outpatient visits annually.",
+  "clean_text": "India's AIIMS hospital hit by ransomware attack patient services disrupted. AIIMS New Delhi hit by ransomware disrupting patient care since Wednesday morning. Servers down since 7 AM affecting smart lab billing report generation and appointments. NIC and CERT-In investigating. Hospital switched to manual processes. Attackers demanded cryptocurrency. AIIMS handles 1.5 million outpatient visits annually.",
+  "language": "en",
+  "url": "https://www.bleepingcomputer.com/news/security/india-aiims-hospital-ransomware-attack",
+  "captured_at": "2022-11-22T18:00:00Z"
+}

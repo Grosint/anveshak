@@ -1,0 +1,56 @@
+id: "evt-097"
+name: "CRPF Convoy Attack Jharkhand — LWE Coordination"
+category: "protest_civil_unrest"
+languages: ["en", "hi"]
+earliest_osint_signal: "2024-09-18T05:30:00Z"
+mainstream_media_date: "2024-09-18T10:00:00Z"
+description: >
+  A CRPF convoy was attacked with IEDs in Latehar district, Jharkhand,
+  killing 4 jawans. Left Wing Extremist (LWE) groups coordinated the
+  ambush using encrypted messaging. Prior chatter on Telegram channels
+  indicated planned action in the Burha Pahar corridor. This represents
+  a resurgence of Maoist activity in the region.
+keywords: ["CRPF", "Jharkhand", "Latehar", "IED", "LWE", "Maoist", "convoy attack", "Burha Pahar", "naxal"]
+should_fire_signal: true
+expected_isc: 4
+sources:
+  - fixture: "evt_097_src_01.json"
+    platform: "telegram"
+    source_name: "Jharkhand News Live"
+    credibility: 40.0
+    published_at: "2024-09-18T05:30:00Z"
+  - fixture: "evt_097_src_02.json"
+    platform: "x"
+    source_name: "CRPFJawanUpdates"
+    credibility: 35.0
+    published_at: "2024-09-18T06:00:00Z"
+  - fixture: "evt_097_src_03.json"
+    platform: "web"
+    source_name: "SATP Database"
+    credibility: 80.0
+    published_at: "2024-09-18T08:00:00Z"
+  - fixture: "evt_097_src_04.json"
+    platform: "telegram"
+    source_name: "Red Corridor Watch"
+    credibility: 30.0
+    published_at: "2024-09-18T05:45:00Z"
+  - fixture: "evt_097_src_05.json"
+    platform: "rss"
+    source_name: "PTI News Wire"
+    credibility: 85.0
+    published_at: "2024-09-18T08:30:00Z"
+  - fixture: "evt_097_src_06.json"
+    platform: "reddit"
+    source_name: "r/IndianArmedForces"
+    credibility: 25.0
+    published_at: "2024-09-18T07:00:00Z"
+  - fixture: "evt_097_src_07.json"
+    platform: "web"
+    source_name: "MHA Press Release"
+    credibility: 95.0
+    published_at: "2024-09-18T10:00:00Z"
+  - fixture: "evt_097_src_08.json"
+    platform: "x"
+    source_name: "JharkhandPolice_Off"
+    credibility: 75.0
+    published_at: "2024-09-18T07:30:00Z"

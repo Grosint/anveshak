@@ -1,0 +1,55 @@
+id: "evt-042"
+name: "AI-Generated Audio of Indian PM — Election Deepfake"
+category: "deepfake_manipulated_media"
+languages: ["en", "hi"]
+earliest_osint_signal: "2024-04-18T04:00:00Z"
+mainstream_media_date: "2024-04-22T09:00:00Z"
+description: >
+  A deepfake audio clip mimicking the Indian Prime Minister's voice surfaced on
+  WhatsApp and Telegram during the 2024 election cycle. The clip fabricated
+  statements about reservations policy changes. Voice forensics confirmed the
+  use of VALL-E style zero-shot voice cloning with spectral artifacts at 8-12kHz.
+keywords: ["deepfake audio", "PM voice clone", "election interference", "VALL-E", "voice forensics", "WhatsApp"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_042_src_01.json"
+    platform: "telegram"
+    source_name: "Viral India Leaks"
+    credibility: 10.0
+    published_at: "2024-04-18T04:00:00Z"
+  - fixture: "evt_042_src_02.json"
+    platform: "telegram"
+    source_name: "Election Watch India"
+    credibility: 25.0
+    published_at: "2024-04-18T06:30:00Z"
+  - fixture: "evt_042_src_03.json"
+    platform: "x"
+    source_name: "@FactCheckIndia"
+    credibility: 70.0
+    published_at: "2024-04-19T03:00:00Z"
+  - fixture: "evt_042_src_04.json"
+    platform: "reddit"
+    source_name: "r/india"
+    credibility: 35.0
+    published_at: "2024-04-19T08:00:00Z"
+  - fixture: "evt_042_src_05.json"
+    platform: "web"
+    source_name: "Alt News"
+    credibility: 75.0
+    published_at: "2024-04-20T10:00:00Z"
+  - fixture: "evt_042_src_06.json"
+    platform: "bluesky"
+    source_name: "@deepfakewatch.bsky.social"
+    credibility: 30.0
+    published_at: "2024-04-20T15:00:00Z"
+  - fixture: "evt_042_src_07.json"
+    platform: "rss"
+    source_name: "BOOM Live RSS"
+    credibility: 78.0
+    published_at: "2024-04-21T12:00:00Z"
+  - fixture: "evt_042_src_08.json"
+    platform: "web"
+    source_name: "Scroll.in"
+    credibility: 65.0
+    published_at: "2024-04-22T09:00:00Z"

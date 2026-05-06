@@ -1,0 +1,55 @@
+id: "evt-088"
+name: "AI Art Contest Entry Mistaken for Military Intel"
+category: "deepfake_manipulated_media"
+languages: ["en"]
+earliest_osint_signal: "2024-07-15T10:00:00Z"
+mainstream_media_date: "2024-07-15T10:00:00Z"
+description: >
+  An AI-generated image from a digital art contest depicting a fictional
+  "stealth drone over Ladakh" was shared on social media as leaked military
+  intelligence. The image was a Midjourney creation submitted to an art
+  competition, with visible AI artifacts and no EXIF military metadata.
+keywords: ["AI art", "midjourney", "drone", "Ladakh", "fake", "generated image", "stealth"]
+should_fire_signal: false
+expected_isc: 1
+sources:
+  - fixture: "evt_088_src_01.json"
+    platform: "x"
+    source_name: "LeakedDefencePhotos"
+    credibility: 5.0
+    published_at: "2024-07-15T10:00:00Z"
+  - fixture: "evt_088_src_02.json"
+    platform: "telegram"
+    source_name: "India Military Leaks"
+    credibility: 5.0
+    published_at: "2024-07-15T10:30:00Z"
+  - fixture: "evt_088_src_03.json"
+    platform: "reddit"
+    source_name: "r/MilitaryPorn"
+    credibility: 20.0
+    published_at: "2024-07-15T11:00:00Z"
+  - fixture: "evt_088_src_04.json"
+    platform: "x"
+    source_name: "AI_Art_Contest_Official"
+    credibility: 60.0
+    published_at: "2024-07-15T14:00:00Z"
+  - fixture: "evt_088_src_05.json"
+    platform: "web"
+    source_name: "BellingcatAI Analysis"
+    credibility: 80.0
+    published_at: "2024-07-15T16:00:00Z"
+  - fixture: "evt_088_src_06.json"
+    platform: "telegram"
+    source_name: "ViralDefenceMedia"
+    credibility: 5.0
+    published_at: "2024-07-15T11:30:00Z"
+  - fixture: "evt_088_src_07.json"
+    platform: "x"
+    source_name: "RandomPatriotAccount"
+    credibility: 5.0
+    published_at: "2024-07-15T12:00:00Z"
+  - fixture: "evt_088_src_08.json"
+    platform: "web"
+    source_name: "AltNews AI Check"
+    credibility: 80.0
+    published_at: "2024-07-15T18:00:00Z"

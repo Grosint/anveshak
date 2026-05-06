@@ -1,0 +1,7 @@
+{
+  "raw_text": "DRDO targeted by supply chain APT attack through a third-party IT vendor. Custom malware hidden in a lab management software update. This is a classic supply chain compromise. Initial attribution points to a South Asian state-sponsored group. NIA investigation underway. How many other defence research orgs use the same vendor?",
+  "clean_text": "Discussion of DRDO supply chain attack via compromised IT vendor. Custom malware in software update. South Asian state-sponsored group suspected. NIA investigating.",
+  "language": "en",
+  "url": "https://www.reddit.com/r/threatintel/comments/1cn7k9m/drdo_supply_chain_attack_south_asian_apt/",
+  "captured_at": "2024-05-11T05:00:00Z"
+}

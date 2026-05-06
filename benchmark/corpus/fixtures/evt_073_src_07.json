@@ -1,0 +1,7 @@
+{
+  "raw_text": "Mandiant has published a threat brief on the attempted supply chain compromise of India's Defence Research and Development Organisation. The attack leveraged a trusted third-party IT vendor to deploy custom malware through a software update for laboratory management systems. The malware exhibited advanced evasion techniques and established encrypted C2 channels. Attribution analysis indicates a South Asian APT group with nation-state backing. The attack was detected before significant data exfiltration occurred.",
+  "clean_text": "Mandiant threat brief on DRDO supply chain attack via compromised vendor. Advanced malware with encrypted C2 channels. South Asian nation-state APT attributed. Detected before significant exfiltration.",
+  "language": "en",
+  "url": "https://www.mandiant.com/resources/blog/drdo-supply-chain-apt-south-asia",
+  "captured_at": "2024-05-11T08:00:00Z"
+}

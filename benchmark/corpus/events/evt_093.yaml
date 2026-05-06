@@ -1,0 +1,56 @@
+id: "evt-093"
+name: "Fake Cyber Attack Claim — Script Kiddie Bragging"
+category: "critical_infrastructure"
+languages: ["en"]
+earliest_osint_signal: "2024-04-22T16:00:00Z"
+mainstream_media_date: "2024-04-23T10:00:00Z"
+description: >
+  A low-skill threat actor on Telegram and dark web forums claimed to
+  have breached ISRO's telemetry servers and exfiltrated satellite data.
+  Screenshots posted were fabricated using publicly available ISRO website
+  images. CERT-In confirmed no breach occurred. The actor had no prior
+  credible claims.
+keywords: ["ISRO", "cyber attack", "breach", "telemetry", "script kiddie", "fake claim", "CERT-In"]
+should_fire_signal: false
+expected_isc: 1
+sources:
+  - fixture: "evt_093_src_01.json"
+    platform: "telegram"
+    source_name: "DarkNetHackers_IN"
+    credibility: 5.0
+    published_at: "2024-04-22T16:00:00Z"
+  - fixture: "evt_093_src_02.json"
+    platform: "x"
+    source_name: "CyberThreatIntel"
+    credibility: 40.0
+    published_at: "2024-04-22T17:00:00Z"
+  - fixture: "evt_093_src_03.json"
+    platform: "reddit"
+    source_name: "r/netsec"
+    credibility: 50.0
+    published_at: "2024-04-22T18:00:00Z"
+  - fixture: "evt_093_src_04.json"
+    platform: "telegram"
+    source_name: "CyberVandals_Official"
+    credibility: 5.0
+    published_at: "2024-04-22T16:30:00Z"
+  - fixture: "evt_093_src_05.json"
+    platform: "web"
+    source_name: "CERT-In Advisory"
+    credibility: 95.0
+    published_at: "2024-04-23T08:00:00Z"
+  - fixture: "evt_093_src_06.json"
+    platform: "x"
+    source_name: "ISROSpaceflight"
+    credibility: 85.0
+    published_at: "2024-04-23T09:00:00Z"
+  - fixture: "evt_093_src_07.json"
+    platform: "rss"
+    source_name: "Bleeping Computer"
+    credibility: 70.0
+    published_at: "2024-04-23T10:00:00Z"
+  - fixture: "evt_093_src_08.json"
+    platform: "web"
+    source_name: "CloudSEK Threat Intel"
+    credibility: 75.0
+    published_at: "2024-04-22T22:00:00Z"

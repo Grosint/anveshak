@@ -1,0 +1,7 @@
+{
+  "raw_text": "CRITICAL: Chinese APT RedEcho found inside Indian power grid infrastructure. Recorded Future just published research showing ShadowPad C2 beacons from 10 Indian power sector organizations — including 4 of 5 national grid control centres. IOCs shared below. Key takeaways: 1) ShadowPad variant matches tools used by APT41 and Tonto Team. 2) Intrusion timeline correlates with Galwan clash escalation (mid-2020). 3) This is pre-positioning for potential grid disruption during military crisis. 4) India's October 2020 Mumbai blackout may be related (unconfirmed but temporal match). If you're in Indian infra-sec: check these C2 domains immediately.",
+  "clean_text": "Chinese APT RedEcho found inside Indian power grid infrastructure. ShadowPad C2 beacons from 10 Indian power sector organizations including 4 of 5 national grid control centres. ShadowPad matches APT41 and Tonto Team tools. Intrusion timeline correlates with Galwan clash. Pre-positioning for grid disruption during military crisis. India's October 2020 Mumbai blackout may be related. Check C2 domains immediately.",
+  "language": "en",
+  "url": "https://t.me/apt_tracker/892",
+  "captured_at": "2021-02-28T10:00:00Z"
+}

@@ -1,0 +1,7 @@
+{
+  "raw_text": "Kudankulam Nuclear Power Plant reportedly hit by Lazarus Group malware. The intrusion was on the administrative network, not the operational technology side which is air-gapped. Still, the fact that a DPRK-linked APT got into a nuclear facility's network is deeply concerning. Anyone know if this is related to the earlier Kudankulam incident from 2019?",
+  "clean_text": "Discussion of Lazarus Group malware at Kudankulam Nuclear Plant. Administrative network compromised, OT air-gapped. Concerns about DPRK-linked APT targeting nuclear facility.",
+  "language": "en",
+  "url": "https://www.reddit.com/r/cybersecurity/comments/17v8j3m/kudankulam_nuclear_plant_lazarus_malware/",
+  "captured_at": "2023-11-14T05:00:00Z"
+}

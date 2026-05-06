@@ -1,0 +1,56 @@
+id: "evt-051"
+name: "Manipulated Drone Footage — LoC Crossing Fabrication"
+category: "deepfake_manipulated_media"
+languages: ["en", "ur"]
+earliest_osint_signal: "2024-05-18T03:00:00Z"
+mainstream_media_date: "2024-05-18T14:00:00Z"
+description: >
+  Manipulated drone footage allegedly showing Indian Army soldiers crossing
+  the Line of Control was shared by accounts linked to Pakistani information
+  operations. The footage spliced authentic terrain imagery with digitally
+  inserted military figures. Metadata analysis revealed frame-rate
+  inconsistencies and EXIF data pointing to stock footage origins.
+keywords: ["LoC", "drone footage", "manipulated", "line of control", "india", "pakistan", "military", "fabrication"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_051_src_01.json"
+    platform: "telegram"
+    source_name: "KashmirFrontline"
+    credibility: 15.0
+    published_at: "2024-05-18T03:00:00Z"
+  - fixture: "evt_051_src_02.json"
+    platform: "x"
+    source_name: "@LocWatchPak"
+    credibility: 18.0
+    published_at: "2024-05-18T03:45:00Z"
+  - fixture: "evt_051_src_03.json"
+    platform: "telegram"
+    source_name: "DefenceAlertPK"
+    credibility: 20.0
+    published_at: "2024-05-18T04:30:00Z"
+  - fixture: "evt_051_src_04.json"
+    platform: "reddit"
+    source_name: "r/IndianMilitary"
+    credibility: 50.0
+    published_at: "2024-05-18T06:00:00Z"
+  - fixture: "evt_051_src_05.json"
+    platform: "web"
+    source_name: "The Print"
+    credibility: 80.0
+    published_at: "2024-05-18T14:00:00Z"
+  - fixture: "evt_051_src_06.json"
+    platform: "web"
+    source_name: "DFRAC (Digital Forensics Research and Analytics Centre)"
+    credibility: 82.0
+    published_at: "2024-05-18T10:00:00Z"
+  - fixture: "evt_051_src_07.json"
+    platform: "rss"
+    source_name: "Economic Times Defence"
+    credibility: 78.0
+    published_at: "2024-05-18T15:00:00Z"
+  - fixture: "evt_051_src_08.json"
+    platform: "bluesky"
+    source_name: "@saaganalysis.bsky.social"
+    credibility: 55.0
+    published_at: "2024-05-18T08:00:00Z"

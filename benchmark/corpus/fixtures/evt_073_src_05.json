@@ -1,0 +1,7 @@
+{
+  "raw_text": "CERT-In Advisory CIAD-2024-0052: A state-sponsored APT group has attempted to compromise the Defence Research and Development Organisation's internal network through a supply chain attack targeting a third-party IT vendor. Custom malware was deployed through a compromised software update mechanism. All defence and research organizations are advised to audit third-party vendor access, verify software update integrity, and implement application whitelisting on critical systems.",
+  "clean_text": "CERT-In advisory on DRDO supply chain attack via compromised vendor. All defence organizations advised to audit vendor access, verify update integrity, and implement application whitelisting.",
+  "language": "en",
+  "url": "https://www.cert-in.org.in/advisory/CIAD-2024-0052",
+  "captured_at": "2024-05-11T06:00:00Z"
+}

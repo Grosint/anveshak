@@ -1,0 +1,55 @@
+id: "evt-064"
+name: "Iran Mahsa Amini Anniversary Protests"
+category: "protest_civil_unrest"
+languages: ["en"]
+earliest_osint_signal: "2023-09-16T05:00:00Z"
+mainstream_media_date: "2023-09-16T14:00:00Z"
+description: >
+  On the first anniversary of Mahsa Amini's death in morality police custody, protests
+  flared across Iranian cities and in diaspora communities worldwide. Security forces
+  pre-emptively detained activists and imposed internet restrictions. Solidarity marches
+  were held in Berlin, London, Toronto, and Washington DC.
+keywords: ["Mahsa Amini", "Iran", "anniversary", "protest", "Woman Life Freedom", "morality police", "diaspora"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_064_src_01.json"
+    platform: "telegram"
+    source_name: "Iran Protest Tracker"
+    credibility: 42.0
+    published_at: "2023-09-16T05:00:00Z"
+  - fixture: "evt_064_src_02.json"
+    platform: "x"
+    source_name: "@IranHRMonitor"
+    credibility: 55.0
+    published_at: "2023-09-16T05:30:00Z"
+  - fixture: "evt_064_src_03.json"
+    platform: "reddit"
+    source_name: "r/worldnews"
+    credibility: 40.0
+    published_at: "2023-09-16T06:00:00Z"
+  - fixture: "evt_064_src_04.json"
+    platform: "web"
+    source_name: "Iran International"
+    credibility: 62.0
+    published_at: "2023-09-16T07:00:00Z"
+  - fixture: "evt_064_src_05.json"
+    platform: "bluesky"
+    source_name: "@iranfreedom.bsky.social"
+    credibility: 34.0
+    published_at: "2023-09-16T06:30:00Z"
+  - fixture: "evt_064_src_06.json"
+    platform: "telegram"
+    source_name: "Tehran Streets Update"
+    credibility: 38.0
+    published_at: "2023-09-16T08:00:00Z"
+  - fixture: "evt_064_src_07.json"
+    platform: "rss"
+    source_name: "BBC Persian Service"
+    credibility: 76.0
+    published_at: "2023-09-16T10:00:00Z"
+  - fixture: "evt_064_src_08.json"
+    platform: "web"
+    source_name: "The Guardian World"
+    credibility: 80.0
+    published_at: "2023-09-16T14:00:00Z"

@@ -1,0 +1,7 @@
+{
+  "raw_text": "Bellingcat — Doklam Footage Verification: EXIF and Geolocation Analysis. Our team conducted a forensic review of six images and two video clips from the CCTV broadcast dated June 10, 2024. EXIF metadata on three images shows creation dates between August 14-18, 2017. Shadow analysis of the remaining frames is consistent with late summer positioning, not early June. Geolocation via satellite comparison confirms the terrain matches the Doka La ridge area but structural features such as a guard post visible in the footage were dismantled in 2019 per commercial satellite imagery. Conclusion: the footage is recycled from the 2017 standoff period.",
+  "clean_text": "Bellingcat conducted a forensic review of six images and two video clips from the CCTV broadcast dated June 10, 2024. EXIF metadata on three images shows creation dates between August 14-18, 2017. Shadow analysis of the remaining frames is consistent with late summer positioning, not early June. Geolocation via satellite comparison confirms the terrain matches the Doka La ridge area but structural features such as a guard post visible in the footage were dismantled in 2019 per commercial satellite imagery. The footage is recycled from the 2017 standoff period.",
+  "language": "en",
+  "url": "https://www.bellingcat.com/news/2024/06/11/doklam-footage-verification-exif-geolocation/",
+  "captured_at": "2024-06-11T10:00:00Z"
+}

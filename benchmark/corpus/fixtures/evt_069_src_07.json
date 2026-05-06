@@ -1,0 +1,7 @@
+{
+  "raw_text": "The Indian Railways KAVACH signaling vulnerability is a textbook example of SCADA security failures. Unencrypted serial communication in critical railway infrastructure in 2024 is inexcusable. The Electronic Interlocking systems at 4,500 stations were essentially accessible without authentication. Emergency patching is underway but this should have been caught during design review.",
+  "clean_text": "KAVACH vulnerability described as textbook SCADA security failure. Unencrypted serial communication in critical railway infrastructure at 4,500 stations. Emergency patching underway.",
+  "language": "en",
+  "url": "https://bsky.app/profile/icsecurity.bsky.social/post/3kv7m4n8p9q2r",
+  "captured_at": "2024-04-03T10:00:00Z"
+}

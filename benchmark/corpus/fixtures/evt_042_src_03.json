@@ -1,0 +1,7 @@
+{
+  "raw_text": "THREAD: The viral PM audio clip about reservations is a DEEPFAKE. Our voice forensics team at @FactCheckIndia has confirmed this. Key findings: 1) Spectral artifacts at 8-12kHz consistent with VALL-E style zero-shot voice cloning 2) Pitch contours don't match PM's documented speech patterns 3) Background noise layer artificially added to mask synthesis artifacts 4) No such party meeting was scheduled on the claimed date. This is election interference via AI.",
+  "clean_text": "FactCheckIndia confirmed PM audio clip is deepfake using VALL-E style voice cloning. Spectral artifacts at 8-12kHz, mismatched pitch contours, and artificial background noise detected. Classified as election interference.",
+  "language": "en",
+  "url": "https://x.com/FactCheckIndia/status/1781234567890123456",
+  "captured_at": "2024-04-19T03:00:00Z"
+}

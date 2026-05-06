@@ -1,0 +1,7 @@
+{
+  "raw_text": "MuddyWater is going after Indian power grid infrastructure using compromised .gov.in domains as delivery mechanism. They're deploying Atera RMM tools which is their standard MO but the targeting of Indian critical infrastructure is new. C2 infrastructure links back to IRGC hosting. Anyone in Indian energy sector InfoSec should be checking for Atera agents on their networks immediately. IOCs in the Mandiant blog post.",
+  "clean_text": "MuddyWater targeting Indian power grid using compromised .gov.in domains to deploy Atera RMM tools. C2 links to IRGC hosting. Indian energy sector should check for unauthorized Atera agents.",
+  "language": "en",
+  "url": "https://www.reddit.com/r/netsec/comments/1caabc/muddywater_india_critical_infrastructure/",
+  "captured_at": "2024-04-22T16:00:00Z"
+}

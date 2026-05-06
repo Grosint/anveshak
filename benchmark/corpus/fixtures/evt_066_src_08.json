@@ -1,0 +1,7 @@
+{
+  "raw_text": "A targeted cyber attack on ISRO's telemetry data centre in Bengaluru has raised concerns about the vulnerability of India's space infrastructure to sophisticated threat actors. The attack, which involved spear-phishing emails impersonating ISRO officials, was detected days after Chandrayaan-3's lunar landing. CERT-In has issued emergency advisories to all space sector organizations, while ISRO has confirmed that operational technology networks and mission control systems remained air-gapped and secure.",
+  "clean_text": "Cyber attack on ISRO telemetry centre raises concerns about space infrastructure security. CERT-In issued advisories. ISRO confirms air-gapped mission control remained secure.",
+  "language": "en",
+  "url": "https://timesofindia.indiatimes.com/technology/tech-news/isro-data-centre-cyber-attack-chandrayaan/articleshow/103245678.cms",
+  "captured_at": "2023-08-25T11:00:00Z"
+}

@@ -1,0 +1,55 @@
+id: "evt-071"
+name: "Indian Telecom — BSNL Data Breach 2024"
+category: "critical_infrastructure"
+languages: ["en", "hi"]
+earliest_osint_signal: "2024-06-20T03:00:00Z"
+mainstream_media_date: "2024-06-20T12:00:00Z"
+description: >
+  A threat actor known as "kiberphant0m" claimed to have exfiltrated 278 GB of data
+  from BSNL servers, including IMSI numbers, SIM card details, and HLR data affecting
+  millions of subscribers. The stolen data was listed on a dark web forum. DoT issued
+  emergency directives to BSNL for containment and subscriber notification.
+keywords: ["BSNL", "data breach", "telecom", "IMSI", "HLR", "dark web", "DoT", "kiberphant0m"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_071_src_01.json"
+    platform: "telegram"
+    source_name: "Dark Web Intel India"
+    credibility: 40.0
+    published_at: "2024-06-20T03:00:00Z"
+  - fixture: "evt_071_src_02.json"
+    platform: "x"
+    source_name: "@ThreatIntelIN"
+    credibility: 52.0
+    published_at: "2024-06-20T03:30:00Z"
+  - fixture: "evt_071_src_03.json"
+    platform: "reddit"
+    source_name: "r/IndianCyberSecurity"
+    credibility: 42.0
+    published_at: "2024-06-20T04:30:00Z"
+  - fixture: "evt_071_src_04.json"
+    platform: "web"
+    source_name: "CloudSEK Threat Report"
+    credibility: 72.0
+    published_at: "2024-06-20T06:00:00Z"
+  - fixture: "evt_071_src_05.json"
+    platform: "rss"
+    source_name: "The Hacker News"
+    credibility: 70.0
+    published_at: "2024-06-20T07:00:00Z"
+  - fixture: "evt_071_src_06.json"
+    platform: "telegram"
+    source_name: "Telecom Workers Forum"
+    credibility: 36.0
+    published_at: "2024-06-20T04:00:00Z"
+  - fixture: "evt_071_src_07.json"
+    platform: "web"
+    source_name: "India Today Technology"
+    credibility: 68.0
+    published_at: "2024-06-20T09:00:00Z"
+  - fixture: "evt_071_src_08.json"
+    platform: "rss"
+    source_name: "Hindustan Times Tech"
+    credibility: 72.0
+    published_at: "2024-06-20T12:00:00Z"

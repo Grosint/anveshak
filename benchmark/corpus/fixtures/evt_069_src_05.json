@@ -1,0 +1,7 @@
+{
+  "raw_text": "A critical vulnerability has been discovered in the integration layer between India's KAVACH automatic train protection system and Electronic Interlocking signaling systems deployed across 4,500 railway stations. The flaw in unencrypted serial communication channels could theoretically allow unauthorized signal manipulation. Indian Railway Board has initiated emergency patching of all Class A routes and is working with the system vendor to deploy fixes.",
+  "clean_text": "Critical KAVACH integration vulnerability in unencrypted serial channels across 4,500 stations. Could allow unauthorized signal manipulation. Railway Board emergency patching Class A routes.",
+  "language": "en",
+  "url": "https://www.bleepingcomputer.com/news/security/indian-railways-kavach-signaling-vulnerability-4500-stations/",
+  "captured_at": "2024-04-03T09:00:00Z"
+}

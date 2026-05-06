@@ -1,0 +1,7 @@
+{
+  "raw_text": "Audio verification thread on the Defence Minister clip: I processed the audio through multiple detection models. Results are conclusive — the waveform shows synthetic generation patterns. Natural speech has stochastic variations in formant frequencies that this clip completely lacks. The 16kHz spectral cutoff is a dead giveaway for neural TTS systems.",
+  "clean_text": "Audio verification of Defence Minister clip shows synthetic generation patterns. Waveform lacks stochastic variations in formant frequencies. 16kHz spectral cutoff indicates neural text-to-speech synthesis.",
+  "language": "en",
+  "url": "https://bsky.app/profile/audioverify.bsky.social/post/3ktx7w8y3dt3l",
+  "captured_at": "2024-06-08T10:00:00Z"
+}

@@ -1,0 +1,7 @@
+{
+  "raw_text": "ALERT: Threat actor \"kiberphant0m\" claims massive BSNL data breach on dark web forum. Claims to have exfiltrated 278 GB of data including IMSI numbers, SIM card details, and HLR data affecting millions of subscribers. Sample data posted as proof. This would be one of the largest telecom breaches in India if confirmed.",
+  "clean_text": "Threat actor kiberphant0m claims 278 GB BSNL data breach including IMSI numbers, SIM details, and HLR data. Sample data posted on dark web forum as proof.",
+  "language": "en",
+  "url": "https://t.me/DarkWebIntelIndia/3456",
+  "captured_at": "2024-06-20T03:00:00Z"
+}

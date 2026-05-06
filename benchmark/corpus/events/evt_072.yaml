@@ -1,0 +1,56 @@
+id: "evt-072"
+name: "Port of Mumbai — Cyber Intrusion Detection"
+category: "critical_infrastructure"
+languages: ["en"]
+earliest_osint_signal: "2024-03-28T02:00:00Z"
+mainstream_media_date: "2024-03-28T12:00:00Z"
+description: >
+  Mumbai Port Trust detected unauthorized access to its vessel traffic management system
+  and cargo scheduling database. The intrusion exploited a zero-day vulnerability in the
+  port's legacy SCADA interface. Maritime traffic was temporarily rerouted to JNPT while
+  incident response teams isolated affected systems. NCIIPC issued a critical alert to
+  all major Indian ports.
+keywords: ["Mumbai Port", "cyber intrusion", "SCADA", "vessel traffic", "NCIIPC", "JNPT", "maritime", "zero-day"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_072_src_01.json"
+    platform: "telegram"
+    source_name: "Maritime Cyber Watch"
+    credibility: 44.0
+    published_at: "2024-03-28T02:00:00Z"
+  - fixture: "evt_072_src_02.json"
+    platform: "x"
+    source_name: "@PortSecurityIN"
+    credibility: 48.0
+    published_at: "2024-03-28T02:30:00Z"
+  - fixture: "evt_072_src_03.json"
+    platform: "web"
+    source_name: "Maritime Gateway India"
+    credibility: 62.0
+    published_at: "2024-03-28T05:00:00Z"
+  - fixture: "evt_072_src_04.json"
+    platform: "reddit"
+    source_name: "r/IndiaDefence"
+    credibility: 36.0
+    published_at: "2024-03-28T06:00:00Z"
+  - fixture: "evt_072_src_05.json"
+    platform: "rss"
+    source_name: "NCIIPC Advisory"
+    credibility: 88.0
+    published_at: "2024-03-28T07:00:00Z"
+  - fixture: "evt_072_src_06.json"
+    platform: "telegram"
+    source_name: "Shipping India Updates"
+    credibility: 38.0
+    published_at: "2024-03-28T03:00:00Z"
+  - fixture: "evt_072_src_07.json"
+    platform: "bluesky"
+    source_name: "@maritimetech.bsky.social"
+    credibility: 30.0
+    published_at: "2024-03-28T08:00:00Z"
+  - fixture: "evt_072_src_08.json"
+    platform: "web"
+    source_name: "Business Standard"
+    credibility: 74.0
+    published_at: "2024-03-28T12:00:00Z"

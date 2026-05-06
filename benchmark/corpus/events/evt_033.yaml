@@ -1,0 +1,55 @@
+id: "evt-033"
+name: "Turkish Erdogan-backed Kashmir Campaign at OIC"
+category: "information_operations"
+languages: ["en", "ur"]
+earliest_osint_signal: "2024-05-02T08:00:00Z"
+mainstream_media_date: "2024-05-06T10:00:00Z"
+description: >
+  Turkey-aligned media outlets and diplomatic social media accounts launched
+  a coordinated narrative push around the OIC summit framing Kashmir as an
+  occupied territory. The campaign leveraged Erdogan's speeches and TRT World
+  segments amplified through Pakistani diaspora Telegram channels.
+keywords: ["Turkey", "Erdogan", "Kashmir", "OIC", "TRT World", "Pakistan diaspora"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_033_src_01.json"
+    platform: "telegram"
+    source_name: "Ummah Voice Channel"
+    credibility: 20.0
+    published_at: "2024-05-02T08:00:00Z"
+  - fixture: "evt_033_src_02.json"
+    platform: "x"
+    source_name: "@TRTWorld"
+    credibility: 40.0
+    published_at: "2024-05-02T10:30:00Z"
+  - fixture: "evt_033_src_03.json"
+    platform: "web"
+    source_name: "TRT World"
+    credibility: 35.0
+    published_at: "2024-05-02T12:00:00Z"
+  - fixture: "evt_033_src_04.json"
+    platform: "reddit"
+    source_name: "r/islamicworld"
+    credibility: 25.0
+    published_at: "2024-05-03T05:00:00Z"
+  - fixture: "evt_033_src_05.json"
+    platform: "telegram"
+    source_name: "Kashmir Intifada Updates"
+    credibility: 15.0
+    published_at: "2024-05-03T09:30:00Z"
+  - fixture: "evt_033_src_06.json"
+    platform: "bluesky"
+    source_name: "@kashmirfreedom.bsky.social"
+    credibility: 10.0
+    published_at: "2024-05-04T03:15:00Z"
+  - fixture: "evt_033_src_07.json"
+    platform: "rss"
+    source_name: "Al Jazeera RSS"
+    credibility: 60.0
+    published_at: "2024-05-05T07:00:00Z"
+  - fixture: "evt_033_src_08.json"
+    platform: "web"
+    source_name: "Hindustan Times"
+    credibility: 70.0
+    published_at: "2024-05-06T10:00:00Z"

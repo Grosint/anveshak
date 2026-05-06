@@ -1,0 +1,7 @@
+{
+  "raw_text": "INTEL: State-sponsored APT group attempting to breach DRDO internal research network. Attack vector is a supply chain compromise through a third-party IT vendor. Custom malware disguised as a legitimate software update for laboratory management systems. Initial indicators point to a South Asian threat actor with nation-state backing. NIA investigation expected.",
+  "clean_text": "State-sponsored APT targeting DRDO research network via supply chain attack through third-party IT vendor. Custom malware disguised as lab management software update.",
+  "language": "en",
+  "url": "https://t.me/APTTrackerSouthAsia/567",
+  "captured_at": "2024-05-11T01:00:00Z"
+}

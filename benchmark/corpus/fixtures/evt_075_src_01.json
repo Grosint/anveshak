@@ -1,0 +1,7 @@
+{
+  "raw_text": "CRITICAL ALERT: Severe frequency deviations detected in North Eastern Regional Grid. Cascading load-shedding across Assam, Meghalaya, and Tripura. Suspected malware found in SCADA systems at two substations near Bongaigaon. Relay protection settings appear to have been manipulated. POSOCO activating emergency islanding protocols to prevent grid collapse.",
+  "clean_text": "Severe frequency deviations in NE Regional Grid with cascading load-shedding. Malware found in SCADA at two Bongaigaon substations. Relay settings manipulated. POSOCO emergency islanding activated.",
+  "language": "en",
+  "url": "https://t.me/PowerGridSecurityAlert/234",
+  "captured_at": "2024-08-18T01:00:00Z"
+}

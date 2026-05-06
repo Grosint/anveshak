@@ -1,0 +1,7 @@
+{
+  "raw_text": "CERT-In Advisory CIAD-2023-0087: Critical alert issued to all Indian space sector entities following detection of targeted spear-phishing campaign against ISRO facilities. Threat actors used sophisticated social engineering techniques impersonating senior officials. All space sector organizations advised to implement enhanced email filtering, conduct immediate phishing awareness training, and report suspicious communications.",
+  "clean_text": "CERT-In emergency advisory to all space sector entities following targeted spear-phishing campaign against ISRO. Enhanced email filtering and phishing awareness training recommended.",
+  "language": "en",
+  "url": "https://www.cert-in.org.in/advisory/CIAD-2023-0087",
+  "captured_at": "2023-08-25T06:00:00Z"
+}

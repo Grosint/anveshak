@@ -1,0 +1,7 @@
+{
+  "raw_text": "CERT-In Advisory CIAD-2022-0042: Critical ransomware incident affecting All India Institute of Medical Sciences (AIIMS), New Delhi. The incident has been classified as a critical severity cyber security event. Preliminary analysis indicates exploitation of vulnerable servers with outdated operating systems. CERT-In has deployed an incident response team on-site. All government healthcare facilities are advised to immediately audit their network infrastructure, apply latest security patches, and implement network segmentation. Indicators of compromise (IOCs) will be shared through secure channels.",
+  "clean_text": "CERT-In Advisory CIAD-2022-0042: Critical ransomware incident affecting AIIMS New Delhi. Classified as critical severity cyber security event. Preliminary analysis indicates exploitation of vulnerable servers with outdated operating systems. CERT-In deployed incident response team on-site. Government healthcare facilities advised to audit network infrastructure apply security patches and implement network segmentation.",
+  "language": "en",
+  "url": "https://www.cert-in.org.in/s2cMainServlet?pageid=PUBVLNOTES&ESSION_ID=advisory_2022_0042",
+  "captured_at": "2022-11-24T08:00:00Z"
+}

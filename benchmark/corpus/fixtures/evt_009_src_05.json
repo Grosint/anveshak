@@ -1,0 +1,7 @@
+{
+  "raw_text": "Thread: AIIMS Delhi patient data spotted on darknet marketplace. Listing claims to have 30-40 million records including Aadhaar numbers, diagnoses, and treatment histories. Seller asking 200 BTC. Sample data looks authentic — includes OPD registration numbers matching AIIMS format. Listing appeared approximately 6 hours ago. If genuine, this is one of the largest healthcare data breaches in Indian history. No official confirmation from AIIMS administration yet.",
+  "clean_text": "AIIMS Delhi patient data spotted on darknet marketplace. Listing claims 30-40 million records including Aadhaar numbers diagnoses and treatment histories. Seller asking 200 BTC. Sample data looks authentic includes OPD registration numbers matching AIIMS format. Listing appeared approximately 6 hours ago. One of the largest healthcare data breaches in Indian history.",
+  "language": "en",
+  "url": "https://darkforum.example.onion/thread/aiims-delhi-data-dump-2022",
+  "captured_at": "2022-11-22T06:00:00Z"
+}

@@ -1,0 +1,7 @@
+{
+  "raw_text": "IIT Delhi Deepfake Detection Lab analysis of the viral Supreme Court judge video confirms it is a sophisticated deepfake. Our forensic analysis detected: (1) temporal artifacts in facial region consistent with face-swap GAN architecture, (2) lip-sync inconsistencies at 0:12, 0:34, and 1:15 timestamps, (3) voice cloning artifacts in spectral analysis showing synthetic speech patterns, and (4) lighting inconsistencies between the face and background. Confidence: 97.3% deepfake probability. The video uses a combination of face-swap and voice cloning technology.",
+  "clean_text": "IIT Delhi Deepfake Detection Lab confirms viral judge video is deepfake at 97.3% confidence. Face-swap GAN artifacts, lip-sync issues, voice cloning artifacts, and lighting inconsistencies detected.",
+  "language": "en",
+  "url": "https://deepfakelab.iitd.ac.in/analysis/supreme-court-judge-deepfake-november-2024",
+  "captured_at": "2024-11-20T12:00:00Z"
+}

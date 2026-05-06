@@ -1,0 +1,55 @@
+id: "evt-081"
+name: "Ethiopia Tigray Conflict — OSINT Satellite Evidence"
+category: "cross_border_security"
+languages: ["en"]
+earliest_osint_signal: "2023-02-10T08:00:00Z"
+mainstream_media_date: "2023-02-11T12:00:00Z"
+description: >
+  Despite the November 2022 ceasefire, satellite imagery and social media revealed
+  continued Eritrean military presence and civilian harm in Tigray. OSINT analysts
+  documented troop positions and infrastructure destruction via commercial satellite
+  imagery and ground-level social media reports.
+keywords: ["tigray", "ethiopia", "eritrea", "TPLF", "ceasefire", "satellite", "mekelle", "axum"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_081_src_01.json"
+    platform: "x"
+    source_name: "Tigray OSINT Watch"
+    credibility: 45.0
+    published_at: "2023-02-10T08:30:00Z"
+  - fixture: "evt_081_src_02.json"
+    platform: "web"
+    source_name: "Planet Labs Analysis"
+    credibility: 85.0
+    published_at: "2023-02-10T10:00:00Z"
+  - fixture: "evt_081_src_03.json"
+    platform: "telegram"
+    source_name: "Tigray Media House"
+    credibility: 40.0
+    published_at: "2023-02-10T09:00:00Z"
+  - fixture: "evt_081_src_04.json"
+    platform: "reddit"
+    source_name: "r/EthiopiaConflict"
+    credibility: 25.0
+    published_at: "2023-02-10T11:00:00Z"
+  - fixture: "evt_081_src_05.json"
+    platform: "web"
+    source_name: "Amnesty International"
+    credibility: 80.0
+    published_at: "2023-02-11T09:00:00Z"
+  - fixture: "evt_081_src_06.json"
+    platform: "x"
+    source_name: "Bellingcat Africa"
+    credibility: 75.0
+    published_at: "2023-02-10T14:00:00Z"
+  - fixture: "evt_081_src_07.json"
+    platform: "rss"
+    source_name: "Reuters Africa Wire"
+    credibility: 90.0
+    published_at: "2023-02-11T12:00:00Z"
+  - fixture: "evt_081_src_08.json"
+    platform: "telegram"
+    source_name: "Horn of Africa Intel"
+    credibility: 35.0
+    published_at: "2023-02-10T09:30:00Z"

@@ -1,0 +1,94 @@
+id: "evt-009"
+name: "AIIMS Delhi Ransomware Attack — Dark Web Indicators"
+category: "critical_infrastructure"
+languages: ["en", "hi"]
+earliest_osint_signal: "2022-11-22T08:00:00Z"
+mainstream_media_date: "2022-11-23T10:00:00Z"
+description: >
+  AIIMS Delhi suffered a massive ransomware attack taking down patient
+  records systems. Dark web monitoring and cybersecurity Telegram channels
+  reported data being offered for sale 24 hours before AIIMS officially
+  acknowledged the breach. CERT-In advisory followed 2 days later.
+  Indian Hindi-language tech channels discussed it before English mainstream.
+keywords: ["AIIMS", "ransomware", "cyberattack", "hospital", "data breach", "CERT-In"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_009_src_01.json"
+    platform: "telegram"
+    source_name: "CyberSec India Alerts"
+    credibility: 62.0
+    published_at: "2022-11-22T08:00:00Z"
+  - fixture: "evt_009_src_02.json"
+    platform: "x"
+    source_name: "@cyaboron (security researcher)"
+    credibility: 70.0
+    published_at: "2022-11-22T12:00:00Z"
+  - fixture: "evt_009_src_03.json"
+    platform: "web"
+    source_name: "BleepingComputer"
+    credibility: 80.0
+    published_at: "2022-11-22T18:00:00Z"
+  - fixture: "evt_009_src_04.json"
+    platform: "rss"
+    source_name: "Indian Express"
+    credibility: 72.0
+    published_at: "2022-11-23T10:00:00Z"
+    language: "hi"
+  - fixture: "evt_009_src_05.json"
+    platform: "web"
+    source_name: "Dark Web Forum"
+    credibility: 30.0
+    published_at: "2022-11-22T06:00:00Z"
+  - fixture: "evt_009_src_06.json"
+    platform: "reddit"
+    source_name: "r/cybersecurity"
+    credibility: 60.0
+    published_at: "2022-11-22T10:00:00Z"
+  - fixture: "evt_009_src_07.json"
+    platform: "web"
+    source_name: "Hindi Tech News"
+    credibility: 55.0
+    published_at: "2022-11-22T14:00:00Z"
+    language: "hi"
+  - fixture: "evt_009_src_08.json"
+    platform: "web"
+    source_name: "CERT-In Advisory"
+    credibility: 90.0
+    published_at: "2022-11-24T08:00:00Z"
+  - fixture: "evt_009_src_09.json"
+    platform: "rss"
+    source_name: "Economic Times"
+    credibility: 72.0
+    published_at: "2022-11-23T06:00:00Z"
+  - fixture: "evt_009_src_10.json"
+    platform: "telegram"
+    source_name: "Cyber India Updates follow-up"
+    credibility: 62.0
+    published_at: "2022-11-22T16:00:00Z"
+  - fixture: "evt_009_src_11.json"
+    platform: "web"
+    source_name: "Healthcare IT Security Blog"
+    credibility: 70.0
+    published_at: "2022-11-23T08:00:00Z"
+  - fixture: "evt_009_src_12.json"
+    platform: "bluesky"
+    source_name: "Infosec Bluesky"
+    credibility: 58.0
+    published_at: "2022-11-22T14:00:00Z"
+  - fixture: "evt_009_src_13.json"
+    platform: "rss"
+    source_name: "Times of India"
+    credibility: 65.0
+    published_at: "2022-11-23T12:00:00Z"
+  - fixture: "evt_009_src_14.json"
+    platform: "web"
+    source_name: "Ransomware Tracker"
+    credibility: 68.0
+    published_at: "2022-11-22T20:00:00Z"
+  - fixture: "evt_009_src_15.json"
+    platform: "rss"
+    source_name: "NDTV Hindi Detailed"
+    credibility: 68.0
+    published_at: "2022-11-23T14:00:00Z"
+    language: "hi"

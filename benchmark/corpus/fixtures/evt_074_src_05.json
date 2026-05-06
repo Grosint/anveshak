@@ -1,0 +1,7 @@
+{
+  "raw_text": "Pune Smart City's IoT infrastructure suffered a major cyber attack when attackers exploited an exposed MQTT broker to gain control of over 2,000 smart streetlights and 150 traffic signal controllers. The attack caused traffic signal malfunctions across the city during morning rush hour, resulting in multiple road accidents. Pune Municipal Corporation has disconnected all smart infrastructure and commissioned a full security audit. Experts say the exposed MQTT broker lacked basic authentication.",
+  "clean_text": "Pune Smart City IoT attack via unprotected MQTT broker. 2,000+ streetlights and 150 traffic controllers compromised. Rush hour accidents. PMC disconnected systems for audit.",
+  "language": "en",
+  "url": "https://indianexpress.com/article/cities/pune/pune-smart-city-iot-cyber-attack-traffic-signals-mqtt-9456789/",
+  "captured_at": "2024-07-09T07:00:00Z"
+}

@@ -1,0 +1,7 @@
+{
+  "raw_text": "Confirmed: AIIMS Delhi hit by ransomware. Multiple sources inside the hospital have confirmed what appears to be a major ransomware attack. Key details: 1) Patient records system (e-Hospital) completely encrypted. 2) Smart lab, billing, report generation all down. 3) Staff reverting to paper-based registration. 4) Initial indicators suggest compromise may have occurred days ago. 5) NIC (National Informatics Centre) team on-site. 6) This is likely one of the largest healthcare cyberattacks in India's history. The attack surface at AIIMS is massive — legacy systems, thousands of endpoints, minimal segmentation.",
+  "clean_text": "Confirmed AIIMS Delhi hit by ransomware. Patient records system e-Hospital completely encrypted. Smart lab billing report generation all down. Staff reverting to paper-based registration. Compromise may have occurred days ago. NIC team on-site. One of largest healthcare cyberattacks in India's history. Massive attack surface with legacy systems and minimal segmentation.",
+  "language": "en",
+  "url": "https://x.com/cyaboron/status/1594876543210987654",
+  "captured_at": "2022-11-22T12:00:00Z"
+}

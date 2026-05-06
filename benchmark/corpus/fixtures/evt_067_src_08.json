@@ -1,0 +1,7 @@
+{
+  "raw_text": "A massive distributed denial-of-service attack disrupted India's UPI payment infrastructure on Monday morning, causing transaction failures across major banks including State Bank of India, HDFC Bank, and ICICI Bank. The attack, which sustained traffic volumes of 3.2 terabits per second, was traced to a botnet operating from Eastern European IP ranges. The Reserve Bank of India activated its cyber crisis management plan and worked with NPCI to restore services. Normal transaction processing resumed by afternoon.",
+  "clean_text": "DDoS attack disrupted UPI with 3.2 Tbps traffic from Eastern European botnet. Major banks affected. RBI activated cyber crisis plan. Services restored by afternoon.",
+  "language": "en",
+  "url": "https://economictimes.indiatimes.com/tech/technology/upi-payment-gateway-ddos-attack-npci-rbi/articleshow/107123456.cms",
+  "captured_at": "2024-01-15T10:00:00Z"
+}

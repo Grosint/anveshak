@@ -1,0 +1,7 @@
+{
+  "raw_text": "Mandiant Threat Intelligence Report: DPRK Lazarus Group Attributed to $230M WazirX Cryptocurrency Theft. Mandiant has attributed the WazirX cryptocurrency exchange breach to North Korean threat actor Lazarus Group (APT38) based on combined on-chain forensics, social engineering indicators, and infrastructure analysis. The attack used compromised LinkedIn profiles to deliver initial access malware to exchange employees. DPRK-affiliated accounts simultaneously conducted an information operation attributing the theft to insider fraud to delay attribution.",
+  "clean_text": "Mandiant attributes WazirX $230M breach to Lazarus Group based on on-chain forensics and infrastructure analysis. Attack used compromised LinkedIn profiles for initial access. DPRK ran parallel information operation to delay attribution.",
+  "language": "en",
+  "url": "https://www.mandiant.com/resources/blog/lazarus-wazirx-crypto-theft-attribution",
+  "captured_at": "2024-04-25T12:00:00Z"
+}

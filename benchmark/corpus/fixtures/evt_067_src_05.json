@@ -1,0 +1,7 @@
+{
+  "raw_text": "A massive distributed denial-of-service attack has crippled India's UPI payment infrastructure, causing widespread transaction failures across the country's banking network. The attack, which sustained traffic volumes of approximately 3.2 Tbps, targeted NPCI's core payment gateway during peak morning transaction hours. Preliminary analysis traces the botnet to Eastern European IP ranges. RBI has activated its cyber crisis management plan in response.",
+  "clean_text": "DDoS attack crippled UPI payment infrastructure with 3.2 Tbps traffic targeting NPCI gateway. Botnet traced to Eastern Europe. RBI activated cyber crisis management plan.",
+  "language": "en",
+  "url": "https://www.livemint.com/technology/tech-news/upi-npci-ddos-attack-banks-payment-failure-rbi-11705298400123.html",
+  "captured_at": "2024-01-15T05:00:00Z"
+}

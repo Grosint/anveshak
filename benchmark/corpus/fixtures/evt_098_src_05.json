@@ -1,0 +1,7 @@
+{
+  "raw_text": "CERT-In Advisory CIAD-2024-0156: A sophisticated spear-phishing campaign targeting Indian government diplomatic missions has been identified. The campaign uses weaponized PDF documents exploiting CVE-2024-XXXX in Adobe Acrobat Reader. Attack infrastructure has been attributed to a state-sponsored threat actor. All government organizations are advised to immediately update PDF readers, implement email attachment sandboxing, and verify the sender authenticity of documents purporting to be from MEA. IOCs and detection signatures are provided in the technical annex.",
+  "clean_text": "CERT-In confirms spear-phishing campaign targeting Indian diplomatic missions using weaponized PDFs. State-sponsored attribution. Emergency advisory to update PDF readers and sandbox attachments.",
+  "language": "en",
+  "url": "https://www.cert-in.org.in/advisory/CIAD-2024-0156",
+  "captured_at": "2024-10-06T06:00:00Z"
+}

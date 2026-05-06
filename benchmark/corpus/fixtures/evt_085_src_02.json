@@ -1,0 +1,7 @@
+{
+  "raw_text": "ALERT: Sophisticated PLC-targeting malware discovered in Indian chemical plant ICS network. Targets Siemens S7-300/400 controllers. Code analysis reveals Stuxnet-like capabilities for process manipulation. This is a highly targeted attack on industrial control systems. Malware modifies setpoints for temperature and pressure control loops. Potentially catastrophic if undetected.",
+  "clean_text": "Sophisticated PLC malware found in Indian chemical plant targeting Siemens S7-300/400. Stuxnet-like process manipulation capabilities. Modifies temperature and pressure setpoints.",
+  "language": "en",
+  "url": "https://x.com/icscertwatcher/status/1825678901234",
+  "captured_at": "2024-08-20T03:00:00Z"
+}

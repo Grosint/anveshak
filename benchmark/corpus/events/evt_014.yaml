@@ -1,0 +1,63 @@
+id: "evt-014"
+name: "Pakistan SSG Training Near LoC — Satellite Detection"
+category: "cross_border_security"
+languages: ["en", "ur"]
+earliest_osint_signal: "2024-01-22T05:00:00Z"
+mainstream_media_date: "2024-01-22T13:00:00Z"
+description: >
+  Commercial satellite imagery revealed unusual Pakistan Special Service
+  Group training activity at a facility 12 km from the LoC in the
+  Kotli sector of Pakistan-administered Kashmir. Enhanced troop movements
+  and temporary structures detected. Indian intelligence agencies
+  alerted Northern Command.
+keywords:
+  - SSG
+  - Pakistan special forces
+  - satellite imagery
+  - Kotli sector
+  - LoC
+  - troop movement
+  - Northern Command
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_014_src_01.json"
+    platform: "telegram"
+    source_name: "GEOINT Alerts"
+    credibility: 50.0
+    published_at: "2024-01-22T05:00:00Z"
+  - fixture: "evt_014_src_02.json"
+    platform: "x"
+    source_name: "@SatImageAnalysis"
+    credibility: 58.0
+    published_at: "2024-01-22T06:30:00Z"
+  - fixture: "evt_014_src_03.json"
+    platform: "web"
+    source_name: "India Strategic"
+    credibility: 70.0
+    published_at: "2024-01-22T09:00:00Z"
+  - fixture: "evt_014_src_04.json"
+    platform: "rss"
+    source_name: "Times of India Defence"
+    credibility: 75.0
+    published_at: "2024-01-22T13:00:00Z"
+  - fixture: "evt_014_src_05.json"
+    platform: "reddit"
+    source_name: "r/IndianDefence"
+    credibility: 40.0
+    published_at: "2024-01-22T07:45:00Z"
+  - fixture: "evt_014_src_06.json"
+    platform: "telegram"
+    source_name: "Kashmir Watch"
+    credibility: 35.0
+    published_at: "2024-01-22T05:30:00Z"
+  - fixture: "evt_014_src_07.json"
+    platform: "web"
+    source_name: "Janes Defence"
+    credibility: 85.0
+    published_at: "2024-01-22T11:00:00Z"
+  - fixture: "evt_014_src_08.json"
+    platform: "bluesky"
+    source_name: "@geointanalyst.bsky.social"
+    credibility: 42.0
+    published_at: "2024-01-22T08:00:00Z"

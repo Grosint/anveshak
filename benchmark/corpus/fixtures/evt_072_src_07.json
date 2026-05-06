@@ -1,0 +1,7 @@
+{
+  "raw_text": "Mumbai Port cyber intrusion is a wake-up call for Indian maritime infrastructure security. A zero-day in a legacy SCADA system gave attackers access to vessel traffic management and cargo scheduling. These systems should never be directly internet-facing. NCIIPC advisory to all ports is crucial but the damage to Mumbai's operations will take days to remediate.",
+  "clean_text": "Mumbai Port intrusion highlights maritime infrastructure security gaps. Legacy SCADA zero-day enabled access to vessel traffic systems. NCIIPC advisory issued, remediation expected to take days.",
+  "language": "en",
+  "url": "https://bsky.app/profile/maritimetech.bsky.social/post/3ku4m6n8p0q2r",
+  "captured_at": "2024-03-28T08:00:00Z"
+}

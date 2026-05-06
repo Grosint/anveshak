@@ -1,0 +1,56 @@
+id: "evt-048"
+name: "Synthetic Video of Indian Navy Ship Sinking — Pakistani Source"
+category: "deepfake_manipulated_media"
+languages: ["en", "ur"]
+earliest_osint_signal: "2024-02-10T05:00:00Z"
+mainstream_media_date: "2024-02-10T16:00:00Z"
+description: >
+  A synthetic video claiming to show an Indian Navy frigate sinking in the
+  Arabian Sea was circulated by Pakistani social media accounts and picked up
+  by several Urdu-language news outlets. Frame-level analysis revealed the
+  footage was generated using AI video synthesis with warship imagery composited
+  onto stock ocean footage. The Indian Navy issued an official denial within hours.
+keywords: ["indian navy", "synthetic video", "pakistan", "frigate", "sinking", "propaganda", "military deepfake"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_048_src_01.json"
+    platform: "telegram"
+    source_name: "PakDefenceForce"
+    credibility: 15.0
+    published_at: "2024-02-10T05:00:00Z"
+  - fixture: "evt_048_src_02.json"
+    platform: "x"
+    source_name: "@PakMilWatch"
+    credibility: 20.0
+    published_at: "2024-02-10T05:45:00Z"
+  - fixture: "evt_048_src_03.json"
+    platform: "telegram"
+    source_name: "UrduBreakingAlerts"
+    credibility: 25.0
+    published_at: "2024-02-10T06:30:00Z"
+  - fixture: "evt_048_src_04.json"
+    platform: "reddit"
+    source_name: "r/IndianDefenceNews"
+    credibility: 50.0
+    published_at: "2024-02-10T08:00:00Z"
+  - fixture: "evt_048_src_05.json"
+    platform: "web"
+    source_name: "Indian Express Defence"
+    credibility: 85.0
+    published_at: "2024-02-10T16:00:00Z"
+  - fixture: "evt_048_src_06.json"
+    platform: "web"
+    source_name: "BOOM Live"
+    credibility: 80.0
+    published_at: "2024-02-10T12:00:00Z"
+  - fixture: "evt_048_src_07.json"
+    platform: "rss"
+    source_name: "Times of India"
+    credibility: 78.0
+    published_at: "2024-02-10T17:00:00Z"
+  - fixture: "evt_048_src_08.json"
+    platform: "bluesky"
+    source_name: "@milanalysis.bsky.social"
+    credibility: 55.0
+    published_at: "2024-02-10T10:30:00Z"

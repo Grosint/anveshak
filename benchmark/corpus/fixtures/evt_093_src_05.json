@@ -1,0 +1,7 @@
+{
+  "raw_text": "CERT-In Advisory CIAD-2024-0089: CERT-In has investigated claims circulating on social media regarding an alleged breach of ISRO telemetry systems. After thorough forensic analysis of ISRO's ISTRAC network infrastructure, CERT-In confirms NO unauthorised access has been detected. All ISRO ground segment systems are operating normally. The screenshots circulated are fabricated from publicly available website content. ISRO's critical satellite control infrastructure operates on isolated air-gapped networks. The threat actor group has no prior credible breach claims. No further action required.",
+  "clean_text": "CERT-In advisory confirms no ISRO breach detected after forensic analysis. ISTRAC network operating normally. Screenshots fabricated from public website content. Critical infrastructure on air-gapped networks. Threat actor has no credible history.",
+  "language": "en",
+  "url": "https://cert-in.org.in/advisory/CIAD-2024-0089",
+  "captured_at": "2024-04-23T08:00:00Z"
+}

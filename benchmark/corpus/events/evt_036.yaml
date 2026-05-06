@@ -1,0 +1,55 @@
+id: "evt-036"
+name: "Chinese Disinfo on Indian Vaccine — Covishield Scare Campaign"
+category: "information_operations"
+languages: ["en", "zh", "hi"]
+earliest_osint_signal: "2024-01-15T01:00:00Z"
+mainstream_media_date: "2024-01-19T09:00:00Z"
+description: >
+  Chinese state media and affiliated social accounts amplified adverse event
+  reports about Covishield (AstraZeneca-India) vaccine to undermine Indian
+  pharmaceutical credibility in South Asia and Africa. The campaign selectively
+  cited retracted studies and fabricated testimonials to promote Sinovac alternatives.
+keywords: ["Covishield", "vaccine disinformation", "China", "Sinovac", "pharma warfare", "AstraZeneca"]
+should_fire_signal: true
+expected_isc: 4
+sources:
+  - fixture: "evt_036_src_01.json"
+    platform: "telegram"
+    source_name: "Health Watch Asia"
+    credibility: 15.0
+    published_at: "2024-01-15T01:00:00Z"
+  - fixture: "evt_036_src_02.json"
+    platform: "x"
+    source_name: "@CGTNHealthDesk"
+    credibility: 25.0
+    published_at: "2024-01-15T04:00:00Z"
+  - fixture: "evt_036_src_03.json"
+    platform: "web"
+    source_name: "Global Times Health"
+    credibility: 20.0
+    published_at: "2024-01-15T08:30:00Z"
+  - fixture: "evt_036_src_04.json"
+    platform: "reddit"
+    source_name: "r/vaccines"
+    credibility: 40.0
+    published_at: "2024-01-16T10:00:00Z"
+  - fixture: "evt_036_src_05.json"
+    platform: "web"
+    source_name: "Xinhua English"
+    credibility: 22.0
+    published_at: "2024-01-16T14:00:00Z"
+  - fixture: "evt_036_src_06.json"
+    platform: "bluesky"
+    source_name: "@vaccinetruth.bsky.social"
+    credibility: 10.0
+    published_at: "2024-01-17T02:30:00Z"
+  - fixture: "evt_036_src_07.json"
+    platform: "rss"
+    source_name: "WHO Newsroom RSS"
+    credibility: 90.0
+    published_at: "2024-01-18T12:00:00Z"
+  - fixture: "evt_036_src_08.json"
+    platform: "web"
+    source_name: "The Indian Express"
+    credibility: 72.0
+    published_at: "2024-01-19T09:00:00Z"

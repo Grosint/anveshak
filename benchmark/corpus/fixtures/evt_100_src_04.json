@@ -1,0 +1,7 @@
+{
+  "raw_text": "C4ADS maritime analysis confirms coordinated GPS spoofing in the Indian Ocean affecting commercial navigation near the Strait of Malacca and Andaman Sea. Our signal analysis and triangulation data points to electronic warfare assets operating from PLAN vessels in the region. The spoofing pattern is consistent with Chinese military EW exercises previously documented in the South China Sea. Over 20 commercial vessels have reported navigation anomalies in the past 12 hours. AIS integrity is compromised across a 200nm radius.",
+  "clean_text": "C4ADS confirms coordinated GPS spoofing in Indian Ocean. Signal triangulation points to PLAN electronic warfare assets. Pattern matches previous Chinese EW exercises. 20+ vessels affected across 200nm radius.",
+  "language": "en",
+  "url": "https://c4ads.org/reports/indian-ocean-gps-spoofing-december-2024",
+  "captured_at": "2024-12-03T10:00:00Z"
+}

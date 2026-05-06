@@ -1,0 +1,7 @@
+{
+  "raw_text": "A threat actor identified as kiberphant0m has claimed responsibility for a massive data breach at Bharat Sanchar Nigam Limited, allegedly exfiltrating 278 GB of data from BSNL servers. The stolen data reportedly includes IMSI numbers, SIM card details, and Home Location Register data affecting millions of subscribers. The Department of Telecommunications has issued emergency directives to BSNL for immediate containment and subscriber notification. CERT-In is assisting in the investigation.",
+  "clean_text": "Kiberphant0m claims 278 GB BSNL data breach with subscriber IMSI, SIM, HLR data. DoT issued emergency containment directives. CERT-In assisting investigation.",
+  "language": "en",
+  "url": "https://www.hindustantimes.com/technology/bsnl-data-breach-278gb-threat-actor-kiberphant0m-101718868400123.html",
+  "captured_at": "2024-06-20T12:00:00Z"
+}

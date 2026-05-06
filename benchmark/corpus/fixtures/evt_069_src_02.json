@@ -1,0 +1,7 @@
+{
+  "raw_text": "ALERT: Major vulnerability discovered in Indian Railways KAVACH integration layer with Electronic Interlocking signaling systems. The flaw allows unauthorized signal manipulation through unencrypted serial communication channels. Affects thousands of stations across the network. Railway Board has initiated emergency patching. This is a critical safety issue.",
+  "clean_text": "Major vulnerability in KAVACH integration with Electronic Interlocking signaling. Unencrypted serial channels enable unauthorized signal manipulation. Railway Board patching initiated.",
+  "language": "en",
+  "url": "https://t.me/IndianSCADASecurity/789",
+  "captured_at": "2024-04-03T06:30:00Z"
+}

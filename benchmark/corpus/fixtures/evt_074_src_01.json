@@ -1,0 +1,7 @@
+{
+  "raw_text": "CRITICAL: Pune Smart City IoT infrastructure compromised. Attackers gained control of 2,000+ smart streetlights and 150 traffic signal controllers through an exposed MQTT broker. Traffic signals malfunctioning citywide during morning rush hour. Multiple accidents reported. PMC disconnecting all smart infrastructure for security audit. This is a major IoT security failure.",
+  "clean_text": "Pune Smart City IoT compromised via exposed MQTT broker. 2,000+ streetlights and 150 traffic controllers taken over. Citywide signal malfunctions during rush hour causing accidents.",
+  "language": "en",
+  "url": "https://t.me/IoTSecurityIndia/1234",
+  "captured_at": "2024-07-09T03:00:00Z"
+}

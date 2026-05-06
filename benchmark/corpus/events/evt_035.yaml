@@ -1,0 +1,55 @@
+id: "evt-035"
+name: "Pakistan ISPR Fabricated Balakot Narrative 2024 Update"
+category: "information_operations"
+languages: ["en", "ur"]
+earliest_osint_signal: "2024-02-26T03:00:00Z"
+mainstream_media_date: "2024-02-28T08:00:00Z"
+description: >
+  On the anniversary of the 2019 Balakot strikes, Pakistan ISPR and affiliated
+  accounts revived fabricated narratives claiming no damage was inflicted. New
+  satellite imagery was selectively cropped and circulated across platforms to
+  support the claim, despite contradictory open-source geospatial evidence.
+keywords: ["Balakot", "ISPR", "Pakistan", "fabricated narrative", "satellite imagery", "IAF strikes"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_035_src_01.json"
+    platform: "telegram"
+    source_name: "ISPR Unofficial Updates"
+    credibility: 15.0
+    published_at: "2024-02-26T03:00:00Z"
+  - fixture: "evt_035_src_02.json"
+    platform: "x"
+    source_name: "@OfficialDGISPR"
+    credibility: 25.0
+    published_at: "2024-02-26T05:00:00Z"
+  - fixture: "evt_035_src_03.json"
+    platform: "web"
+    source_name: "Dawn News"
+    credibility: 45.0
+    published_at: "2024-02-26T08:00:00Z"
+  - fixture: "evt_035_src_04.json"
+    platform: "reddit"
+    source_name: "r/pakistan"
+    credibility: 25.0
+    published_at: "2024-02-26T12:00:00Z"
+  - fixture: "evt_035_src_05.json"
+    platform: "telegram"
+    source_name: "Pak Defence Forum"
+    credibility: 20.0
+    published_at: "2024-02-27T01:30:00Z"
+  - fixture: "evt_035_src_06.json"
+    platform: "bluesky"
+    source_name: "@paktruth.bsky.social"
+    credibility: 10.0
+    published_at: "2024-02-27T06:00:00Z"
+  - fixture: "evt_035_src_07.json"
+    platform: "rss"
+    source_name: "Bellingcat RSS"
+    credibility: 90.0
+    published_at: "2024-02-28T06:00:00Z"
+  - fixture: "evt_035_src_08.json"
+    platform: "web"
+    source_name: "NDTV"
+    credibility: 70.0
+    published_at: "2024-02-28T08:00:00Z"

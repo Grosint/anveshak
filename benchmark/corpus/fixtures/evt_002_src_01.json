@@ -1,0 +1,7 @@
+{
+  "raw_text": "ALERT: Vessel MV Galaxy Leader (IMO 9237307) AIS signal LOST in Red Sea near coordinates 17.2N, 41.8E. Last heading indicated normal transit through Bab-el-Mandeb approach. Possible distress situation. Multiple helicopter tracks observed in vicinity on ADS-B prior to AIS loss. Ship is Bahamas-flagged, car carrier, currently en route from Turkey to India. This matches pattern of Houthi interdiction threats against Israel-linked shipping. Will update as more information becomes available.",
+  "clean_text": "Vessel MV Galaxy Leader AIS signal lost in Red Sea near coordinates 17.2N 41.8E. Last heading indicated normal transit through Bab-el-Mandeb approach. Possible distress situation. Multiple helicopter tracks observed in vicinity on ADS-B prior to AIS loss. Ship is Bahamas-flagged car carrier en route from Turkey to India. This matches pattern of Houthi interdiction threats against Israel-linked shipping.",
+  "language": "en",
+  "url": "https://t.me/marinetraffic_osint/2891",
+  "captured_at": "2023-11-19T06:15:00Z"
+}

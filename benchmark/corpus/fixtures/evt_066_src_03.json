@@ -1,0 +1,7 @@
+{
+  "raw_text": "A sophisticated cyber attack has targeted the Indian Space Research Organisation's telemetry data centre in Bengaluru, just days after the successful Chandrayaan-3 lunar landing. The attack involved carefully crafted spear-phishing emails that impersonated senior ISRO officials and attempted to establish persistent access to internal networks. Initial analysis suggests the attackers sought lateral movement toward mission control systems, though these attempts were reportedly detected and blocked.",
+  "clean_text": "Sophisticated spear-phishing attack on ISRO telemetry data centre in Bengaluru post-Chandrayaan-3. Attackers sought lateral movement to mission control but were detected and blocked.",
+  "language": "en",
+  "url": "https://thehackernews.in/2023/08/isro-chandrayaan-data-centre-cyber-attack.html",
+  "captured_at": "2023-08-25T04:00:00Z"
+}

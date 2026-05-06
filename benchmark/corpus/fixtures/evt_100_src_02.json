@@ -1,0 +1,7 @@
+{
+  "raw_text": "ALERT: Widespread GPS anomalies reported by commercial shipping in the Indian Ocean. MarineTraffic data showing vessels teleporting on AIS displays, phantom tracks, and position jumps of up to 50 nautical miles. Concentrated near the Strait of Malacca and Andaman Sea. Multiple ship operators reporting navigation system warnings. This pattern is consistent with deliberate GPS spoofing.",
+  "clean_text": "MarineTraffic reports widespread GPS anomalies in Indian Ocean shipping. Vessel teleporting, phantom tracks, 50nm position jumps near Strait of Malacca. Consistent with deliberate GPS spoofing.",
+  "language": "en",
+  "url": "https://x.com/marinetraffic_alert/status/1864123456789",
+  "captured_at": "2024-12-03T02:00:00Z"
+}

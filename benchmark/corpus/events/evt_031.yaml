@@ -1,0 +1,55 @@
+id: "evt-031"
+name: "ISI Social Media Campaign During Indian Elections 2024"
+category: "information_operations"
+languages: ["en", "ur", "hi"]
+earliest_osint_signal: "2024-04-10T06:30:00Z"
+mainstream_media_date: "2024-04-14T09:00:00Z"
+description: >
+  Coordinated social media influence operation attributed to ISI-linked accounts
+  targeting Indian general elections in April-May 2024. The campaign amplified
+  communal narratives across Telegram, X, and Reddit to polarise voter sentiment
+  in key swing constituencies.
+keywords: ["ISI", "Indian elections 2024", "information operation", "communal polarisation", "social media manipulation"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_031_src_01.json"
+    platform: "telegram"
+    source_name: "South Asia Watch Channel"
+    credibility: 25.0
+    published_at: "2024-04-10T06:30:00Z"
+  - fixture: "evt_031_src_02.json"
+    platform: "telegram"
+    source_name: "Kashmir Truth Network"
+    credibility: 20.0
+    published_at: "2024-04-10T08:15:00Z"
+  - fixture: "evt_031_src_03.json"
+    platform: "x"
+    source_name: "@pak_affairs_insider"
+    credibility: 15.0
+    published_at: "2024-04-10T10:00:00Z"
+  - fixture: "evt_031_src_04.json"
+    platform: "reddit"
+    source_name: "r/southasianpolitics"
+    credibility: 30.0
+    published_at: "2024-04-11T03:45:00Z"
+  - fixture: "evt_031_src_05.json"
+    platform: "web"
+    source_name: "The Diplomat"
+    credibility: 75.0
+    published_at: "2024-04-12T14:00:00Z"
+  - fixture: "evt_031_src_06.json"
+    platform: "rss"
+    source_name: "EU DisinfoLab Feed"
+    credibility: 80.0
+    published_at: "2024-04-13T09:30:00Z"
+  - fixture: "evt_031_src_07.json"
+    platform: "bluesky"
+    source_name: "@osamabin.bsky.social"
+    credibility: 10.0
+    published_at: "2024-04-11T17:20:00Z"
+  - fixture: "evt_031_src_08.json"
+    platform: "web"
+    source_name: "India Today OSINT Desk"
+    credibility: 70.0
+    published_at: "2024-04-14T09:00:00Z"

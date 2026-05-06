@@ -1,0 +1,57 @@
+id: "evt-055"
+name: "AI-Generated News Broadcast — Fake DD News Clip"
+category: "deepfake_manipulated_media"
+languages: ["en", "hi"]
+earliest_osint_signal: "2024-09-02T06:00:00Z"
+mainstream_media_date: "2024-09-02T15:00:00Z"
+description: >
+  An AI-generated video mimicking a Doordarshan news broadcast announced
+  fabricated emergency measures including curfew orders for multiple cities.
+  The clip used a synthetic news anchor with DD News branding and lower-third
+  graphics. Analysis revealed the anchor's face was entirely AI-generated with
+  no matching identity in any broadcast archive. DD News and PIB issued rapid
+  denials confirming no such broadcast was aired.
+keywords: ["DD News", "fake broadcast", "AI anchor", "synthetic news", "doordarshan", "curfew", "emergency", "fabricated"]
+should_fire_signal: true
+expected_isc: 4
+sources:
+  - fixture: "evt_055_src_01.json"
+    platform: "telegram"
+    source_name: "BreakingNewsIN"
+    credibility: 18.0
+    published_at: "2024-09-02T06:00:00Z"
+  - fixture: "evt_055_src_02.json"
+    platform: "x"
+    source_name: "@UrgentAlertIndia"
+    credibility: 15.0
+    published_at: "2024-09-02T06:30:00Z"
+  - fixture: "evt_055_src_03.json"
+    platform: "telegram"
+    source_name: "HindiViralClips"
+    credibility: 12.0
+    published_at: "2024-09-02T07:00:00Z"
+  - fixture: "evt_055_src_04.json"
+    platform: "reddit"
+    source_name: "r/indianews"
+    credibility: 40.0
+    published_at: "2024-09-02T08:30:00Z"
+  - fixture: "evt_055_src_05.json"
+    platform: "web"
+    source_name: "Doordarshan Official"
+    credibility: 98.0
+    published_at: "2024-09-02T15:00:00Z"
+  - fixture: "evt_055_src_06.json"
+    platform: "web"
+    source_name: "Alt News"
+    credibility: 82.0
+    published_at: "2024-09-02T11:00:00Z"
+  - fixture: "evt_055_src_07.json"
+    platform: "bluesky"
+    source_name: "@mediawatch.bsky.social"
+    credibility: 58.0
+    published_at: "2024-09-02T10:00:00Z"
+  - fixture: "evt_055_src_08.json"
+    platform: "rss"
+    source_name: "News18"
+    credibility: 75.0
+    published_at: "2024-09-02T16:00:00Z"

@@ -1,0 +1,88 @@
+id: "evt-004"
+name: "AI-Generated Modi-Xi Handshake Image — G20 Disinformation"
+category: "deepfake_manipulated_media"
+languages: ["en", "hi", "zh"]
+earliest_osint_signal: "2023-09-08T12:00:00Z"
+mainstream_media_date: "2023-09-10T04:00:00Z"
+description: >
+  An AI-generated image showing PM Modi and Xi Jinping in a staged handshake
+  was widely circulated on Indian WhatsApp and Chinese Weibo during G20 Delhi.
+  Reverse image search and metadata analysis by OSINT accounts revealed no
+  EXIF data and GAN artefacts. Indian fact-checkers confirmed within 48 hours.
+keywords: ["deepfake", "Modi", "Xi Jinping", "G20", "AI generated", "handshake"]
+should_fire_signal: true
+expected_isc: 3
+sources:
+  - fixture: "evt_004_src_01.json"
+    platform: "x"
+    source_name: "Boom Live Fact Check"
+    credibility: 80.0
+    published_at: "2023-09-08T14:00:00Z"
+  - fixture: "evt_004_src_02.json"
+    platform: "web"
+    source_name: "Vishvas News (Hindi)"
+    credibility: 75.0
+    published_at: "2023-09-08T18:00:00Z"
+    language: "hi"
+  - fixture: "evt_004_src_03.json"
+    platform: "reddit"
+    source_name: "r/india"
+    credibility: 48.0
+    published_at: "2023-09-08T12:30:00Z"
+  - fixture: "evt_004_src_04.json"
+    platform: "rss"
+    source_name: "India Today"
+    credibility: 70.0
+    published_at: "2023-09-10T04:00:00Z"
+  - fixture: "evt_004_src_05.json"
+    platform: "telegram"
+    source_name: "WhatsApp Forward Tracker"
+    credibility: 45.0
+    published_at: "2023-09-08T13:00:00Z"
+  - fixture: "evt_004_src_06.json"
+    platform: "web"
+    source_name: "Weibo Discussion"
+    credibility: 40.0
+    published_at: "2023-09-08T16:00:00Z"
+    language: "zh"
+  - fixture: "evt_004_src_07.json"
+    platform: "rss"
+    source_name: "Times of India"
+    credibility: 65.0
+    published_at: "2023-09-09T06:00:00Z"
+  - fixture: "evt_004_src_08.json"
+    platform: "web"
+    source_name: "The Quint Fact Check"
+    credibility: 78.0
+    published_at: "2023-09-08T20:00:00Z"
+  - fixture: "evt_004_src_09.json"
+    platform: "reddit"
+    source_name: "r/AIGenerated"
+    credibility: 50.0
+    published_at: "2023-09-08T15:00:00Z"
+  - fixture: "evt_004_src_10.json"
+    platform: "web"
+    source_name: "Aaj Tak Hindi"
+    credibility: 62.0
+    published_at: "2023-09-09T08:00:00Z"
+    language: "hi"
+  - fixture: "evt_004_src_11.json"
+    platform: "bluesky"
+    source_name: "AI Art Community"
+    credibility: 55.0
+    published_at: "2023-09-08T17:00:00Z"
+  - fixture: "evt_004_src_12.json"
+    platform: "rss"
+    source_name: "PTI Wire"
+    credibility: 80.0
+    published_at: "2023-09-09T10:00:00Z"
+  - fixture: "evt_004_src_13.json"
+    platform: "telegram"
+    source_name: "OSINT Community"
+    credibility: 60.0
+    published_at: "2023-09-08T14:30:00Z"
+  - fixture: "evt_004_src_14.json"
+    platform: "web"
+    source_name: "Election Deepfake Research"
+    credibility: 75.0
+    published_at: "2023-09-10T08:00:00Z"

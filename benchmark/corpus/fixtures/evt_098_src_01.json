@@ -1,0 +1,7 @@
+{
+  "raw_text": "ALERT: Detecting coordinated spear-phishing campaign targeting Indian diplomatic missions in Europe. Weaponized PDF documents mimicking MEA circulars being sent to embassy staff. Infrastructure overlaps with known APT28/Fancy Bear C2 servers. At least three embassies affected. IOCs dropping in next tweet. This looks like GRU-linked activity.",
+  "clean_text": "Spear-phishing campaign targeting Indian embassies in Europe detected. Weaponized PDFs mimicking MEA circulars. Infrastructure linked to APT28/Fancy Bear. Three embassies affected.",
+  "language": "en",
+  "url": "https://x.com/vaborshov_threatintel/status/1842567890123",
+  "captured_at": "2024-10-05T14:00:00Z"
+}

@@ -1,0 +1,56 @@
+id: "evt-047"
+name: "Indian Election Deepfake Audio — State CM Fabricated Speech"
+category: "deepfake_manipulated_media"
+languages: ["en", "hi"]
+earliest_osint_signal: "2024-01-22T06:30:00Z"
+mainstream_media_date: "2024-01-22T14:00:00Z"
+description: >
+  A fabricated audio clip purporting to be a sitting Chief Minister making
+  inflammatory communal remarks was widely shared on WhatsApp and Telegram
+  ahead of state assembly elections. Voice analysis by forensic labs confirmed
+  AI voice cloning artifacts including unnatural pitch transitions and
+  spectral inconsistencies absent in authentic recordings.
+keywords: ["deepfake audio", "election", "chief minister", "voice clone", "india", "communal", "fabricated speech"]
+should_fire_signal: true
+expected_isc: 4
+sources:
+  - fixture: "evt_047_src_01.json"
+    platform: "telegram"
+    source_name: "IndianPoliticalLeaks"
+    credibility: 20.0
+    published_at: "2024-01-22T06:30:00Z"
+  - fixture: "evt_047_src_02.json"
+    platform: "telegram"
+    source_name: "HindiNewsUpdates"
+    credibility: 30.0
+    published_at: "2024-01-22T07:00:00Z"
+  - fixture: "evt_047_src_03.json"
+    platform: "x"
+    source_name: "@FactCheckIndia"
+    credibility: 75.0
+    published_at: "2024-01-22T09:15:00Z"
+  - fixture: "evt_047_src_04.json"
+    platform: "reddit"
+    source_name: "r/IndiaElections"
+    credibility: 40.0
+    published_at: "2024-01-22T10:00:00Z"
+  - fixture: "evt_047_src_05.json"
+    platform: "web"
+    source_name: "NDTV"
+    credibility: 80.0
+    published_at: "2024-01-22T14:00:00Z"
+  - fixture: "evt_047_src_06.json"
+    platform: "web"
+    source_name: "Alt News"
+    credibility: 82.0
+    published_at: "2024-01-22T11:30:00Z"
+  - fixture: "evt_047_src_07.json"
+    platform: "rss"
+    source_name: "The Hindu"
+    credibility: 85.0
+    published_at: "2024-01-22T15:00:00Z"
+  - fixture: "evt_047_src_08.json"
+    platform: "bluesky"
+    source_name: "@indiaosint.bsky.social"
+    credibility: 55.0
+    published_at: "2024-01-22T12:00:00Z"

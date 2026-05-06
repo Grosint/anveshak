@@ -1,0 +1,7 @@
+{
+  "raw_text": "CloudSEK's XVigil platform has identified a threat actor known as \"kiberphant0m\" claiming to have exfiltrated 278 GB of data from BSNL servers. The stolen dataset reportedly includes IMSI numbers, SIM card details, and Home Location Register data affecting millions of subscribers. Our analysis of the sample data posted on the dark web forum confirms the data structure is consistent with legitimate telecom subscriber databases. The Department of Telecommunications has been notified.",
+  "clean_text": "CloudSEK confirms kiberphant0m claimed 278 GB BSNL breach. Data includes IMSI, SIM, and HLR records. Sample data structure consistent with legitimate telecom databases. DoT notified.",
+  "language": "en",
+  "url": "https://www.cloudsek.com/threatintelligence/bsnl-data-breach-278gb-kiberphant0m",
+  "captured_at": "2024-06-20T06:00:00Z"
+}

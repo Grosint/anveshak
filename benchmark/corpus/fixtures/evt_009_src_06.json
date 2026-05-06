@@ -1,0 +1,7 @@
+{
+  "raw_text": "r/cybersecurity — Anyone following the AIIMS Delhi situation? Multiple reports from Indian healthcare IT folks that the entire NIC network at AIIMS has been compromised. Ransomware variant appears to be a customized Wanna Cry derivative based on the encryption patterns. Their e-Hospital application is completely offline. This is critical infrastructure — AIIMS handles VIP patients including government officials. The attack vector might have been an unpatched server — AIIMS was reportedly running outdated Windows Server instances.",
+  "clean_text": "AIIMS Delhi situation has multiple reports that entire NIC network at AIIMS compromised. Ransomware variant appears to be customized Wanna Cry derivative based on encryption patterns. e-Hospital application completely offline. Critical infrastructure handling VIP patients including government officials. Attack vector might have been unpatched server running outdated Windows Server instances.",
+  "language": "en",
+  "url": "https://www.reddit.com/r/cybersecurity/comments/z1kx9f/aiims_delhi_ransomware_attack",
+  "captured_at": "2022-11-22T10:00:00Z"
+}

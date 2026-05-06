@@ -1,0 +1,7 @@
+{
+  "raw_text": "In what could be one of the largest telecom data breaches in India, a threat actor known as kiberphant0m has claimed to have stolen 278 GB of data from BSNL servers including sensitive subscriber information such as IMSI numbers, SIM card details, and Home Location Register data. The Department of Telecommunications has issued emergency directives to BSNL for containment and subscriber notification. Cybersecurity experts warn the stolen data could be exploited for SIM cloning and targeted surveillance.",
+  "clean_text": "Massive BSNL breach by kiberphant0m with 278 GB stolen data. DoT issued emergency directives. Experts warn of SIM cloning and surveillance exploitation risks.",
+  "language": "en",
+  "url": "https://www.indiatoday.in/technology/news/story/bsnl-data-breach-278gb-kiberphant0m-imsi-sim-2548901-2024-06-20",
+  "captured_at": "2024-06-20T09:00:00Z"
+}

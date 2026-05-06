@@ -1,0 +1,7 @@
+{
+  "raw_text": "Mumbai Port Trust has confirmed that its vessel traffic management system and cargo scheduling database were compromised through a zero-day vulnerability in the port's legacy SCADA interface. Maritime traffic has been temporarily rerouted to Jawaharlal Nehru Port Trust while incident response teams work to isolate and remediate the affected systems. The National Critical Information Infrastructure Protection Centre has issued a critical advisory to all major Indian ports.",
+  "clean_text": "Mumbai Port confirms vessel traffic and cargo system compromise via SCADA zero-day. Traffic rerouted to JNPT. NCIIPC advisory to all ports for immediate SCADA security assessment.",
+  "language": "en",
+  "url": "https://www.maritimegateway.com/mumbai-port-cyber-intrusion-scada-zero-day-vulnerability/",
+  "captured_at": "2024-03-28T05:00:00Z"
+}

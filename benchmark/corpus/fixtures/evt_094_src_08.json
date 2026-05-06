@@ -1,0 +1,7 @@
+{
+  "raw_text": "Digital forensics thread on the 'Dubai meeting' images. Ran these through multiple detection pipelines. Results: (1) DIRE model: 0.94 probability synthetic. (2) CNNDetection: 0.91 probability GAN-generated. (3) Frequency domain analysis shows classic GAN spectral peaks at high frequencies. (4) The PolitiMeme app uses a fine-tuned Stable Diffusion XL model for face compositing — their model card is public. These are trivially detectable with modern forensic tools. The real concern is the speed of viral spread before detection.",
+  "clean_text": "Digital forensics analysis of Dubai meeting images. DIRE model gives 0.94 synthetic probability. CNNDetection gives 0.91 GAN probability. Frequency domain shows GAN spectral peaks. PolitiMeme uses fine-tuned SDXL for face compositing. Trivially detectable but spreads faster than debunking.",
+  "language": "en",
+  "url": "https://bsky.app/profile/digitalforensics.bsky.social/post/3kxyz456",
+  "captured_at": "2024-05-02T15:00:00Z"
+}

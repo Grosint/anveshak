@@ -1,0 +1,7 @@
+{
+  "raw_text": "An obscure hacking group called CyberVandals claimed to have breached India's space agency ISRO this week, posting screenshots purportedly showing access to satellite telemetry systems. However, India's cybersecurity response agency CERT-In has debunked the claims after forensic analysis found no evidence of intrusion. Security researchers noted the screenshots were manipulated versions of ISRO's publicly accessible web pages. The group, which has no track record of verified breaches, appears to have sought attention through fabricated claims.",
+  "clean_text": "Bleeping Computer reports CyberVandals claimed ISRO breach but CERT-In debunked claims after finding no intrusion evidence. Screenshots were manipulated public web pages. Group has no verified breach history and sought attention through fabricated claims.",
+  "language": "en",
+  "url": "https://bleepingcomputer.com/news/security/cybervandals-isro-breach-claim-debunked",
+  "captured_at": "2024-04-23T10:00:00Z"
+}
