@@ -280,6 +280,7 @@ class TestAnalyseContentWithTranslation:
         ):
             mock_settings.translation_enabled = True
             mock_settings.translation_model = "facebook/nllb-200-distilled-600M"
+            mock_settings.minhash_num_perm = 128
 
             from anveshak.analyst.jobs import analyse_content
             await analyse_content(ctx, content_id)

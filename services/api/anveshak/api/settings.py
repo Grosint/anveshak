@@ -32,11 +32,8 @@ class Settings(BaseSettings):
     x_bearer_token: Optional[str] = None
     x_monthly_read_cap: int = 40000
 
-    # Embeddings — used by /search route; hardware-controlled (see hardware.md)
-    embedding_model: str = "all-MiniLM-L6-v2"  # see hardware.md
-    embedding_dimensions: int = 384             # see hardware.md
-
-    # Vision service (Phase 4)
+    # Internal service URLs
+    analyst_service_url: str = "http://analyst-scheduler:8007"
     vision_service_url: Optional[str] = "http://vision:8003"
     phash_duplicate_threshold: int = 8   # Hamming distance for reverse-image search
 

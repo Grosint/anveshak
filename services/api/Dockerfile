@@ -1,61 +1,57 @@
 # Anveshak API service
 # FastAPI application — port 8000
 # Build context: project root (../../ from compose.yml)
+#
+# Multi-stage build: builder (compile C extensions) → runtime (slim final image).
+# sentence-transformers removed — search embeddings are served by analyst service.
 
-FROM python:3.12-slim AS base
+# ===== Stage 1: builder — compile C extensions, install wheels =====
+FROM python:3.12-slim AS builder
 
-# --------------------------------------------------------------------------
-# System deps
-# --------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
     libpq-dev \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# --------------------------------------------------------------------------
-# uv — fast Python package manager
-# --------------------------------------------------------------------------
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 ENV UV_SYSTEM_PYTHON=1 \
     UV_NO_CACHE=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONDONTWRITEBYTECODE=1
 
-# --------------------------------------------------------------------------
-# Workspace setup — uv needs the workspace root to resolve SDK references.
-# Install SDK first, then service (namespace package coexistence via wheels).
-# --------------------------------------------------------------------------
 COPY pyproject.toml /workspace/pyproject.toml
 COPY sdk/ /workspace/sdk/
 RUN uv pip install --system /workspace/sdk/
 
-# --------------------------------------------------------------------------
-# Service source + dependencies
-# --------------------------------------------------------------------------
 WORKDIR /workspace/services/api
 COPY services/api/pyproject.toml .
 COPY services/api/anveshak/ anveshak/
 RUN uv pip install --system .
 
-# --------------------------------------------------------------------------
-# Migrations
-# --------------------------------------------------------------------------
+# ===== Stage 2: runtime — no gcc, no build artifacts =====
+FROM python:3.12-slim AS runtime
+
+# Runtime-only system deps (libpq for asyncpg, curl for healthcheck)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy installed Python packages + SDK source from builder
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder /workspace/sdk /workspace/sdk
+
+# Copy service source + migrations
+COPY --from=builder /workspace/services/api /workspace/services/api
+WORKDIR /workspace/services/api
 COPY services/api/migrations/ migrations/
 COPY services/api/alembic.ini alembic.ini
 
-# --------------------------------------------------------------------------
-# Pre-download sentence-transformers model for /search endpoint
-# --------------------------------------------------------------------------
-ARG EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
-ENV HF_HOME=/app/models
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${EMBEDDING_MODEL}')"
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-# --------------------------------------------------------------------------
-# Non-root user for security
-# --------------------------------------------------------------------------
-RUN addgroup --system anveshak && adduser --system --ingroup anveshak anveshak \
-    && chown -R anveshak:anveshak /app/models
+# Non-root user
+RUN addgroup --system anveshak && adduser --system --ingroup anveshak anveshak
 USER anveshak
 
 EXPOSE 8000

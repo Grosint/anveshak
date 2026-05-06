@@ -1,23 +1,32 @@
-"""Anveshak Analyst Scheduler — lightweight loops that need global state.
+"""Anveshak Analyst Scheduler — lightweight loops + internal embedding API.
 
-Runs cluster_loop, signal_check_loop, convergence_loop, and orphan_sweep.
-Does NOT import spaCy, sentence-transformers, NLLB, VADER, or YAKE.
-All per-item ML work runs in analyst-worker via ARQ.
+Runs cluster_loop, signal_check_loop, convergence_loop, and orphan_sweep
+as background tasks inside a FastAPI app. Also serves:
+  - /internal/embed   — embedding endpoint for API/reporter (avoids PyTorch in those images)
+  - /metrics          — Prometheus metrics
+  - /health           — health check
+
+Does NOT eagerly import spaCy, NLLB, VADER, or YAKE.
+The sentence-transformers encoder is lazy-loaded on first /internal/embed request.
 
 Entry point: python -m anveshak.analyst.scheduler
 """
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 
 import asyncpg
 import structlog
+import uvicorn
 from arq import create_pool as create_redis_pool
 from arq.connections import RedisSettings
+from fastapi import FastAPI
+from pydantic import BaseModel, ConfigDict
 from anveshak.logging import configure_logging
 
 configure_logging("analyst-scheduler")
-from prometheus_client import start_http_server
+from prometheus_client import generate_latest
 
 from .clustering import run_clustering
 from .dedup import detect_near_duplicates, upsert_near_duplicates
@@ -52,10 +61,35 @@ SQL_ORPHANED_CONTENT = """
 """
 
 # ---------------------------------------------------------------------------
-# Scheduler metrics port (separate from worker)
+# Embedding endpoint — lazy-loaded, avoids PyTorch in API/reporter images
 # ---------------------------------------------------------------------------
 
-SCHEDULER_METRICS_PORT = 8007
+_encoder = None
+
+
+def _get_encoder():
+    """Lazy-load sentence-transformers on first embed request."""
+    global _encoder
+    if _encoder is None:
+        from sentence_transformers import SentenceTransformer
+
+        _encoder = SentenceTransformer(settings.embedding_model)
+        log.info(
+            "scheduler.encoder_loaded",
+            model=settings.embedding_model,
+            dimensions=settings.embedding_dimensions,
+        )
+    return _encoder
+
+
+class EmbedRequest(BaseModel):
+    model_config = ConfigDict(strict=True)
+    texts: list[str]
+
+
+class EmbedResponse(BaseModel):
+    model_config = ConfigDict(strict=True)
+    embeddings: list[list[float]]
 
 
 # ---------------------------------------------------------------------------
@@ -200,27 +234,75 @@ async def orphan_sweep(pool: asyncpg.Pool, redis: object) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Main
+# FastAPI app
 # ---------------------------------------------------------------------------
 
-async def main() -> None:
-    """Start the analyst scheduler with 4 concurrent loops."""
-    start_http_server(SCHEDULER_METRICS_PORT, registry=ANALYST_REGISTRY)
-    log.info("scheduler.metrics_server_started", port=SCHEDULER_METRICS_PORT)
-
-    log.info("scheduler.starting")
-
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Start scheduler loops as background tasks."""
     pool = await asyncpg.create_pool(settings.postgres_url, min_size=2, max_size=5)
     redis = await create_redis_pool(RedisSettings.from_dsn(settings.redis_url))
 
     log.info("scheduler.ready")
 
-    await asyncio.gather(
-        cluster_loop(pool, redis),
-        signal_check_loop(pool),
-        convergence_loop(pool),
-        orphan_sweep(pool, redis),
+    tasks = [
+        asyncio.create_task(cluster_loop(pool, redis)),
+        asyncio.create_task(signal_check_loop(pool)),
+        asyncio.create_task(convergence_loop(pool)),
+        asyncio.create_task(orphan_sweep(pool, redis)),
+    ]
+
+    yield
+
+    for t in tasks:
+        t.cancel()
+    await pool.close()
+
+
+app = FastAPI(title="Anveshak Analyst Scheduler", lifespan=lifespan)
+
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy", "service": "analyst-scheduler"}
+
+
+@app.get("/metrics")
+async def metrics():
+    from fastapi.responses import PlainTextResponse
+
+    return PlainTextResponse(
+        generate_latest(ANALYST_REGISTRY).decode(),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
     )
+
+
+@app.post("/internal/embed", response_model=EmbedResponse)
+async def embed(req: EmbedRequest):
+    """Encode texts to normalised embedding vectors.
+
+    Used by API (/search) and reporter (RAG) to avoid installing
+    PyTorch/sentence-transformers in those lighter containers.
+    """
+    encoder = _get_encoder()
+    vectors = encoder.encode(req.texts, normalize_embeddings=True)
+    return EmbedResponse(embeddings=[v.tolist() for v in vectors])
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+async def main() -> None:
+    """Start the analyst scheduler with FastAPI + background loops."""
+    config = uvicorn.Config(
+        app,
+        host="0.0.0.0",
+        port=settings.metrics_port,
+        log_level="warning",
+    )
+    server = uvicorn.Server(config)
+    await server.serve()
 
 
 if __name__ == "__main__":

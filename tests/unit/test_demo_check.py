@@ -46,7 +46,7 @@ def test_check_services_all_up():
         "localhost:8000/health": (200, {"status": "ok"}),
         "localhost:8001/health": (200, {"status": "ok"}),
         "localhost:8002/health": (200, {"status": "ok"}),
-        "localhost:8004/health": (200, {"status": "ok"}),
+        "localhost:8007/health": (200, {"status": "ok"}),
         "localhost:8005/health": (200, {"status": "ok"}),
     })):
         checks = demo_check.check_services()
@@ -60,7 +60,7 @@ def test_check_services_one_down():
         "localhost:8000/health": (200, {"status": "ok"}),
         "localhost:8001/health": (0, {"error": "connection refused"}),
         "localhost:8002/health": (200, {"status": "ok"}),
-        "localhost:8004/health": (200, {"status": "ok"}),
+        "localhost:8007/health": (200, {"status": "ok"}),
         "localhost:8005/health": (200, {"status": "ok"}),
     })):
         checks = demo_check.check_services()
@@ -180,7 +180,7 @@ def test_main_returns_0_when_all_pass(capsys):
         "localhost:8000/health": (200, {"status": "ok"}),
         "localhost:8001/health": (200, {"status": "ok"}),
         "localhost:8002/health": (200, {"status": "ok"}),
-        "localhost:8004/health": (200, {"status": "ok"}),
+        "localhost:8007/health": (200, {"status": "ok"}),
         "localhost:8005/health": (200, {"status": "ok"}),
         "11434/api/tags": (200, {"models": [{"name": "qwen2:7b"}]}),
         "/auth/login": (200, {"access_token": "tok123"}),
@@ -208,7 +208,7 @@ def test_main_returns_1_when_service_down(capsys):
         "localhost:8000/health": (0, {"error": "connection refused"}),
         "localhost:8001/health": (200, {"status": "ok"}),
         "localhost:8002/health": (200, {"status": "ok"}),
-        "localhost:8004/health": (200, {"status": "ok"}),
+        "localhost:8007/health": (200, {"status": "ok"}),
         "localhost:8005/health": (200, {"status": "ok"}),
         "11434/api/tags": (200, {"models": [{"name": "qwen2:7b"}]}),
         "/auth/login": (200, {"access_token": "tok123"}),

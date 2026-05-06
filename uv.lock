@@ -217,6 +217,7 @@ dependencies = [
     { name = "arq" },
     { name = "asyncpg" },
     { name = "datasketch" },
+    { name = "fastapi" },
     { name = "hdbscan" },
     { name = "httpx" },
     { name = "langdetect" },
@@ -230,6 +231,7 @@ dependencies = [
     { name = "spacy" },
     { name = "structlog" },
     { name = "transformers" },
+    { name = "uvicorn", extra = ["standard"] },
     { name = "vadersentiment" },
     { name = "yake" },
 ]
@@ -240,6 +242,7 @@ requires-dist = [
     { name = "arq", specifier = ">=0.25" },
     { name = "asyncpg", specifier = ">=0.29" },
     { name = "datasketch", specifier = ">=1.6" },
+    { name = "fastapi", specifier = ">=0.111" },
     { name = "hdbscan", specifier = ">=0.8" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "langdetect", specifier = ">=1.0" },
@@ -253,6 +256,7 @@ requires-dist = [
     { name = "spacy", specifier = ">=3.7" },
     { name = "structlog", specifier = ">=24.1" },
     { name = "transformers", specifier = ">=4.41,<5.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.29" },
     { name = "vadersentiment", specifier = ">=3.3" },
     { name = "yake", specifier = ">=0.4" },
 ]
@@ -277,7 +281,6 @@ dependencies = [
     { name = "python-jose", extra = ["cryptography"] },
     { name = "python-multipart" },
     { name = "redis" },
-    { name = "sentence-transformers" },
     { name = "structlog" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -299,7 +302,6 @@ requires-dist = [
     { name = "python-jose", extras = ["cryptography"], specifier = ">=3.3" },
     { name = "python-multipart", specifier = ">=0.0.9" },
     { name = "redis", specifier = ">=5.0" },
-    { name = "sentence-transformers", specifier = ">=2.6" },
     { name = "structlog", specifier = ">=24.1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.29" },
 ]
@@ -320,7 +322,6 @@ dependencies = [
     { name = "prometheus-client" },
     { name = "pydantic-settings" },
     { name = "redis" },
-    { name = "sentence-transformers" },
     { name = "staticmap" },
     { name = "structlog" },
     { name = "uvicorn", extra = ["standard"] },
@@ -340,7 +341,6 @@ requires-dist = [
     { name = "prometheus-client", specifier = ">=0.20" },
     { name = "pydantic-settings", specifier = ">=2.2" },
     { name = "redis", specifier = ">=5.0" },
-    { name = "sentence-transformers", specifier = ">=2.7" },
     { name = "staticmap", specifier = ">=0.5" },
     { name = "structlog", specifier = ">=24.1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.29" },

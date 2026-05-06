@@ -4,7 +4,7 @@ pytest.mark.unit — no DB, no network, no real embedding model.
 """
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -86,48 +86,51 @@ class TestAssembleContext:
 
 
 class TestGenerateQueryEmbedding:
-    """generate_query_embedding uses sentence-transformers under the hood."""
+    """generate_query_embedding calls analyst service /internal/embed."""
 
-    def test_returns_list_of_floats(self):
+    @pytest.mark.asyncio
+    async def test_returns_list_of_floats(self):
         from anveshak.reporter.rag import generate_query_embedding
 
-        mock_model = MagicMock()
-        mock_model.encode.return_value = [0.1, 0.2, 0.3, 0.4]
+        # httpx Response.json() is sync, so use MagicMock for the response
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {"embeddings": [[0.1, 0.2, 0.3, 0.4]]}
 
-        with patch("anveshak.reporter.rag.get_embedding_model", return_value=mock_model):
-            result = generate_query_embedding(
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=mock_response)
+
+        with patch("anveshak.reporter.rag.httpx.AsyncClient", return_value=mock_client):
+            result = await generate_query_embedding(
                 topic_name="test topic",
                 keywords=["kw1", "kw2"],
-                model_name="all-MiniLM-L6-v2",
             )
 
         assert isinstance(result, list)
         assert all(isinstance(v, float) for v in result)
 
-    def test_combines_topic_and_keywords(self):
+    @pytest.mark.asyncio
+    async def test_combines_topic_and_keywords(self):
         from anveshak.reporter.rag import generate_query_embedding
 
-        mock_model = MagicMock()
-        mock_model.encode.return_value = [0.5] * 384
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {"embeddings": [[0.5] * 384]}
 
-        with patch("anveshak.reporter.rag.get_embedding_model", return_value=mock_model):
-            generate_query_embedding("UAV incidents", ["drone", "airspace"], "all-MiniLM-L6-v2")
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=mock_response)
 
-        call_args = mock_model.encode.call_args[0][0]
-        assert "UAV incidents" in call_args
-        assert "drone" in call_args
+        with patch("anveshak.reporter.rag.httpx.AsyncClient", return_value=mock_client):
+            await generate_query_embedding("UAV incidents", ["drone", "airspace"])
 
-
-class TestGetEmbeddingModel:
-    """get_embedding_model caches the model in the module-level dict."""
-
-    def test_same_model_cached(self):
-        from anveshak.reporter import rag
-
-        mock_model = MagicMock()
-        with patch("anveshak.reporter.rag.SentenceTransformer", return_value=mock_model):
-            # Clear cache first
-            rag._MODEL_CACHE.clear()
-            m1 = rag.get_embedding_model("all-MiniLM-L6-v2")
-            m2 = rag.get_embedding_model("all-MiniLM-L6-v2")
-        assert m1 is m2  # same cached instance
+        # Verify the POST payload contains combined text
+        call_kwargs = mock_client.post.call_args
+        payload = call_kwargs.kwargs.get("json") or call_kwargs[1].get("json")
+        assert "UAV incidents" in payload["texts"][0]
+        assert "drone" in payload["texts"][0]

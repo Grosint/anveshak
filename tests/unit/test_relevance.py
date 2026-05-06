@@ -61,9 +61,9 @@ class TestResolveThreshold:
     def test_falls_back_to_global_when_none(self):
         from anveshak.analyst.relevance import resolve_threshold
 
-        # Global default is 0.42 (from settings, calibrated from real data)
+        # Global default is 0.35 (from settings, calibrated from real data)
         result = resolve_threshold(None)
-        assert result == pytest.approx(0.42)
+        assert result == pytest.approx(0.35)
 
     def test_per_topic_zero_is_valid(self):
         """A per-topic threshold of 0.0 should be honoured (disable filtering)."""

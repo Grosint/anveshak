@@ -8,6 +8,8 @@ version = "1.0.0"
 requires-python = ">=3.12"
 dependencies = [
     "anveshak-sdk",
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.29",
     "spacy>=3.7",
     "langdetect>=1.0",
     "sentence-transformers>=2.7,<4.0",

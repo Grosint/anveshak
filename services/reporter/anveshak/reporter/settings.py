@@ -12,9 +12,8 @@ class ReporterSettings(BaseSettings):
     ollama_model: str = "qwen2:7b"
     llm_max_tokens: int = 2048
 
-    # Embeddings — hardware-controlled, see hardware.md
-    embedding_model: str = "all-MiniLM-L6-v2"
-    embedding_dimensions: int = 384
+    # Analyst service — embedding endpoint (avoids PyTorch in reporter image)
+    analyst_service_url: str = "http://analyst-scheduler:8007"
 
     # RAG
     rag_top_k: int = 10

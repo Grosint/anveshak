@@ -1,0 +1,50 @@
+# Git
+.git
+.gitignore
+
+# Claude Code
+.claude
+
+# Python caches
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+htmlcov
+.coverage
+
+# Node / Frontend build artifacts (frontend has its own Dockerfile)
+frontend/node_modules
+frontend/dist
+
+# Documentation (not needed in containers)
+docs/
+*.md
+!sdk/anveshak-sdk/README.md
+
+# IDE
+.vscode
+.idea
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Test data / scripts not needed at runtime
+tests/
+scripts/
+benchmarks/
+
+# Docker / Infra configs (not needed inside containers)
+infra/configs/
+infra/compose*.yml
+
+# Models (downloaded at runtime, not baked in)
+models/
+
+# Media (volume-mounted)
+media/

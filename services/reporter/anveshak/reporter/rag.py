@@ -1,48 +1,41 @@
 """RAG (Retrieval-Augmented Generation) helpers for the reporter service.
 
 Responsibilities:
-- Lazy-load and cache the sentence-transformer embedding model.
-- Generate a query embedding from topic name + keywords.
+- Generate a query embedding from topic name + keywords (via analyst service).
 - Assemble a prompt context string from retrieved chunks, truncated to max_tokens.
+
+Embeddings are served by the analyst-scheduler /internal/embed endpoint,
+avoiding a PyTorch dependency in the reporter image.
 """
 from __future__ import annotations
 
 from typing import Any
 
+import httpx
 import structlog
-from sentence_transformers import SentenceTransformer
+
+from .settings import settings
 
 log = structlog.get_logger(__name__)
 
-# ---------------------------------------------------------------------------
-# Module-level model cache — loaded once per process
-# ---------------------------------------------------------------------------
-_MODEL_CACHE: dict[str, SentenceTransformer] = {}
 
-
-def get_embedding_model(model_name: str) -> SentenceTransformer:
-    """Return a cached SentenceTransformer instance for *model_name*."""
-    if model_name not in _MODEL_CACHE:
-        log.info("rag.loading_embedding_model", model_name=model_name)
-        _MODEL_CACHE[model_name] = SentenceTransformer(model_name)
-        log.info("rag.embedding_model_loaded", model_name=model_name)
-    return _MODEL_CACHE[model_name]
-
-
-def generate_query_embedding(
+async def generate_query_embedding(
     topic_name: str,
     keywords: list[str],
-    model_name: str,
 ) -> list[float]:
-    """Encode topic_name + keywords into a single query vector.
+    """Encode topic_name + keywords into a single query vector via analyst service.
 
     The combined query text is: "<topic_name> <keyword1> <keyword2> ..."
     This gives pgvector something meaningful to rank chunks against.
     """
     query_text = " ".join([topic_name] + keywords)
-    model = get_embedding_model(model_name)
-    vector = model.encode(query_text)
-    return [float(v) for v in vector]
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            f"{settings.analyst_service_url}/internal/embed",
+            json={"texts": [query_text]},
+        )
+        resp.raise_for_status()
+        return resp.json()["embeddings"][0]
 
 
 def assemble_context(
