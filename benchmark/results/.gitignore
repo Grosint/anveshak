@@ -1,0 +1,3 @@
+# Benchmark output files (regenerated on each run)
+*.json
+!.gitkeep

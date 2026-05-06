@@ -162,13 +162,20 @@ def run_hdbscan(rows: list[EmbeddingRow]) -> dict[int, list[int]]:
         )
         return {}
 
-    matrix = np.vstack([r.vector for r in rows])
+    matrix = np.vstack([r.vector for r in rows]).astype(np.float64)
+    # Precompute cosine distance matrix. Embeddings are L2-normalized so
+    # cosine_distance = 1 - dot(a, b). Using precomputed because hdbscan 0.8.x
+    # does not support metric="cosine" directly.
+    cosine_sim = matrix @ matrix.T
+    np.clip(cosine_sim, -1.0, 1.0, out=cosine_sim)
+    distance_matrix = 1.0 - cosine_sim
+
     clusterer = HDBSCAN(
         min_cluster_size=settings.hdbscan_min_cluster_size,
         min_samples=settings.hdbscan_min_samples,
-        metric="euclidean",
+        metric="precomputed",
     )
-    labels = clusterer.fit_predict(matrix)
+    labels = clusterer.fit_predict(distance_matrix)
 
     groups: dict[int, list[int]] = {}
     for idx, label in enumerate(labels):

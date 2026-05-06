@@ -488,6 +488,24 @@ verify-reports:
 	@$(UV) --package anveshak-sdk python scripts/verify_reports_immutable.py
 
 # ---------------------------------------------------------------------------
+# Benchmark
+# ---------------------------------------------------------------------------
+
+benchmark:
+	$(call header,Running Accuracy Benchmark)
+	@$(UV) python -m benchmark
+	$(call success,Benchmark complete — see docs/accuracy_benchmark.md)
+
+benchmark-clean:
+	$(call header,Cleaning Benchmark Data)
+	@$(UV) python -m benchmark --clean-only
+	$(call success,Benchmark data removed)
+
+benchmark-skip-analyse:
+	$(call header,Running Benchmark — skip NLP)
+	@$(UV) python -m benchmark --skip-analyse
+
+# ---------------------------------------------------------------------------
 # Code quality
 # ---------------------------------------------------------------------------
 
