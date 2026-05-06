@@ -198,7 +198,10 @@
       "Bash(/tmp/report_summary.txt:*)",
       "Read(//tmp/**)",
       "Bash(grep -r \"SELECT.*,.*\\(\" /Users/navitas28/Work/anveshak/services/api/anveshak/api/db/*.py)",
-      "Bash(find /Users/navitas28/Work/anveshak/services -type f -name \"*.py\" -exec wc -l {} +)"
+      "Bash(find /Users/navitas28/Work/anveshak/services -type f -name \"*.py\" -exec wc -l {} +)",
+      "Bash(xargs cat:*)",
+      "Bash(pip install:*)",
+      "Bash(uv build:*)"
     ]
   }
 }

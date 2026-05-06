@@ -321,12 +321,10 @@ migrate-rollback:
 	@cd services/api && $(UV) --package anveshak-api alembic downgrade -1
 	$(call success,Rolled back one revision)
 
-# Upgrade pgvector index to HNSW — run when 32GB RAM available (see hardware.md)
+# HNSW index is now part of 001_initial_schema — this target is a no-op
 migrate-hnsw:
-	$(call header,Upgrading pgvector Index to HNSW)
-	$(call warn,This requires 32GB RAM — see hardware.md)
-	@cd services/api && $(UV) --package anveshak-api alembic upgrade hnsw
-	$(call success,HNSW migration complete)
+	$(call header,HNSW index included in initial schema)
+	$(call success,Nothing to do — HNSW is the default index)
 
 # ---------------------------------------------------------------------------
 # Demo seed
