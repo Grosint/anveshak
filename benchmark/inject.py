@@ -185,7 +185,7 @@ async def inject_event(
             if not fixture_path.exists():
                 log.warning(
                     "benchmark.fixture_missing",
-                    event=event_id,
+                    event_id=event_id,
                     fixture=src["fixture"],
                 )
                 continue
