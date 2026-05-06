@@ -302,7 +302,7 @@ Anveshak runs as **19 containers** (+ 1 optional) on a single Docker network (`a
 
 Runs four concurrent async loops:
 
-1. **Clustering Loop** (every 5 min) — runs near-duplicate detection, then HDBSCAN clustering on embeddings per topic. Creates/updates `narrative_clusters` with item counts and source diversity metrics. Excludes near-duplicate items from `independent_source_count` to prevent false signals. Archives stale clusters older than `cluster_archive_after_days`. After clustering, **enqueues** `generate_cluster_label` and `run_cross_verification` to the analyst-worker via ARQ (never calls Ollama directly). Label staleness tracked via `label_item_hash` — re-enqueues label generation when cluster composition changes by >30%.
+1. **Clustering Loop** (every 5 min) — runs near-duplicate detection, then **incremental clustering** per topic. New items are assigned to nearest existing cluster centroid (cosine similarity ≥ 0.75); only truly unassigned items go through HDBSCAN. Distance matrix blends 70% cosine distance + 30% entity MinHash similarity — articles sharing named entities cluster together even with distant embeddings. Adaptive `min_cluster_size` (2 for small topics, 3 for large). Creates/updates `narrative_clusters` with item counts and source diversity metrics. Excludes near-duplicate items from `independent_source_count` to prevent false signals. Archives stale clusters older than `cluster_archive_after_days`. After clustering, **enqueues** `generate_cluster_label` and `run_cross_verification` to the analyst-worker via ARQ (never calls Ollama directly). Label staleness tracked via `label_item_hash` — re-enqueues label generation when cluster composition changes by >30%.
 
 2. **Signal Check Loop** (every 5 min) — monitors clusters for corroboration threshold: when `independent_source_count >= topic.signal_threshold`, fires a signal (inserts into `signals` table). Also checks for sentiment shifts (compound score drops >0.3 over 24h baseline).
 
@@ -335,9 +335,10 @@ Registered ARQ jobs:
    - NLLB-200 translation (non-English → English)
    - spaCy NER (English, Russian, Chinese models)
    - Sentence-transformer embedding (384 dimensions, all-MiniLM-L6-v2)
+   - Entity MinHash fingerprint (128-permutation signature from extracted entities)
    - VADER sentiment analysis + YAKE keyword extraction
    - Topic relevance scoring (cosine similarity vs topic query embedding)
-   - Results stored in `content_items.embedding`, `content_items.labels`, `extracted_entities`
+   - Results stored in `content_items.embedding`, `content_items.entity_minhash`, `content_items.labels`, `extracted_entities`
 
 2. **`generate_cluster_label`** — Ollama LLM call to generate human-readable cluster labels
 
@@ -937,6 +938,114 @@ Content Items (raw text)
 
 ---
 
+### 7. Incremental Clustering (2026-05-06)
+
+**Problem solved:** Re-running HDBSCAN from scratch every 5 minutes on ALL items is O(N²) per topic. At 500 items, that's 250,000 distance computations every cycle. At 5,000 items it becomes 25 million — unsustainable for 1000+ topics.
+
+**How it works:**
+
+```
+Every 5 min per topic:
+  1. Load ONLY unclustered items (narrative_cluster_id IS NULL)
+  2. Load existing cluster centroids
+  3. For each new item:
+     - Cosine similarity to each centroid
+     - If sim ≥ 0.75 → assign to that cluster, update centroid + ISC
+     - Else → add to unassigned buffer
+  4. If buffer ≥ min_cluster_size → HDBSCAN on buffer only → new clusters
+  5. No existing clusters? → full HDBSCAN on all unclustered (fresh topic)
+```
+
+**Performance:**
+
+| Scale | Old (O(N²)) | Incremental (O(new × clusters)) |
+|-------|-------------|--------------------------------|
+| 500 items, 5 new | 250,000 ops | 50 ops |
+| 5,000 items, 50 new | 25,000,000 ops | 1,000 ops |
+
+**Signal stability:** Cluster IDs are preserved across cycles. New items are assigned TO existing clusters, not into newly created ones. Signals pointing to a cluster_id remain valid — no orphaning.
+
+**Adaptive min_cluster_size:** Scales with item count — `max(2, min(default, N//5))`. Topics with <50 items use min_size=2; larger topics use the production default of 3.
+
+**Key files:**
+
+- `services/analyst/anveshak/analyst/clustering.py` — `assign_to_nearest_cluster()`, `update_cluster_with_assignments()`, modified `run_clustering()`
+
+**Configuration:** `CLUSTER_ASSIGN_THRESHOLD` (0.75)
+
+---
+
+### 8. Entity MinHash Clustering Boost (2026-05-06)
+
+**Problem solved:** A dark web post about "AIIMS data dump" and a CERT-In advisory about "AIIMS cyber incident" embed far apart (different vocabulary, different tone) but share the SAME entities: "AIIMS", "Delhi", "ransomware". Pure embedding distance fails to cluster them.
+
+**How it works:**
+
+At **ingestion time** (analyse_content job):
+```
+Article → NER → entities: {"AIIMS", "Delhi", "ransomware"}
+                    ↓
+              MinHash signature (128 integers, datasketch library)
+                    ↓
+              Stored in content_items.entity_minhash (BIGINT[])
+```
+
+At **clustering time** (every 5 min):
+```
+1. Build cosine distance matrix (N×N) — embedding similarity
+2. Build MinHash similarity matrix (N×N) — entity overlap (Jaccard estimate)
+3. Blend: distance = 0.7 × cosine_dist + 0.3 × entity_dist
+4. Feed ONE blended matrix to HDBSCAN
+```
+
+**NULL-safe blending:** Items without entity_minhash (no entities extracted, or pre-migration content) fall back to cosine-only distance. No penalty applied.
+
+**Why MinHash, not raw Jaccard:** MinHash precomputes a 128-integer fingerprint once at ingestion. At clustering time, comparing two fingerprints is 128 integer comparisons (~100ns). Raw Jaccard requires full set intersection per pair — slower at scale.
+
+**Performance:** 500 items × 128 permutations = ~3ms for the entity similarity matrix. Negligible compared to HDBSCAN itself.
+
+**Key files:**
+
+- `services/analyst/anveshak/analyst/entity_minhash.py` — `compute_entity_minhash()`, `minhash_similarity_matrix()`
+- `services/analyst/anveshak/analyst/jobs.py` — computes and stores MinHash after NER
+- `services/analyst/anveshak/analyst/clustering.py` — blends entity similarity into distance matrix
+- `services/api/migrations/versions/010_entity_minhash.py` — adds `entity_minhash BIGINT[]` column
+
+**Configuration:** `ENTITY_BLEND_WEIGHT` (0.3 — 0=embedding only, 1=entity only), `MINHASH_NUM_PERM` (128)
+
+---
+
+### 9. Accuracy Benchmark Framework (2026-05-06)
+
+**Problem solved:** No way to measure Anveshak's detection accuracy against known events. MoD decision makers need proof the system works.
+
+**How it works:**
+
+- 100 real OSINT event definitions (YAML) with 858 fixture articles (JSON)
+- Events span 5 categories: cross-border, info ops, deepfake, protest, critical infra
+- 10 negative events (satire, recycled, commentary) measure false positive rate
+- 6 languages: English, Hindi, Chinese, Urdu, Arabic, Russian
+- Automated pipeline: inject → embed → cluster → signal → measure → report
+
+**Results (v3.0):**
+
+| Metric | Score |
+|--------|-------|
+| Precision | 90.7% |
+| Recall | 43.3% |
+| F1 | 58.6% |
+
+**Key files:**
+
+- `benchmark/` — complete framework (run.py, inject.py, metrics.py, report.py)
+- `benchmark/corpus/events/` — 100 event YAML definitions
+- `benchmark/corpus/fixtures/` — 858 article JSON files
+- `docs/accuracy_benchmark.md` — full report with per-category/language breakdown
+
+**Usage:** `make benchmark` (full run), `make benchmark-clean` (remove benchmark data)
+
+---
+
 ### Cross-Dependencies Between Subsystems
 
 These six improvements are not independent features — they form a reinforcing chain:
@@ -945,8 +1054,14 @@ These six improvements are not independent features — they form a reinforcing 
 Near-Duplicate Detection ──► prevents false ISC inflation
          │
          ▼
-Clustering (windowed) ──► uses dedup-adjusted ISC
-         │                  only recent content
+Incremental Clustering ──► assigns new items to existing centroids
+         │                   preserves cluster IDs (no orphaned signals)
+         │                   falls back to HDBSCAN for unassigned
+         │
+         ├──► Entity MinHash Boost ──► blends entity overlap into distance
+         │                              dark web + CERT-In advisory cluster together
+         │
+         ├──► Adaptive min_cluster_size ──► small topics (N<50) use min_size=2
          │
          ├──► Signal Engine ──► fires on accurate ISC
          │                       excludes archived clusters
@@ -962,6 +1077,9 @@ Continuous Backfill ──► feeds content into multiple topics
 
 HNSW Index ──► accelerates all pgvector queries
                backfill, vector search, centroid comparison
+
+Benchmark Framework ──► validates accuracy against 100 known events
+                         reproducible via `make benchmark`
 ```
 
 **Critical path for court-admissible output:**
@@ -980,6 +1098,7 @@ Without near-duplicate detection, a single-source story paraphrased across 3 pla
 | 004 | `narrative_clusters.archived_at` | New column for temporal cluster archival |
 | 005 | `narrative_clusters.label_generated_at`, `label_item_hash` | New columns for label staleness tracking |
 | 006 | `idx_signals_cross_topic` | Partial index for `cross_topic_convergence` signal type |
+| 010 | `content_items.entity_minhash` | BIGINT[] column for MinHash fingerprint (128 permutations) |
 
 All migrations are additive — no columns dropped, no data modified, backward compatible with existing deployments.
 
