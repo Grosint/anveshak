@@ -35,6 +35,8 @@ class AnalystSettings(BaseSettings):
     clustering_window_days: int = 30      # only cluster content from last N days (0 = no filter)
     cluster_archive_after_days: int = 90  # archive clusters older than N days
     cluster_assign_threshold: float = 0.75  # cosine sim to assign new item to existing cluster
+    entity_blend_weight: float = 0.3        # weight of entity similarity in distance matrix (0=embedding only, 1=entity only)
+    minhash_num_perm: int = 128             # MinHash permutations (higher=more accurate, slower)
 
     # Label staleness detection
     label_staleness_change_threshold: float = 0.30  # re-label if >30% items changed

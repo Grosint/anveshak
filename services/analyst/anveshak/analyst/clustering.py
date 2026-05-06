@@ -23,6 +23,7 @@ import numpy as np
 import structlog
 from hdbscan import HDBSCAN
 
+from .entity_minhash import minhash_similarity_matrix
 from .settings import settings
 
 log = structlog.get_logger(__name__)
@@ -34,7 +35,8 @@ log = structlog.get_logger(__name__)
 SQL_TOPIC_EMBEDDINGS = """
     SELECT ci.id AS content_item_id,
            ci.embedding::text AS embedding_text,
-           s.platform
+           s.platform,
+           ci.entity_minhash
     FROM content_items ci
     JOIN sources s ON ci.source_id = s.id
     WHERE ci.topic_id = $1
@@ -46,7 +48,8 @@ SQL_TOPIC_EMBEDDINGS = """
 SQL_TOPIC_EMBEDDINGS_WINDOWED = """
     SELECT ci.id AS content_item_id,
            ci.embedding::text AS embedding_text,
-           s.platform
+           s.platform,
+           ci.entity_minhash
     FROM content_items ci
     JOIN sources s ON ci.source_id = s.id
     WHERE ci.topic_id = $1
@@ -60,7 +63,8 @@ SQL_TOPIC_EMBEDDINGS_WINDOWED = """
 SQL_UNCLUSTERED_EMBEDDINGS_WINDOWED = """
     SELECT ci.id AS content_item_id,
            ci.embedding::text AS embedding_text,
-           s.platform
+           s.platform,
+           ci.entity_minhash
     FROM content_items ci
     JOIN sources s ON ci.source_id = s.id
     WHERE ci.topic_id = $1
@@ -74,7 +78,8 @@ SQL_UNCLUSTERED_EMBEDDINGS_WINDOWED = """
 SQL_UNCLUSTERED_EMBEDDINGS = """
     SELECT ci.id AS content_item_id,
            ci.embedding::text AS embedding_text,
-           s.platform
+           s.platform,
+           ci.entity_minhash
     FROM content_items ci
     JOIN sources s ON ci.source_id = s.id
     WHERE ci.topic_id = $1
@@ -144,6 +149,7 @@ class EmbeddingRow(NamedTuple):
     content_item_id: str
     vector: np.ndarray
     platform: str
+    entity_minhash: list[int] | None
 
 
 class ClusterCentroid(NamedTuple):
@@ -254,10 +260,12 @@ def _parse_embedding_rows(rows: list) -> list[EmbeddingRow]:
     for row in rows:
         try:
             vec = _parse_pgvector(row["embedding_text"])
+            minhash = list(row["entity_minhash"]) if row.get("entity_minhash") else None
             result.append(EmbeddingRow(
                 content_item_id=row["content_item_id"],
                 vector=vec,
                 platform=row["platform"],
+                entity_minhash=minhash,
             ))
         except Exception as exc:
             log.warning(
@@ -294,7 +302,30 @@ def run_hdbscan(rows: list[EmbeddingRow]) -> dict[int, list[int]]:
     # does not support metric="cosine" directly.
     cosine_sim = matrix @ matrix.T
     np.clip(cosine_sim, -1.0, 1.0, out=cosine_sim)
-    distance_matrix = 1.0 - cosine_sim
+    cosine_dist = 1.0 - cosine_sim
+
+    # Blend entity MinHash similarity into distance matrix.
+    # Articles sharing entities (e.g., "AIIMS" + "Delhi") get pulled closer
+    # even if their embedding vectors are distant.
+    # Items with NULL minhash fall back to cosine-only (no penalty).
+    w = settings.entity_blend_weight
+    minhash_list = [r.entity_minhash for r in rows]
+    minhash_count = sum(1 for m in minhash_list if m is not None)
+
+    if w > 0 and minhash_count >= 2:
+        entity_sim = minhash_similarity_matrix(minhash_list)
+        entity_dist = 1.0 - entity_sim
+        # Only blend where BOTH items have minhash; otherwise use cosine-only
+        has_minhash = np.array([m is not None for m in minhash_list])
+        blend_mask = np.outer(has_minhash, has_minhash).astype(np.float64)
+        # Where both have minhash: blend. Where either is NULL: cosine-only.
+        distance_matrix = np.where(
+            blend_mask > 0,
+            (1.0 - w) * cosine_dist + w * entity_dist,
+            cosine_dist,
+        )
+    else:
+        distance_matrix = cosine_dist
 
     clusterer = HDBSCAN(
         min_cluster_size=effective_min,

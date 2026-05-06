@@ -15,6 +15,7 @@ dependencies = [
     "sentencepiece>=0.2",
     "sacremoses>=0.1",
     "hdbscan>=0.8",
+    "datasketch>=1.6",
     "numpy>=1.26",
     "asyncpg>=0.29",
     "redis>=5.0",

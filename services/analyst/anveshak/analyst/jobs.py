@@ -25,6 +25,7 @@ from .sentiment import analyse_sentiment
 from .translation import needs_translation, translate_to_english
 from .content_quality import is_quality_content
 from .relevance import compute_topic_relevance, build_topic_query_embedding
+from .entity_minhash import compute_entity_minhash
 
 log = structlog.get_logger(__name__)
 
@@ -49,7 +50,8 @@ SQL_UPDATE_CONTENT_NLP = """
         translation_model      = $4,
         labels                 = $5::jsonb,
         updated_at             = $6,
-        topic_relevance_score  = $7
+        topic_relevance_score  = $7,
+        entity_minhash         = $9
     WHERE id = $8
 """
 
@@ -175,13 +177,17 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
 
         now = datetime.now(UTC)
 
+        # --- Step 4c: Entity MinHash fingerprint for clustering boost ---
+        entity_texts = [ent.entity_text for ent in entities]
+        minhash = compute_entity_minhash(entity_texts, settings.minhash_num_perm)
+
         # --- Step 5: Write to DB (criteria 1.16) ---
         async with db_pool.acquire() as conn:
             async with conn.transaction():
                 await conn.execute(
                     SQL_UPDATE_CONTENT_NLP,
                     embedding_str, lang, translated_text, translation_model_used,
-                    labels_json, now, relevance_score, content_item_id,
+                    labels_json, now, relevance_score, content_item_id, minhash,
                 )
                 for ent in entities:
                     await conn.execute(
