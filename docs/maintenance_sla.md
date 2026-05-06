@@ -195,17 +195,17 @@ Anveshak is designed for intelligence officers, not IT staff. The AMC ensures th
 
 ---
 
-## AMC Pricing Structure
+## Pricing Structure
 
-| Tier | Annual Cost (% of license) | Typical Range |
-|------|---------------------------|---------------|
-| Tier 1 (Standard) | 15–18% of license value | ₹___ Lakh/year |
-| Tier 2 (Priority) | 22–25% of license value | ₹___ Lakh/year |
-| Tier 3 (Embedded) | 35–40% of license value | ₹___ Lakh/year |
+Anveshak is priced as an **annual subscription** (not one-time license). Support is included in the subscription tier:
 
-**First year Tier 1 support included in license fee.**
+| Tier | What's Included | Typical Range |
+|------|----------------|---------------|
+| Tier 1 (Standard) | Platform subscription + standard support | ₹___ Lakh/year |
+| Tier 2 (Priority) | Platform subscription + priority 24/7 support | ₹___ Lakh/year |
+| Tier 3 (Embedded) | Platform subscription + dedicated on-site engineer | ₹___ Lakh/year |
 
-Multi-year discount: 10% off for 3-year AMC commitment, 15% off for 5-year.
+Multi-year discount: 10% off for 3-year commitment, 15% off for 5-year.
 
 ---
 

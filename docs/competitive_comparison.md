@@ -50,7 +50,7 @@ Decision makers evaluating Anveshak will ask: "How is this different from what w
 | Capability | Recorded Future / Babel Street | Anveshak | Advantage |
 |-----------|-------------------------------|----------|-----------|
 | **Data sovereignty** | Data processed on US/EU cloud | 100% on-premise, air-gappable | Anveshak — non-negotiable for classified environments |
-| **Annual cost** | $70K–$500K (₹60L–₹4Cr) per module | One-time license + AMC (see pricing) | Anveshak — no recurring USD outflow |
+| **Annual cost** | $70K–$500K (₹60L–₹4Cr) per module | Annual subscription in INR (see pricing) | Anveshak — no USD outflow, budget-appropriate |
 | **Currency** | USD billing, foreign vendor approval | INR, Indian company, iDEX route | Anveshak — simpler procurement |
 | **Customisation** | Fixed modules, request features via ticket | Full source code ownership possible | Anveshak — unit can extend |
 | **Deepfake detection** | Separate product / not included | Integrated (M4) | Anveshak — single platform |
@@ -117,7 +117,7 @@ Anveshak's target position: **high capability at Indian defence budget-appropria
 | "Why not just buy Recorded Future?" | USD billing, US cloud, no deepfake, no Indian language depth, export control risk. One sanctions event = dark. |
 | "A 7B model can't match GPT-4" | For structured intel extraction with RAG context, 7B is sufficient and proven. Upgradeable to 70B on better hardware. Zero data leak risk. |
 | "We can hire more analysts instead" | 4 analysts cost ₹50L+/year, cover 2 languages, 20 sources, 12 hours/day. Anveshak covers 200+ languages, 500+ sources, 24/7. |
-| "What about Palantir?" | Palantir is ₹50Cr+/year, requires their team on-site, US company. Anveshak is Indian, one-time license, self-sufficient. |
+| "What about Palantir?" | Palantir is ₹50Cr+/year, requires their team on-site, US company. Anveshak is Indian, annual subscription at a fraction of the cost, self-sufficient. |
 | "Is the AI reliable?" | Every output has source citations and credibility scores. Analyst reviews and decides. System never acts autonomously. |
 
 ---
