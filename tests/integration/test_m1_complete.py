@@ -8,6 +8,7 @@ These tests exercise the full credibility feedback loop end-to-end:
 """
 import asyncio
 import json
+import os
 import uuid
 from datetime import datetime, UTC
 
@@ -21,7 +22,7 @@ from anveshak.analyst.credibility import (
 )
 from anveshak.analyst.settings import AnalystSettings
 
-POSTGRES_URL = "postgresql://anveshak:anveshak@localhost:5433/anveshak"
+POSTGRES_URL = os.environ.get("POSTGRES_URL", "postgresql://anveshak:change-me-in-production@localhost:5433/anveshak")
 LABELS_JSON = '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'
 
 settings = AnalystSettings()
@@ -31,14 +32,7 @@ settings = AnalystSettings()
 # Fixtures
 # ---------------------------------------------------------------------------
 
-@pytest.fixture(scope="module")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest.fixture(scope="module")
+@pytest.fixture
 async def pool():
     p = await asyncpg.create_pool(POSTGRES_URL, min_size=1, max_size=3)
     yield p

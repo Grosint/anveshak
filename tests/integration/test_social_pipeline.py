@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import os
 import re
 import uuid
 from datetime import datetime, UTC
@@ -30,10 +31,10 @@ pytestmark = pytest.mark.integration
 # Fixtures (reuse DB pool from integration conftest if present)
 # ---------------------------------------------------------------------------
 
-POSTGRES_URL = "postgresql://anveshak:anveshak@localhost:5433/anveshak"
+POSTGRES_URL = os.environ.get("POSTGRES_URL", "postgresql://anveshak:change-me-in-production@localhost:5433/anveshak")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 async def db_pool():
     pool = await asyncpg.create_pool(POSTGRES_URL, min_size=1, max_size=3)
     yield pool
@@ -154,7 +155,8 @@ class TestIngestRawItem:
             )
         assert row is not None
         assert row["source_id"] == reddit_source["id"]
-        mock_arq_pool.enqueue_job.assert_called_once_with("analyse_content", pytest.approx)
+        from unittest.mock import ANY
+        mock_arq_pool.enqueue_job.assert_called_once_with("analyse_content", ANY)
 
     @pytest.mark.asyncio
     async def test_telegram_item_inserted_with_correct_platform(

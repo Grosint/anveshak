@@ -8,6 +8,7 @@ Run with:
 """
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import datetime, UTC
 
@@ -18,7 +19,7 @@ import asyncpg
 # Fixtures
 # ---------------------------------------------------------------------------
 
-POSTGRES_URL = "postgresql://anveshak:anveshak@localhost:5433/anveshak"
+POSTGRES_URL = os.environ.get("POSTGRES_URL", "postgresql://anveshak:change-me-in-production@localhost:5433/anveshak")
 
 
 @pytest.fixture

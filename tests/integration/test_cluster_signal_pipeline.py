@@ -16,6 +16,7 @@ Tests:
 from __future__ import annotations
 
 import asyncio
+import os
 import uuid
 from datetime import datetime, UTC
 from unittest.mock import AsyncMock
@@ -26,7 +27,7 @@ import asyncpg
 from anveshak.analyst.clustering import count_independent_sources, run_clustering
 from anveshak.analyst.signal_engine import check_signals, is_duplicate_signal
 
-POSTGRES_URL = "postgresql://anveshak:anveshak@localhost:5433/anveshak"
+POSTGRES_URL = os.environ.get("POSTGRES_URL", "postgresql://anveshak:change-me-in-production@localhost:5433/anveshak")
 
 # ---------------------------------------------------------------------------
 # Fixtures

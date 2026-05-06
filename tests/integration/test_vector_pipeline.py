@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import os
 import uuid
 from datetime import datetime, timedelta, UTC
 from unittest.mock import AsyncMock
@@ -33,7 +34,7 @@ from anveshak.analyst.convergence import check_cross_topic_convergence
 from anveshak.analyst.signal_engine import check_signals
 from anveshak.analyst.labeller import check_label_staleness, compute_item_hash
 
-POSTGRES_URL = "postgresql://anveshak:anveshak@localhost:5433/anveshak"
+POSTGRES_URL = os.environ.get("POSTGRES_URL", "postgresql://anveshak:change-me-in-production@localhost:5433/anveshak")
 
 
 # ---------------------------------------------------------------------------
@@ -319,7 +320,7 @@ async def test_full_pipeline_chain(db_pool, vector_topic, sources_three):
     # Insert 6 items: 2 per platform, all semantically similar
     for platform, source_id in sources_three.items():
         for i in range(2):
-            noise = np.random.RandomState(hash(platform) + i).randn(384).astype(np.float32) * 0.02
+            noise = np.random.RandomState(abs(hash(platform)) % (2**32) + i).randn(384).astype(np.float32) * 0.02
             vec = _norm((np.array(base_vec) + noise).tolist())
             await insert_item(
                 db_pool, vector_topic, source_id,

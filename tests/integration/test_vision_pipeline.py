@@ -10,6 +10,7 @@ Criteria:
 """
 import asyncio
 import hashlib
+import os
 import uuid
 from datetime import datetime, UTC
 
@@ -17,7 +18,7 @@ import pytest
 import asyncpg
 
 
-POSTGRES_URL = "postgresql://anveshak:anveshak@localhost:5432/anveshak"
+POSTGRES_URL = os.environ.get("POSTGRES_URL", "postgresql://anveshak:change-me-in-production@localhost:5433/anveshak")
 REDIS_URL = "redis://localhost:6379"
 
 
