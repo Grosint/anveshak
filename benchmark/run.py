@@ -198,22 +198,23 @@ async def run_benchmark(
         await wait_for_clusters(pool, topic_ids)
 
         # Phase 5: SIGNAL — wait for signal engine to process new clusters
+        # Signal engine runs every 5 min on the scheduler. Wait up to 180s
+        # (guaranteed to catch at least one signal engine cycle).
         print("\n" + "=" * 60)
-        print("PHASE 5: SIGNAL CHECK")
+        print("PHASE 5: SIGNAL CHECK (waiting up to 180s)")
         print("=" * 60)
-        # Signal engine runs every 15s on the scheduler; wait up to 60s
-        for i in range(12):
-            await asyncio.sleep(5)
+        for i in range(18):
+            await asyncio.sleep(10)
             async with pool.acquire() as conn:
                 sig_count = await conn.fetchval(
                     "SELECT COUNT(*) FROM signals WHERE topic_id = ANY($1)",
                     topic_ids,
                 )
             if sig_count > 0:
-                print(f"  {sig_count} signal(s) detected after {(i+1)*5}s")
+                print(f"  {sig_count} signal(s) detected after {(i+1)*10}s")
                 break
         else:
-            print("  No signals fired within 60s window")
+            print("  No signals fired within 180s window")
 
     # Phase 6: MEASURE
     print("\n" + "=" * 60)

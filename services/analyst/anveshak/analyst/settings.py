@@ -34,6 +34,7 @@ class AnalystSettings(BaseSettings):
     hdbscan_min_samples: int = 2
     clustering_window_days: int = 30      # only cluster content from last N days (0 = no filter)
     cluster_archive_after_days: int = 90  # archive clusters older than N days
+    cluster_assign_threshold: float = 0.75  # cosine sim to assign new item to existing cluster
 
     # Label staleness detection
     label_staleness_change_threshold: float = 0.30  # re-label if >30% items changed
