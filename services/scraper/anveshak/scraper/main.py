@@ -48,6 +48,7 @@ async def _enqueue_active_topics(pool: asyncpg.Pool, redis) -> None:
     for topic in topics:
         await redis.enqueue_job("scrape_topic", topic["id"], _queue_name="arq:scraper")
         await redis.enqueue_job("poll_rss_sources", topic["id"], _queue_name="arq:scraper")
+        await redis.enqueue_job("scrape_darkweb_topic", topic["id"], _queue_name="arq:scraper")
         log.debug("scraper.enqueued", topic_id=topic["id"], name=topic["name"])
 
 

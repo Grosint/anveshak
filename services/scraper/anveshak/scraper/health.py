@@ -18,7 +18,7 @@ from typing import Optional
 import httpx
 import structlog
 
-from .fetch import fetch_url
+from .fetch import fetch_url, validate_onion_url, _trafilatura_fetch
 from .metrics import scraper_circuit_breaker_total
 from .settings import settings
 
@@ -38,7 +38,7 @@ _PAYWALL_PATTERNS = frozenset({
 SQL_GET_ALL_ACTIVE_SOURCES = """
     SELECT id, url_or_handle, platform, consecutive_failures, health_status
     FROM sources
-    WHERE is_active = TRUE AND platform IN ('rss', 'web')
+    WHERE is_active = TRUE AND platform IN ('rss', 'web', 'darkweb')
 """
 
 SQL_UPDATE_HEALTH = """
@@ -84,6 +84,45 @@ async def check_rss_health(url: str) -> HealthResult:
         return HealthResult("degraded", f"HTTP {exc.response.status_code}")
     except Exception as exc:
         return HealthResult("degraded", str(exc)[:200])
+
+
+async def check_darkweb_health(url: str) -> HealthResult:
+    """Probe a .onion URL via Tor SOCKS5 proxy. Returns HealthResult."""
+    try:
+        validate_onion_url(url)
+    except ValueError as exc:
+        return HealthResult("down", str(exc))
+
+    try:
+        import inspect
+        client_kwargs: dict = {
+            "timeout": settings.darkweb_request_timeout_s,
+            "follow_redirects": True,
+            "headers": {"User-Agent": _BROWSER_UA},
+        }
+        try:
+            sig = inspect.signature(httpx.AsyncClient.__init__)
+            if "proxy" in sig.parameters:
+                client_kwargs["proxy"] = settings.darkweb_tor_proxy_url
+            else:
+                client_kwargs["proxies"] = {"all://": settings.darkweb_tor_proxy_url}
+        except Exception:
+            client_kwargs["proxy"] = settings.darkweb_tor_proxy_url
+
+        async with httpx.AsyncClient(**client_kwargs) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            if len(resp.text) < 50:
+                return HealthResult(
+                    "degraded",
+                    f"Response too short ({len(resp.text)} chars)",
+                    hard_failure=True,
+                )
+            return HealthResult("healthy", None)
+    except httpx.HTTPStatusError as exc:
+        return HealthResult("degraded", f"HTTP {exc.response.status_code}")
+    except Exception as exc:
+        return HealthResult("degraded", str(exc)[:200], hard_failure=True)
 
 
 async def check_web_health(url: str) -> HealthResult:
@@ -136,6 +175,8 @@ async def run_all_health_checks(db_pool) -> int:
         try:
             if platform == "rss":
                 result = await check_rss_health(url)
+            elif platform == "darkweb":
+                result = await check_darkweb_health(url)
             else:
                 result = await check_web_health(url)
 

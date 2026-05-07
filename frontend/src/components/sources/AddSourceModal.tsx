@@ -12,6 +12,7 @@ const PLATFORMS: { value: Platform; label: string }[] = [
   { value: 'bluesky',  label: 'Bluesky' },
   { value: 'twitter',  label: 'X / Twitter' },
   { value: 'rss',      label: 'RSS Feed' },
+  { value: 'darkweb',  label: 'Dark Web (.onion)' },
 ]
 
 interface AddSourceModalProps {
@@ -109,7 +110,7 @@ export function AddSourceModal({ open, onClose, onSubmit }: AddSourceModalProps)
             value={handle}
             onChange={(e) => setHandle(e.target.value)}
             className="w-full bg-anveshak-bg border border-anveshak-border rounded px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-anveshak-accent"
-            placeholder={platform === 'web' ? 'https://example.com' : platform === 'reddit' ? 'r/worldnews' : '@handle'}
+            placeholder={platform === 'web' ? 'https://example.com' : platform === 'darkweb' ? 'http://example.onion' : platform === 'reddit' ? 'r/worldnews' : '@handle'}
           />
         </div>
 

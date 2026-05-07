@@ -40,6 +40,14 @@ arq_jobs_failed_total = Counter(
     registry=REGISTRY,
 )
 
+# Dark web — per-URL fetch latency via Tor (higher buckets than clearnet)
+scraper_darkweb_fetch_duration_seconds = Histogram(
+    "scraper_darkweb_fetch_duration_seconds",
+    "Time to fetch a single .onion URL via Tor",
+    buckets=[1.0, 5.0, 10.0, 20.0, 30.0, 45.0, 60.0, 75.0, 90.0],
+    registry=REGISTRY,
+)
+
 # Circuit breaker events — tripped (source went down) and recovered
 scraper_circuit_breaker_total = Counter(
     "scraper_circuit_breaker_total",

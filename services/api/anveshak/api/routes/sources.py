@@ -5,6 +5,8 @@ import uuid
 from datetime import datetime, UTC
 from typing import Optional
 
+from urllib.parse import urlparse
+
 import asyncpg
 import httpx
 import structlog
@@ -32,7 +34,7 @@ class CreateSourceRequest(BaseModel):
     model_config = ConfigDict(strict=True)
     name: str
     url_or_handle: str
-    platform: str  # web|telegram|twitter|reddit|bluesky|rss|upload
+    platform: str  # web|telegram|twitter|reddit|bluesky|rss|upload|darkweb
     credibility_score: float = 50.0
     topic_id: Optional[str] = None  # if provided, auto-link source to this topic
     topic_ids: Optional[list[str]] = None  # link to multiple topics at creation
@@ -119,6 +121,21 @@ async def create_source(
             health_error = err
             warning = err
 
+    elif req.platform == "darkweb":
+        # Validate .onion URL format — API cannot probe (no Tor access)
+        parsed = urlparse(req.url_or_handle)
+        if not parsed.netloc.endswith(".onion"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Dark web sources must use .onion URLs",
+            )
+        if parsed.scheme not in ("http", "https"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Dark web sources must use http:// or https:// scheme",
+            )
+        initial_health = "unverified"  # health checked by scraper via Tor
+
     source_id = str(uuid.uuid4())
     now = datetime.now(UTC)
     await sources_db.insert_source(
@@ -197,6 +214,11 @@ async def check_source_health(
             failures = prev_failures + 1
             health_status = "down" if failures >= 3 else "degraded"
             health_error = err
+
+    elif platform == "darkweb":
+        # Dark web sources are probed by the scraper service via Tor, not by the API
+        health_status, failures, health_error = "unverified", prev_failures, \
+            "Dark web health checks run via scraper service (Tor proxy)"
 
     else:
         # telegram/x/reddit — not HTTP-probeable from API; mark as unverified

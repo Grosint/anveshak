@@ -1,6 +1,6 @@
 import api from './client'
 
-export type Platform = 'web' | 'telegram' | 'twitter' | 'reddit' | 'bluesky' | 'rss' | 'upload'
+export type Platform = 'web' | 'telegram' | 'twitter' | 'reddit' | 'bluesky' | 'rss' | 'upload' | 'darkweb'
 
 export type HealthStatus = 'healthy' | 'degraded' | 'down' | 'unverified'
 

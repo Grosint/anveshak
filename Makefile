@@ -89,11 +89,12 @@ _WORK  := $(_CYN)⟳$(_RST)
         ps logs init pull-models download-models migrate migrate-status migrate-hnsw \
         migrate-rollback seed-demo \
         fresh fresh-all \
-        test test-unit test-integration test-e2e test-coverage \
+        test test-unit test-integration test-e2e test-scrape test-coverage \
         demo-check validate validate-vision health syscheck \
         lint format typecheck security-scan \
         clean clean-containers clean-volumes clean-cache purge nuke \
-        verify-labels verify-reports shell-%
+        verify-labels verify-reports shell-% \
+        benchmark benchmark-clean benchmark-skip-analyse
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -407,6 +408,10 @@ test-vector-integration:
 	$(call header,Running Vector Pipeline Integration Tests)
 	$(call info,Requires running stack — run make up first)
 	@$(UV) pytest tests/integration/test_vector_pipeline.py -v --tb=short -m integration
+
+test-scrape:
+	$(call header,Source Connectivity Test)
+	@$(UV) python scripts/test_scrape.py
 
 test-coverage:
 	$(call header,Running Tests with Coverage)
