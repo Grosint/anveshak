@@ -6,6 +6,7 @@ const PLATFORM_CONFIG: Record<string, { label: string; color: string }> = {
   web:      { label: 'Web',      color: 'text-green-400 bg-green-400/10' },
   rss:      { label: 'RSS',      color: 'text-amber-400 bg-amber-400/10' },
   upload:   { label: 'Upload',   color: 'text-purple-400 bg-purple-400/10' },
+  darkweb:  { label: 'Dark Web', color: 'text-red-400 bg-red-400/10' },
 }
 
 interface PlatformBadgeProps {

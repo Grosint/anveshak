@@ -15,6 +15,13 @@ class ScraperSettings(BaseSettings):
     respect_robots_txt: bool = True
     tor_proxy_url: Optional[str] = None            # criteria 1.10 — e.g. socks5://127.0.0.1:9050
 
+    # Dark web (.onion) scraping — routed through Tor SOCKS5 proxy
+    darkweb_tor_proxy_url: str = "socks5://tor-proxy:9050"
+    darkweb_request_timeout_s: int = 90            # Tor adds latency; 3x the default web timeout
+    darkweb_concurrency: int = 2                   # lower than web to avoid Tor circuit exhaustion
+    darkweb_follow_links: bool = False             # safety — no recursive crawling on .onion
+    darkweb_media_download: bool = False           # Phase 1: no media download from .onion sites
+
     # Phase 4: media download settings
     media_storage_root: Path = Path("/app/media")  # shared volume with vision service
     media_max_size_mb: int = 50                    # per-file download cap

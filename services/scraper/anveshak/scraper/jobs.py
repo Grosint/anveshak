@@ -21,10 +21,18 @@ from arq.connections import RedisSettings
 from anveshak.media.downloader import download_media_asset
 
 from .clean import clean_extracted_text, compute_clean_hash, score_content_quality, extract_title
-from .fetch import fetch_url, fetch_url_with_crawler, create_shared_crawler, fetch_html, extract_article_links
+from .fetch import (
+    fetch_url, fetch_url_with_crawler, create_shared_crawler,
+    fetch_html, extract_article_links,
+    create_tor_crawler, fetch_url_via_tor,
+)
 from .health import run_all_health_checks
 from .rss import fetch_rss_items
-from .metrics import scraper_items_fetched_total, scraper_fetch_errors_total, scraper_fetch_duration_seconds, arq_jobs_failed_total
+from .metrics import (
+    scraper_items_fetched_total, scraper_fetch_errors_total,
+    scraper_fetch_duration_seconds, scraper_darkweb_fetch_duration_seconds,
+    arq_jobs_failed_total,
+)
 from .normalise import compute_content_hash
 from .settings import settings
 
@@ -76,9 +84,19 @@ SQL_INSERT_MEDIA_ASSET = """
     ON CONFLICT (content_hash) DO NOTHING
 """
 
+SQL_GET_DARKWEB_SOURCES = """
+    SELECT s.id, s.url_or_handle, s.credibility_score
+    FROM sources s
+    JOIN topic_sources ts ON ts.source_id = s.id
+    WHERE ts.topic_id = $1
+      AND s.is_active = TRUE AND s.platform = 'darkweb'
+      AND s.health_status != 'down'
+"""
+
 SQL_GET_MEDIA_ASSET_BY_HASH = "SELECT id FROM media_assets WHERE content_hash = $1"
 
 _LABELS_JSON = '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'
+_DARKWEB_LABELS_JSON = '{"classification":"RESTRICTED","domain":"darkweb","owner_org":"anveshak"}'
 
 
 # ---------------------------------------------------------------------------
@@ -359,6 +377,143 @@ async def poll_rss_sources(ctx: dict, topic_id: str) -> int:
     return counter["inserted"]
 
 
+async def scrape_darkweb_topic(ctx: dict, topic_id: str) -> int:
+    """Scrape all active dark web (.onion) sources for a topic via Tor.
+
+    Routes all traffic through the Tor SOCKS5 proxy with DNS leak protection.
+    Uses lower concurrency and higher timeouts than clearnet scraping.
+    No recursive link following or media download (Phase 1 safety).
+    Returns the number of new content_items inserted.
+    """
+    db_pool: asyncpg.Pool = ctx["db_pool"]
+
+    async with db_pool.acquire() as conn:
+        topic = await conn.fetchrow(SQL_GET_TOPIC, topic_id)
+        if not topic:
+            log.warning("darkweb.topic_not_found", topic_id=topic_id)
+            return 0
+        sources = await conn.fetch(SQL_GET_DARKWEB_SOURCES, topic_id)
+
+    if not sources:
+        log.debug("darkweb.no_sources", topic_id=topic_id)
+        return 0
+
+    semaphore = asyncio.Semaphore(settings.darkweb_concurrency)
+    counter: dict[str, int] = {"inserted": 0}
+
+    async def _insert_darkweb_content(
+        raw_text: str, url: str, source_id: str, credibility_score: float,
+    ) -> Optional[str]:
+        """Insert a dark web content item with RESTRICTED labels."""
+        content_hash = compute_content_hash(raw_text)
+        cleaned = clean_extracted_text(raw_text)
+        effective_clean = cleaned or raw_text
+        quality = score_content_quality(raw_text, effective_clean)
+        c_hash = compute_clean_hash(effective_clean)
+        title = extract_title(effective_clean)
+        now = datetime.now(UTC)
+        async with db_pool.acquire() as conn:
+            result = await conn.fetchrow(
+                SQL_INSERT_CONTENT,
+                str(uuid.uuid4()),
+                topic_id,
+                source_id,
+                raw_text,
+                effective_clean,
+                "en",
+                content_hash,
+                url,
+                now,
+                credibility_score,
+                now,
+                now,
+                _DARKWEB_LABELS_JSON,
+                quality,
+                c_hash,
+                title,
+            )
+        if result is not None:
+            counter["inserted"] += 1
+            scraper_items_fetched_total.labels(
+                topic_id=topic_id, source_platform="darkweb"
+            ).inc()
+            return result["id"]
+        return None
+
+    async def _process_onion(source: asyncpg.Record, crawler, run_cfg) -> None:
+        async with semaphore:
+            url: str = source["url_or_handle"]
+            source_id: str = source["id"]
+            cred_score = float(source["credibility_score"])
+            try:
+                import time as _time
+                _t0 = _time.monotonic()
+                fetched_text = await asyncio.wait_for(
+                    fetch_url_via_tor(url, crawler, run_cfg),
+                    timeout=settings.darkweb_request_timeout_s,
+                )
+                scraper_darkweb_fetch_duration_seconds.observe(
+                    _time.monotonic() - _t0
+                )
+                if not fetched_text:
+                    return
+                await _insert_darkweb_content(
+                    fetched_text, url, source_id, cred_score
+                )
+            except asyncio.TimeoutError:
+                scraper_fetch_errors_total.labels(
+                    error_type="DarkwebTimeoutError"
+                ).inc()
+                log.warning("darkweb.source_timeout", url=url)
+            except ValueError as exc:
+                # DNS leak prevention — should never happen if sources are validated
+                log.error("darkweb.dns_leak_blocked", url=url, error=str(exc))
+            except Exception as exc:
+                scraper_fetch_errors_total.labels(
+                    error_type=type(exc).__name__
+                ).inc()
+                log.warning("darkweb.source_failed", url=url, error=str(exc))
+
+    try:
+        async with create_tor_crawler() as (crawler, run_cfg):
+            await asyncio.gather(
+                *[_process_onion(s, crawler, run_cfg) for s in sources]
+            )
+    except Exception as exc:
+        log.error("darkweb.tor_crawler_failed", error=str(exc))
+        # Fallback: trafilatura-only via Tor (no browser)
+        from .fetch import _trafilatura_fetch
+
+        async def _fallback(source: asyncpg.Record) -> None:
+            async with semaphore:
+                url = source["url_or_handle"]
+                try:
+                    from .fetch import validate_onion_url
+                    validate_onion_url(url)
+                    fetched_text = await _trafilatura_fetch(
+                        url, proxy_url=settings.darkweb_tor_proxy_url
+                    )
+                    if fetched_text:
+                        await _insert_darkweb_content(
+                            fetched_text, url, source["id"],
+                            float(source["credibility_score"]),
+                        )
+                except Exception as exc:
+                    log.warning(
+                        "darkweb.fallback_failed", url=url, error=str(exc)
+                    )
+
+        await asyncio.gather(*[_fallback(s) for s in sources])
+
+    log.info(
+        "darkweb.job_done",
+        topic_id=topic_id,
+        total_sources=len(sources),
+        inserted=counter["inserted"],
+    )
+    return counter["inserted"]
+
+
 async def _download_page_media(
     page_url: str,
     topic_id: str,
@@ -477,6 +632,7 @@ class WorkerSettings:
         # 8C.5 — scrape_topic: ON CONFLICT DO NOTHING makes it safe to retry
         arq.func(scrape_topic, max_tries=2),
         arq.func(poll_rss_sources, max_tries=2),
+        arq.func(scrape_darkweb_topic, max_tries=2),
         arq.func(check_all_source_health, max_tries=1),
     ]
     cron_jobs = [

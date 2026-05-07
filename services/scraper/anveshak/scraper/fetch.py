@@ -196,25 +196,32 @@ async def fetch_html(url: str) -> Optional[str]:
         return None
 
 
-async def _trafilatura_fetch(url: str) -> Optional[str]:
-    """Download raw HTML via httpx then extract with trafilatura."""
+async def _trafilatura_fetch(
+    url: str, *, proxy_url: Optional[str] = None
+) -> Optional[str]:
+    """Download raw HTML via httpx then extract with trafilatura.
+
+    Args:
+        proxy_url: Explicit proxy override. If None, falls back to settings.tor_proxy_url.
+    """
     import httpx
 
+    effective_proxy = proxy_url or settings.tor_proxy_url
     client_kwargs: dict = {
         "timeout": settings.scraper_request_timeout_s,
         "follow_redirects": True,
         "headers": {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"},
     }
-    if settings.tor_proxy_url:
+    if effective_proxy:
         try:
             import inspect
             sig = inspect.signature(httpx.AsyncClient.__init__)
             if "proxy" in sig.parameters:
-                client_kwargs["proxy"] = settings.tor_proxy_url
+                client_kwargs["proxy"] = effective_proxy
             else:
-                client_kwargs["proxies"] = {"all://": settings.tor_proxy_url}
+                client_kwargs["proxies"] = {"all://": effective_proxy}
         except Exception:
-            client_kwargs["proxy"] = settings.tor_proxy_url
+            client_kwargs["proxy"] = effective_proxy
 
     async with httpx.AsyncClient(**client_kwargs) as client:
         resp = await client.get(url)
@@ -223,3 +230,91 @@ async def _trafilatura_fetch(url: str) -> Optional[str]:
 
     text = trafilatura.extract(html, url=url, include_comments=False, include_tables=True)
     return text or None
+
+
+# ---------------------------------------------------------------------------
+# Dark web (.onion) — Tor-forced fetching with DNS leak protection
+# ---------------------------------------------------------------------------
+
+def validate_onion_url(url: str) -> None:
+    """Raise ValueError if URL is not a .onion address.
+
+    DNS leak prevention: ensures .onion traffic is never sent to a clearnet
+    DNS resolver. Called before every dark web fetch as defense in depth.
+    """
+    parsed = urlparse(url)
+    if not parsed.netloc.endswith(".onion"):
+        raise ValueError(
+            f"DNS leak prevention: {url} is not a .onion URL — "
+            "refusing to fetch via clearnet"
+        )
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(
+            f"Dark web URL must use http:// or https:// scheme, got {parsed.scheme}"
+        )
+
+
+@asynccontextmanager
+async def create_tor_crawler():
+    """Create a Crawl4AI browser instance routed through the Tor SOCKS5 proxy.
+
+    Always uses settings.darkweb_tor_proxy_url — never falls back to direct.
+    Timeout is set to darkweb_request_timeout_s (default 90s).
+    """
+    from crawl4ai import AsyncWebCrawler
+
+    if not os.environ.get("HOME") or os.environ["HOME"] == "/nonexistent":
+        os.environ["HOME"] = "/tmp"
+
+    proxy_kwargs: dict = {"proxy": settings.darkweb_tor_proxy_url}
+
+    try:
+        from crawl4ai import BrowserConfig, CrawlerRunConfig
+
+        try:
+            browser_cfg = BrowserConfig(headless=True, enable_stealth=True, **proxy_kwargs)
+        except TypeError:
+            browser_cfg = BrowserConfig(headless=True, **proxy_kwargs)
+        run_cfg = CrawlerRunConfig(
+            page_timeout=settings.darkweb_request_timeout_s * 1000,
+        )
+        async with AsyncWebCrawler(config=browser_cfg) as crawler:
+            yield crawler, run_cfg
+    except (ImportError, TypeError):
+        async with AsyncWebCrawler(**proxy_kwargs) as crawler:
+            yield crawler, None
+
+
+async def fetch_url_via_tor(
+    url: str, crawler, run_cfg=None
+) -> Optional[str]:
+    """Fetch a .onion URL through Tor. Validates URL before fetching.
+
+    Unlike fetch_url_with_crawler, this function:
+    - Validates the URL is .onion (DNS leak prevention)
+    - Uses Tor-specific timeout
+    - trafilatura fallback also routes through Tor proxy explicitly
+    - Never falls back to direct (non-Tor) fetching
+    """
+    validate_onion_url(url)
+
+    try:
+        if run_cfg is not None:
+            result = await crawler.arun(url=url, config=run_cfg)
+        else:
+            result = await crawler.arun(url=url)
+        clean = _extract_markdown(result)
+        if clean and len(clean.strip()) >= 50:
+            return clean.strip()
+        log.debug("scraper.darkweb_crawl4ai_empty", url=url)
+    except Exception as exc:
+        log.warning("scraper.darkweb_crawl4ai_error", url=url, error=str(exc))
+
+    # Fallback: trafilatura via Tor proxy (explicitly passed, not optional)
+    try:
+        return await _trafilatura_fetch(
+            url, proxy_url=settings.darkweb_tor_proxy_url
+        )
+    except Exception as exc:
+        log.warning("scraper.darkweb_fetch_failed", url=url, error=str(exc))
+        return None

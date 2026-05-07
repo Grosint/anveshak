@@ -80,6 +80,26 @@ services:
     networks:
       - anveshak-net
 
+  # Tor SOCKS5 proxy — dark web (.onion) scraping via scraper service
+  tor-proxy:
+    image: alpine:3.20
+    restart: unless-stopped
+    mem_limit: 128m
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        apk add --no-cache tor &&
+        echo "SocksPort 0.0.0.0:9050" > /etc/tor/torrc &&
+        echo "SocksPolicy accept 172.28.0.0/16" >> /etc/tor/torrc &&
+        echo "SocksPolicy reject *" >> /etc/tor/torrc &&
+        tor -f /etc/tor/torrc
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 9050 || exit 1"]
+      <<: *healthcheck-defaults
+      start_period: 45s
+    networks:
+      - anveshak-net
+
   # ---------------------------------------------------------------------------
   # Inference
   # ---------------------------------------------------------------------------
@@ -154,6 +174,9 @@ services:
       SCRAPER_CONCURRENCY: ${SCRAPER_CONCURRENCY:-4}
       SCRAPER_REQUEST_TIMEOUT_S: ${SCRAPER_REQUEST_TIMEOUT_S:-30}
       TOR_PROXY_URL: ${TOR_PROXY_URL:-}
+      DARKWEB_TOR_PROXY_URL: ${DARKWEB_TOR_PROXY_URL:-socks5://tor-proxy:9050}
+      DARKWEB_REQUEST_TIMEOUT_S: ${DARKWEB_REQUEST_TIMEOUT_S:-90}
+      DARKWEB_CONCURRENCY: ${DARKWEB_CONCURRENCY:-2}
       MEDIA_STORAGE_ROOT: /app/media
       MEDIA_MAX_SIZE_MB: ${MEDIA_MAX_SIZE_MB:-50}
       MEDIA_DOWNLOAD_ENABLED: "true"
@@ -166,13 +189,15 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      tor-proxy:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "kill -0 1 || exit 1"]
       <<: *healthcheck-defaults
     networks:
       - anveshak-net
 
-  # ARQ worker for scrape_topic, poll_rss_sources, check_all_source_health jobs
+  # ARQ worker for scrape_topic, poll_rss_sources, scrape_darkweb_topic, check_all_source_health jobs
   scraper-worker:
     image: anveshak-scraper:latest
     restart: unless-stopped
@@ -183,6 +208,9 @@ services:
       SCRAPER_CONCURRENCY: ${SCRAPER_CONCURRENCY:-4}
       SCRAPER_REQUEST_TIMEOUT_S: ${SCRAPER_REQUEST_TIMEOUT_S:-30}
       TOR_PROXY_URL: ${TOR_PROXY_URL:-}
+      DARKWEB_TOR_PROXY_URL: ${DARKWEB_TOR_PROXY_URL:-socks5://tor-proxy:9050}
+      DARKWEB_REQUEST_TIMEOUT_S: ${DARKWEB_REQUEST_TIMEOUT_S:-90}
+      DARKWEB_CONCURRENCY: ${DARKWEB_CONCURRENCY:-2}
       HOME: /tmp
     volumes:
       - media_store:/app/media
@@ -190,6 +218,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      tor-proxy:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import arq; import anveshak.scraper.jobs'"]
@@ -211,10 +241,14 @@ services:
     environment:
       <<: *common-env
       SOCIAL_PORT: 8002
-      TWITTER_BEARER_TOKEN: ${TWITTER_BEARER_TOKEN:-}
+      TELEGRAM_ADAPTER_ENABLED: ${TELEGRAM_ADAPTER_ENABLED:-false}
       TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}
       TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:-}
       TELEGRAM_SESSION_STRING: ${TELEGRAM_SESSION_STRING:-}
+      X_ADAPTER_ENABLED: ${X_ADAPTER_ENABLED:-false}
+      X_BEARER_TOKEN: ${X_BEARER_TOKEN:-}
+      X_MONTHLY_READ_CAP: ${X_MONTHLY_READ_CAP:-40000}
+      X_POLL_INTERVAL_S: ${X_POLL_INTERVAL_S:-900}
       INSTAGRAM_USERNAME: ${INSTAGRAM_USERNAME:-}
       INSTAGRAM_PASSWORD: ${INSTAGRAM_PASSWORD:-}
       SOCIAL_RATE_LIMIT_RPM: ${SOCIAL_RATE_LIMIT_RPM:-60}
