@@ -14,6 +14,8 @@ dev-dependencies = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "pytest-cov>=4.0",
+    "pytest-xdist>=3.0",
+    "pytest-sugar>=1.0",
     "httpx>=0.27",
     "respx>=0.21",
     "black>=24.0",
@@ -29,7 +31,28 @@ markers = [
     "unit: no external dependencies",
     "integration: requires docker compose services",
     "e2e: full demo arc, requires seeded data",
+    "smoke: quick post-deploy health check",
+    "contract: service boundary verification",
+    "connectivity: external source reachability (docker exec)",
+    "regression: reproduces a specific fixed bug",
+    "resilience: chaos/failure mode tests (nightly only)",
+    "migration: database migration verification",
+    "slow: tests taking > 30s",
 ]
+addopts = "--strict-markers --tb=short -q"
+
+[tool.coverage.run]
+source = ["services", "sdk"]
+omit = ["*/tests/*", "*/migrations/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+precision = 0
+sort = "Cover"
+
+[tool.coverage.html]
+directory = "htmlcov"
 
 [tool.ruff]
 line-length = 100

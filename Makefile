@@ -90,6 +90,7 @@ _WORK  := $(_CYN)⟳$(_RST)
         migrate-rollback seed-demo \
         fresh fresh-all \
         test test-unit test-integration test-e2e test-scrape test-coverage \
+        test-contract test-smoke test-fast test-ci test-all test-nightly \
         demo-check validate validate-vision health syscheck \
         lint format typecheck security-scan \
         clean clean-containers clean-volumes clean-cache purge nuke \
@@ -376,6 +377,8 @@ fresh-all:
 # Testing
 # ---------------------------------------------------------------------------
 
+# ── Fast feedback (developer loop) ──────────────────────────
+
 test: test-unit test-integration
 
 unit: test-unit
@@ -383,21 +386,43 @@ unit: test-unit
 integration: test-integration
 
 test-unit:
-	$(call header,Running Unit Tests)
-	@$(UV) pytest tests/unit/ -v --tb=short -q
+	$(call header,Unit Tests)
+	@$(UV) pytest tests/unit/ -v --tb=short -q \
+		--cov=services --cov=sdk --cov-report=term:skip-covered
 
 test-integration:
-	$(call header,Running Integration Tests)
+	$(call header,Integration Tests)
 	$(call info,Requires running stack — run make up first)
-	@$(UV) pytest tests/integration/ -v --tb=short -q -m integration
+	@$(UV) pytest tests/integration/ -v --tb=short -q -m integration \
+		--cov=services --cov=sdk --cov-report=term:skip-covered
+
+test-contract:
+	$(call header,Contract Tests)
+	@$(UV) pytest tests/contracts/ -v --tb=short -q -m contract
 
 test-e2e:
-	$(call header,Running End-to-End Tests)
-	$(call info,Requires full stack + live credentials)
+	$(call header,End-to-End Tests)
+	$(call info,Requires full stack + seeded demo data)
 	@E2E_LIVE=1 $(UV) pytest tests/e2e/ -v --tb=short -m e2e
 
+test-smoke:
+	$(call header,Smoke Tests)
+	@$(UV) pytest tests/smoke/ -v --tb=short -q -m smoke
+
+# ── Connectivity (external sources) ────────────────────────
+
+test-scrape:
+	$(call header,Source Connectivity Tests)
+	@if [ -d tests/connectivity ]; then \
+		$(UV) pytest tests/connectivity/ -v --tb=short -q -m connectivity; \
+	else \
+		$(UV) python scripts/test_scrape.py; \
+	fi
+
+# ── Focused targets ────────────────────────────────────────
+
 test-vector:
-	$(call header,Running Vector Pipeline Tests)
+	$(call header,Vector Pipeline Tests)
 	@$(UV) pytest tests/unit/test_near_duplicate_dedup.py \
 		tests/unit/test_temporal_windowing.py \
 		tests/unit/test_label_staleness.py \
@@ -405,18 +430,43 @@ test-vector:
 		tests/unit/test_backfill.py -v --tb=short
 
 test-vector-integration:
-	$(call header,Running Vector Pipeline Integration Tests)
+	$(call header,Vector Pipeline Integration Tests)
 	$(call info,Requires running stack — run make up first)
 	@$(UV) pytest tests/integration/test_vector_pipeline.py -v --tb=short -m integration
 
-test-scrape:
-	$(call header,Source Connectivity Test)
-	@$(UV) python scripts/test_scrape.py
+# ── Composite targets ──────────────────────────────────────
+
+test-fast:
+	$(call header,Parallel Unit Tests)
+	@$(UV) pytest tests/unit/ -x -q --tb=short -n auto
+
+test-ci:
+	$(call header,CI Test Suite — unit + contract + integration)
+	@$(UV) pytest tests/unit/ tests/contracts/ tests/integration/ \
+		-v --tb=short -q -m "unit or contract or integration" \
+		--cov=services --cov=sdk --cov-report=term:skip-covered \
+		--cov-report=html:htmlcov --cov-fail-under=80
+
+test-all:
+	$(call header,Full Test Suite)
+	@$(UV) pytest tests/ -v --tb=short \
+		-m "not resilience and not connectivity" \
+		--cov=services --cov=sdk --cov-report=term:skip-covered \
+		--cov-report=html:htmlcov --cov-fail-under=80
+
+test-nightly:
+	$(call header,Nightly Test Suite — includes resilience + migration)
+	@$(UV) pytest tests/ -v --tb=short \
+		-m "not connectivity" \
+		--cov=services --cov=sdk --cov-report=term:skip-covered \
+		--cov-report=html:htmlcov --cov-fail-under=80
 
 test-coverage:
-	$(call header,Running Tests with Coverage)
-	@$(UV) pytest tests/unit/ tests/integration/ \
-		--cov=services --cov-report=term-missing --cov-report=html:htmlcov
+	$(call header,Full Coverage Report)
+	@$(UV) pytest tests/unit/ tests/integration/ tests/contracts/ \
+		--cov=services --cov=sdk \
+		--cov-report=term-missing --cov-report=html:htmlcov \
+		--cov-fail-under=80
 	$(call success,Coverage report: htmlcov/index.html)
 
 # ---------------------------------------------------------------------------

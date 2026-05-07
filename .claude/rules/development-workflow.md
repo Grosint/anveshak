@@ -19,10 +19,20 @@
    - Write tests first (RED) → implement (GREEN) → refactor (IMPROVE)
    - 80%+ coverage on new code
 
-3. **Code Review**
+3. **Test** (run appropriate layer for what changed)
+   - Use /test command — auto-detects which test layer to run
+   - Changed pure logic? → `make test-unit` (< 30s)
+   - Changed SQL/DB/wiring? → `make test-integration` (< 5min)
+   - Changed service contracts? → `make test-contract` (< 60s)
+   - Before push → `make test-ci` (< 6min)
+   - Before demo → `make test-scrape` (< 10min)
+   - Every test run shows: pass/fail with file:line, coverage per module
+
+4. **Code Review**
    - Use /code-review after writing code
    - Address all FAIL issues before committing
 
-4. **Commit**
+5. **Commit**
+   - Unit tests must pass before commit (make test-unit)
    - Conventional commits format
    - See git-workflow.md
