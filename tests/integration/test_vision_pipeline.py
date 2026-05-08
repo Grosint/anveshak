@@ -8,54 +8,23 @@ Criteria:
   4.32: vision_results.deepfake_score is always float (never NULL after processing)
   4.34: same image URL scraped from two sources → one vision_results row (dedup)
 """
-import asyncio
 import hashlib
-import os
 import uuid
-from datetime import datetime, UTC
 
 import pytest
-import asyncpg
-
-
-POSTGRES_URL = os.environ.get("POSTGRES_URL", "postgresql://anveshak:change-me-in-production@localhost:5433/anveshak")
-REDIS_URL = "redis://localhost:6379"
-
-
-@pytest.fixture
-async def db():
-    pool = await asyncpg.create_pool(POSTGRES_URL, min_size=1, max_size=3)
-    yield pool
-    await pool.close()
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_media_asset_insert_dedup(db):
+async def test_media_asset_insert_dedup(db_pool, make_topic, make_source):
     """Same content_hash → ON CONFLICT DO NOTHING → one media_assets row (criteria 4.34)."""
     raw_bytes = b"test image bytes for deduplication"
     content_hash = hashlib.sha256(raw_bytes).hexdigest()
 
-    # Create a dummy content_item to satisfy FK
-    async with db.acquire() as conn:
-        # Insert a source
-        source_id = str(uuid.uuid4())
-        await conn.execute("""
-            INSERT INTO sources (id, name, url_or_handle, platform, labels)
-            VALUES ($1, 'Test Source', 'http://test.example.com', 'web',
-                    '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb)
-            ON CONFLICT DO NOTHING
-        """, source_id)
+    topic_id = await make_topic(name="Vision Test Topic")
+    source_id = await make_source(name="Test Source", url_or_handle="http://test.example.com")
 
-        # Insert a topic
-        topic_id = str(uuid.uuid4())
-        await conn.execute("""
-            INSERT INTO topics (id, name, keywords, labels)
-            VALUES ($1, 'Vision Test Topic', '{}',
-                    '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb)
-            ON CONFLICT DO NOTHING
-        """, topic_id)
-
+    async with db_pool.acquire() as conn:
         # Insert content_item
         ci_id = str(uuid.uuid4())
         ci_hash = hashlib.sha256(f"content_{ci_id}".encode()).hexdigest()
@@ -95,22 +64,16 @@ async def test_media_asset_insert_dedup(db):
             "ON CONFLICT(content_hash) DO NOTHING must be enforced."
         )
 
-        # Cleanup
-        await conn.execute("DELETE FROM media_assets WHERE content_hash = $1", content_hash)
-        await conn.execute("DELETE FROM content_items WHERE id = $1", ci_id)
-        await conn.execute("DELETE FROM topics WHERE id = $1", topic_id)
-        await conn.execute("DELETE FROM sources WHERE id = $1", source_id)
-
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_vision_results_deepfake_score_is_float(db):
+async def test_vision_results_deepfake_score_is_float(db_pool):
     """vision_results.deepfake_score stored as FLOAT, never NULL after processing.
 
     Criteria 4.32: deepfake_score is always float 0.0–1.0 after vision job runs.
     CLAUDE.md rule 7: never bool, never None.
     """
-    async with db.acquire() as conn:
+    async with db_pool.acquire() as conn:
         # Check that all processed vision_results have non-NULL float scores
         rows = await conn.fetch("""
             SELECT id, deepfake_score

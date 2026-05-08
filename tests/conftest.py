@@ -19,8 +19,8 @@ import pytest
 # ---------------------------------------------------------------------------
 
 POSTGRES_URL = os.environ.get(
-    "POSTGRES_URL",
-    "postgresql://anveshak:change-me-in-production@localhost:5433/anveshak",
+    "POSTGRES_TEST_URL",
+    "postgresql://anveshak:change-me-in-production@localhost:5433/anveshak_test",
 )
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
 LABELS_JSON = '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'
@@ -120,13 +120,42 @@ async def make_topic(db_pool):
 
     yield _factory
 
-    # Cleanup in reverse order to handle FK dependencies
+    # Cleanup in reverse FK order (deepest children first)
     async with db_pool.acquire() as conn:
         for tid in reversed(created):
+            # vision_results → media_assets → content_items
+            await conn.execute(
+                "DELETE FROM vision_results WHERE media_asset_id IN "
+                "(SELECT id FROM media_assets WHERE content_item_id IN "
+                "(SELECT id FROM content_items WHERE topic_id=$1))", tid)
+            await conn.execute(
+                "DELETE FROM media_assets WHERE content_item_id IN "
+                "(SELECT id FROM content_items WHERE topic_id=$1)", tid)
+            # extracted_entities → content_items
+            await conn.execute(
+                "DELETE FROM extracted_entities WHERE content_item_id IN "
+                "(SELECT id FROM content_items WHERE topic_id=$1)", tid)
+            # report_source_warnings → reports
+            await conn.execute(
+                "DELETE FROM report_source_warnings WHERE report_id IN "
+                "(SELECT id FROM reports WHERE topic_id=$1)", tid)
+            await conn.execute("DELETE FROM reports WHERE topic_id=$1", tid)
+            # near_duplicates → content_items
+            await conn.execute(
+                "DELETE FROM near_duplicates WHERE content_item_a_id IN "
+                "(SELECT id FROM content_items WHERE topic_id=$1) "
+                "OR content_item_b_id IN "
+                "(SELECT id FROM content_items WHERE topic_id=$1)", tid)
             await conn.execute("DELETE FROM signals WHERE topic_id=$1", tid)
+            # nullify cluster FK before deleting clusters
+            await conn.execute(
+                "UPDATE content_items SET narrative_cluster_id = NULL "
+                "WHERE topic_id=$1 AND narrative_cluster_id IS NOT NULL", tid)
             await conn.execute("DELETE FROM narrative_clusters WHERE topic_id=$1", tid)
+            await conn.execute("DELETE FROM topic_content_items WHERE topic_id=$1", tid)
             await conn.execute("DELETE FROM content_items WHERE topic_id=$1", tid)
             await conn.execute("DELETE FROM topic_sources WHERE topic_id=$1", tid)
+            await conn.execute("DELETE FROM analysis_jobs WHERE topic_id=$1", tid)
             await conn.execute("DELETE FROM topics WHERE id=$1", tid)
 
 
@@ -166,6 +195,8 @@ async def make_source(db_pool):
 
     async with db_pool.acquire() as conn:
         for sid in reversed(created):
+            await conn.execute("DELETE FROM credibility_audit_log WHERE source_id=$1", sid)
+            await conn.execute("DELETE FROM report_source_warnings WHERE source_id=$1", sid)
             await conn.execute("DELETE FROM sources WHERE id=$1", sid)
 
 

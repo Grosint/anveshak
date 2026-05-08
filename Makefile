@@ -172,6 +172,7 @@ setup:
 		$(COMPOSE) exec -T api alembic upgrade head 2>&1 | tail -1; \
 	}
 	$(call success,Migrations applied)
+	@$(MAKE) --no-print-directory migrate-test 2>/dev/null || true
 	@printf "  $(_WORK) Pulling Ollama model (this may take several minutes on first run)...\n"
 	@$(COMPOSE) exec -T ollama ollama pull $$(grep -E '^OLLAMA_MODEL=' .env 2>/dev/null | cut -d= -f2 | sed 's/#.*//' | tr -d ' ' || echo "qwen2:7b") 2>&1 | tail -3
 	$(call success,Ollama model ready)
@@ -316,6 +317,26 @@ migrate:
 	@$(COMPOSE) exec -T api alembic upgrade head
 	$(call success,Migrations applied)
 
+create-test-db:
+	$(call header,Creating Test Database)
+	@$(COMPOSE) exec -T postgres psql -U anveshak -tc \
+		"SELECT 1 FROM pg_database WHERE datname='anveshak_test'" | grep -q 1 \
+		|| $(COMPOSE) exec -T postgres psql -U anveshak -c "CREATE DATABASE anveshak_test OWNER anveshak;"
+	@$(COMPOSE) exec -T postgres psql -U anveshak -d anveshak_test -c "CREATE EXTENSION IF NOT EXISTS vector;" 2>/dev/null
+	@$(COMPOSE) exec -T postgres psql -U anveshak -d anveshak_test -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";' 2>/dev/null
+	@$(COMPOSE) exec -T postgres psql -U anveshak -d anveshak_test -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;" 2>/dev/null
+	@$(COMPOSE) exec -T postgres psql -U anveshak -d anveshak_test -c "CREATE EXTENSION IF NOT EXISTS btree_gin;" 2>/dev/null
+	$(call success,Test database ready)
+
+migrate-test:
+	$(call header,Running Test Database Migrations)
+	@$(MAKE) --no-print-directory create-test-db
+	@$(COMPOSE) exec -T -e POSTGRES_URL=postgresql://anveshak:$${POSTGRES_PASSWORD:-change-me-in-production}@postgres:5432/anveshak_test \
+		api alembic upgrade head
+	$(call success,Test DB migrations applied)
+
+migrate-all: migrate migrate-test
+
 migrate-status:
 	$(call header,Migration Status)
 	@cd services/api && $(UV) --package anveshak-api alembic current
@@ -396,6 +417,7 @@ test-unit:
 
 test-integration:
 	$(call header,Integration Tests (~90s — requires make up))
+	@$(MAKE) --no-print-directory migrate-test
 	@_fail=0; \
 	printf "\n  $(_INFO) Step 1/4: Host-side DB tests\n"; \
 	$(UV) pytest tests/integration/ -v --tb=short -q -m integration \
@@ -556,6 +578,12 @@ security-scan:
 # ---------------------------------------------------------------------------
 # Maintenance / Cleanup (graduated)
 # ---------------------------------------------------------------------------
+
+# clean-test-data — remove orphaned integration-test rows from PostgreSQL
+clean-test-data:
+	$(call header,Cleaning Test Data from Database)
+	@$(COMPOSE) exec -T postgres psql -U anveshak -d anveshak < scripts/cleanup_test_data.sql
+	$(call success,Test data removed)
 
 # clean — Python caches only (safe, fast)
 clean:

@@ -10,15 +10,10 @@ Real PostgreSQL and Redis from Docker Compose are used (pytest.mark.integration)
 """
 from __future__ import annotations
 
-import asyncio
-import hashlib
-import os
-import re
 import uuid
 from datetime import datetime, UTC
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-import asyncpg
 import pytest
 
 from anveshak.social.adapters.base import RawItem
@@ -27,98 +22,39 @@ from anveshak.social.ingest import ingest_raw_item
 
 pytestmark = pytest.mark.integration
 
+
 # ---------------------------------------------------------------------------
-# Fixtures (reuse DB pool from integration conftest if present)
+# Fixtures
 # ---------------------------------------------------------------------------
 
-POSTGRES_URL = os.environ.get("POSTGRES_URL", "postgresql://anveshak:change-me-in-production@localhost:5433/anveshak")
+@pytest.fixture
+async def test_topic(make_topic):
+    return await make_topic(
+        name="Social Test Topic",
+        keywords=["border", "airforce"],
+    )
 
 
 @pytest.fixture
-async def db_pool():
-    pool = await asyncpg.create_pool(POSTGRES_URL, min_size=1, max_size=3)
-    yield pool
-    await pool.close()
+async def reddit_source(make_source):
+    source_id = await make_source(
+        name="r/worldnews test",
+        url_or_handle="r/worldnews",
+        platform="reddit",
+        credibility_score=75.0,
+    )
+    return {"id": source_id, "handle": "r/worldnews", "platform": "reddit"}
 
 
 @pytest.fixture
-async def test_topic(db_pool):
-    """Create a disposable test topic, yield its ID, delete on teardown."""
-    topic_id = str(uuid.uuid4())
-    now = datetime.now(UTC)
-    async with db_pool.acquire() as conn:
-        await conn.execute(
-            """
-            INSERT INTO topics (id, name, keywords, languages, credibility_min,
-                                signal_threshold, status, created_at, updated_at, labels)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            """,
-            topic_id,
-            f"Social Test Topic {topic_id[:8]}",
-            ["border", "airforce"],
-            ["en"],
-            0.0,
-            2,
-            "active",
-            now,
-            now,
-            '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}',
-        )
-    yield topic_id
-    async with db_pool.acquire() as conn:
-        await conn.execute("DELETE FROM topics WHERE id = $1", topic_id)
-
-
-@pytest.fixture
-async def reddit_source(db_pool):
-    source_id = str(uuid.uuid4())
-    now = datetime.now(UTC)
-    async with db_pool.acquire() as conn:
-        await conn.execute(
-            """
-            INSERT INTO sources (id, name, url_or_handle, platform, credibility_score,
-                                 is_active, created_at, updated_at, labels)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            """,
-            source_id,
-            "r/worldnews test",
-            "r/worldnews",
-            "reddit",
-            75.0,
-            True,
-            now,
-            now,
-            '{"classification":"OPEN","domain":"social","owner_org":"anveshak"}',
-        )
-    yield {"id": source_id, "handle": "r/worldnews", "platform": "reddit"}
-    async with db_pool.acquire() as conn:
-        await conn.execute("DELETE FROM sources WHERE id = $1", source_id)
-
-
-@pytest.fixture
-async def telegram_source(db_pool):
-    source_id = str(uuid.uuid4())
-    now = datetime.now(UTC)
-    async with db_pool.acquire() as conn:
-        await conn.execute(
-            """
-            INSERT INTO sources (id, name, url_or_handle, platform, credibility_score,
-                                 is_active, created_at, updated_at, labels)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            """,
-            source_id,
-            "@defencenews test",
-            "@defencenews",
-            "telegram",
-            70.0,
-            True,
-            now,
-            now,
-            '{"classification":"OPEN","domain":"social","owner_org":"anveshak"}',
-        )
-    yield {"id": source_id, "handle": "@defencenews", "platform": "telegram"}
-    async with db_pool.acquire() as conn:
-        await conn.execute("DELETE FROM sources WHERE id = $1", source_id)
+async def telegram_source(make_source):
+    source_id = await make_source(
+        name="@defencenews test",
+        url_or_handle="@defencenews",
+        platform="telegram",
+        credibility_score=70.0,
+    )
+    return {"id": source_id, "handle": "@defencenews", "platform": "telegram"}
 
 
 @pytest.fixture

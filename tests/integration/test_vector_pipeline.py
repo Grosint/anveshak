@@ -34,18 +34,12 @@ from anveshak.analyst.convergence import check_cross_topic_convergence
 from anveshak.analyst.signal_engine import check_signals
 from anveshak.analyst.labeller import check_label_staleness, compute_item_hash
 
-POSTGRES_URL = os.environ.get("POSTGRES_URL", "postgresql://anveshak:change-me-in-production@localhost:5433/anveshak")
+from tests.conftest import POSTGRES_URL
 
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Fixtures — db_pool from root conftest, local fixtures below
 # ---------------------------------------------------------------------------
-
-@pytest.fixture
-async def db_pool():
-    pool = await asyncpg.create_pool(POSTGRES_URL, min_size=1, max_size=3)
-    yield pool
-    await pool.close()
 
 
 @pytest.fixture

@@ -5,16 +5,11 @@ Requires: make up (PostgreSQL running with migrations applied)
 """
 from __future__ import annotations
 
-import os
-
 import pytest
 
-pytestmark = [pytest.mark.migration, pytest.mark.asyncio]
+from tests.conftest import POSTGRES_URL
 
-POSTGRES_URL = os.environ.get(
-    "POSTGRES_URL",
-    "postgresql://anveshak:change-me-in-production@localhost:5433/anveshak",
-)
+pytestmark = [pytest.mark.migration, pytest.mark.asyncio]
 
 
 @pytest.fixture

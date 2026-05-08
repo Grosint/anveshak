@@ -8,79 +8,34 @@ Run with:
 """
 from __future__ import annotations
 
-import os
 import uuid
 from datetime import datetime, UTC
 
 import pytest
-import asyncpg
 
 pytestmark = pytest.mark.integration
 
-POSTGRES_URL = os.environ.get(
-    "POSTGRES_URL",
-    "postgresql://anveshak:change-me-in-production@localhost:5433/anveshak",
-)
-
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Fixtures — db_pool and make_topic/make_source from root conftest
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-async def db_pool():
-    pool = await asyncpg.create_pool(POSTGRES_URL, min_size=1, max_size=3)
-    yield pool
-    await pool.close()
+async def test_topic(make_topic):
+    return await make_topic(name="Darkweb Integration Test", keywords=["darkweb", "test"])
 
 
 @pytest.fixture
-async def test_topic(db_pool):
-    """Create a throwaway topic for the integration test."""
-    topic_id = str(uuid.uuid4())
-    async with db_pool.acquire() as conn:
-        await conn.execute(
-            """
-            INSERT INTO topics (id, name, keywords, status, created_at, updated_at, labels)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            """,
-            topic_id, "Darkweb Integration Test", ["darkweb", "test"],
-            "active", datetime.now(UTC), datetime.now(UTC),
-            '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}',
-        )
-    yield topic_id
-    async with db_pool.acquire() as conn:
-        await conn.execute(
-            "DELETE FROM content_items WHERE topic_id = $1", topic_id
-        )
-        await conn.execute(
-            "DELETE FROM topic_sources WHERE topic_id = $1", topic_id
-        )
-        await conn.execute("DELETE FROM topics WHERE id = $1", topic_id)
-
-
-@pytest.fixture
-async def darkweb_source(db_pool, test_topic):
+async def darkweb_source(db_pool, make_source, test_topic):
     """Create a throwaway dark web source linked to the test topic."""
-    source_id = str(uuid.uuid4())
+    source_id = await make_source(
+        name="Test Onion Site",
+        url_or_handle="http://testsite.onion",
+        platform="darkweb",
+        credibility_score=50.0,
+    )
     now = datetime.now(UTC)
     async with db_pool.acquire() as conn:
-        await conn.execute(
-            """
-            INSERT INTO sources (
-                id, name, url_or_handle, platform, credibility_score,
-                created_at, updated_at, labels
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            """,
-            source_id,
-            "Test Onion Site",
-            "http://testsite.onion",
-            "darkweb",
-            50.0,
-            now,
-            now,
-            '{"classification":"RESTRICTED","domain":"darkweb","owner_org":"anveshak"}',
-        )
         await conn.execute(
             """
             INSERT INTO topic_sources (topic_id, source_id, added_at)
@@ -89,12 +44,7 @@ async def darkweb_source(db_pool, test_topic):
             """,
             test_topic, source_id, now,
         )
-    yield source_id
-    async with db_pool.acquire() as conn:
-        await conn.execute(
-            "DELETE FROM topic_sources WHERE source_id = $1", source_id
-        )
-        await conn.execute("DELETE FROM sources WHERE id = $1", source_id)
+    return source_id
 
 
 # ---------------------------------------------------------------------------

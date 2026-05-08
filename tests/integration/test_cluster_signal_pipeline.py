@@ -16,10 +16,11 @@ Tests:
 from __future__ import annotations
 
 import asyncio
-import os
+import hashlib
+import math
+import random
 import uuid
 from datetime import datetime, UTC
-from unittest.mock import AsyncMock
 
 import pytest
 import asyncpg
@@ -27,70 +28,56 @@ import asyncpg
 from anveshak.analyst.clustering import count_independent_sources, run_clustering
 from anveshak.analyst.signal_engine import check_signals, is_duplicate_signal
 
-POSTGRES_URL = os.environ.get("POSTGRES_URL", "postgresql://anveshak:change-me-in-production@localhost:5433/anveshak")
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Fixtures (using root conftest make_topic / make_source)
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-async def db_pool():
-    pool = await asyncpg.create_pool(POSTGRES_URL, min_size=1, max_size=3)
-    yield pool
-    await pool.close()
-
-
-@pytest.fixture
-async def topic_threshold_2(db_pool):
+async def topic_threshold_2(make_topic):
     """Topic with signal_threshold=2 to trigger signal on 2 platforms."""
-    topic_id = str(uuid.uuid4())
-    async with db_pool.acquire() as conn:
-        await conn.execute("""
-            INSERT INTO topics (id, name, keywords, signal_threshold, status,
-                                created_at, updated_at, labels)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        """,
-            topic_id, "Cluster Signal Test Topic", ["defence", "IAF"],
-            2, "active",
-            datetime.now(UTC), datetime.now(UTC),
-            '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}',
-        )
-    yield topic_id
-    async with db_pool.acquire() as conn:
-        await conn.execute(
-            "DELETE FROM signals WHERE topic_id=$1", topic_id
-        )
-        await conn.execute(
-            "DELETE FROM narrative_clusters WHERE topic_id=$1", topic_id
-        )
-        await conn.execute(
-            "DELETE FROM content_items WHERE topic_id=$1", topic_id
-        )
-        await conn.execute("DELETE FROM topics WHERE id=$1", topic_id)
+    return await make_topic(
+        name="Cluster Signal Test Topic",
+        keywords=["defence", "IAF"],
+        signal_threshold=2,
+    )
 
 
 @pytest.fixture
-async def sources_three_platforms(db_pool):
+async def sources_three_platforms(make_source):
     """Three sources from distinct platforms."""
     ids = {}
     platforms = {"telegram": "t.me/iaf_news", "reddit": "r/IndianDefence", "web": "https://indiandefence.com"}
     for platform, handle in platforms.items():
-        sid = str(uuid.uuid4())
-        async with db_pool.acquire() as conn:
-            await conn.execute("""
-                INSERT INTO sources (id, name, url_or_handle, platform, credibility_score,
-                                     created_at, updated_at, labels)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            """,
-                sid, f"Source {platform}", handle, platform, 70.0,
-                datetime.now(UTC), datetime.now(UTC),
-                '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}',
-            )
+        sid = await make_source(
+            name=f"Source {platform}",
+            url_or_handle=handle,
+            platform=platform,
+            credibility_score=70.0,
+        )
         ids[platform] = sid
-    yield ids
-    for sid in ids.values():
-        async with db_pool.acquire() as conn:
-            await conn.execute("DELETE FROM sources WHERE id=$1", sid)
+    return ids
+
+
+@pytest.fixture
+async def sources_four_platforms(make_source):
+    """Four sources from distinct platforms for production-load test."""
+    ids = {}
+    platforms = {
+        "telegram": "t.me/defence_news",
+        "reddit": "r/IndianMilitary",
+        "web": "https://defencenews.in",
+        "bluesky": "defence.bsky.social",
+    }
+    for platform, handle in platforms.items():
+        sid = await make_source(
+            name=f"Source {platform}",
+            url_or_handle=handle,
+            platform=platform,
+            credibility_score=70.0,
+        )
+        ids[platform] = sid
+    return ids
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +93,6 @@ async def insert_item_with_embedding(
     embedding: list[float],
 ) -> str:
     """Insert a content_item with a pre-computed embedding (bypasses NLP for speed)."""
-    import hashlib
     item_id = str(uuid.uuid4())
     content_hash = hashlib.sha256(text.lower().encode()).hexdigest()
     embedding_str = "[" + ",".join(f"{x:.8f}" for x in embedding) + "]"
@@ -129,7 +115,6 @@ async def insert_item_with_embedding(
 
 def _l2_normalize(vec: list[float]) -> list[float]:
     """L2-normalize a vector to unit length (matching sentence-transformers output)."""
-    import math
     norm = math.sqrt(sum(x * x for x in vec))
     if norm == 0:
         return vec
@@ -137,24 +122,14 @@ def _l2_normalize(vec: list[float]) -> list[float]:
 
 
 def _random_base(seed: int, dim: int = 384) -> list[float]:
-    """Generate a diverse, L2-normalized base vector (mimics sentence-transformers).
-
-    Unlike uniform [c]*384, real embeddings have varied per-dimension values,
-    which produces meaningful pairwise distance variation under perturbation.
-    """
-    import random as _rng
-    _rng.seed(seed)
+    """Generate a diverse, L2-normalized base vector (mimics sentence-transformers)."""
+    _rng = random.Random(seed)
     vec = [_rng.gauss(0, 1) for _ in range(dim)]
     return _l2_normalize(vec)
 
 
 def _similar_embedding(base: list[float], noise: float = 0.03) -> list[float]:
-    """Generate a perturbed, L2-normalized embedding that clusters together.
-
-    noise=0.03 produces cosine similarity ~0.88-0.95 between items,
-    matching realistic production spread for same-topic articles.
-    """
-    import random
+    """Generate a perturbed, L2-normalized embedding that clusters together."""
     perturbed = [x + random.uniform(-noise, noise) for x in base]
     return _l2_normalize(perturbed)
 
@@ -169,7 +144,6 @@ async def test_cluster_forms_from_multi_platform_items(
     db_pool, topic_threshold_2, sources_three_platforms
 ):
     """Criteria 2.26: 5+ items from 3 platforms → cluster forms."""
-    # Base embedding — diverse, L2-normalized like sentence-transformers output
     base = _random_base(seed=101)
 
     items_inserted = 0
@@ -225,11 +199,9 @@ async def test_independent_source_count_reflects_platforms(
 
     assert rows, "At least one cluster should exist"
     best = rows[0]
-    # 3 distinct platforms → independent_source_count should be 3
     assert best["independent_source_count"] == 3, (
         f"Expected 3 independent sources, got {best['independent_source_count']}"
     )
-    # item_count should be total items, not platform count
     assert best["item_count"] > best["independent_source_count"], (
         "item_count should exceed platform count (9 items vs 3 platforms)"
     )
@@ -324,13 +296,7 @@ async def test_no_duplicate_signal_within_24h(
 async def test_signal_delivery_loop_pushes_within_10s(
     db_pool, topic_threshold_2, sources_three_platforms
 ):
-    """Criteria 2.29: WebSocket delivery loop delivers a signal within 10 seconds.
-
-    Simulates the API's signal_delivery_loop running alongside the analyst's
-    signal_engine: after a cluster fires a signal (stored in DB with
-    delivered_at=NULL), the delivery loop detects it and calls broadcast within
-    the poll interval (≤5s) + processing overhead (≤5s) = ≤10s.
-    """
+    """Criteria 2.29: WebSocket delivery loop delivers a signal within 10 seconds."""
     from anveshak.api.signal_delivery import signal_delivery_loop
 
     base = _random_base(seed=505)
@@ -369,7 +335,6 @@ async def test_signal_delivery_loop_pushes_within_10s(
     loop_task = asyncio.create_task(signal_delivery_loop(db_pool, capture_broadcast))
 
     try:
-        # Wait up to 10 seconds for delivery (criterion 2.29)
         await asyncio.wait_for(
             _wait_for_delivery(delivered),
             timeout=10.0,
@@ -399,45 +364,12 @@ async def _wait_for_delivery(delivered: list, poll_interval: float = 0.1) -> Non
 # Scenario 2: Production load — 100 articles across 5 narratives
 # ---------------------------------------------------------------------------
 
-@pytest.fixture
-async def sources_four_platforms(db_pool):
-    """Four sources from distinct platforms for production-load test."""
-    ids = {}
-    platforms = {
-        "telegram": "t.me/defence_news",
-        "reddit": "r/IndianMilitary",
-        "web": "https://defencenews.in",
-        "bluesky": "defence.bsky.social",
-    }
-    for platform, handle in platforms.items():
-        sid = str(uuid.uuid4())
-        async with db_pool.acquire() as conn:
-            await conn.execute("""
-                INSERT INTO sources (id, name, url_or_handle, platform, credibility_score,
-                                     created_at, updated_at, labels)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            """,
-                sid, f"Source {platform}", handle, platform, 70.0,
-                datetime.now(UTC), datetime.now(UTC),
-                '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}',
-            )
-        ids[platform] = sid
-    yield ids
-    for sid in ids.values():
-        async with db_pool.acquire() as conn:
-            await conn.execute("DELETE FROM sources WHERE id=$1", sid)
-
-
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_production_load_100_articles_5_narratives(
     db_pool, topic_threshold_2, sources_four_platforms
 ):
-    """Scenario 2: 100 articles from 5 narratives across 4 platforms.
-
-    Each narrative has 20 articles (5 per platform). Leiden should form
-    5 distinct clusters with no narrative leakage.
-    """
+    """Scenario 2: 100 articles from 5 narratives across 4 platforms."""
     import time
 
     narrative_seeds = [1001, 1002, 1003, 1004, 1005]
@@ -448,7 +380,7 @@ async def test_production_load_100_articles_5_narratives(
         base = _random_base(seed=seed)
         for platform in platforms:
             source_id = sources_four_platforms[platform]
-            for i in range(5):  # 5 items per platform per narrative
+            for i in range(5):
                 emb = _similar_embedding(base)
                 await insert_item_with_embedding(
                     pool=db_pool,
@@ -466,13 +398,9 @@ async def test_production_load_100_articles_5_narratives(
     cluster_ids = await run_clustering(topic_threshold_2, db_pool)
     elapsed = time.monotonic() - start
 
-    # Should form exactly 5 clusters
     assert len(cluster_ids) == 5, f"Expected 5 clusters, got {len(cluster_ids)}"
-
-    # Performance: must complete in <2s
     assert elapsed < 2.0, f"Clustering took {elapsed:.2f}s, expected <2s"
 
-    # Verify ISC = 4 for each cluster (all 4 platforms represented)
     async with db_pool.acquire() as conn:
         rows = await conn.fetch("""
             SELECT independent_source_count, item_count
@@ -500,11 +428,7 @@ async def test_production_load_100_articles_5_narratives(
 async def test_incremental_arrival_new_batch(
     db_pool, topic_threshold_2, sources_three_platforms
 ):
-    """Scenario 5: existing clusters + new batch → correct assignment.
-
-    Phase 1: 10 articles → 1 cluster.
-    Phase 2: 4 new similar articles arrive → join existing cluster.
-    """
+    """Scenario 5: existing clusters + new batch → correct assignment."""
     base = _random_base(seed=5001)
 
     # Phase 1: insert 10 items, cluster
@@ -519,7 +443,6 @@ async def test_incremental_arrival_new_batch(
                 url=f"https://example.com/incr/p1/{platform}/{i}/{uuid.uuid4()}",
                 embedding=emb,
             )
-    # Add 1 more to reach 10
     emb = _similar_embedding(base)
     first_platform = list(sources_three_platforms.keys())[0]
     first_source = sources_three_platforms[first_platform]
@@ -549,7 +472,6 @@ async def test_incremental_arrival_new_batch(
 
     cluster_ids_p2 = await run_clustering(topic_threshold_2, db_pool)
 
-    # Phase 2 items should join existing cluster (incremental path)
     async with db_pool.acquire() as conn:
         rows = await conn.fetch("""
             SELECT item_count FROM narrative_clusters
