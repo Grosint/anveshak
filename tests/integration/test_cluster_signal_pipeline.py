@@ -127,10 +127,36 @@ async def insert_item_with_embedding(
     return item_id
 
 
-def _similar_embedding(base: list[float], noise: float = 0.02) -> list[float]:
-    """Generate a slightly perturbed embedding to ensure items cluster together."""
+def _l2_normalize(vec: list[float]) -> list[float]:
+    """L2-normalize a vector to unit length (matching sentence-transformers output)."""
+    import math
+    norm = math.sqrt(sum(x * x for x in vec))
+    if norm == 0:
+        return vec
+    return [x / norm for x in vec]
+
+
+def _random_base(seed: int, dim: int = 384) -> list[float]:
+    """Generate a diverse, L2-normalized base vector (mimics sentence-transformers).
+
+    Unlike uniform [c]*384, real embeddings have varied per-dimension values,
+    which produces meaningful pairwise distance variation under perturbation.
+    """
+    import random as _rng
+    _rng.seed(seed)
+    vec = [_rng.gauss(0, 1) for _ in range(dim)]
+    return _l2_normalize(vec)
+
+
+def _similar_embedding(base: list[float], noise: float = 0.03) -> list[float]:
+    """Generate a perturbed, L2-normalized embedding that clusters together.
+
+    noise=0.03 produces cosine similarity ~0.88-0.95 between items,
+    matching realistic production spread for same-topic articles.
+    """
     import random
-    return [x + random.uniform(-noise, noise) for x in base]
+    perturbed = [x + random.uniform(-noise, noise) for x in base]
+    return _l2_normalize(perturbed)
 
 
 # ---------------------------------------------------------------------------
@@ -143,8 +169,8 @@ async def test_cluster_forms_from_multi_platform_items(
     db_pool, topic_threshold_2, sources_three_platforms
 ):
     """Criteria 2.26: 5+ items from 3 platforms → cluster forms."""
-    # Base embedding — all items close in semantic space → single cluster
-    base = [0.1] * 384
+    # Base embedding — diverse, L2-normalized like sentence-transformers output
+    base = _random_base(seed=101)
 
     items_inserted = 0
     for platform, source_id in sources_three_platforms.items():
@@ -172,10 +198,10 @@ async def test_independent_source_count_reflects_platforms(
     db_pool, topic_threshold_2, sources_three_platforms
 ):
     """Criteria 2.27: independent_source_count = platform diversity, not item count."""
-    base = [0.2] * 384
+    base = _random_base(seed=202)
 
     for platform, source_id in sources_three_platforms.items():
-        for i in range(3):  # 3 items per platform = 9 items total
+        for i in range(5):  # 5 items per platform = 15 items total
             emb = _similar_embedding(base)
             await insert_item_with_embedding(
                 pool=db_pool,
@@ -215,7 +241,7 @@ async def test_signal_fires_when_threshold_met(
     db_pool, topic_threshold_2, sources_three_platforms
 ):
     """Criteria 2.28: threshold=2, 2+ platforms → signal fires."""
-    base = [0.3] * 384
+    base = _random_base(seed=303)
 
     # Insert items from 2 platforms only
     platform_list = list(sources_three_platforms.items())[:2]
@@ -254,7 +280,7 @@ async def test_no_duplicate_signal_within_24h(
     db_pool, topic_threshold_2, sources_three_platforms
 ):
     """Criteria 2.30: second clustering run does NOT create duplicate signal."""
-    base = [0.4] * 384
+    base = _random_base(seed=404)
 
     for platform, source_id in list(sources_three_platforms.items())[:2]:
         for i in range(2):
@@ -307,7 +333,7 @@ async def test_signal_delivery_loop_pushes_within_10s(
     """
     from anveshak.api.signal_delivery import signal_delivery_loop
 
-    base = [0.5] * 384
+    base = _random_base(seed=505)
 
     for platform, source_id in list(sources_three_platforms.items())[:2]:
         for i in range(2):
@@ -367,3 +393,168 @@ async def _wait_for_delivery(delivered: list, poll_interval: float = 0.1) -> Non
     """Poll until at least one signal has been delivered."""
     while not delivered:
         await asyncio.sleep(poll_interval)
+
+
+# ---------------------------------------------------------------------------
+# Scenario 2: Production load — 100 articles across 5 narratives
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+async def sources_four_platforms(db_pool):
+    """Four sources from distinct platforms for production-load test."""
+    ids = {}
+    platforms = {
+        "telegram": "t.me/defence_news",
+        "reddit": "r/IndianMilitary",
+        "web": "https://defencenews.in",
+        "bluesky": "defence.bsky.social",
+    }
+    for platform, handle in platforms.items():
+        sid = str(uuid.uuid4())
+        async with db_pool.acquire() as conn:
+            await conn.execute("""
+                INSERT INTO sources (id, name, url_or_handle, platform, credibility_score,
+                                     created_at, updated_at, labels)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            """,
+                sid, f"Source {platform}", handle, platform, 70.0,
+                datetime.now(UTC), datetime.now(UTC),
+                '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}',
+            )
+        ids[platform] = sid
+    yield ids
+    for sid in ids.values():
+        async with db_pool.acquire() as conn:
+            await conn.execute("DELETE FROM sources WHERE id=$1", sid)
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_production_load_100_articles_5_narratives(
+    db_pool, topic_threshold_2, sources_four_platforms
+):
+    """Scenario 2: 100 articles from 5 narratives across 4 platforms.
+
+    Each narrative has 20 articles (5 per platform). Leiden should form
+    5 distinct clusters with no narrative leakage.
+    """
+    import time
+
+    narrative_seeds = [1001, 1002, 1003, 1004, 1005]
+    platforms = list(sources_four_platforms.keys())
+    items_inserted = 0
+
+    for seed in narrative_seeds:
+        base = _random_base(seed=seed)
+        for platform in platforms:
+            source_id = sources_four_platforms[platform]
+            for i in range(5):  # 5 items per platform per narrative
+                emb = _similar_embedding(base)
+                await insert_item_with_embedding(
+                    pool=db_pool,
+                    topic_id=topic_threshold_2,
+                    source_id=source_id,
+                    text=f"Narrative {seed} {platform} article {i} {uuid.uuid4()}",
+                    url=f"https://example.com/prod/{seed}/{platform}/{i}/{uuid.uuid4()}",
+                    embedding=emb,
+                )
+                items_inserted += 1
+
+    assert items_inserted == 100
+
+    start = time.monotonic()
+    cluster_ids = await run_clustering(topic_threshold_2, db_pool)
+    elapsed = time.monotonic() - start
+
+    # Should form exactly 5 clusters
+    assert len(cluster_ids) == 5, f"Expected 5 clusters, got {len(cluster_ids)}"
+
+    # Performance: must complete in <2s
+    assert elapsed < 2.0, f"Clustering took {elapsed:.2f}s, expected <2s"
+
+    # Verify ISC = 4 for each cluster (all 4 platforms represented)
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT independent_source_count, item_count
+            FROM narrative_clusters
+            WHERE topic_id = $1
+            ORDER BY item_count DESC
+        """, topic_threshold_2)
+
+    assert len(rows) == 5
+    for row in rows:
+        assert row["independent_source_count"] == 4, (
+            f"Expected ISC=4, got {row['independent_source_count']}"
+        )
+        assert row["item_count"] == 20, (
+            f"Expected 20 items per cluster, got {row['item_count']}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Scenario 5: Incremental arrival
+# ---------------------------------------------------------------------------
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_incremental_arrival_new_batch(
+    db_pool, topic_threshold_2, sources_three_platforms
+):
+    """Scenario 5: existing clusters + new batch → correct assignment.
+
+    Phase 1: 10 articles → 1 cluster.
+    Phase 2: 4 new similar articles arrive → join existing cluster.
+    """
+    base = _random_base(seed=5001)
+
+    # Phase 1: insert 10 items, cluster
+    for platform, source_id in sources_three_platforms.items():
+        for i in range(3):
+            emb = _similar_embedding(base)
+            await insert_item_with_embedding(
+                pool=db_pool,
+                topic_id=topic_threshold_2,
+                source_id=source_id,
+                text=f"Phase1 {platform} {i} {uuid.uuid4()}",
+                url=f"https://example.com/incr/p1/{platform}/{i}/{uuid.uuid4()}",
+                embedding=emb,
+            )
+    # Add 1 more to reach 10
+    emb = _similar_embedding(base)
+    first_platform = list(sources_three_platforms.keys())[0]
+    first_source = sources_three_platforms[first_platform]
+    await insert_item_with_embedding(
+        pool=db_pool,
+        topic_id=topic_threshold_2,
+        source_id=first_source,
+        text=f"Phase1 extra {uuid.uuid4()}",
+        url=f"https://example.com/incr/p1/extra/{uuid.uuid4()}",
+        embedding=emb,
+    )
+
+    cluster_ids_p1 = await run_clustering(topic_threshold_2, db_pool)
+    assert len(cluster_ids_p1) >= 1, "Phase 1 should form at least 1 cluster"
+
+    # Phase 2: insert 4 more similar items
+    for i in range(4):
+        emb = _similar_embedding(base)
+        await insert_item_with_embedding(
+            pool=db_pool,
+            topic_id=topic_threshold_2,
+            source_id=first_source,
+            text=f"Phase2 new {i} {uuid.uuid4()}",
+            url=f"https://example.com/incr/p2/{i}/{uuid.uuid4()}",
+            embedding=emb,
+        )
+
+    cluster_ids_p2 = await run_clustering(topic_threshold_2, db_pool)
+
+    # Phase 2 items should join existing cluster (incremental path)
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT item_count FROM narrative_clusters
+            WHERE topic_id = $1
+        """, topic_threshold_2)
+
+    total_items = sum(r["item_count"] for r in rows)
+    assert total_items == 14, f"Expected 14 total items (10+4), got {total_items}"

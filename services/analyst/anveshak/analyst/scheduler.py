@@ -106,7 +106,7 @@ async def _noop_broadcast(payload: dict) -> None:
 # ---------------------------------------------------------------------------
 
 async def cluster_loop(pool: asyncpg.Pool, redis: object) -> None:
-    """Cluster content_items by topic using HDBSCAN (criteria 2.1-2.5).
+    """Cluster content_items by topic using Leiden community detection (criteria 2.1-2.5).
 
     After clustering, enqueues label generation and cross-verification
     to ARQ worker instead of calling Ollama inline.

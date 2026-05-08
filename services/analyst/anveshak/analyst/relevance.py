@@ -2,7 +2,7 @@
 
 Computes cosine similarity between a content item's embedding and the topic's
 query embedding (topic name + keywords). Items below the threshold are excluded
-from HDBSCAN but remain in the DB for auditability.
+from clustering but remain in the DB for auditability.
 
 Reuses the same pattern as backfill.py — encode topic keywords, dot-product
 against content embeddings. Both vectors are L2-normalized by encode_text(),

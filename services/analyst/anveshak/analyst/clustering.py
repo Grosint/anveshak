@@ -2,15 +2,21 @@
 
 Responsibilities:
   - Assign NEW items to existing cluster centroids (O(new × clusters))
-  - Run HDBSCAN only on truly unassigned items
-  - Full re-cluster when no existing clusters (fresh topics)
+  - Run Leiden community detection on truly unassigned items
+  - Full cluster when no existing clusters (fresh topics)
   - Compute embedding centroid per cluster
   - Count distinct platforms (independent_source_count)
   - Upsert rows into narrative_clusters table
 
+Algorithm:
+  Leiden community detection on a blended similarity graph.
+  Edges form between article pairs with blended similarity >= threshold.
+  Blended similarity = (1-w) * cosine_sim + w * entity_minhash_sim.
+  Leiden optimises modularity to find well-connected communities.
+
 Performance:
   - Current items per cycle: O(new_items × existing_clusters) — NOT O(N²)
-  - Full re-cluster fallback: O(N²) — only for fresh topics or staleness trigger
+  - Full cluster fallback: O(N²) — only for fresh topics or staleness trigger
 """
 from __future__ import annotations
 
@@ -19,9 +25,10 @@ from datetime import datetime, UTC
 from typing import NamedTuple
 
 import asyncpg
+import igraph as ig
+import leidenalg
 import numpy as np
 import structlog
-from hdbscan import HDBSCAN
 
 from .entity_minhash import minhash_similarity_matrix
 from .settings import settings
@@ -179,14 +186,33 @@ def _vec_to_pgvector(arr: np.ndarray) -> str:
     return "[" + ",".join(f"{x:.8f}" for x in arr.tolist()) + "]"
 
 
-def _effective_min_cluster_size(item_count: int) -> int:
-    """Adaptive min_cluster_size based on available items.
+def _compute_blended_similarity(rows: list[EmbeddingRow]) -> np.ndarray:
+    """Compute blended similarity matrix: (1-w)*cosine + w*entity_minhash.
 
-    - 50+ items → production default (3)
-    - 10-49 items → 2
-    - <10 items → 2 (minimum)
+    Embeddings are L2-normalised so cosine_similarity = dot(a, b).
+    Items without entity minhash fall back to cosine-only.
     """
-    return max(2, min(settings.hdbscan_min_cluster_size, item_count // 5))
+    matrix = np.vstack([r.vector for r in rows]).astype(np.float64)
+    cosine_sim = matrix @ matrix.T
+    np.clip(cosine_sim, -1.0, 1.0, out=cosine_sim)
+
+    w = settings.entity_blend_weight
+    minhash_list = [r.entity_minhash for r in rows]
+    minhash_count = sum(1 for m in minhash_list if m is not None)
+
+    if w > 0 and minhash_count >= 2:
+        entity_sim = minhash_similarity_matrix(minhash_list)
+        has_minhash = np.array([m is not None for m in minhash_list])
+        blend_mask = np.outer(has_minhash, has_minhash).astype(np.float64)
+        blended = np.where(
+            blend_mask > 0,
+            (1.0 - w) * cosine_sim + w * entity_sim,
+            cosine_sim,
+        )
+    else:
+        blended = cosine_sim
+
+    return blended
 
 
 # ---------------------------------------------------------------------------
@@ -280,65 +306,59 @@ def _parse_embedding_rows(rows: list) -> list[EmbeddingRow]:
 # Core functions
 # ---------------------------------------------------------------------------
 
-def run_hdbscan(rows: list[EmbeddingRow]) -> dict[int, list[int]]:
-    """Run HDBSCAN; return mapping of cluster_label → row indices.
+def find_narrative_clusters(rows: list[EmbeddingRow]) -> dict[int, list[int]]:
+    """Find narrative clusters using Leiden community detection.
 
-    Uses adaptive min_cluster_size based on item count.
-    Noise points (label == -1) are excluded (criteria 2.3).
+    Builds a similarity graph where edges connect article pairs with
+    blended similarity >= threshold, then runs Leiden to find communities.
+    Communities smaller than clustering_min_cluster_size are discarded.
+
+    Returns mapping of community_label → row indices.
     """
-    effective_min = _effective_min_cluster_size(len(rows))
-
-    if len(rows) < effective_min:
+    min_size = settings.clustering_min_cluster_size
+    if len(rows) < min_size:
         log.info(
             "clustering.insufficient_items",
             count=len(rows),
-            min_required=effective_min,
+            min_required=min_size,
         )
         return {}
 
-    matrix = np.vstack([r.vector for r in rows]).astype(np.float64)
-    # Precompute cosine distance matrix. Embeddings are L2-normalized so
-    # cosine_distance = 1 - dot(a, b). Using precomputed because hdbscan 0.8.x
-    # does not support metric="cosine" directly.
-    cosine_sim = matrix @ matrix.T
-    np.clip(cosine_sim, -1.0, 1.0, out=cosine_sim)
-    cosine_dist = 1.0 - cosine_sim
+    sim_matrix = _compute_blended_similarity(rows)
+    threshold = settings.clustering_similarity_threshold
 
-    # Blend entity MinHash similarity into distance matrix.
-    # Articles sharing entities (e.g., "AIIMS" + "Delhi") get pulled closer
-    # even if their embedding vectors are distant.
-    # Items with NULL minhash fall back to cosine-only (no penalty).
-    w = settings.entity_blend_weight
-    minhash_list = [r.entity_minhash for r in rows]
-    minhash_count = sum(1 for m in minhash_list if m is not None)
+    # Build igraph from similarity matrix: edges where sim >= threshold
+    n = len(rows)
+    edges = []
+    weights = []
+    for i in range(n):
+        for j in range(i + 1, n):
+            if sim_matrix[i, j] >= threshold:
+                edges.append((i, j))
+                weights.append(float(sim_matrix[i, j]))
 
-    if w > 0 and minhash_count >= 2:
-        entity_sim = minhash_similarity_matrix(minhash_list)
-        entity_dist = 1.0 - entity_sim
-        # Only blend where BOTH items have minhash; otherwise use cosine-only
-        has_minhash = np.array([m is not None for m in minhash_list])
-        blend_mask = np.outer(has_minhash, has_minhash).astype(np.float64)
-        # Where both have minhash: blend. Where either is NULL: cosine-only.
-        distance_matrix = np.where(
-            blend_mask > 0,
-            (1.0 - w) * cosine_dist + w * entity_dist,
-            cosine_dist,
+    if not edges:
+        log.info(
+            "clustering.no_edges_above_threshold",
+            item_count=n,
+            threshold=threshold,
         )
-    else:
-        distance_matrix = cosine_dist
+        return {}
 
-    clusterer = HDBSCAN(
-        min_cluster_size=effective_min,
-        min_samples=settings.hdbscan_min_samples,
-        metric="precomputed",
+    graph = ig.Graph(n=n, edges=edges, directed=False)
+    graph.es["weight"] = weights
+
+    # Leiden community detection optimising modularity
+    partition = leidenalg.find_partition(
+        graph,
+        leidenalg.ModularityVertexPartition,
+        weights="weight",
     )
-    labels = clusterer.fit_predict(distance_matrix)
 
     groups: dict[int, list[int]] = {}
-    for idx, label in enumerate(labels):
-        if label == -1:
-            continue  # noise — not a cluster
-        groups.setdefault(label, []).append(idx)
+    for label, members in enumerate(partition):
+        if len(members) >= min_size:
+            groups[label] = list(members)
 
     return groups
 
@@ -396,7 +416,7 @@ def build_cluster_data(
     rows: list[EmbeddingRow],
     indices: list[int],
 ) -> ClusterData:
-    """Assemble ClusterData from HDBSCAN row indices."""
+    """Assemble ClusterData from community row indices."""
     content_item_ids = [rows[i].content_item_id for i in indices]
     platforms = [rows[i].platform for i in indices]
     vectors = [rows[i].vector for i in indices]
@@ -533,8 +553,8 @@ async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
     Flow:
       1. Load unclustered items only (narrative_cluster_id IS NULL)
       2. If existing clusters exist → try assigning to nearest centroid
-      3. Run HDBSCAN only on truly unassigned items
-      4. If no existing clusters → full HDBSCAN on all unclustered items
+      3. Run Leiden only on truly unassigned items
+      4. If no existing clusters → full Leiden on all unclustered items
       5. Returns list of cluster_ids created or updated
 
     Criteria 2.1–2.5, 2.9.
@@ -582,11 +602,11 @@ async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
                 unassigned_items=len(unassigned),
             )
 
-        # Run HDBSCAN only on items that didn't match any centroid
+        # Run Leiden only on items that didn't match any centroid
         if unassigned:
-            effective_min = _effective_min_cluster_size(len(unassigned))
-            if len(unassigned) >= effective_min:
-                new_cluster_ids = await _hdbscan_and_persist(
+            min_size = settings.clustering_min_cluster_size
+            if len(unassigned) >= min_size:
+                new_cluster_ids = await _leiden_and_persist(
                     topic_id, pool, unassigned,
                 )
                 cluster_ids.extend(new_cluster_ids)
@@ -595,11 +615,11 @@ async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
                     "clustering.unassigned_below_threshold",
                     topic_id=topic_id,
                     unassigned=len(unassigned),
-                    min_required=effective_min,
+                    min_required=min_size,
                 )
     else:
-        # --- Fresh topic: full HDBSCAN on all unclustered items ---
-        new_cluster_ids = await _hdbscan_and_persist(
+        # --- Fresh topic: full Leiden on all unclustered items ---
+        new_cluster_ids = await _leiden_and_persist(
             topic_id, pool, new_rows,
         )
         cluster_ids.extend(new_cluster_ids)
@@ -614,13 +634,13 @@ async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
     return cluster_ids
 
 
-async def _hdbscan_and_persist(
+async def _leiden_and_persist(
     topic_id: str,
     pool: asyncpg.Pool,
     rows: list[EmbeddingRow],
 ) -> list[str]:
-    """Run HDBSCAN on a set of items and persist the resulting clusters."""
-    groups = run_hdbscan(rows)
+    """Run Leiden community detection on items and persist resulting clusters."""
+    groups = find_narrative_clusters(rows)
     if not groups:
         log.info("clustering.no_clusters_formed", topic_id=topic_id, item_count=len(rows))
         return []
@@ -636,13 +656,13 @@ async def _hdbscan_and_persist(
         duplicate_ids = await get_duplicate_ids_for_cluster(all_item_ids, conn)
 
         async with conn.transaction():
-            for hdbscan_label, indices in groups.items():
+            for community_label, indices in groups.items():
                 cluster_data = build_cluster_data(rows, indices)
                 cluster_id = str(uuid.uuid5(
                     uuid.NAMESPACE_URL,
-                    f"{topic_id}:{hdbscan_label}",
+                    f"{topic_id}:{community_label}",
                 ))
-                fallback_label = f"Cluster {existing_count + hdbscan_label + 1}"
+                fallback_label = f"Cluster {existing_count + community_label + 1}"
 
                 await upsert_cluster(
                     conn=conn,

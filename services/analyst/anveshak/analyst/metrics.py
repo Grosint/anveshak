@@ -27,7 +27,7 @@ analyst_nlp_duration_seconds = Histogram(
 # 8A.7 — clusters created per topic
 analyst_clusters_created_total = Counter(
     "analyst_clusters_created_total",
-    "Narrative clusters created by HDBSCAN",
+    "Narrative clusters created by Leiden community detection",
     ["topic_id"],
     registry=REGISTRY,
 )

@@ -2,7 +2,7 @@
 
 Computes a MinHash signature from extracted entity texts at ingestion time.
 At clustering time, MinHash similarity between items is blended into the
-distance matrix to help HDBSCAN cluster articles that share entities but
+similarity matrix to help Leiden cluster articles that share entities but
 have distant embeddings (e.g., a dark web post and a CERT-In advisory
 both mentioning "AIIMS" + "Delhi").
 

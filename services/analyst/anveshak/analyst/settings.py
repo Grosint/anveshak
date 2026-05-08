@@ -29,9 +29,9 @@ class AnalystSettings(BaseSettings):
     ollama_model: str = "qwen2:7b"
     llm_max_tokens: int = 512
 
-    # Clustering
-    hdbscan_min_cluster_size: int = 3
-    hdbscan_min_samples: int = 2
+    # Clustering — Leiden community detection on blended similarity graph
+    clustering_similarity_threshold: float = 0.75  # min blended similarity to form an edge in the graph
+    clustering_min_cluster_size: int = 2            # communities smaller than this are discarded
     clustering_window_days: int = 30      # only cluster content from last N days (0 = no filter)
     cluster_archive_after_days: int = 90  # archive clusters older than N days
     cluster_assign_threshold: float = 0.75  # cosine sim to assign new item to existing cluster

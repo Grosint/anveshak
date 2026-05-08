@@ -222,7 +222,7 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 async def run_clustering(ctx: dict, topic_id: str) -> None:
-    """HDBSCAN clustering for a topic (criteria 2.1–2.5).
+    """Leiden clustering for a topic (criteria 2.1–2.5).
 
     Creates/updates narrative_clusters rows and enqueues label generation
     for each cluster formed. Also enqueues cross-verification boost (7.1)
