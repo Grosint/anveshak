@@ -5,7 +5,7 @@ Marked @pytest.mark.resilience — runs nightly only, not in CI.
 """
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -30,7 +30,7 @@ async def test_report_generation_fails_gracefully_on_ollama_timeout():
         mock_client_cls.return_value = mock_client
 
         with pytest.raises((httpx.ConnectError, Exception)):
-            await call_ollama("test prompt", "qwen2:7b")
+            await call_ollama("test prompt", "qwen2:7b", "http://localhost:11434", 30)
 
 
 async def test_report_generation_fails_gracefully_on_malformed_json():
@@ -45,12 +45,12 @@ async def test_report_generation_fails_gracefully_on_malformed_json():
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
         # Ollama returns non-JSON response
-        mock_resp = AsyncMock()
+        mock_resp = MagicMock()
         mock_resp.json.return_value = {"response": "not valid json {{{"}
-        mock_resp.raise_for_status = AsyncMock()
+        mock_resp.raise_for_status = MagicMock()
         mock_client.post.return_value = mock_resp
         mock_client_cls.return_value = mock_client
 
-        result = await call_ollama("test prompt", "qwen2:7b")
+        result = await call_ollama("test prompt", "qwen2:7b", "http://localhost:11434", 30)
         # Should return the raw string, not crash
         assert isinstance(result, str)

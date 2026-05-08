@@ -47,11 +47,12 @@ def _http(method: str, url: str, data: bytes | None = None, headers: dict | None
 @pytest.fixture(scope="session")
 def api_token() -> str:
     """Obtain a JWT for the demo analyst account."""
-    data = urllib.parse.urlencode({
+    data = json.dumps({
         "username": DEMO_EMAIL,
         "password": DEMO_PASSWORD,
     }).encode()
-    status, body = _http("POST", f"{API_BASE}/api/v1/auth/login", data=data)
+    status, body = _http("POST", f"{API_BASE}/api/v1/auth/login", data=data,
+                         headers={"Content-Type": "application/json"})
     if status != 200 or not body.get("access_token"):
         pytest.skip(f"Demo login failed (HTTP {status}) — is `make up seed-demo` done?")
     return body["access_token"]
