@@ -12,3 +12,17 @@ paths:
 - Immutable dataclasses for DTOs where appropriate
 - Module-level constants for SQL queries (testability — same pattern as Drishti)
 - No bare except: clauses
+
+# Silent Failure Prevention
+
+Every conditional feature (feature flag, env toggle, optional dependency) MUST log
+at INFO level when disabled or operating in degraded mode. Silent defaults are the
+#1 source of "works on my machine" bugs in this project.
+
+- Feature toggled off → `log.info("feature.disabled", feature="X", reason="env var not set")`
+- Optional model missing → `log.warning("model.not_loaded", model="X")`, never return 0.0 silently
+- Env var missing from compose → feature silently defaults to false with no trace
+- Volume-mounted model dir empty → inference returns zero scores with no error
+
+When in doubt: log it. An analyst debugging a missing signal at 2am needs to see
+WHY a feature is off, not just that it produced no output.

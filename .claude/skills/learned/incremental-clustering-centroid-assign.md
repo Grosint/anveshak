@@ -6,15 +6,15 @@
 
 ## Problem
 
-Re-running HDBSCAN from scratch every cycle on ALL items is O(N²) per topic. At 500 items that's 250K distance computations. At 5000 items it's 25M. Cluster IDs change on every re-run (HDBSCAN label assignment is non-deterministic), orphaning signals that reference old cluster_ids.
+Re-running full clustering from scratch every cycle on ALL items is O(N²) per topic. At 500 items that's 250K distance computations. At 5000 items it's 25M.
 
 ## Solution
 
 1. Load only **unclustered** items (`narrative_cluster_id IS NULL`)
 2. Compare each new item against **existing cluster centroids** (cosine similarity)
 3. If similarity ≥ threshold (0.75) → assign to that cluster, update centroid + ISC
-4. Only items that DON'T match any centroid go through HDBSCAN
-5. Fresh topics (no existing clusters) fall back to full HDBSCAN
+4. Only items that DON'T match any centroid go through Leiden community detection
+5. Fresh topics (no existing clusters) fall back to full Leiden
 
 ## Key Code
 
@@ -30,9 +30,9 @@ for row in new_rows:
     else:
         unassigned.append(row)
 
-# HDBSCAN only on truly unassigned
+# Leiden only on truly unassigned
 if len(unassigned) >= min_cluster_size:
-    run_hdbscan(unassigned)
+    find_narrative_clusters(unassigned)
 ```
 
 ## Performance

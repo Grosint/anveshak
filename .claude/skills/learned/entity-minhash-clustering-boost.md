@@ -13,7 +13,7 @@ A dark web post about "AIIMS data dump" and a CERT-In advisory about "AIIMS cybe
 Compute a MinHash fingerprint from extracted entities at ingestion time. At clustering time, blend entity similarity into the distance matrix:
 
 ```python
-blended = (1 - weight) * cosine_dist + weight * (1 - entity_jaccard_sim)
+blended_sim = (1 - weight) * cosine_sim + weight * entity_jaccard_sim
 ```
 
 Default weight: 0.3 (70% embedding, 30% entity).
@@ -61,6 +61,6 @@ Entity MinHash is the correct approach because it's computed once from NER outpu
 ## Files
 
 - `services/analyst/anveshak/analyst/entity_minhash.py` — `compute_entity_minhash()`, `minhash_similarity_matrix()`
-- `services/analyst/anveshak/analyst/clustering.py` — blending logic in `run_hdbscan()`
+- `services/analyst/anveshak/analyst/clustering.py` — blending logic in `_compute_blended_similarity()`
 - `services/analyst/anveshak/analyst/jobs.py` — compute + store after NER
 - `services/api/migrations/versions/010_entity_minhash.py` — BIGINT[] column
