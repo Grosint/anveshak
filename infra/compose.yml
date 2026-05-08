@@ -328,8 +328,6 @@ services:
     environment:
       <<: *common-env
       SPACY_EN_MODEL: ${SPACY_EN_MODEL:-en_core_web_md}
-      SPACY_RU_MODEL: ${SPACY_RU_MODEL:-ru_core_news_md}
-      SPACY_ZH_MODEL: ${SPACY_ZH_MODEL:-zh_core_web_md}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2:7b}
       TRANSLATION_ENABLED: ${TRANSLATION_ENABLED:-true}
       TRANSLATION_MODEL: ${TRANSLATION_MODEL:-facebook/nllb-200-distilled-600M}
@@ -432,6 +430,20 @@ services:
   # Vision (M4: YOLO, CLIP, deepfake, EXIF, pHash)
   # ---------------------------------------------------------------------------
 
+  # Vision model init — downloads YOLO, CLIP, facetorch, efficientnet to shared volume.
+  # Runs once on first deploy, idempotent on restarts.
+  vision-init:
+    image: anveshak-vision:latest
+    command: ["python", "-m", "anveshak.vision.download_models"]
+    environment:
+      <<: *vision-env
+      HF_HOME: /app/models
+    volumes:
+      - vision_models:/app/models
+    restart: "no"
+    networks:
+      - anveshak-net
+
   vision:
     image: anveshak-vision:latest
     build:
@@ -442,12 +454,15 @@ services:
     environment:
       <<: *vision-env
       PORT: 8003
+      HF_HOME: /app/models
     volumes:
       - vision_models:/app/models
       - vision_media:/app/media
     ports:
       - "8003:8003"
     depends_on:
+      vision-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -469,10 +484,13 @@ services:
     mem_limit: 6g
     environment:
       <<: *vision-env
+      HF_HOME: /app/models
     volumes:
       - vision_models:/app/models
       - vision_media:/app/media
     depends_on:
+      vision-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:

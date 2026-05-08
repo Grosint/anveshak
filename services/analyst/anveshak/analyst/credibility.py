@@ -125,10 +125,10 @@ def clamp_score(score: float) -> float:
 def compute_new_score(old_score: float, deepfake_count: int) -> float:
     """Compute reduced credibility score based on deepfake amplification count.
 
-    Drop = min_auto_drop * deepfake_count, clamped to [0, 100].
+    Drop = credibility_deepfake_drop * deepfake_count, clamped to [0, 100].
     Pure function — unit-testable without DB.
     """
-    drop = settings.credibility_min_auto_drop * deepfake_count
+    drop = settings.credibility_deepfake_drop * deepfake_count
     return clamp_score(old_score - drop)
 
 

@@ -56,13 +56,13 @@ async def _insert_source(conn, source_id: str, name: str, score: float) -> None:
     """, source_id, name, f"https://{source_id}.example.com", score, LABELS_JSON)
 
 
-async def _insert_cluster(conn, cluster_id: str, topic_id: str, isc: int) -> None:
+async def _insert_cluster(conn, cluster_id: str, topic_id: str, isc: int, item_count: int = 5) -> None:
     await conn.execute("""
         INSERT INTO narrative_clusters
             (id, topic_id, label, item_count, independent_source_count, created_at, updated_at, labels)
-        VALUES ($1, $2, 'Test Cluster', 3, $3, NOW(), NOW(), $4::jsonb)
+        VALUES ($1, $2, 'Test Cluster', $3, $4, NOW(), NOW(), $5::jsonb)
         ON CONFLICT (id) DO NOTHING
-    """, cluster_id, topic_id, isc, LABELS_JSON)
+    """, cluster_id, topic_id, item_count, isc, LABELS_JSON)
 
 
 async def _insert_content_item(
@@ -366,6 +366,16 @@ async def test_list_topic_sources_returns_contributing_sources(pool):
         await _insert_topic(conn, topic_id)
         await _insert_source(conn, contributing_source_id, "Contributing", 60.0)
         await _insert_source(conn, non_contributing_source_id, "Non-Contributing", 60.0)
+        # Link both sources to the topic via topic_sources join table
+        await conn.execute(
+            "INSERT INTO topic_sources (topic_id, source_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            topic_id, contributing_source_id,
+        )
+        await conn.execute(
+            "INSERT INTO topic_sources (topic_id, source_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            topic_id, non_contributing_source_id,
+        )
+        # Only the contributing source has content items
         await _insert_content_item(conn, item_id, topic_id, contributing_source_id)
 
     from anveshak.api.db.sources import list_topic_sources
@@ -374,8 +384,10 @@ async def test_list_topic_sources_returns_contributing_sources(pool):
 
     result_ids = [r["id"] for r in results]
     assert contributing_source_id in result_ids
-    assert non_contributing_source_id not in result_ids
+    assert non_contributing_source_id in result_ids  # linked but no content yet
 
-    # item_count must be present and correct
+    # item_count distinguishes contributing from non-contributing
     contributing_row = next(r for r in results if r["id"] == contributing_source_id)
+    non_contributing_row = next(r for r in results if r["id"] == non_contributing_source_id)
     assert contributing_row["item_count"] >= 1
+    assert non_contributing_row["item_count"] == 0

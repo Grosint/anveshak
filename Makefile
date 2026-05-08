@@ -85,7 +85,7 @@ _WARN  := $(_YEL)!$(_RST)
 _INFO  := $(_BLU)→$(_RST)
 _WORK  := $(_CYN)⟳$(_RST)
 
-.PHONY: all setup up up-vision up-bridge build build-vision down restart \
+.PHONY: all setup up up-vision up-bridge build build-nocache build-vision down restart \
         ps logs init pull-models download-models migrate migrate-status migrate-hnsw \
         migrate-rollback seed-demo \
         fresh fresh-all \
@@ -219,6 +219,12 @@ build:
 	@$(COMPOSE) build
 	$(call success,All images built)
 
+build-nocache:
+	$(call header,Building Docker Images (no cache))
+	$(call check_env)
+	@$(COMPOSE) build --no-cache
+	$(call success,All images built (no cache))
+
 build-vision:
 	$(call header,Building Docker Images (+ Vision))
 	$(call check_env)
@@ -290,13 +296,9 @@ pull-models:
 	$(call success,Model ready)
 
 download-models:
-	$(call header,Downloading Deepfake ONNX Models)
-	@$(COMPOSE) cp scripts/download_models.py vision:/tmp/download_models.py
-	@$(COMPOSE) exec -T -u root vision pip install -q onnxscript 2>/dev/null || true
-	@$(COMPOSE) exec -T -u root vision python /tmp/download_models.py --model-dir /app/models
-	@$(COMPOSE) exec -T -u root vision chown -R anveshak:anveshak /app/models/
-	@$(COMPOSE) restart vision-worker
-	$(call success,Deepfake models ready — vision worker restarted)
+	$(call header,Downloading Vision Models (YOLO + CLIP + Deepfake ONNX))
+	@$(COMPOSE) run --rm vision-init
+	$(call success,All vision models ready)
 
 # Pull upgraded models when hardware is available (see hardware.md)
 pull-models-gpu:
@@ -344,7 +346,7 @@ seed-demo:
 # Fresh start shortcuts
 # ---------------------------------------------------------------------------
 
-fresh: clean-containers build up migrate download-models validate
+fresh: clean-containers build-nocache up migrate download-models validate
 	$(call success,Fresh rebuild complete)
 
 fresh-all:
@@ -393,8 +395,20 @@ test-unit:
 test-integration:
 	$(call header,Integration Tests)
 	$(call info,Requires running stack — run make up first)
-	@$(UV) pytest tests/integration/ -v --tb=short -q -m integration \
-		--cov=services --cov=sdk --cov-report=term:skip-covered
+	@_fail=0; \
+	printf "\n  $(_INFO) Step 1/4: Host-side DB tests\n"; \
+	$(UV) pytest tests/integration/ -v --tb=short -q -m integration \
+		--cov=services --cov=sdk --cov-report=term:skip-covered || _fail=1; \
+	printf "\n  $(_INFO) Step 2/4: Analyst model tests (inside analyst-worker)\n"; \
+	$(COMPOSE) cp scripts/test_analyst_models.py analyst-worker:/tmp/test_analyst_models.py; \
+	$(COMPOSE) exec -T analyst-worker python /tmp/test_analyst_models.py || _fail=1; \
+	printf "\n  $(_INFO) Step 3/4: Vision model tests (inside vision-worker)\n"; \
+	$(COMPOSE) cp scripts/test_vision_models.py vision-worker:/tmp/test_vision_models.py; \
+	$(COMPOSE) exec -T vision-worker python /tmp/test_vision_models.py || _fail=1; \
+	printf "\n  $(_INFO) Step 4/4: Ollama LLM tests (inside reporter-worker)\n"; \
+	$(COMPOSE) cp scripts/test_ollama_models.py reporter-worker:/tmp/test_ollama_models.py; \
+	$(COMPOSE) exec -T reporter-worker python /tmp/test_ollama_models.py || _fail=1; \
+	exit $$_fail
 
 test-contract:
 	$(call header,Contract Tests)

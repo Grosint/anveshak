@@ -18,7 +18,7 @@ from .credibility import run_credibility_update, run_cross_verification_update, 
 from .embeddings import encode_text, load_encoder
 from .labeller import generate_label_for_cluster
 from .metrics import analyst_nlp_jobs_total, analyst_nlp_duration_seconds, analyst_clusters_created_total, analyst_relevance_score, arq_jobs_failed_total
-from .nlp import detect_language, load_models, parse_entities
+from .nlp import detect_language, is_model_loaded, load_models, parse_entities
 from .settings import settings
 from .keywords import extract_keywords
 from .sentiment import analyse_sentiment
@@ -142,7 +142,16 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
         # --- Step 3: NER on work_text (English after translation) (criteria 1.14) ---
         # Always use English model when work_text is the translated version.
         nlp_lang = "en" if translated_text else lang
-        entities = parse_entities(work_text, nlp_lang)
+        if is_model_loaded(nlp_lang):
+            entities = parse_entities(work_text, nlp_lang)
+        else:
+            log.error(
+                "analyst.ner_unavailable",
+                lang=nlp_lang,
+                content_item_id=content_item_id,
+                hint=f"spaCy model for '{nlp_lang}' not loaded — NER skipped",
+            )
+            entities = []
 
         # --- Step 4: Embedding on work_text (English semantic space) (criteria 1.15) ---
         embedding = encode_text(work_text)

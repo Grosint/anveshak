@@ -7,9 +7,8 @@ class AnalystSettings(BaseSettings):
     ollama_host: str = "http://ollama:11434"
 
     # NLP — hardware-controlled, see hardware.md
+    # English-only NER. Non-English content is translated to English by NLLB first.
     spacy_en_model: str = "en_core_web_md"
-    spacy_ru_model: str = "ru_core_news_md"
-    spacy_zh_model: str = "zh_core_web_md"
 
     # Translation — hardware-controlled, see hardware.md
     # NLLB-200 translates non-English articles to English before NLP/embedding.
@@ -43,7 +42,8 @@ class AnalystSettings(BaseSettings):
 
     # Credibility auto-update (deepfake drop — 7.3, 7.4)
     credibility_update_interval_s: int = 86400  # 24h
-    credibility_min_auto_drop: float = 10.0     # minimum drop delta to write audit log
+    credibility_deepfake_drop: float = 1.0      # pts subtracted per high-risk deepfake item
+    credibility_min_auto_drop: float = 1.0      # minimum drop delta to write audit log (noise filter)
 
     # Cross-verification boost (7.1) — hardware-controlled, see hardware.md
     credibility_high_threshold: float = 60.0    # min score for a source to be "high credibility"

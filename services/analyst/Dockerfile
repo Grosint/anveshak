@@ -3,8 +3,9 @@
 # Build context: project root (../../ from compose.yml)
 #
 # Multi-stage build: builder (compile C extensions) → runtime (slim final image).
-# ML models (NLLB, spaCy, sentence-transformers) are downloaded at first startup
-# into the analyst_models volume — NOT baked into the image.
+# spaCy NLP models are baked into the image at build time.
+# Large ML models (NLLB, sentence-transformers) are downloaded at first startup
+# into the analyst_models volume via analyst-init container.
 
 # ===== Stage 1: builder — compile C extensions, install wheels =====
 FROM python:3.12-slim AS builder
@@ -28,6 +29,12 @@ WORKDIR /workspace/services/analyst
 COPY services/analyst/pyproject.toml .
 COPY services/analyst/anveshak/ anveshak/
 RUN uv pip install --system .
+
+# spaCy NLP models — installed at build time into site-packages.
+# Model names are configurable via env vars at runtime (settings.py),
+# but defaults are baked in here. See hardware.md for upgrade path.
+ARG SPACY_EN_MODEL=en_core_web_md
+RUN python -m spacy download ${SPACY_EN_MODEL}
 
 # ===== Stage 2: runtime — no gcc/g++, no build artifacts =====
 FROM python:3.12-slim AS runtime

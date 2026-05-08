@@ -252,7 +252,7 @@ async def get_vision_for_content(
             "media_asset_id": r["media_asset_id"],
             "yolo_detections": r["yolo_detections"],
             "clip_labels": r["clip_labels"],
-            "deepfake_score": r["deepfake_score"],           # float 0.0–1.0 always
+            "deepfake_score": r["deepfake_score"],           # float 0.0–1.0 or null (analysis failed)
             "deepfake_model": r["deepfake_model"],
             "synthetic_probability": r["synthetic_probability"],
             "processed_at": r["processed_at"],

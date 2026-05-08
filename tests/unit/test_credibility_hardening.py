@@ -43,9 +43,9 @@ def test_compute_new_score_floored():
 
 
 def test_compute_new_score_normal_drop():
-    """Standard drop: 50.0 - (10.0 * 1) = 40.0."""
+    """Standard drop: 50.0 - (credibility_deepfake_drop * 1) = 49.0."""
     result = compute_new_score(50.0, deepfake_count=1)
-    assert result == 40.0
+    assert result == 49.0
 
 
 def test_compute_new_score_ceiling_not_exceeded():
