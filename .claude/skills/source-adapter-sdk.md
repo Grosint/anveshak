@@ -27,6 +27,9 @@
 > See also: `learned/docker-exec-integration-test.md` — host→docker cp→docker exec→JSON stdout pattern for testing real code paths in containers
 > See also: `learned/container-integration-test-orchestration.md` — single make test-integration runs host DB tests + container model tests
 > See also: `learned/httpx-socks-optional-extra.md` — httpx[socks] required for Tor SOCKS5; unit tests don't catch missing optional extras
+> See also: `learned/test-db-same-container-isolation.md` — anveshak_test DB in same container; pool-based tests can't use transaction rollback
+> See also: `learned/fk-cascade-teardown-order.md` — full 13-table delete order for topic/source teardown; circular FK trap with narrative_clusters
+> See also: `learned/pytest-exit-safety-guard.md` — pytest.exit() to hard-block tests from running against production DB
 
 ---
 
