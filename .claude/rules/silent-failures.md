@@ -37,3 +37,11 @@ Consolidated from 7 learned instincts. Silent failures are the #1 source of prod
 - Volume-mounted models start empty on first deploy — add health checks
   Empty volume = silent 0.0 scores with no error
   See: `learned/volume-mounted-models-silent-failure.md`
+
+## Git & Build
+
+- Blanket `.gitignore` patterns (`models/`, `media/`) silently exclude Python packages
+  with the same directory name — fresh clones break with `ImportError`, but developer
+  machines work fine (files exist in working tree). Always use negation rules for
+  Python packages: `!sdk/anveshak/models/`
+  See: `learned/gitignore-blanket-pattern-collision.md`
