@@ -14,10 +14,6 @@ dependencies = [
 ]
 
 [tool.hatch.build]
-# Root .gitignore excludes models/ and media/ (ML weight dirs) which
-# also matches our Python packages anveshak/models/ and anveshak/media/.
-# Override so hatchling includes them in the wheel.
-ignore-vcs = true
 include = ["anveshak/"]
 exclude = ["anveshak/__pycache__/"]
 

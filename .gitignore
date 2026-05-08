@@ -137,8 +137,9 @@ storybook-static/
 *.pb
 *.tflite
 
-# Model dirs
+# Model dirs — block everywhere (safety net for ML weights)
 models/
+!sdk/anveshak/models/
 weights/
 checkpoints/
 .ollama/
@@ -160,6 +161,7 @@ data/
 scraped/
 raw/
 media/
+!sdk/anveshak/media/
 exports/
 intel/
 corpus/

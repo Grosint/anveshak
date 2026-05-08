@@ -45,6 +45,8 @@ infra/compose*.yml
 
 # Models (downloaded at runtime, not baked in)
 models/
+!sdk/anveshak/models/
 
 # Media (volume-mounted)
 media/
+!sdk/anveshak/media/
