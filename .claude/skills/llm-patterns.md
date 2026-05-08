@@ -22,6 +22,9 @@
 > See also: `learned/hdbscan-cosine-precomputed.md` — HDBSCAN 0.8.x needs precomputed float64 matrix; metric="cosine" not supported
 > See also: `learned/benchmark-arq-dedup-flush.md` — flush arq:job:* Redis keys before benchmark re-runs; production uses unique UUIDs
 > See also: `learned/quality-gate-unicode-ranges.md` — word regex must cover Devanagari \u0900-\u097f; silent failure drops Hindi content
+> See also: `learned/deepfake-none-error-signal.md` — return None on detection failure instead of default 0.0 score
+> See also: `learned/spacy-pip-models-bake-in-image.md` — spaCy models are pip packages; bake into image, not volume
+> See also: `learned/credibility-settings-separation.md` — separate penalty magnitude from noise filter threshold
 
 ---
 
