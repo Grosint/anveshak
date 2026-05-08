@@ -55,7 +55,7 @@ Anveshak (Sanskrit: investigator, seeker) is a standalone, sovereign AI-OSINT an
    │  analyst-    │   │  vision    │       │   reporter     │
    │  scheduler   │   │            │       │   + worker     │
    │  (512 MB)    │   │ YOLOv8    │       │ RAG + Ollama   │
-   │ HDBSCAN      │   │ deepfake  │       │ PDF export     │
+   │ Leiden clust │   │ deepfake  │       │ PDF export     │
    │ signals      │   │ CLIP      │       │ GeoJSON        │
    │ convergence  │   │ EXIF/pHash│       │ scheduled cron │
    │ orphan sweep │   └────────────┘       └───────┬────────┘
@@ -302,7 +302,7 @@ Anveshak runs as **19 containers** (+ 1 optional) on a single Docker network (`a
 
 Runs four concurrent async loops:
 
-1. **Clustering Loop** (every 5 min) — runs near-duplicate detection, then **incremental clustering** per topic. New items are assigned to nearest existing cluster centroid (cosine similarity ≥ 0.75); only truly unassigned items go through HDBSCAN. Distance matrix blends 70% cosine distance + 30% entity MinHash similarity — articles sharing named entities cluster together even with distant embeddings. Adaptive `min_cluster_size` (2 for small topics, 3 for large). Creates/updates `narrative_clusters` with item counts and source diversity metrics. Excludes near-duplicate items from `independent_source_count` to prevent false signals. Archives stale clusters older than `cluster_archive_after_days`. After clustering, **enqueues** `generate_cluster_label` and `run_cross_verification` to the analyst-worker via ARQ (never calls Ollama directly). Label staleness tracked via `label_item_hash` — re-enqueues label generation when cluster composition changes by >30%.
+1. **Clustering Loop** (every 5 min) — runs near-duplicate detection, then **incremental clustering** per topic. New items are assigned to nearest existing cluster centroid (cosine similarity ≥ 0.75); only truly unassigned items go through **Leiden community detection** on a blended similarity graph (70% cosine + 30% entity MinHash). Articles sharing named entities cluster together even with distant embeddings. Creates/updates `narrative_clusters` with item counts and source diversity metrics. Excludes near-duplicate items from `independent_source_count` to prevent false signals. Archives stale clusters older than `cluster_archive_after_days`. After clustering, **enqueues** `generate_cluster_label` and `run_cross_verification` to the analyst-worker via ARQ (never calls Ollama directly). Label staleness tracked via `label_item_hash` — re-enqueues label generation when cluster composition changes by >30%. See `docs/narrative_clustering_algorithm.md` for the full algorithm explanation.
 
 2. **Signal Check Loop** (every 5 min) — monitors clusters for corroboration threshold: when `independent_source_count >= topic.signal_threshold`, fires a signal (inserts into `signals` table). Also checks for sentiment shifts (compound score drops >0.3 over 24h baseline).
 
@@ -312,7 +312,7 @@ Runs four concurrent async loops:
 
 **Key details:**
 
-- Memory limit: 512 MB (no ML models — just asyncpg, numpy, hdbscan, arq)
+- Memory limit: 512 MB (no ML models — just asyncpg, numpy, leidenalg, arq)
 - Port 8007 for Prometheus metrics
 - Does NOT depend on Ollama
 - Always runs as a single instance (clustering needs global state)
@@ -655,7 +655,7 @@ Step 4: Analyst service processes content (within 30 seconds)
   → INSERT INTO extracted_entities
 
 Step 5: Clustering (every 5 minutes)
-  analyst clustering loop runs HDBSCAN on topic embeddings
+  analyst clustering loop runs Leiden community detection on blended similarity graph
   → groups related content into narrative_clusters
   → counts independent_source_count (distinct platforms per cluster)
   → generates human-readable label via Ollama
@@ -737,7 +737,7 @@ topics ─────────────┬──────────�
 | `sources` | ~100 | OSINT sources (URLs, platforms, credibility scores, health) |
 | `content_items` | ~100K+ | Scraped/collected text with embeddings (SHA-256 deduplicated) |
 | `extracted_entities` | ~500K+ | NER results (PERSON, ORG, GPE, DATE) linked to content |
-| `narrative_clusters` | ~1K | HDBSCAN clusters with centroids, source diversity, archival status, label tracking |
+| `narrative_clusters` | ~1K | Leiden clusters with centroids, source diversity, archival status, label tracking |
 | `near_duplicates` | ~5K | Semantically equivalent content pairs (cosine ≥0.95, canonical a<b ordering) |
 | `signals` | ~500 | Threshold-based alerts including cross-topic convergence (new → acknowledged → dismissed) |
 | `reports` | ~200 | LLM-generated intelligence reports (immutable after generation) |
@@ -779,7 +779,7 @@ Content Items (raw text)
     └─────────┘ └────┬──────────────┘
                      │
               ┌──────▼──────────────────┐
-              │  HDBSCAN Clustering     │
+              │  Leiden Clustering      │
               │  per topic, windowed    │  ← Migration 004
               │  ISC excludes near-dups │
               │  centroids stored       │
@@ -846,12 +846,12 @@ Content Items (raw text)
 
 ### 3. Temporal Windowing for Clustering
 
-**Problem solved:** HDBSCAN treats a 6-month-old article identically to one from 10 minutes ago. For a real-time monitoring platform, fresh narratives drown in historical noise. An analyst watching for emerging threats doesn't want last year's articles dominating cluster composition.
+**Problem solved:** The clustering algorithm treats a 6-month-old article identically to one from 10 minutes ago. For a real-time monitoring platform, fresh narratives drown in historical noise. An analyst watching for emerging threats doesn't want last year's articles dominating cluster composition.
 
 **How it works:**
 
 - `load_embeddings()` accepts a `window_days` parameter (default: `clustering_window_days=30`)
-- Only content items with `captured_at` within the window are loaded for HDBSCAN
+- Only content items with `captured_at` within the window are loaded for clustering
 - Clusters older than `cluster_archive_after_days` (default: 90) are marked with `archived_at` timestamp
 - Archived clusters are excluded from the signal engine — they won't trigger new signals
 - The temporal filter uses `MAKE_INTERVAL(days => $2)` in PostgreSQL for timezone-safe comparison
@@ -890,7 +890,7 @@ Content Items (raw text)
 
 ### 5. Label Staleness Detection
 
-**Problem solved:** HDBSCAN re-runs every 5 minutes. Cluster composition may shift significantly — items join, leave, or swap clusters. But the Ollama-generated cluster label persists and may no longer describe what the cluster actually contains. An analyst sees "Chinese Military Exercises" on a cluster that is now about "South China Sea Shipping Lanes".
+**Problem solved:** Clustering re-runs every 5 minutes. Cluster composition may shift significantly — items join, leave, or swap clusters. But the Ollama-generated cluster label persists and may no longer describe what the cluster actually contains. An analyst sees "Chinese Military Exercises" on a cluster that is now about "South China Sea Shipping Lanes".
 
 **How it works:**
 
@@ -940,7 +940,7 @@ Content Items (raw text)
 
 ### 7. Incremental Clustering (2026-05-06)
 
-**Problem solved:** Re-running HDBSCAN from scratch every 5 minutes on ALL items is O(N²) per topic. At 500 items, that's 250,000 distance computations every cycle. At 5,000 items it becomes 25 million — unsustainable for 1000+ topics.
+**Problem solved:** Re-running clustering from scratch every 5 minutes on ALL items is O(N²) per topic. At 500 items, that's 250,000 distance computations every cycle. At 5,000 items it becomes 25 million — unsustainable for 1000+ topics.
 
 **How it works:**
 
@@ -952,8 +952,8 @@ Every 5 min per topic:
      - Cosine similarity to each centroid
      - If sim ≥ 0.75 → assign to that cluster, update centroid + ISC
      - Else → add to unassigned buffer
-  4. If buffer ≥ min_cluster_size → HDBSCAN on buffer only → new clusters
-  5. No existing clusters? → full HDBSCAN on all unclustered (fresh topic)
+  4. If buffer ≥ min_cluster_size → Leiden on buffer only → new clusters
+  5. No existing clusters? → full Leiden on all unclustered (fresh topic)
 ```
 
 **Performance:**
@@ -992,17 +992,18 @@ Article → NER → entities: {"AIIMS", "Delhi", "ransomware"}
 
 At **clustering time** (every 5 min):
 ```
-1. Build cosine distance matrix (N×N) — embedding similarity
+1. Build cosine similarity matrix (N×N) — embedding similarity
 2. Build MinHash similarity matrix (N×N) — entity overlap (Jaccard estimate)
-3. Blend: distance = 0.7 × cosine_dist + 0.3 × entity_dist
-4. Feed ONE blended matrix to HDBSCAN
+3. Blend: similarity = 0.7 × cosine_sim + 0.3 × entity_sim
+4. Build similarity graph: edge if blended_sim >= 0.75
+5. Run Leiden community detection on the graph
 ```
 
 **NULL-safe blending:** Items without entity_minhash (no entities extracted, or pre-migration content) fall back to cosine-only distance. No penalty applied.
 
 **Why MinHash, not raw Jaccard:** MinHash precomputes a 128-integer fingerprint once at ingestion. At clustering time, comparing two fingerprints is 128 integer comparisons (~100ns). Raw Jaccard requires full set intersection per pair — slower at scale.
 
-**Performance:** 500 items × 128 permutations = ~3ms for the entity similarity matrix. Negligible compared to HDBSCAN itself.
+**Performance:** 500 items × 128 permutations = ~3ms for the entity similarity matrix. Negligible compared to graph construction and Leiden itself.
 
 **Key files:**
 
@@ -1056,7 +1057,7 @@ Near-Duplicate Detection ──► prevents false ISC inflation
          ▼
 Incremental Clustering ──► assigns new items to existing centroids
          │                   preserves cluster IDs (no orphaned signals)
-         │                   falls back to HDBSCAN for unassigned
+         │                   falls back to Leiden for unassigned
          │
          ├──► Entity MinHash Boost ──► blends entity overlap into distance
          │                              dark web + CERT-In advisory cluster together
@@ -1110,7 +1111,7 @@ Signals are Anveshak's real-time alerting mechanism. They fire when enough indep
 
 **How it works:**
 
-1. Content items are clustered by semantic similarity (HDBSCAN on pgvector embeddings)
+1. Content items are clustered by semantic similarity (Leiden community detection on blended similarity graph)
 2. Near-duplicate items are excluded from source counting — prevents paraphrased content from inflating diversity
 3. Each cluster tracks `independent_source_count` — the number of distinct `source.platform` values contributing unique content
 4. When `independent_source_count >= topic.signal_threshold`, a `multi_source_convergence` signal is created
