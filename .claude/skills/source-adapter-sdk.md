@@ -25,6 +25,7 @@
 > See also: `learned/quality-gate-all-consumers.md` — apply quality/relevance filters at every consumption point, not just clustering
 > See also: `learned/compose-env-var-silent-disable.md` — feature flag env vars must be in compose environment block; silently defaults to false
 > See also: `learned/docker-exec-integration-test.md` — host→docker cp→docker exec→JSON stdout pattern for testing real code paths in containers
+> See also: `learned/container-integration-test-orchestration.md` — single make test-integration runs host DB tests + container model tests
 > See also: `learned/httpx-socks-optional-extra.md` — httpx[socks] required for Tor SOCKS5; unit tests don't catch missing optional extras
 
 ---
