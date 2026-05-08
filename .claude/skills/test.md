@@ -6,6 +6,17 @@ Run the appropriate test layer based on what changed. Always show formatted resu
 
 ---
 
+### Test tiers:
+
+```
+make test-unit         → mocked tests, no containers (~10s)
+make test-integration  → DB + container model tests (~90s)
+make test-e2e          → demo arc + resilience (~2min)
+make test              → all three combined
+make test-full         → test + coverage 80% gate (pre-release)
+make test-scrape       → source connectivity (manual, needs internet)
+```
+
 ### Auto-detect mode (`/test` with no args):
 
 1. Run `git diff --name-only` to find changed files since last commit
@@ -13,13 +24,13 @@ Run the appropriate test layer based on what changed. Always show formatted resu
 
 | Changed path pattern | Test command |
 |---------------------|-------------|
-| `services/*/clean.py`, `normalise.py`, `rss.py`, `clustering.py` | `make test-unit` |
-| `services/*/db/`, `services/*/jobs.py`, `services/*/main.py` | `make test-unit` then `make test-integration` |
-| `sdk/` (Pydantic models, schemas) | `make test-unit` then `make test-contract` |
-| `infra/`, `docker-compose`, `.env` | `make test-smoke` |
-| `tests/unit/` | `make test-unit` |
-| `tests/integration/` | `make test-integration` |
-| `tests/e2e/` | `make test-e2e` |
+| `tests/unit/`, `services/*/clean.py`, `normalise.py`, `clustering.py` | `make test-unit` |
+| `tests/integration/`, `services/*/db/`, `services/*/jobs.py` | `make test-unit` then `make test-integration` |
+| `services/*/nlp.py`, `services/*/embeddings.py`, `services/*/detectors/` | `make test-unit` then `make test-integration` (container model tests) |
+| `sdk/` (Pydantic models, schemas) | `make test-unit` |
+| `infra/`, `docker-compose`, `.env`, `Dockerfile` | `make test-integration` |
+| `tests/e2e/`, `tests/resilience/` | `make test-e2e` |
+| `scripts/test_*_models.py` | `make test-integration` (container tests) |
 | No changes detected | `make test-unit` (sanity check) |
 
 3. Run the mapped command(s)
@@ -32,15 +43,10 @@ Run the appropriate test layer based on what changed. Always show formatted resu
 
 - `/test unit` → `make test-unit`
 - `/test integration` → `make test-integration`
-- `/test contract` → `make test-contract`
-- `/test scrape` → `make test-scrape`
 - `/test e2e` → `make test-e2e`
-- `/test smoke` → `make test-smoke`
-- `/test ci` → `make test-ci` (unit + contract + integration, with 80% gate)
-- `/test all` → `make test-all`
-- `/test fast` → `make test-fast` (parallel unit with pytest-xdist)
-- `/test coverage` → `make test-coverage` (full report with missing lines)
-- `/test vector` → `make test-vector`
+- `/test all` → `make test`
+- `/test full` → `make test-full`
+- `/test scrape` → `make test-scrape`
 
 ### On failure:
 
