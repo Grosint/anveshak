@@ -17,7 +17,8 @@
     {"title": "Vision / M4", "url": "/d/anveshak-vision", "type": "dashboards", "icon": "external link"},
     {"title": "Reporter / M5", "url": "/d/anveshak-reporter", "type": "dashboards", "icon": "external link"},
     {"title": "Credibility / M1", "url": "/d/anveshak-credibility", "type": "dashboards", "icon": "external link"},
-    {"title": "Infrastructure", "url": "/d/anveshak-infra", "type": "dashboards", "icon": "external link"}
+    {"title": "Infrastructure", "url": "/d/anveshak-infra", "type": "dashboards", "icon": "external link"},
+    {"title": "Container Resources", "url": "/d/anveshak-containers", "type": "dashboards", "icon": "external link"}
   ],
   "panels": [
     {
@@ -33,16 +34,17 @@
         "defaults": {
           "color": {"mode": "thresholds"},
           "mappings": [
-            {"type": "value", "options": {"0": {"text": "DOWN", "color": "red", "index": 0}}},
-            {"type": "value", "options": {"1": {"text": "UP", "color": "green", "index": 1}}}
+            {"type": "value", "options": {"0": {"text": "DOWN", "color": "#F4A4A4", "index": 0}}},
+            {"type": "value", "options": {"1": {"text": "UP", "color": "#A8D5BA", "index": 1}}}
           ],
-          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+          "thresholds": {"mode": "absolute", "steps": [{"color": "#F4A4A4", "value": null}, {"color": "#A8D5BA", "value": 1}]}
         },
         "overrides": []
       },
       "gridPos": {"h": 4, "w": 3, "x": 0, "y": 1},
       "id": 1,
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "orientation": "auto", "textMode": "auto", "colorMode": "background"},
+      "description": "API gateway health. DOWN means analysts cannot reach any endpoint.",
       "title": "API",
       "type": "stat",
       "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "up{job=\"anveshak_api\"}", "legendFormat": "API", "refId": "A"}]
@@ -53,15 +55,16 @@
         "defaults": {
           "color": {"mode": "thresholds"},
           "mappings": [
-            {"type": "value", "options": {"0": {"text": "DOWN", "color": "red", "index": 0}}},
-            {"type": "value", "options": {"1": {"text": "UP", "color": "green", "index": 1}}}
+            {"type": "value", "options": {"0": {"text": "DOWN", "color": "#F4A4A4", "index": 0}}},
+            {"type": "value", "options": {"1": {"text": "UP", "color": "#A8D5BA", "index": 1}}}
           ],
-          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+          "thresholds": {"mode": "absolute", "steps": [{"color": "#F4A4A4", "value": null}, {"color": "#A8D5BA", "value": 1}]}
         }
       },
       "gridPos": {"h": 4, "w": 3, "x": 3, "y": 1},
       "id": 2,
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+      "description": "Web scraper service health. DOWN stops all web content ingestion.",
       "title": "Scraper",
       "type": "stat",
       "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "up{job=\"anveshak_scraper\"}", "legendFormat": "Scraper", "refId": "A"}]
@@ -72,15 +75,16 @@
         "defaults": {
           "color": {"mode": "thresholds"},
           "mappings": [
-            {"type": "value", "options": {"0": {"text": "DOWN", "color": "red", "index": 0}}},
-            {"type": "value", "options": {"1": {"text": "UP", "color": "green", "index": 1}}}
+            {"type": "value", "options": {"0": {"text": "DOWN", "color": "#F4A4A4", "index": 0}}},
+            {"type": "value", "options": {"1": {"text": "UP", "color": "#A8D5BA", "index": 1}}}
           ],
-          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+          "thresholds": {"mode": "absolute", "steps": [{"color": "#F4A4A4", "value": null}, {"color": "#A8D5BA", "value": 1}]}
         }
       },
       "gridPos": {"h": 4, "w": 3, "x": 6, "y": 1},
       "id": 3,
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+      "description": "Social media adapter service. DOWN stops Telegram, Reddit, Bluesky, and X collection.",
       "title": "Social",
       "type": "stat",
       "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "up{job=\"anveshak_social\"}", "legendFormat": "Social", "refId": "A"}]
@@ -91,15 +95,16 @@
         "defaults": {
           "color": {"mode": "thresholds"},
           "mappings": [
-            {"type": "value", "options": {"0": {"text": "DOWN", "color": "red", "index": 0}}},
-            {"type": "value", "options": {"1": {"text": "UP", "color": "green", "index": 1}}}
+            {"type": "value", "options": {"0": {"text": "DOWN", "color": "#F4A4A4", "index": 0}}},
+            {"type": "value", "options": {"1": {"text": "UP", "color": "#A8D5BA", "index": 1}}}
           ],
-          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+          "thresholds": {"mode": "absolute", "steps": [{"color": "#F4A4A4", "value": null}, {"color": "#A8D5BA", "value": 1}]}
         }
       },
       "gridPos": {"h": 4, "w": 3, "x": 9, "y": 1},
       "id": 4,
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+      "description": "NLP, clustering, and signals engine. DOWN halts all analysis and signal detection.",
       "title": "Analyst",
       "type": "stat",
       "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "up{job=\"anveshak_analyst\"}", "legendFormat": "Analyst", "refId": "A"}]
@@ -110,15 +115,16 @@
         "defaults": {
           "color": {"mode": "thresholds"},
           "mappings": [
-            {"type": "value", "options": {"0": {"text": "DOWN", "color": "red", "index": 0}}},
-            {"type": "value", "options": {"1": {"text": "UP", "color": "green", "index": 1}}}
+            {"type": "value", "options": {"0": {"text": "DOWN", "color": "#F4A4A4", "index": 0}}},
+            {"type": "value", "options": {"1": {"text": "UP", "color": "#A8D5BA", "index": 1}}}
           ],
-          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+          "thresholds": {"mode": "absolute", "steps": [{"color": "#F4A4A4", "value": null}, {"color": "#A8D5BA", "value": 1}]}
         }
       },
       "gridPos": {"h": 4, "w": 3, "x": 12, "y": 1},
       "id": 5,
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+      "description": "LLM report generation service. DOWN blocks new report creation and PDF export.",
       "title": "Reporter",
       "type": "stat",
       "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "up{job=\"anveshak_reporter\"}", "legendFormat": "Reporter", "refId": "A"}]
@@ -129,15 +135,16 @@
         "defaults": {
           "color": {"mode": "thresholds"},
           "mappings": [
-            {"type": "value", "options": {"0": {"text": "DOWN", "color": "red", "index": 0}}},
-            {"type": "value", "options": {"1": {"text": "UP", "color": "green", "index": 1}}}
+            {"type": "value", "options": {"0": {"text": "DOWN", "color": "#F4A4A4", "index": 0}}},
+            {"type": "value", "options": {"1": {"text": "UP", "color": "#A8D5BA", "index": 1}}}
           ],
-          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+          "thresholds": {"mode": "absolute", "steps": [{"color": "#F4A4A4", "value": null}, {"color": "#A8D5BA", "value": 1}]}
         }
       },
       "gridPos": {"h": 4, "w": 3, "x": 15, "y": 1},
       "id": 6,
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+      "description": "YOLO, CLIP, and deepfake detection service. DOWN stops all image/video analysis.",
       "title": "Vision",
       "type": "stat",
       "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "up{job=\"anveshak_vision\"}", "legendFormat": "Vision", "refId": "A"}]
@@ -148,15 +155,16 @@
         "defaults": {
           "color": {"mode": "thresholds"},
           "mappings": [
-            {"type": "value", "options": {"0": {"text": "DOWN", "color": "red", "index": 0}}},
-            {"type": "value", "options": {"1": {"text": "UP", "color": "green", "index": 1}}}
+            {"type": "value", "options": {"0": {"text": "DOWN", "color": "#F4A4A4", "index": 0}}},
+            {"type": "value", "options": {"1": {"text": "UP", "color": "#A8D5BA", "index": 1}}}
           ],
-          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+          "thresholds": {"mode": "absolute", "steps": [{"color": "#F4A4A4", "value": null}, {"color": "#A8D5BA", "value": 1}]}
         }
       },
       "gridPos": {"h": 4, "w": 3, "x": 18, "y": 1},
       "id": 7,
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
+      "description": "Ollama LLM runtime. DOWN blocks report generation and cluster labelling.",
       "title": "Ollama LLM",
       "type": "stat",
       "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "up{job=\"ollama\"}", "legendFormat": "Ollama", "refId": "A"}]
@@ -170,60 +178,66 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A4C8E8", "value": null}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 0, "y": 6},
       "id": 10,
-      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "none"},
+      "description": "Total web + social items collected in 24h. Zero means ingestion is stalled.",
       "title": "Items Ingested (24h)",
       "type": "stat",
       "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(scraper_items_fetched_total[24h]) + increase(social_items_collected_total[24h])", "legendFormat": "Total Items", "refId": "A"}]
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 5}, {"color": "red", "value": 20}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A8D5BA", "value": null}, {"color": "#FFE0A3", "value": 5}, {"color": "#F4A4A4", "value": 20}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 4, "y": 6},
       "id": 11,
-      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "none"},
+      "description": "Narrative signals fired in 24h. High counts (>20) may indicate a major event or noisy thresholds.",
       "title": "Signals Fired (24h)",
       "type": "stat",
       "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_signals_fired_total[24h])", "legendFormat": "Signals", "refId": "A"}]
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A4C8E8", "value": null}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 8, "y": 6},
       "id": 12,
-      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "none"},
+      "description": "Successful LLM report jobs in 24h. Zero during active topics means reporter may be stuck.",
       "title": "Reports Generated (24h)",
       "type": "stat",
       "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(reporter_jobs_total{status=\"success\"}[24h])", "legendFormat": "Reports", "refId": "A"}]
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}, {"color": "red", "value": 10}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A8D5BA", "value": null}, {"color": "#FFE0A3", "value": 1}, {"color": "#F4A4A4", "value": 10}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 12, "y": 6},
       "id": 13,
-      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "none"},
+      "description": "Failed ARQ background jobs in 24h. >10 indicates systemic issues needing investigation.",
       "title": "ARQ Job Failures (24h)",
       "type": "stat",
       "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(arq_jobs_failed_total[24h])", "legendFormat": "Failures", "refId": "A"}]
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A4C8E8", "value": null}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 16, "y": 6},
       "id": 14,
-      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "none"},
+      "description": "Narrative clusters formed in 24h. Zero with active ingestion means clustering may be failing.",
       "title": "Clusters Created (24h)",
       "type": "stat",
       "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_clusters_created_total[24h])", "legendFormat": "Clusters", "refId": "A"}]
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "orange", "value": null}, {"color": "red", "value": 5}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#FFCBA4", "value": null}, {"color": "#F4A4A4", "value": 5}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 20, "y": 6},
       "id": 15,
-      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "none"},
+      "description": "Items with deepfake score >0.8 in 24h. >5 warrants immediate analyst review.",
       "title": "High-Risk Deepfakes (24h)",
       "type": "stat",
       "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(vision_deepfake_score_bucket{le=\"1.0\"}[24h]) - increase(vision_deepfake_score_bucket{le=\"0.8\"}[24h])", "legendFormat": "Deepfakes >0.8", "refId": "A"}]
@@ -244,6 +258,7 @@
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 11},
       "id": 20,
       "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
+      "description": "Live ingestion rate split by web scraper and social adapters. A flat line at zero means no content is flowing.",
       "title": "Content Ingestion Rate (items/min)",
       "type": "timeseries",
       "targets": [
@@ -260,6 +275,7 @@
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 11},
       "id": 21,
       "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
+      "description": "Rate of ARQ job failures by job type. Sustained non-zero rate means a job type is consistently broken.",
       "title": "ARQ Job Failure Rate (failures/min)",
       "type": "timeseries",
       "targets": [
@@ -278,6 +294,7 @@
       "gridPos": {"h": 10, "w": 24, "x": 0, "y": 20},
       "id": 30,
       "options": {"dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showLabels": true, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": false},
+      "description": "Live error and warning logs across all services. Repeated patterns indicate systemic issues.",
       "title": "Error & Warning Logs (all services)",
       "type": "logs",
       "targets": [

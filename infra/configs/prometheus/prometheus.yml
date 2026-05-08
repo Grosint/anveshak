@@ -69,7 +69,7 @@ scrape_configs:
   - job_name: anveshak_analyst
     metrics_path: /metrics
     static_configs:
-      - targets: ["analyst:8004"]
+      - targets: ["analyst-scheduler:8007"]
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance
@@ -95,15 +95,8 @@ scrape_configs:
         target_label: instance
         replacement: reporter-worker
 
-  # Ollama inference server — model-level metrics (if enabled)
-  - job_name: ollama
-    metrics_path: /metrics
-    static_configs:
-      - targets: ["ollama:11434"]
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: instance
-        replacement: ollama
+  # Ollama — no native /metrics endpoint; skip scraping
+  # Enable if using a metrics-exporting Ollama fork in future
 
   # PostgreSQL — via postgres_exporter sidecar
   - job_name: postgres
@@ -131,3 +124,24 @@ scrape_configs:
       - source_labels: [__address__]
         target_label: instance
         replacement: loki
+
+  # cAdvisor — per-container CPU, memory, network, disk metrics
+  - job_name: cadvisor
+    metrics_path: /metrics
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["cadvisor:8080"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: cadvisor
+    metric_relabel_configs:
+      # Keep only per-container metrics (id="/docker/..."), drop root cgroup aggregates
+      - source_labels: [id]
+        regex: /docker/.+
+        action: keep
+      # Extract short container ID as label (first 12 chars) for readability
+      - source_labels: [id]
+        regex: /docker/(.{12}).*
+        target_label: container_short
+        replacement: "${1}"

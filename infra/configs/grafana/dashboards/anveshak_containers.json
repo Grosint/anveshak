@@ -1,0 +1,255 @@
+{
+  "__inputs": [],
+  "__requires": [
+    {"type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0"},
+    {"type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0"}
+  ],
+  "annotations": {"list": []},
+  "description": "Container-level resource monitoring — CPU, memory, network, and disk usage for every Anveshak container. Powered by cAdvisor.",
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {"title": "Overview", "url": "/d/anveshak-overview", "type": "dashboards", "icon": "external link"},
+    {"title": "Infrastructure", "url": "/d/anveshak-infra", "type": "dashboards", "icon": "external link"}
+  ],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 100,
+      "title": "Resource Summary",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Number of running Anveshak containers detected by cAdvisor. If this drops below expected count (~21), a container has stopped.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"fixedColor": "#A4C8E8", "mode": "fixed"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "#F4A4A4", "value": null}, {"color": "#A8D5BA", "value": 18}]},
+          "unit": "none"
+        }
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 1},
+      "id": 1,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background", "graphMode": "none", "textMode": "auto"},
+      "title": "Containers Running",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "count(container_memory_usage_bytes{job=\"cadvisor\", id=~\"/docker/.+\"})", "legendFormat": "Containers", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Total CPU usage across all Anveshak containers as a percentage of available CPU cores. High values (>80%) indicate CPU saturation.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "#A8D5BA", "value": null}, {"color": "#FFE0A3", "value": 60}, {"color": "#F4A4A4", "value": 80}]},
+          "unit": "percent",
+          "decimals": 1
+        }
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 1},
+      "id": 2,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background", "graphMode": "none"},
+      "title": "Total CPU Usage",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(rate(container_cpu_usage_seconds_total{job=\"cadvisor\", id=~\"/docker/.+\"}[5m])) * 100", "legendFormat": "CPU %", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Total memory (working set) used by all Anveshak containers. Working set excludes filesystem cache — this is the real memory pressure.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"fixedColor": "#C4B4E0", "mode": "fixed"},
+          "unit": "decbytes",
+          "decimals": 1
+        }
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 1},
+      "id": 3,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background", "graphMode": "none"},
+      "title": "Total Memory Used",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(container_memory_working_set_bytes{job=\"cadvisor\", id=~\"/docker/.+\"})", "legendFormat": "Memory", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Total network receive throughput across all containers. Spikes may indicate heavy scraping or report downloads.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"fixedColor": "#A4D8D8", "mode": "fixed"},
+          "unit": "Bps",
+          "decimals": 1
+        }
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 1},
+      "id": 4,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background", "graphMode": "none"},
+      "title": "Network Receive",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(rate(container_network_receive_bytes_total{job=\"cadvisor\", id=~\"/docker/.+\"}[5m]))", "legendFormat": "Net RX", "refId": "A"}]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 5},
+      "id": 200,
+      "title": "CPU Usage per Container",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "CPU usage as percentage of one core per container. Values above 100% mean the container is using more than one CPU core.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic-by-name"},
+          "custom": {"fillOpacity": 10, "lineWidth": 1, "spanNulls": true, "axisSoftMin": 0},
+          "unit": "percent",
+          "decimals": 1
+        }
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 6},
+      "id": 5,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "sortBy": "Last *", "sortDesc": true}, "tooltip": {"mode": "multi"}},
+      "title": "CPU Usage per Container (%)",
+      "type": "timeseries",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(container_cpu_usage_seconds_total{job=\"cadvisor\", id=~\"/docker/.+\"}[5m]) * 100", "legendFormat": "{{container_short}}", "refId": "A"}]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 14},
+      "id": 300,
+      "title": "Memory Usage per Container",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Working set memory per container over time. Watch analyst-worker (6 GB limit) and ollama closely. Sustained growth without plateaus may indicate a memory leak.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic-by-name"},
+          "custom": {"fillOpacity": 10, "lineWidth": 1, "spanNulls": true, "axisSoftMin": 0},
+          "unit": "decbytes"
+        }
+      },
+      "gridPos": {"h": 8, "w": 16, "x": 0, "y": 15},
+      "id": 6,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "sortBy": "Last *", "sortDesc": true}, "tooltip": {"mode": "multi"}},
+      "title": "Memory Working Set per Container",
+      "type": "timeseries",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "container_memory_working_set_bytes{job=\"cadvisor\", id=~\"/docker/.+\"}", "legendFormat": "{{container_short}}", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Memory usage as a percentage of the container's configured limit (mem_limit in compose). Only shows containers with limits set. Above 90% is danger zone — OOM kill is imminent.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "#A8D5BA", "value": null}, {"color": "#FFE0A3", "value": 70}, {"color": "#FFCBA4", "value": 85}, {"color": "#F4A4A4", "value": 95}]},
+          "unit": "percent",
+          "decimals": 0,
+          "min": 0,
+          "max": 100
+        }
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 15},
+      "id": 7,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true},
+      "title": "Memory vs Limit (%)",
+      "type": "bargauge",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "container_memory_working_set_bytes{job=\"cadvisor\", id=~\"/docker/.+\"} / container_spec_memory_limit_bytes{job=\"cadvisor\", id=~\"/docker/.+\"} * 100 > 0", "legendFormat": "{{container_short}}", "refId": "A"}]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 23},
+      "id": 400,
+      "title": "Network I/O per Container",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Network bytes received per second by each container. Scraper and social containers will show the most activity during active collection.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic-by-name"},
+          "custom": {"fillOpacity": 10, "lineWidth": 1, "spanNulls": true, "axisSoftMin": 0},
+          "unit": "Bps"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "id": 8,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "title": "Network Receive (bytes/s)",
+      "type": "timeseries",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(container_network_receive_bytes_total{job=\"cadvisor\", id=~\"/docker/.+\"}[5m])", "legendFormat": "{{container_short}}", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Network bytes transmitted per second by each container. API and reporter will show spikes when serving responses or generating reports.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic-by-name"},
+          "custom": {"fillOpacity": 10, "lineWidth": 1, "spanNulls": true, "axisSoftMin": 0},
+          "unit": "Bps"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+      "id": 9,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "title": "Network Transmit (bytes/s)",
+      "type": "timeseries",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(container_network_transmit_bytes_total{job=\"cadvisor\", id=~\"/docker/.+\"}[5m])", "legendFormat": "{{container_short}}", "refId": "A"}]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 32},
+      "id": 500,
+      "title": "Top Resource Consumers",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Current resource usage ranked by CPU. Use this to quickly identify which containers are consuming the most resources.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "#A8D5BA", "value": null}]},
+          "custom": {"align": "auto", "filterable": true}
+        },
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "Container"}, "properties": [{"id": "custom.width", "value": 250}]},
+          {"matcher": {"id": "byName", "options": "CPU %"}, "properties": [{"id": "unit", "value": "percent"}, {"id": "decimals", "value": 2}, {"id": "thresholds", "value": {"mode": "absolute", "steps": [{"color": "#A8D5BA", "value": null}, {"color": "#FFE0A3", "value": 50}, {"color": "#F4A4A4", "value": 80}]}}, {"id": "custom.cellOptions", "value": {"type": "color-background"}}]},
+          {"matcher": {"id": "byName", "options": "Memory"}, "properties": [{"id": "unit", "value": "decbytes"}, {"id": "decimals", "value": 0}]},
+          {"matcher": {"id": "byName", "options": "Net RX"}, "properties": [{"id": "unit", "value": "Bps"}, {"id": "decimals", "value": 0}]},
+          {"matcher": {"id": "byName", "options": "Net TX"}, "properties": [{"id": "unit", "value": "Bps"}, {"id": "decimals", "value": 0}]}
+        ]
+      },
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 33},
+      "id": 10,
+      "options": {"showHeader": true, "sortBy": [{"displayName": "CPU %", "desc": true}], "footer": {"show": true, "reducer": ["sum"]}},
+      "title": "Container Resource Table",
+      "type": "table",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(container_cpu_usage_seconds_total{job=\"cadvisor\", id=~\"/docker/.+\"}[5m]) * 100", "legendFormat": "{{container_short}}", "refId": "CPU", "format": "table", "instant": true},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "container_memory_working_set_bytes{job=\"cadvisor\", id=~\"/docker/.+\"}", "legendFormat": "{{container_short}}", "refId": "MEM", "format": "table", "instant": true},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(container_network_receive_bytes_total{job=\"cadvisor\", id=~\"/docker/.+\"}[5m])", "legendFormat": "{{container_short}}", "refId": "RX", "format": "table", "instant": true},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(container_network_transmit_bytes_total{job=\"cadvisor\", id=~\"/docker/.+\"}[5m])", "legendFormat": "{{container_short}}", "refId": "TX", "format": "table", "instant": true}
+      ],
+      "transformations": [
+        {"id": "merge", "options": {}},
+        {"id": "organize", "options": {"renameByName": {"name": "Container", "Value #CPU": "CPU %", "Value #MEM": "Memory", "Value #RX": "Net RX", "Value #TX": "Net TX"}, "excludeByName": {"Time": true, "__name__": true, "container_label_com_docker_compose_project": true, "id": true, "image": true, "instance": true, "job": true}}}
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["anveshak", "containers", "resources"],
+  "templating": {"list": []},
+  "time": {"from": "now-3h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Anveshak — Container Resources",
+  "uid": "anveshak-containers",
+  "version": 1
+}

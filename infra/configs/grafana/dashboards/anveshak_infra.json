@@ -15,9 +15,10 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 15}, {"color": "red", "value": 25}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A8D5BA", "value": null}, {"color": "#FFE0A3", "value": 15}, {"color": "#F4A4A4", "value": 25}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 0, "y": 1},
       "id": 1,
+      "description": "Current active PostgreSQL connections. Yellow at 15, red at 25 -- indicates connection pool pressure or leaked connections.",
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
       "title": "Active Connections",
       "type": "stat",
@@ -25,9 +26,10 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 5}, {"color": "red", "value": 15}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A8D5BA", "value": null}, {"color": "#FFE0A3", "value": 5}, {"color": "#F4A4A4", "value": 15}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 4, "y": 1},
       "id": 2,
+      "description": "Idle PostgreSQL connections. High idle count (yellow at 5, red at 15) suggests connection pool is not reclaiming connections.",
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
       "title": "Idle Connections",
       "type": "stat",
@@ -35,9 +37,10 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "decbytes", "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "decbytes", "thresholds": {"mode": "absolute", "steps": [{"color": "#A4C8E8", "value": null}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 8, "y": 1},
       "id": 3,
+      "description": "Total size of the anveshak database on disk. Sudden jumps may indicate large content ingestion or missing cleanup.",
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
       "title": "DB Size",
       "type": "stat",
@@ -45,9 +48,10 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A4C8E8", "value": null}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 12, "y": 1},
       "id": 4,
+      "description": "Cumulative PostgreSQL deadlocks. Any non-zero value warrants investigation -- check for conflicting ARQ jobs or concurrent writes.",
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
       "title": "Deadlocks Total",
       "type": "stat",
@@ -56,11 +60,12 @@
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {
-        "defaults": {"color": {"mode": "palette-classic"}, "unit": "short", "custom": {"lineWidth": 2}},
+        "defaults": {"color": {"mode": "palette-classic"}, "unit": "short", "custom": {"lineWidth": 2, "fillOpacity": 10}},
         "overrides": []
       },
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 5},
       "id": 10,
+      "description": "Breakdown of PostgreSQL connections by state over time. Watch for growing idle-in-transaction connections -- they hold locks.",
       "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
       "title": "PostgreSQL Connections by State",
       "type": "timeseries",
@@ -71,11 +76,12 @@
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {
-        "defaults": {"color": {"mode": "palette-classic"}, "unit": "reqps", "custom": {"lineWidth": 2}},
+        "defaults": {"color": {"mode": "palette-classic"}, "unit": "reqps", "custom": {"lineWidth": 2, "fillOpacity": 10}},
         "overrides": []
       },
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 5},
       "id": 11,
+      "description": "Commit and rollback rates. Rising rollback rate indicates failing transactions -- check ARQ job error logs.",
       "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
       "title": "PostgreSQL Transactions per Second",
       "type": "timeseries",
@@ -93,9 +99,10 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "decbytes", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 150000000}, {"color": "red", "value": 190000000}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "decbytes", "thresholds": {"mode": "absolute", "steps": [{"color": "#A8D5BA", "value": null}, {"color": "#FFE0A3", "value": 150000000}, {"color": "#F4A4A4", "value": 190000000}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 0, "y": 14},
       "id": 20,
+      "description": "Current Redis memory usage. Yellow at 150MB, red at 190MB (limit is 200MB). Approaching red means ARQ job results are not expiring or queue is backing up.",
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
       "title": "Redis Memory Used",
       "type": "stat",
@@ -103,9 +110,10 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A4C8E8", "value": null}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 4, "y": 14},
       "id": 21,
+      "description": "Number of Redis clients connected. Should match the number of running service instances plus ARQ workers.",
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
       "title": "Connected Clients",
       "type": "stat",
@@ -113,9 +121,10 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A4C8E8", "value": null}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 8, "y": 14},
       "id": 22,
+      "description": "Total Redis keys in db0, primarily ARQ job entries. Monotonic growth means job results are not being cleaned up.",
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
       "title": "Queue Keys (ARQ jobs)",
       "type": "stat",
@@ -124,11 +133,12 @@
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {
-        "defaults": {"color": {"mode": "palette-classic"}, "unit": "decbytes", "custom": {"lineWidth": 2}},
+        "defaults": {"color": {"mode": "palette-classic"}, "unit": "decbytes", "custom": {"lineWidth": 2, "fillOpacity": 10}},
         "overrides": []
       },
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 18},
       "id": 30,
+      "description": "Redis memory usage vs configured max. When 'Used' approaches 'Max', eviction policies kick in and ARQ jobs may be lost.",
       "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
       "title": "Redis Memory Usage Over Time",
       "type": "timeseries",
@@ -140,11 +150,12 @@
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {
-        "defaults": {"color": {"mode": "palette-classic"}, "unit": "reqps", "custom": {"lineWidth": 2}},
+        "defaults": {"color": {"mode": "palette-classic"}, "unit": "reqps", "custom": {"lineWidth": 2, "fillOpacity": 10}},
         "overrides": []
       },
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 18},
       "id": 31,
+      "description": "Redis throughput. Baseline depends on active topics and scrape intervals. A drop to zero means no service is processing jobs.",
       "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
       "title": "Redis Commands per Second",
       "type": "timeseries",
@@ -162,11 +173,12 @@
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {
-        "defaults": {"color": {"mode": "palette-classic"}, "unit": "short", "custom": {"lineWidth": 2}},
+        "defaults": {"color": {"mode": "palette-classic"}, "unit": "short", "custom": {"lineWidth": 2, "fillOpacity": 10}},
         "overrides": []
       },
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 27},
       "id": 40,
+      "description": "Loki ingestion rates. If lines received drops to zero, Promtail may have lost connection or containers stopped logging.",
       "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
       "title": "Loki Log Lines Ingested per Second",
       "type": "timeseries",
@@ -178,11 +190,12 @@
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {
-        "defaults": {"color": {"mode": "palette-classic"}, "unit": "decbytes", "custom": {"lineWidth": 2}},
+        "defaults": {"color": {"mode": "palette-classic"}, "unit": "decbytes", "custom": {"lineWidth": 2, "fillOpacity": 10}},
         "overrides": []
       },
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 27},
       "id": 41,
+      "description": "Byte volume flowing into Loki. Sustained spikes may indicate verbose logging from a misbehaving service.",
       "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
       "title": "Loki Bytes Ingested per Second",
       "type": "timeseries",
@@ -201,11 +214,12 @@
       "datasource": {"type": "loki", "uid": "loki"},
       "gridPos": {"h": 10, "w": 24, "x": 0, "y": 36},
       "id": 50,
+      "description": "Error and warning logs from ALL Anveshak services. Filters by level only -- no service filter. Check the 'service' label to identify the source.",
       "options": {"dedupStrategy": "none", "enableLogDetails": true, "showLabels": true, "showTime": true, "sortOrder": "Descending"},
-      "title": "API & Infrastructure Error Logs",
+      "title": "All Services Error & Warning Logs",
       "type": "logs",
       "targets": [
-        {"datasource": {"type": "loki", "uid": "loki"}, "expr": "{job=\"anveshak\", service=\"api\", level=\"error\"} | json", "refId": "A"}
+        {"datasource": {"type": "loki", "uid": "loki"}, "expr": "{job=\"anveshak\", level=~\"error|warning\"} | json", "refId": "A"}
       ]
     }
   ],

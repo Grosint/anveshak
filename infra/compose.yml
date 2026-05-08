@@ -672,6 +672,29 @@ services:
       - anveshak-net
 
   # ---------------------------------------------------------------------------
+  # Container resource monitoring (CPU, memory, network, disk per container)
+  # ---------------------------------------------------------------------------
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: anveshak-cadvisor
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - "8080:8080"
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
+      <<: *healthcheck-defaults
+    networks:
+      - anveshak-net
+
+  # ---------------------------------------------------------------------------
   # Distributed tracing (opt-in via OTEL_ENABLED=true)
   # ---------------------------------------------------------------------------
 

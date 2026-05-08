@@ -96,7 +96,7 @@ groups:
           ) - increase(
             vision_deepfake_score_bucket{le="0.8"}[1h]
           ) > 50
-        for: 0m
+        for: 5m
         labels:
           severity: warning
           platform: anveshak
@@ -104,7 +104,9 @@ groups:
           summary: "High-confidence deepfake detections spiked (>50 in last hour)"
           description: >
             More than 50 media items scored above 0.8 deepfake probability
-            in the last hour. Review vision queue for adversarial content.
+            in the last hour. Steps: (1) Check Vision dashboard for source patterns.
+            (2) Review vision service logs: {service="vision"} |= "deepfake".
+            (3) Check if a single source is flooding — may need circuit-breaker.
 
   - name: anveshak.signals
     rules:
@@ -113,16 +115,18 @@ groups:
         expr: >
           increase(analyst_signals_fired_total[30m]) == 0
           and sum(increase(scraper_items_fetched_total[30m])) > 0
-        for: 30m
+        for: 10m
         labels:
           severity: info
           platform: anveshak
         annotations:
-          summary: "Signal engine has fired no signals in 30 minutes"
+          summary: "Signal engine has fired no signals while content is flowing"
           description: >
             Content is being ingested but no intelligence signals have been
-            generated in the last 30 minutes. Verify signal thresholds and
-            clustering is running correctly.
+            generated in the last 30 minutes. Steps: (1) Check analyst-scheduler
+            logs: {service="analyst-scheduler"} |= "signal". (2) Verify
+            topic.signal_threshold isn't set too high. (3) Check clustering
+            is producing clusters: increase(analyst_clusters_created_total[30m]).
 
   # ---------------------------------------------------------------------------
   # Extended alerting — Phase 5 additions
@@ -155,7 +159,7 @@ groups:
           ) - increase(
             vision_deepfake_score_bucket{le="0.9"}[15m]
           ) > 20
-        for: 0m
+        for: 5m
         labels:
           severity: critical
           platform: anveshak
@@ -164,8 +168,9 @@ groups:
           description: >
             More than 20 media items have scored above 0.9 deepfake probability
             in the last 15 minutes. This may indicate a coordinated disinformation
-            campaign. Escalate to senior analyst immediately and review
-            Vision dashboard for source patterns.
+            campaign. Steps: (1) Escalate to senior analyst immediately.
+            (2) Open Vision dashboard — check which sources are producing high scores.
+            (3) Check if a single topic is the target: {service="vision"} |= "topic_id".
 
   - name: anveshak.credibility_feedback
     rules:
@@ -205,21 +210,5 @@ groups:
             Services may still be logging to stdout but logs are not being
             shipped to Loki for search or alerting.
 
-  - name: anveshak.ollama
-    rules:
-      # Ollama is up but no models are loaded (cold-start was never triggered)
-      - alert: OllamaNoModelsLoaded
-        expr: >
-          up{job="ollama"} == 1
-          and ollama_models_total == 0
-        for: 10m
-        labels:
-          severity: warning
-          platform: anveshak
-        annotations:
-          summary: "Ollama is running but has no models loaded"
-          description: >
-            The Ollama service is reachable but reports zero loaded models.
-            This means the first LLM call (report generation or cluster labelling)
-            will incur a full model load delay. Trigger a warm-up via the API
-            or restart the api service to trigger the pre-warm in lifespan startup.
+  # anveshak.ollama — removed: Ollama does not expose /metrics endpoint.
+  # Re-enable if Ollama adds native Prometheus metrics support.

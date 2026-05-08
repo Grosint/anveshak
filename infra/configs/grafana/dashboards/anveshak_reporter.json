@@ -15,8 +15,9 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A4C8E8", "value": null}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 0, "y": 1},
+      "description": "Total successfully generated reports in the last 24 hours.",
       "id": 1,
       "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
       "title": "Reports Generated (24h)",
@@ -25,8 +26,9 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}, {"color": "red", "value": 5}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A8D5BA", "value": null}, {"color": "#FFE0A3", "value": 1}, {"color": "#F4A4A4", "value": 10}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 4, "y": 1},
+      "description": "Failed report generation jobs in the last 24 hours. Check Ollama health if this rises.",
       "id": 2,
       "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
       "title": "Report Failures (24h)",
@@ -35,8 +37,9 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 120}, {"color": "red", "value": 270}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "#A8D5BA", "value": null}, {"color": "#FFE0A3", "value": 120}, {"color": "#F4A4A4", "value": 270}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 8, "y": 1},
+      "description": "95th percentile report generation time. Values above 270s suggest LLM or RAG bottlenecks.",
       "id": 3,
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
       "title": "Generation Latency p95",
@@ -45,8 +48,9 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 90}, {"color": "red", "value": 200}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "#A8D5BA", "value": null}, {"color": "#FFE0A3", "value": 90}, {"color": "#F4A4A4", "value": 200}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 12, "y": 1},
+      "description": "Median report generation time. Typical baseline is under 90 seconds.",
       "id": 4,
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
       "title": "Generation Latency p50",
@@ -55,8 +59,9 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}, {"color": "red", "value": 5}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A8D5BA", "value": null}, {"color": "#FFE0A3", "value": 1}, {"color": "#F4A4A4", "value": 10}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 16, "y": 1},
+      "description": "Ollama inference errors in the last hour. Persistent errors may indicate model not loaded or OOM.",
       "id": 5,
       "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
       "title": "Ollama LLM Errors (1h)",
@@ -65,8 +70,9 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A4C8E8", "value": null}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 20, "y": 1},
+      "description": "Successfully exported PDF reports in the last 24 hours.",
       "id": 6,
       "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
       "title": "PDF Exports (24h)",
@@ -85,11 +91,12 @@
       "fieldConfig": {
         "defaults": {"color": {"mode": "palette-classic"}, "unit": "short", "custom": {"lineWidth": 2, "fillOpacity": 10}},
         "overrides": [
-          {"matcher": {"id": "byLabelValue", "options": {"label": "status", "value": "failed"}}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]},
-          {"matcher": {"id": "byLabelValue", "options": {"label": "status", "value": "success"}}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]}
+          {"matcher": {"id": "byLabelValue", "options": {"label": "status", "value": "failed"}}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "#F4A4A4"}}]},
+          {"matcher": {"id": "byLabelValue", "options": {"label": "status", "value": "success"}}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "#A8D5BA"}}]}
         ]
       },
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+      "description": "Hourly rate of report generation jobs split by success and failure status.",
       "id": 10,
       "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
       "title": "Report Generation Jobs by Status (rate/h)",
@@ -105,6 +112,7 @@
         "overrides": []
       },
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+      "description": "Latency distribution (p50, p95, p99) for report generation jobs.",
       "id": 11,
       "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
       "title": "Report Generation Latency Percentiles",
@@ -119,9 +127,10 @@
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {
         "defaults": {"color": {"mode": "palette-classic"}, "unit": "short", "custom": {"lineWidth": 2, "fillOpacity": 10}},
-        "overrides": [{"matcher": {"id": "byFrameRefID", "options": "A"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]}]
+        "overrides": [{"matcher": {"id": "byFrameRefID", "options": "A"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "#F4A4A4"}}]}]
       },
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
+      "description": "Hourly rate of Ollama errors broken down by error type (timeout, connection, validation).",
       "id": 12,
       "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
       "title": "Ollama LLM Errors by Type (rate/h)",
@@ -137,6 +146,7 @@
         "overrides": []
       },
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
+      "description": "Hourly rate of PDF export jobs split by success and failure.",
       "id": 13,
       "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
       "title": "PDF Export Success vs Failure",
@@ -155,6 +165,7 @@
     {
       "datasource": {"type": "loki", "uid": "loki"},
       "gridPos": {"h": 10, "w": 24, "x": 0, "y": 23},
+      "description": "Structured logs from the reporter service. Filter by level or job_id for targeted debugging.",
       "id": 30,
       "options": {"dedupStrategy": "none", "enableLogDetails": true, "showLabels": true, "showTime": true, "sortOrder": "Descending"},
       "title": "Reporter Service Logs",

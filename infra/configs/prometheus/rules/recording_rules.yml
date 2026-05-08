@@ -1,0 +1,26 @@
+# Anveshak — Prometheus recording rules
+# Pre-compute expensive histogram percentiles so dashboards load instantly.
+# These are evaluated every 15s (global evaluation_interval) and stored
+# as new time series that Grafana queries directly.
+
+groups:
+  - name: anveshak.recording
+    rules:
+      # Reporter latency percentiles
+      - record: anveshak:reporter_job_duration_p95:5m
+        expr: histogram_quantile(0.95, rate(reporter_job_duration_seconds_bucket[5m]))
+
+      - record: anveshak:reporter_job_duration_p50:5m
+        expr: histogram_quantile(0.50, rate(reporter_job_duration_seconds_bucket[5m]))
+
+      # Analyst NLP latency
+      - record: anveshak:analyst_nlp_duration_p95:5m
+        expr: histogram_quantile(0.95, rate(analyst_nlp_duration_seconds_bucket[5m]))
+
+      # Scraper fetch latency
+      - record: anveshak:scraper_fetch_duration_p95:5m
+        expr: histogram_quantile(0.95, rate(scraper_fetch_duration_seconds_bucket[5m]))
+
+      # Vision analysis latency
+      - record: anveshak:vision_analysis_duration_p95:5m
+        expr: histogram_quantile(0.95, rate(vision_analysis_duration_seconds_bucket[5m]))

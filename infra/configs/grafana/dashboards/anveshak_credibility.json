@@ -15,9 +15,10 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A8D5BA", "value": null}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 0, "y": 1},
       "id": 1,
+      "description": "Number of source credibility score increases in the last 24 hours. Zero for extended periods may indicate the auto-feedback loop is not running.",
       "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
       "title": "Score Increases (24h)",
       "type": "stat",
@@ -25,9 +26,10 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "orange", "value": null}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#FFCBA4", "value": null}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 4, "y": 1},
       "id": 2,
+      "description": "Number of source credibility score decreases in the last 24 hours. A sustained spike suggests newly detected unreliable sources or deepfake detections.",
       "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
       "title": "Score Decreases (24h)",
       "type": "stat",
@@ -35,9 +37,10 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A4C8E8", "value": null}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 8, "y": 1},
       "id": 3,
+      "description": "Total credibility audit events (up + down) in 24 hours. If zero, the analyst service may be down or no sources are being evaluated.",
       "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
       "title": "Total Audit Events (24h)",
       "type": "stat",
@@ -55,12 +58,13 @@
       "fieldConfig": {
         "defaults": {"color": {"mode": "palette-classic"}, "unit": "short", "custom": {"lineWidth": 2, "fillOpacity": 10}},
         "overrides": [
-          {"matcher": {"id": "byLabelValue", "options": {"label": "direction", "value": "up"}}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
-          {"matcher": {"id": "byLabelValue", "options": {"label": "direction", "value": "down"}}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]}
+          {"matcher": {"id": "byLabelValue", "options": {"label": "direction", "value": "up"}}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "#A8D5BA"}}]},
+          {"matcher": {"id": "byLabelValue", "options": {"label": "direction", "value": "down"}}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "#F4A4A4"}}]}
         ]
       },
       "gridPos": {"h": 8, "w": 24, "x": 0, "y": 6},
       "id": 10,
+      "description": "Rate of credibility score changes per hour, split by direction. A sustained 'down' spike indicates a batch of sources being penalised -- check audit logs for root cause.",
       "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
       "title": "Credibility Score Changes Over Time (rate/h)",
       "type": "timeseries",
@@ -79,6 +83,7 @@
       "datasource": {"type": "loki", "uid": "loki"},
       "gridPos": {"h": 12, "w": 24, "x": 0, "y": 15},
       "id": 20,
+      "description": "Structured log stream of credibility audit events from the analyst service. Every row maps to an insert in credibility_audit_log. Gaps indicate the analyst service is not processing.",
       "options": {"dedupStrategy": "none", "enableLogDetails": true, "showLabels": true, "showTime": true, "sortOrder": "Descending"},
       "title": "Source Credibility Audit Events",
       "type": "logs",
@@ -97,6 +102,7 @@
       "datasource": {"type": "loki", "uid": "loki"},
       "gridPos": {"h": 10, "w": 24, "x": 0, "y": 28},
       "id": 30,
+      "description": "Logs from the reporter service when a source used in a report has since been downgraded. Each entry corresponds to a report_source_warnings insert. High volume means many reports reference now-questionable sources.",
       "options": {"dedupStrategy": "none", "enableLogDetails": true, "showLabels": true, "showTime": true, "sortOrder": "Descending"},
       "title": "Report Source Warning Insertions (CLAUDE.md Rule 8)",
       "type": "logs",

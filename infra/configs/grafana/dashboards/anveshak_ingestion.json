@@ -15,9 +15,10 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "reqps", "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "reqps", "thresholds": {"mode": "absolute", "steps": [{"color": "#A4C8E8", "value": null}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 0, "y": 1},
       "id": 1,
+      "description": "Current scraper fetch rate across all sources. Drop to zero means scraper is stalled or all sources are circuit-broken.",
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background", "graphMode": "area"},
       "title": "Fetch Rate (items/min)",
       "type": "stat",
@@ -25,9 +26,10 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 5}, {"color": "red", "value": 20}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A8D5BA", "value": null}, {"color": "#FFE0A3", "value": 5}, {"color": "#F4A4A4", "value": 20}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 4, "y": 1},
       "id": 2,
+      "description": "Fetch errors in the last 5 minutes. Yellow at 5, red at 20. Sustained errors indicate source health or network issues.",
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background", "graphMode": "area"},
       "title": "Fetch Errors (5m)",
       "type": "stat",
@@ -35,9 +37,10 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 5}, {"color": "red", "value": 15}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "#A8D5BA", "value": null}, {"color": "#FFE0A3", "value": 5}, {"color": "#F4A4A4", "value": 15}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 8, "y": 1},
       "id": 3,
+      "description": "95th percentile fetch latency. Yellow above 5s, red above 15s. High latency degrades ingestion throughput.",
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
       "title": "Fetch Latency p95 (5m)",
       "type": "stat",
@@ -45,9 +48,10 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A4C8E8", "value": null}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 12, "y": 1},
       "id": 4,
+      "description": "Total items fetched in the last 24 hours. A sharp drop compared to prior days signals collection issues.",
       "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
       "title": "Total Items (24h)",
       "type": "stat",
@@ -61,6 +65,7 @@
       },
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 5},
       "id": 10,
+      "description": "Per-platform fetch rate over time. A flat line for one platform while others are active indicates an adapter failure.",
       "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
       "title": "Items Fetched by Platform (rate/min)",
       "type": "timeseries",
@@ -72,10 +77,11 @@
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {
         "defaults": {"color": {"mode": "palette-classic"}, "unit": "short", "custom": {"lineWidth": 2, "fillOpacity": 10}},
-        "overrides": [{"matcher": {"id": "byName", "options": "errors"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]}]
+        "overrides": [{"matcher": {"id": "byName", "options": "errors"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "#F4A4A4"}}]}]
       },
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 5},
       "id": 11,
+      "description": "Error rate broken down by type (timeout, HTTP 4xx/5xx, parse). Spikes in one type help isolate root cause.",
       "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
       "title": "Fetch Errors by Type (rate/min)",
       "type": "timeseries",
@@ -86,13 +92,14 @@
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {
-        "defaults": {"color": {"mode": "palette-classic"}, "unit": "s", "custom": {"lineWidth": 2}},
+        "defaults": {"color": {"mode": "palette-classic"}, "unit": "s", "custom": {"lineWidth": 2, "fillOpacity": 10}},
         "overrides": []
       },
       "gridPos": {"h": 8, "w": 24, "x": 0, "y": 13},
       "id": 12,
+      "description": "p50/p95/p99 fetch latency over time. Sustained p95 above 10s suggests upstream timeouts or DNS issues.",
       "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
-      "title": "Fetch Latency Percentiles",
+      "title": "Fetch Latency Percentiles (s)",
       "type": "timeseries",
       "targets": [
         {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "histogram_quantile(0.50, rate(scraper_fetch_duration_seconds_bucket[5m]))", "legendFormat": "p50", "refId": "A"},
@@ -115,6 +122,7 @@
       },
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22},
       "id": 20,
+      "description": "Social platform collection rates. Missing platforms mean the adapter is disabled or credentials are invalid.",
       "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
       "title": "Social Items Collected by Platform (rate/min)",
       "type": "timeseries",
@@ -125,13 +133,14 @@
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {
-        "defaults": {"color": {"mode": "palette-classic"}, "unit": "short", "custom": {"lineWidth": 2}},
-        "overrides": [{"matcher": {"id": "byFrameRefID", "options": "A"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]}]
+        "defaults": {"color": {"mode": "palette-classic"}, "unit": "short", "custom": {"lineWidth": 2, "fillOpacity": 10}},
+        "overrides": [{"matcher": {"id": "byFrameRefID", "options": "A"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "#F4A4A4"}}]}]
       },
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22},
       "id": 21,
+      "description": "Social adapter errors by platform and error type. Persistent errors trigger circuit breaker and source health degradation.",
       "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
-      "title": "Social Adapter Errors by Platform",
+      "title": "Social Adapter Errors by Platform (rate/min)",
       "type": "timeseries",
       "targets": [
         {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum by (platform, error_type) (rate(social_adapter_errors_total[5m])) * 60", "legendFormat": "{{platform}}/{{error_type}}", "refId": "A"}
@@ -148,6 +157,7 @@
       "datasource": {"type": "loki", "uid": "loki"},
       "gridPos": {"h": 10, "w": 24, "x": 0, "y": 31},
       "id": 30,
+      "description": "Live log stream from scraper and social services. Filter by level=error to isolate failures.",
       "options": {"dedupStrategy": "none", "enableLogDetails": true, "showLabels": true, "showTime": true, "sortOrder": "Descending"},
       "title": "Scraper & Social Logs",
       "type": "logs",

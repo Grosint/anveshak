@@ -15,8 +15,9 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A4C8E8", "value": null}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 0, "y": 1},
+      "description": "Total vision analyses completed in the last hour across all types.",
       "id": 1,
       "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
       "title": "Total Analyses (1h)",
@@ -25,8 +26,9 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A4C8E8", "value": null}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 4, "y": 1},
+      "description": "YOLO object detection analyses completed in the last hour.",
       "id": 2,
       "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
       "title": "YOLO Analyses (1h)",
@@ -35,8 +37,9 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A4C8E8", "value": null}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 8, "y": 1},
+      "description": "Deepfake detection analyses (image and video) completed in the last hour.",
       "id": 3,
       "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
       "title": "Deepfake Analyses (1h)",
@@ -45,9 +48,10 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 5}, {"color": "red", "value": 20}]}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A8D5BA", "value": null}, {"color": "#FFCBA4", "value": 5}, {"color": "#F4A4A4", "value": 20}]}},
       "overrides": []},
       "gridPos": {"h": 4, "w": 4, "x": 12, "y": 1},
+      "description": "Media items scoring above 0.8 deepfake probability. Investigate these for potential synthetic content.",
       "id": 4,
       "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
       "title": "High-Risk Deepfakes >0.8 (1h)",
@@ -56,8 +60,9 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 15}, {"color": "red", "value": 60}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "#A8D5BA", "value": null}, {"color": "#FFE0A3", "value": 15}, {"color": "#F4A4A4", "value": 60}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 16, "y": 1},
+      "description": "95th percentile analysis latency. Check vision worker health if this exceeds 60s.",
       "id": 5,
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
       "title": "Analysis Latency p95",
@@ -66,8 +71,9 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 3}, {"color": "red", "value": 10}]}}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A8D5BA", "value": null}, {"color": "#FFE0A3", "value": 3}, {"color": "#F4A4A4", "value": 10}]}}},
       "gridPos": {"h": 4, "w": 4, "x": 20, "y": 1},
+      "description": "ARQ job failures in the last 5 minutes. Persistent failures indicate model loading or OOM issues.",
       "id": 6,
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"},
       "title": "Vision ARQ Failures (5m)",
@@ -88,6 +94,7 @@
         "overrides": []
       },
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+      "description": "Per-minute rate of vision analyses broken down by type (YOLO, CLIP, deepfake).",
       "id": 10,
       "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
       "title": "Vision Analyses by Type (rate/min)",
@@ -103,6 +110,7 @@
         "overrides": []
       },
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+      "description": "Latency distribution (p50, p95, p99) across all vision analysis types.",
       "id": 11,
       "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}},
       "title": "Analysis Latency Percentiles (all types)",
@@ -124,7 +132,7 @@
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "description": "Distribution of deepfake probability scores across all analysed media items. Scores near 1.0 indicate high confidence of synthetic content.",
       "fieldConfig": {
-        "defaults": {"color": {"mode": "palette-classic"}, "unit": "short", "custom": {"lineWidth": 2, "fillOpacity": 20}},
+        "defaults": {"color": {"mode": "palette-classic"}, "unit": "short", "custom": {"lineWidth": 2, "fillOpacity": 10}},
         "overrides": []
       },
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 15},
@@ -142,10 +150,11 @@
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {
-        "defaults": {"color": {"mode": "fixed", "fixedColor": "red"}, "unit": "short", "custom": {"lineWidth": 3, "fillOpacity": 20}},
+        "defaults": {"color": {"mode": "fixed", "fixedColor": "#F4A4A4"}, "unit": "short", "custom": {"lineWidth": 3, "fillOpacity": 10}},
         "overrides": []
       },
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 15},
+      "description": "Cumulative count of items scoring above 0.8 deepfake probability over a rolling 1-hour window.",
       "id": 21,
       "options": {"tooltip": {"mode": "single"}, "legend": {"displayMode": "list", "placement": "bottom"}},
       "title": "High-Confidence Deepfakes >0.8 (cumulative, 1h window)",
@@ -164,6 +173,7 @@
     {
       "datasource": {"type": "loki", "uid": "loki"},
       "gridPos": {"h": 10, "w": 24, "x": 0, "y": 24},
+      "description": "Structured logs from the vision service. Filter by level or analysis_type for targeted debugging.",
       "id": 30,
       "options": {"dedupStrategy": "none", "enableLogDetails": true, "showLabels": true, "showTime": true, "sortOrder": "Descending"},
       "title": "Vision Logs",
