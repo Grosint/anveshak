@@ -295,6 +295,9 @@ tramp
 # Cursor
 .cursor/
 
+# Claude Code (local settings — user-specific)
+.claude/settings.local.json
+
 
 # =============================================================================
 # OS
