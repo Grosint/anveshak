@@ -3,6 +3,8 @@
 # Build context: project root (../../ from compose.yml)
 #
 # Multi-stage build: builder (compile C extensions + torch) → runtime (slim).
+# ML models (YOLO, CLIP, deepfake ONNX) are downloaded by the vision-init
+# container into the vision_models volume — NOT baked into the image.
 # GPU usage: pass VISION_DEVICE=cuda via environment (compose.vision.yml).
 # The image itself is CUDA-agnostic; onnxruntime selects the provider at runtime.
 
@@ -26,19 +28,12 @@ RUN uv pip install --system /workspace/sdk/
 WORKDIR /workspace/services/vision
 COPY services/vision/pyproject.toml .
 COPY services/vision/anveshak/ anveshak/
-# Install torch CPU-only FIRST so uv doesn't pull CUDA wheels (nvidia-cudnn-cu13).
+# Install torch + torchvision CPU-only FIRST so uv doesn't pull CUDA wheels.
+# onnxscript is needed for ONNX model export in vision-init.
 RUN uv pip install --system \
-        torch \
+        torch torchvision \
         --index-url https://download.pytorch.org/whl/cpu \
-    && uv pip install --system .
-
-# Pre-download YOLO nano model (avoids runtime internet access)
-# Ensure /app/models exists even if mv fails (model path varies by ultralytics version)
-RUN mkdir -p /app/models/yolo \
-    && python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')" \
-    && (mv /root/.config/Ultralytics/yolov8n.pt /app/models/yolo/ 2>/dev/null \
-        || find / -name 'yolov8n.pt' -not -path '/proc/*' -exec mv {} /app/models/yolo/ \; 2>/dev/null) \
-    || true
+    && uv pip install --system . onnxscript
 
 # ===== Stage 2: runtime — OpenCV + ffmpeg, no build tools =====
 FROM python:3.12-slim AS runtime
@@ -68,11 +63,10 @@ COPY --from=builder /workspace/sdk /workspace/sdk
 COPY --from=builder /workspace/services/vision /workspace/services/vision
 WORKDIR /workspace/services/vision
 
-# Copy pre-downloaded YOLO model
-COPY --from=builder /app/models /app/models
-
-# Model directories — facetorch/efficientnet ONNX models are volume-mounted
-RUN mkdir -p /app/models/facetorch \
+# Model directories — all ML models are downloaded by vision-init container
+# into the vision_models volume. These dirs ensure mount points exist.
+RUN mkdir -p /app/models/yolo \
+             /app/models/facetorch \
              /app/models/efficientnet \
              /app/media
 

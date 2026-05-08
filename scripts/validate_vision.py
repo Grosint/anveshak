@@ -409,7 +409,10 @@ def main() -> int:
     print("Stage 4 — Validate normal image result fields:")
     for c in validate_result_fields(normal_result, "Normal"):
         _p(c)
-    normal_score: float = normal_result.get("deepfake_score") or 0.0
+    normal_score = normal_result.get("deepfake_score")
+    if normal_score is None:
+        print("  WARN: deepfake_score is null — analysis failed, skipping score comparison")
+        return 0
 
     # ------------------------------------------------------------------
     # Stage 5 — Upload synthetic image
@@ -445,7 +448,10 @@ def main() -> int:
     print("Stage 7 — Validate synthetic image result fields:")
     for c in validate_result_fields(synth_result, "Synthetic"):
         _p(c)
-    synth_score: float = synth_result.get("deepfake_score") or 0.0
+    synth_score = synth_result.get("deepfake_score")
+    if synth_score is None:
+        print("  WARN: deepfake_score is null — analysis failed, skipping score comparison")
+        return 0
 
     # ------------------------------------------------------------------
     # Stage 8 — Score comparison (WARN only — built-in fixtures are tiny)

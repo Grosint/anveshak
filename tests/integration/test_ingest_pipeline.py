@@ -132,99 +132,11 @@ async def test_content_hash_deduplication(db_pool, test_topic, test_source):
     assert count == 1, "Duplicate content_hash must produce exactly one row"
 
 
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_analyst_sets_embedding(db_pool, test_topic, test_source):
-    """Criteria 1.27: embedding IS NOT NULL after analyst processes item."""
-    from anveshak.scraper.normalise import compute_content_hash
-    from anveshak.analyst.nlp import load_models
-    from anveshak.analyst.embeddings import load_encoder
-    from anveshak.analyst.jobs import analyse_content
 
-    # Load models (CPU — criteria 1.34)
-    load_models()
-    load_encoder()
-
-    text = (
-        "Russian forces conducted exercises near the border. "
-        "NATO responded with increased aerial surveillance over the Baltic region. "
-        "India and China held talks regarding the Himalayan standoff. "
-    )
-    content_hash = compute_content_hash(text)
-
-    item_id = await _insert_content_item(
-        db_pool, test_topic, test_source, text, content_hash,
-        f"https://example.com/test-embedding-{uuid.uuid4()}"
-    )
-
-    ctx = {"db_pool": db_pool}
-    await analyse_content(ctx, item_id)
-
-    async with db_pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT embedding, language FROM content_items WHERE id = $1", item_id
-        )
-
-    assert row is not None
-    assert row["embedding"] is not None, "embedding must be set after analyse_content"
-    assert row["language"] is not None
-    assert len(row["language"]) >= 2  # ISO 639-1 code
+# NOTE: test_analyst_sets_embedding, test_extracted_entities_exist, and
+# test_language_not_null_after_analysis have been moved to
+# scripts/test_analyst_models.py (runs inside analyst-worker container
+# where spaCy and sentence-transformers are installed).
+# They execute as part of `make test-integration` step 2/4.
 
 
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_extracted_entities_exist(db_pool, test_topic, test_source):
-    """Criteria 1.28: extracted_entities rows exist for content with named entities."""
-    from anveshak.scraper.normalise import compute_content_hash
-    from anveshak.analyst.jobs import analyse_content
-
-    text = (
-        "General Ahmed Khan of Pakistan visited Moscow to meet with Defence Minister Shoigu. "
-        "The meeting focused on bilateral agreements and arms exports to South Asia. "
-        "China's PLA also expressed interest in the joint exercise programme. "
-    )
-    content_hash = compute_content_hash(text)
-    item_id = await _insert_content_item(
-        db_pool, test_topic, test_source, text, content_hash,
-        f"https://example.com/entities-{uuid.uuid4()}"
-    )
-
-    ctx = {"db_pool": db_pool}
-    await analyse_content(ctx, item_id)
-
-    async with db_pool.acquire() as conn:
-        count = await conn.fetchval(
-            "SELECT COUNT(*) FROM extracted_entities WHERE content_item_id = $1", item_id
-        )
-
-    assert count > 0, "Named entities should be extracted from intelligence-relevant text"
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_language_not_null_after_analysis(db_pool, test_topic, test_source):
-    """Criteria 1.29: language is set correctly and not left as default for processed items."""
-    from anveshak.scraper.normalise import compute_content_hash
-    from anveshak.analyst.jobs import analyse_content
-
-    text = (
-        "The Indian Air Force deployed Rafale jets to the eastern sector following "
-        "intelligence reports of increased activity across the LAC. "
-        "Southern Air Command confirmed the deployment on Tuesday. "
-    )
-    content_hash = compute_content_hash(text)
-    item_id = await _insert_content_item(
-        db_pool, test_topic, test_source, text, content_hash,
-        f"https://example.com/language-{uuid.uuid4()}"
-    )
-
-    ctx = {"db_pool": db_pool}
-    await analyse_content(ctx, item_id)
-
-    async with db_pool.acquire() as conn:
-        lang = await conn.fetchval(
-            "SELECT language FROM content_items WHERE id = $1", item_id
-        )
-
-    assert lang is not None
-    assert lang != ""

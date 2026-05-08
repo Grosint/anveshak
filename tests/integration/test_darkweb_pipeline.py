@@ -162,7 +162,7 @@ class TestDarkwebContentDedup:
                 str(uuid.uuid4()), test_topic, darkweb_source,
                 raw_text, raw_text, "en", content_hash,
                 "http://testsite.onion/page1", now, 50.0,
-                now, now, labels, 0.5, content_hash, "Test",
+                now, now, labels, "good", content_hash, "Test",
             )
             # Second insert with same content_hash
             r2 = await conn.fetchrow(
@@ -170,7 +170,7 @@ class TestDarkwebContentDedup:
                 str(uuid.uuid4()), test_topic, darkweb_source,
                 raw_text, raw_text, "en", content_hash,
                 "http://testsite.onion/page1", now, 50.0,
-                now, now, labels, 0.5, content_hash, "Test",
+                now, now, labels, "good", content_hash, "Test",
             )
 
         assert r1 is not None  # first insert succeeds

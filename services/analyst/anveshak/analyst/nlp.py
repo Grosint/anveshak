@@ -21,20 +21,27 @@ _MIN_LANGDETECT_LEN = 30
 
 
 def load_models() -> None:
-    """Load all configured spaCy models. Must be called ONCE at service startup."""
+    """Load English spaCy model. Must be called ONCE at service startup.
+
+    English is the only NER model — all non-English content is translated
+    to English by NLLB before NER. Raises RuntimeError if model fails to load.
+    """
     import spacy
 
     global _MODELS
-    for lang, model_name in [
-        ("en", settings.spacy_en_model),
-        ("ru", settings.spacy_ru_model),
-        ("zh", settings.spacy_zh_model),
-    ]:
-        try:
-            _MODELS[lang] = spacy.load(model_name)
-            log.info("nlp.model_loaded", lang=lang, model=model_name)
-        except OSError as exc:
-            log.error("nlp.model_load_failed", lang=lang, model=model_name, error=str(exc))
+    model_name = settings.spacy_en_model
+    try:
+        _MODELS["en"] = spacy.load(model_name)
+        log.info("nlp.model_loaded", lang="en", model=model_name)
+    except OSError as exc:
+        raise RuntimeError(
+            f"spaCy model '{model_name}' failed to load: {exc}"
+        ) from exc
+
+
+def get_loaded_models() -> dict[str, bool]:
+    """Return which spaCy models are loaded. Used by health checks."""
+    return {lang: lang in _MODELS for lang in ["en"]}
 
 
 import re
@@ -75,6 +82,11 @@ def detect_language(text: str) -> str:
         log.warning("nlp.unsupported_language", detected=lang, fallback="en")
         return "en"
     return lang
+
+
+def is_model_loaded(lang: str) -> bool:
+    """Check if spaCy model for the given language is loaded."""
+    return lang in _MODELS
 
 
 def _get_nlp(lang: str):

@@ -145,7 +145,7 @@ async def run_vision_analysis(ctx: dict, media_asset_id: str) -> dict:
                 log.warning("vision.yolo.failed", media_asset_id=media_asset_id, error=str(exc))
 
         # STEP 4: Deepfake detection (criteria 4.12–4.21)
-        deepfake_score: float = 0.0
+        deepfake_score: float | None = None
         deepfake_model_name: str = ""
         synthetic_probability: Optional[float] = None
 
@@ -179,7 +179,7 @@ async def run_vision_analysis(ctx: dict, media_asset_id: str) -> dict:
             media_asset_id=media_asset_id,
             yolo_detections=yolo_detections,
             clip_labels=clip_labels,
-            deepfake_score=deepfake_score,          # always float 0.0–1.0 (CLAUDE.md rule 7)
+            deepfake_score=deepfake_score,          # float 0.0–1.0 or None on error (CLAUDE.md rule 7)
             deepfake_model=deepfake_model_name,
             synthetic_probability=synthetic_probability,
         )
@@ -198,7 +198,7 @@ async def run_vision_analysis(ctx: dict, media_asset_id: str) -> dict:
         # Note: actual credibility downgrade is handled by analyst/credibility.py
         # which queries vision_results JOIN media_assets JOIN content_items.
         # No direct call needed here — Phase 2 loop handles it.
-        if deepfake_score > settings.deepfake_high_risk_threshold:
+        if deepfake_score is not None and deepfake_score > settings.deepfake_high_risk_threshold:
             log.warning(
                 "vision.deepfake_high_risk",
                 media_asset_id=media_asset_id,
@@ -215,7 +215,8 @@ async def run_vision_analysis(ctx: dict, media_asset_id: str) -> dict:
         vision_analyses_total.labels(analysis_type="yolo").inc()
     if clip_labels:
         vision_analyses_total.labels(analysis_type="clip").inc()
-    vision_deepfake_score.observe(deepfake_score)
+    if deepfake_score is not None:
+        vision_deepfake_score.observe(deepfake_score)
 
     result = {
         "media_asset_id": media_asset_id,
@@ -231,7 +232,7 @@ async def run_vision_analysis(ctx: dict, media_asset_id: str) -> dict:
     return result
 
 
-async def _analyse_image(image_bytes: bytes, media_asset_id: str) -> tuple[float, str]:
+async def _analyse_image(image_bytes: bytes, media_asset_id: str) -> tuple[float | None, str]:
     """Route image to face or non-face deepfake detector based on face presence."""
     try:
         face_detector = _get_deepfake_image_detector()
@@ -246,21 +247,26 @@ async def _analyse_image(image_bytes: bytes, media_asset_id: str) -> tuple[float
             model_name = f"{settings.vision_deepfake_video_model}:no_face"
         return score, model_name
     except Exception as exc:
-        log.warning(
+        log.error(
             "vision.deepfake_image.failed",
             media_asset_id=media_asset_id,
             error=str(exc),
         )
-        return 0.0, "error"
+        return None, "error"
 
 
-async def _analyse_video(storage_path: str, media_asset_id: str) -> tuple[float, str]:
+async def _analyse_video(storage_path: str, media_asset_id: str) -> tuple[float | None, str]:
     """Extract keyframes and propagate worst-case deepfake score."""
     try:
         from pathlib import Path
         frames = await extract_keyframes(Path(storage_path))
         if not frames:
-            return 0.0, "no_frames"
+            log.error(
+                "vision.deepfake_video.no_frames",
+                media_asset_id=media_asset_id,
+                storage_path=storage_path,
+            )
+            return None, "no_frames"
 
         video_detector = _get_deepfake_video_detector()
         frame_scores: list[float] = []
@@ -277,12 +283,12 @@ async def _analyse_video(storage_path: str, media_asset_id: str) -> tuple[float,
         )
         return score, model_name
     except Exception as exc:
-        log.warning(
+        log.error(
             "vision.deepfake_video.failed",
             media_asset_id=media_asset_id,
             error=str(exc),
         )
-        return 0.0, "error"
+        return None, "error"
 
 
 # ---------------------------------------------------------------------------

@@ -122,12 +122,12 @@ async def _pillow_first_frame(video_path: Path) -> list[bytes]:
         return []
 
 
-def worst_case_score(frame_scores: list[float]) -> float:
+def worst_case_score(frame_scores: list[float]) -> float | None:
     """Return worst-case (maximum) deepfake score across all keyframes.
 
     Criteria 4.21: worst-case score propagated to media_asset.
-    CLAUDE.md rule 7: always float, never bool.
+    CLAUDE.md rule 7: always float, never bool. None = analysis failed.
     """
     if not frame_scores:
-        return 0.0
+        return None
     return float(max(frame_scores))

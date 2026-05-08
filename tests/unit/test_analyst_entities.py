@@ -96,6 +96,63 @@ class TestParseEntities:
         assert result == []
 
 
+class TestIsModelLoaded:
+    """is_model_loaded() — checks if spaCy model is loaded for a language."""
+
+    def test_returns_true_when_loaded(self):
+        from anveshak.analyst.nlp import _MODELS, is_model_loaded
+
+        with patch.dict(_MODELS, {"en": MagicMock()}, clear=True):
+            assert is_model_loaded("en") is True
+
+    def test_returns_false_when_not_loaded(self):
+        from anveshak.analyst.nlp import _MODELS, is_model_loaded
+
+        with patch.dict(_MODELS, {}, clear=True):
+            assert is_model_loaded("en") is False
+
+    def test_returns_false_for_unknown_lang(self):
+        from anveshak.analyst.nlp import _MODELS, is_model_loaded
+
+        with patch.dict(_MODELS, {"en": MagicMock()}, clear=True):
+            assert is_model_loaded("ja") is False
+
+
+class TestLoadModelsFastFail:
+    """load_models() crashes for required langs, warns for optional."""
+
+    def test_raises_runtime_error_when_en_fails(self):
+        """English spaCy model failure must crash the worker."""
+        from anveshak.analyst.nlp import _MODELS, load_models
+
+        with (
+            patch.dict(_MODELS, {}, clear=True),
+            patch("anveshak.analyst.nlp.settings") as mock_settings,
+            patch("spacy.load", side_effect=OSError("model not found")),
+        ):
+            mock_settings.spacy_en_model = "en_core_web_md"
+
+            with pytest.raises(RuntimeError, match="spaCy model"):
+                load_models()
+
+    def test_loads_en_model_successfully(self):
+        """English model loads and is registered in _MODELS."""
+        from anveshak.analyst.nlp import _MODELS, load_models
+
+        mock_nlp = MagicMock()
+
+        with (
+            patch.dict(_MODELS, {}, clear=True),
+            patch("anveshak.analyst.nlp.settings") as mock_settings,
+            patch("spacy.load", return_value=mock_nlp),
+        ):
+            mock_settings.spacy_en_model = "en_core_web_md"
+
+            load_models()
+
+            assert "en" in _MODELS, "English model should be loaded"
+
+
 class TestDetectLanguage:
     """Language detection routing."""
 

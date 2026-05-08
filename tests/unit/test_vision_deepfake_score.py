@@ -118,3 +118,75 @@ class TestDIREDetector:
         # Should not raise — lazy loading happens on first score() call
         detector = EfficientNetDetector(device="cpu")
         assert detector.device == "cpu"
+
+
+# ---------------------------------------------------------------------------
+# Tests: worst_case_score — None for empty, max for non-empty
+# ---------------------------------------------------------------------------
+
+class TestWorstCaseScore:
+    @pytest.mark.unit
+    def test_empty_list_returns_none(self):
+        """Empty frame list must return None, not 0.0 (analysis failed)."""
+        from anveshak.vision.video import worst_case_score
+
+        result = worst_case_score([])
+        assert result is None
+
+    @pytest.mark.unit
+    def test_single_frame(self):
+        """Single frame score returned as-is."""
+        from anveshak.vision.video import worst_case_score
+
+        result = worst_case_score([0.75])
+        assert result == 0.75
+        assert isinstance(result, float)
+
+    @pytest.mark.unit
+    def test_multiple_frames_returns_max(self):
+        """Worst-case (maximum) score across frames."""
+        from anveshak.vision.video import worst_case_score
+
+        result = worst_case_score([0.2, 0.9, 0.5])
+        assert result == 0.9
+
+
+# ---------------------------------------------------------------------------
+# Tests: _analyse_image / _analyse_video return (None, "error") on failure
+# ---------------------------------------------------------------------------
+
+class TestDeepfakeErrorHandling:
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_analyse_image_returns_none_on_error(self):
+        """_analyse_image must return (None, 'error'), never (0.0, 'error')."""
+        with patch("anveshak.vision.jobs._get_deepfake_image_detector") as mock_get:
+            mock_get.side_effect = RuntimeError("model not found")
+
+            from anveshak.vision.jobs import _analyse_image
+            score, model = await _analyse_image(b"fake", "asset-1")
+
+        assert score is None, "Failed deepfake analysis must return None, not 0.0"
+        assert model == "error"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_analyse_video_returns_none_on_error(self):
+        """_analyse_video must return (None, 'error'), never (0.0, 'error')."""
+        with patch("anveshak.vision.jobs.extract_keyframes", side_effect=RuntimeError("ffmpeg missing")):
+            from anveshak.vision.jobs import _analyse_video
+            score, model = await _analyse_video("/fake/path.mp4", "asset-2")
+
+        assert score is None, "Failed video analysis must return None, not 0.0"
+        assert model == "error"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_analyse_video_returns_none_on_no_frames(self):
+        """_analyse_video with no extractable frames must return (None, 'no_frames')."""
+        with patch("anveshak.vision.jobs.extract_keyframes", return_value=[]):
+            from anveshak.vision.jobs import _analyse_video
+            score, model = await _analyse_video("/fake/path.mp4", "asset-3")
+
+        assert score is None, "No frames must return None, not 0.0"
+        assert model == "no_frames"
