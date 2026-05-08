@@ -43,6 +43,19 @@ Consolidated from 9 learned instincts. These apply to all PostgreSQL/asyncpg cod
   rather than UPDATE on the primary table — preserves UNIQUE constraints and
   allows an item to belong to multiple topics
 
+## Source of Truth
+
+- The database is ALWAYS authoritative. Never rely on Redis or in-memory state
+  as the record for long-lived entities (jobs, reports, credibility scores).
+  Redis is for queues and caches — DB is for truth.
+  See: `learned/analysis-jobs-db-source-of-truth.md`
+
+## Atomicity
+
+- Use database constraints and SQL atomicity for critical paths
+  `ON CONFLICT`, `WHERE sentinel IS NULL`, Redis INCR (not GET→SET)
+  See: `learned/redis-atomic-budget-guard.md`, `learned/immutable-write-idempotency.md`
+
 ## Pitfalls
 
 - PostgreSQL volumes read the password only on first init — if the volume exists
