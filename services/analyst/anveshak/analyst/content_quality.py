@@ -35,9 +35,9 @@ def is_quality_content(text: str) -> bool:
         return False
 
     # Check 2: unique word ratio (catches "Business Tech Lifestyle Business Tech Lifestyle...")
-    # CJK characters are single-char words; Latin/Cyrillic/Arabic/Devanagari require 2+ chars
+    # CJK characters are single-char words; Latin/Cyrillic/Arabic/Devanagari/Bengali require 2+ chars
     words = re.findall(
-        r"[a-zA-Z\u0400-\u04ff\u0600-\u06ff\u0900-\u097f]{2,}|[\u4e00-\u9fff\u3400-\u4dbf]",
+        r"[a-zA-Z\u0400-\u04ff\u0600-\u06ff\u0900-\u097f\u0980-\u09ff]{2,}|[\u4e00-\u9fff\u3400-\u4dbf]",
         stripped.lower(),
     )
     if len(words) < 5:

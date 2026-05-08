@@ -12,6 +12,7 @@ Supported source languages (currently active):
   ar  → Arabic                — arb_Arab
   ur  → Urdu                  — urd_Arab
   ru  → Russian               — rus_Cyrl
+  bn  → Bengali               — ben_Beng
 
 Model: facebook/nllb-200-distilled-600M (~2.4GB, CPU-capable)
 GPU upgrade: facebook/nllb-200-1.3B or facebook/nllb-200-3.3B — see hardware.md
@@ -34,6 +35,7 @@ _NLLB_SRC_CODES: dict[str, str] = {
     "ar": "arb_Arab",   # Arabic
     "ur": "urd_Arab",   # Urdu
     "ru": "rus_Cyrl",   # Russian
+    "bn": "ben_Beng",   # Bengali
 }
 
 _NLLB_TGT_CODE = "eng_Latn"   # English (Latin script) — always the target

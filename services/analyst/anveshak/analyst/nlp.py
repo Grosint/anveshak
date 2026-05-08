@@ -78,9 +78,12 @@ def detect_language(text: str) -> str:
     if lang.startswith("zh"):
         lang = "zh"
 
-    if lang not in _MODELS:
-        log.warning("nlp.unsupported_language", detected=lang, fallback="en")
-        return "en"
+    # Return the detected language even if no spaCy model exists for it.
+    # Translation (NLLB) uses this to decide whether to translate to English.
+    # NER will fall back to the English model in parse_entities().
+    if lang != "en" and lang not in _MODELS:
+        log.info("nlp.non_english_detected", detected=lang,
+                 note="no spaCy model for this language; NER will use English model")
     return lang
 
 

@@ -419,18 +419,23 @@ test-integration:
 	$(call header,Integration Tests (~90s — requires make up))
 	@$(MAKE) --no-print-directory migrate-test
 	@_fail=0; \
-	printf "\n  $(_INFO) Step 1/4: Host-side DB tests\n"; \
+	printf "\n  $(_INFO) Step 1/5: Host-side DB tests\n"; \
 	$(UV) pytest tests/integration/ -v --tb=short -q -m integration \
 		--cov=services --cov=sdk --cov-report=term:skip-covered || _fail=1; \
-	printf "\n  $(_INFO) Step 2/4: Analyst model tests (inside analyst-worker)\n"; \
+	printf "\n  $(_INFO) Step 2/5: Analyst model tests (inside analyst-worker)\n"; \
 	$(COMPOSE) cp scripts/test_analyst_models.py analyst-worker:/tmp/test_analyst_models.py; \
-	$(COMPOSE) exec -T analyst-worker python /tmp/test_analyst_models.py || _fail=1; \
-	printf "\n  $(_INFO) Step 3/4: Vision model tests (inside vision-worker)\n"; \
+	$(COMPOSE) exec -T -e POSTGRES_URL=postgresql://anveshak:$${POSTGRES_PASSWORD:-change-me-in-production}@postgres:5432/anveshak_test \
+		analyst-worker python /tmp/test_analyst_models.py || _fail=1; \
+	printf "\n  $(_INFO) Step 3/5: Vision model tests (inside vision-worker)\n"; \
 	$(COMPOSE) cp scripts/test_vision_models.py vision-worker:/tmp/test_vision_models.py; \
 	$(COMPOSE) exec -T vision-worker python /tmp/test_vision_models.py || _fail=1; \
-	printf "\n  $(_INFO) Step 4/4: Ollama LLM tests (inside reporter-worker)\n"; \
+	printf "\n  $(_INFO) Step 4/5: Ollama LLM tests (inside reporter-worker)\n"; \
 	$(COMPOSE) cp scripts/test_ollama_models.py reporter-worker:/tmp/test_ollama_models.py; \
 	$(COMPOSE) exec -T reporter-worker python /tmp/test_ollama_models.py || _fail=1; \
+	printf "\n  $(_INFO) Step 5/5: Multilingual pipeline validation (inside analyst-worker)\n"; \
+	$(COMPOSE) cp scripts/test_multilingual_pipeline.py analyst-worker:/tmp/test_multilingual_pipeline.py; \
+	$(COMPOSE) exec -T -e POSTGRES_URL=postgresql://anveshak:$${POSTGRES_PASSWORD:-change-me-in-production}@postgres:5432/anveshak_test \
+		analyst-worker python /tmp/test_multilingual_pipeline.py || _fail=1; \
 	exit $$_fail
 
 test-e2e:
