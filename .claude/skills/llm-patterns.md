@@ -25,6 +25,8 @@
 > See also: `learned/deepfake-none-error-signal.md` — return None on detection failure instead of default 0.0 score
 > See also: `learned/spacy-pip-models-bake-in-image.md` — spaCy models are pip packages; bake into image, not volume
 > See also: `learned/credibility-settings-separation.md` — separate penalty magnitude from noise filter threshold
+> See also: `learned/detect-language-must-not-gatekeep.md` — detect_language returns real lang; don't filter on downstream model availability
+> See also: `learned/golden-test-data-ml-pipeline.md` — pre-written multilingual content with expected outputs; fuzzy keyword matching
 
 ---
 

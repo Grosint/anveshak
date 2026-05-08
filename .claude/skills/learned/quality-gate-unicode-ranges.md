@@ -28,6 +28,7 @@ r"[a-zA-Z\u0400-\u04ff\u0600-\u06ff\u0900-\u097f]{2,}|[\u4e00-\u9fff\u3400-\u4db
 | Russian | Cyrillic | U+0400-04FF | `\u0400-\u04ff` |
 | Arabic/Urdu | Arabic | U+0600-06FF | `\u0600-\u06ff` |
 | Hindi | Devanagari | U+0900-097F | `\u0900-\u097f` |
+| Bengali | Bengali | U+0980-09FF | `\u0980-\u09ff` |
 | Chinese | CJK Unified | U+4E00-9FFF | `\u4e00-\u9fff` |
 
 ## Pitfall: Silent Failure
