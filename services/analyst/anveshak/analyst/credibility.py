@@ -80,7 +80,8 @@ SQL_CROSS_VERIFY_SOURCES = """
     FROM content_items ci
     JOIN sources s            ON s.id  = ci.source_id
     JOIN narrative_clusters nc ON nc.id = ci.narrative_cluster_id
-    WHERE ci.topic_id     = $1
+    WHERE (ci.topic_id = $1
+       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND nc.independent_source_count >= 2
       AND s.credibility_score >= $2
       AND s.credibility_score  < 100.0

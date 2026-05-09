@@ -44,7 +44,8 @@ SQL_FETCH_RAG_CHUNKS = """
            url,
            source_id
     FROM content_items
-    WHERE topic_id = $1
+    WHERE (topic_id = $1
+       OR id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND embedding IS NOT NULL
       AND credibility_score_at_capture >= $2
     ORDER BY embedding <-> $3
@@ -119,7 +120,8 @@ SQL_FETCH_TOPIC_LOCATION_ENTITIES = """
     SELECT DISTINCT ee.entity_text
     FROM extracted_entities ee
     JOIN content_items ci ON ee.content_item_id = ci.id
-    WHERE ci.topic_id = $1
+    WHERE (ci.topic_id = $1
+       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND ee.entity_type IN ('GPE', 'LOC', 'FACILITY')
       AND ee.confidence >= 0.8
 """
