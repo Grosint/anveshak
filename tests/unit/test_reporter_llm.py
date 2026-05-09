@@ -183,3 +183,128 @@ class TestCallOllamaWithRetry:
             result = await call_ollama_with_retry("test prompt", settings, max_retries=2)
 
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# _extract_json_from_text tests
+# ---------------------------------------------------------------------------
+
+class TestExtractJsonFromText:
+    """Tests for JSON extraction from LLM output with various wrappings."""
+
+    def test_extract_json_finds_fenced_json(self):
+        """```json {...} ``` -> extracted correctly."""
+        from anveshak.reporter.llm import _extract_json_from_text
+
+        payload = json.dumps({"key": "value"})
+        wrapped = f"```json\n{payload}\n```"
+        result = _extract_json_from_text(wrapped)
+        assert json.loads(result) == {"key": "value"}
+
+    def test_extract_json_bare_object(self):
+        """No fence, just {...} -> extracted."""
+        from anveshak.reporter.llm import _extract_json_from_text
+
+        payload = json.dumps({"key": "value"})
+        result = _extract_json_from_text(payload)
+        assert json.loads(result) == {"key": "value"}
+
+    def test_extract_json_with_preamble(self):
+        """'Here is the report: {...}' -> extracts the JSON."""
+        from anveshak.reporter.llm import _extract_json_from_text
+
+        payload = json.dumps({"key": "value"})
+        text = f"Here is the report: {payload}"
+        result = _extract_json_from_text(text)
+        assert json.loads(result) == {"key": "value"}
+
+
+# ---------------------------------------------------------------------------
+# parse_llm_response — extended tests
+# ---------------------------------------------------------------------------
+
+class TestParseLlmResponseExtended:
+    """Additional parse_llm_response tests covering edge cases."""
+
+    def test_parse_llm_response_valid(self):
+        """Valid JSON matching ReportContent -> returns object."""
+        from anveshak.reporter.llm import parse_llm_response
+
+        raw = json.dumps(VALID_LLM_RESPONSE)
+        result = parse_llm_response(raw)
+        assert result.executive_summary == VALID_LLM_RESPONSE["executive_summary"]
+        assert result.confidence_level == pytest.approx(0.82)
+        assert len(result.key_findings) == 2
+
+    def test_parse_llm_response_invalid_json(self):
+        """Not JSON -> ValueError."""
+        from anveshak.reporter.llm import parse_llm_response
+
+        with pytest.raises(ValueError, match="Invalid JSON"):
+            parse_llm_response("This is not JSON at all, just plain text.")
+
+    def test_parse_llm_response_missing_field(self):
+        """JSON missing required field -> ValidationError."""
+        from anveshak.reporter.llm import parse_llm_response
+
+        # Missing recommendations field
+        incomplete = {k: v for k, v in VALID_LLM_RESPONSE.items() if k != "recommendations"}
+        with pytest.raises(ValidationError):
+            parse_llm_response(json.dumps(incomplete))
+
+
+# ---------------------------------------------------------------------------
+# call_ollama_with_retry — extended tests
+# ---------------------------------------------------------------------------
+
+class TestCallOllamaWithRetryExtended:
+    """Additional retry logic tests."""
+
+    @pytest.mark.asyncio
+    async def test_succeeds_first_try(self):
+        """Mock httpx, returns valid JSON -> success on attempt 1."""
+        from anveshak.reporter.llm import call_ollama_with_retry
+
+        valid_json = json.dumps(VALID_LLM_RESPONSE)
+        settings = _make_settings()
+
+        with patch("anveshak.reporter.llm.call_ollama", new_callable=AsyncMock) as mock_call:
+            mock_call.return_value = valid_json
+            result = await call_ollama_with_retry("generate report", settings, max_retries=3)
+
+        assert result is not None
+        assert result.executive_summary == VALID_LLM_RESPONSE["executive_summary"]
+        assert mock_call.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_succeeds_second_try(self):
+        """First attempt invalid, second valid -> success on attempt 2."""
+        from anveshak.reporter.llm import call_ollama_with_retry
+
+        valid_json = json.dumps(VALID_LLM_RESPONSE)
+        settings = _make_settings()
+
+        with patch("anveshak.reporter.llm.call_ollama", new_callable=AsyncMock) as mock_call:
+            # First: garbled output, second: valid
+            mock_call.side_effect = [
+                "Sure! Here is your report but I forgot the JSON",
+                valid_json,
+            ]
+            result = await call_ollama_with_retry("generate report", settings, max_retries=3)
+
+        assert result is not None
+        assert mock_call.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_all_fail(self):
+        """All attempts fail -> returns None."""
+        from anveshak.reporter.llm import call_ollama_with_retry
+
+        settings = _make_settings()
+
+        with patch("anveshak.reporter.llm.call_ollama", new_callable=AsyncMock) as mock_call:
+            mock_call.return_value = "I cannot generate JSON right now."
+            result = await call_ollama_with_retry("generate report", settings, max_retries=3)
+
+        assert result is None
+        assert mock_call.call_count == 3

@@ -83,7 +83,7 @@ class RedditAdapter(SourceAdapterBase):
             return
 
         for handle in source_handles:
-            subreddit_name = handle.lstrip("r/")
+            subreddit_name = handle.removeprefix("r/")
             async for item in self._poll_subreddit(subreddit_name, handle, topic_keywords):
                 yield item
 

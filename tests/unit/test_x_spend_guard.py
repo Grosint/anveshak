@@ -149,6 +149,52 @@ class TestXSpendGuardMonthlyReset:
         await guard.check_and_increment()
         redis.expire.assert_called_once()
 
+    def test_monthly_key_contains_year_and_month(self):
+        """Key must include YYYY-MM so each month gets an independent counter.
+
+        Bug caught: if the key used only MM (no year), January 2026 and
+        January 2027 would share a counter — silently capping reads at
+        whatever was left from 11 months ago.
+        """
+        from datetime import datetime, UTC
+
+        key = _monthly_key()
+        now = datetime.now(UTC)
+        expected_suffix = now.strftime("%Y-%m")
+        assert key.endswith(expected_suffix)
+
+    def test_monthly_key_prefix_is_namespaced(self):
+        """Key must be namespaced to anveshak:x: — prevents collision with other Redis users."""
+        key = _monthly_key()
+        assert key.startswith("anveshak:x:monthly_reads:")
+
+    def test_seconds_until_month_end_at_least_one(self):
+        """TTL must be >= 1 even at month boundary — max(1, ...) guard.
+
+        Bug caught: if max() guard is removed, a call at exactly midnight on the
+        1st of next month returns 0 → Redis expire(key, 0) deletes the key
+        immediately, resetting the counter mid-boundary.
+        """
+        ttl = _seconds_until_month_end()
+        assert ttl >= 1
+
+    def test_seconds_until_month_end_december_crosses_year(self):
+        """December must compute TTL to January 1 of next year.
+
+        Bug caught: if the code only handles month + 1 without checking
+        month == 12, it would try to create datetime(2026, 13, 1) → crash.
+        """
+        from unittest.mock import patch
+        from datetime import datetime, UTC
+
+        fake_dec_31 = datetime(2026, 12, 31, 23, 0, 0, tzinfo=UTC)
+        with patch("anveshak.social.adapters.x_adapter.datetime") as mock_dt:
+            mock_dt.now.return_value = fake_dec_31
+            mock_dt.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+            ttl = _seconds_until_month_end()
+            # Should be about 3600 seconds (1 hour until midnight Jan 1)
+            assert 3500 <= ttl <= 3700
+
 
 class TestXSpendGuardCurrentCount:
     """current_count() returns existing counter without incrementing."""

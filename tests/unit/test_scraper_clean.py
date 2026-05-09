@@ -335,3 +335,102 @@ class TestPaywallDetection:
             "integrated air defence operations across multiple airbases."
         )
         assert score_content_quality(article, article) == "good"
+
+
+# ---------------------------------------------------------------------------
+# Additional clean.py tests — quality scoring, title extraction, clean hash
+# ---------------------------------------------------------------------------
+
+from anveshak.scraper.clean import compute_clean_hash, extract_title
+
+
+class TestScoreContentQualityExtended:
+    """Extended tests for score_content_quality business logic."""
+
+    @pytest.mark.unit
+    def test_high_quality_article(self):
+        """Normal article text → 'good' quality."""
+        article = (
+            "The Indian Navy commissioned its second indigenous aircraft carrier today "
+            "at a ceremony in Kochi. The 45,000-tonne vessel represents a significant "
+            "milestone in India's naval shipbuilding capabilities. Defence Minister "
+            "praised the achievement as a step toward self-reliance in defence. "
+            "The carrier can operate 30 aircraft including MiG-29K fighters."
+        )
+        assert score_content_quality(article, article) == "good"
+
+    @pytest.mark.unit
+    def test_boilerplate_only_is_low_quality(self):
+        """Navigation-only text → 'low_quality' after cleaning strips most content."""
+        raw = (
+            "Home About Contact Us Privacy Policy Terms of Service "
+            "Subscribe Now Log In Register My Account Sign In Sign Out "
+            "Cookie Settings Accept Cookies Newsletter Download the App"
+        )
+        cleaned = clean_extracted_text(raw)
+        result = score_content_quality(raw, cleaned)
+        assert result == "low_quality"
+
+    @pytest.mark.unit
+    def test_short_clean_text_is_low_quality(self):
+        """Clean text under 100 chars → low_quality."""
+        assert score_content_quality("short", "short") == "low_quality"
+
+
+class TestExtractTitle:
+    """Tests for extract_title logic."""
+
+    @pytest.mark.unit
+    def test_first_sentence_extracted(self):
+        """First sentence becomes the title."""
+        text = (
+            "China launches new satellite for maritime surveillance. "
+            "The satellite will enhance monitoring of sea lanes in the South China Sea."
+        )
+        title = extract_title(text)
+        assert title is not None
+        assert "China launches new satellite" in title
+
+    @pytest.mark.unit
+    def test_markdown_heading_preferred(self):
+        """Markdown heading is used over first sentence when present."""
+        text = "## Defence Budget Analysis 2026\n\nThe government increased spending by 12%."
+        title = extract_title(text)
+        assert title == "Defence Budget Analysis 2026"
+
+    @pytest.mark.unit
+    def test_empty_returns_none(self):
+        assert extract_title("") is None
+        assert extract_title(None) is None
+
+    @pytest.mark.unit
+    def test_very_short_text_returns_none(self):
+        """Text too short for a title → None."""
+        assert extract_title("Hi") is None
+
+
+class TestComputeCleanHash:
+    """Tests for compute_clean_hash determinism."""
+
+    @pytest.mark.unit
+    def test_deterministic(self):
+        """Same text → same hash."""
+        text = "India deploys additional troops along the northern border."
+        h1 = compute_clean_hash(text)
+        h2 = compute_clean_hash(text)
+        assert h1 == h2
+        assert len(h1) == 64  # SHA-256 hex digest
+
+    @pytest.mark.unit
+    def test_different_text_different_hash(self):
+        """Different text → different hash."""
+        h1 = compute_clean_hash("Alpha article about naval exercises.")
+        h2 = compute_clean_hash("Beta article about air force procurement.")
+        assert h1 != h2
+
+    @pytest.mark.unit
+    def test_whitespace_normalisation(self):
+        """Whitespace differences produce the same hash."""
+        h1 = compute_clean_hash("India   deploys   troops")
+        h2 = compute_clean_hash("India deploys troops")
+        assert h1 == h2

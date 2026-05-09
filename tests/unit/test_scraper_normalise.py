@@ -28,6 +28,30 @@ class TestNormaliseText:
     def test_mixed_whitespace_types(self):
         assert normalise_text("a\t\t b\n\nc") == "a b c"
 
+    def test_unicode_preserved(self):
+        """Hindi/Devanagari text must survive normalisation — not stripped or mangled.
+
+        Bug surface: if normalise_text used ASCII-only regex or encoding,
+        multilingual content would silently lose characters, producing
+        colliding content_hash values for different articles.
+        """
+        assert normalise_text("  भारतीय   सेना  ") == "भारतीय सेना"
+
+    def test_newlines_and_tabs_collapsed(self):
+        """\\r\\n sequences from Windows sources must collapse to single space."""
+        assert normalise_text("line1\r\nline2\r\n\r\nline3") == "line1 line2 line3"
+
+    def test_zero_width_spaces_not_collapsed(self):
+        """Bug surface: zero-width spaces (U+200B) are NOT \\s in Python regex.
+
+        Two articles differing only by zero-width spaces would get different
+        hashes — defeating deduplication. This test documents the gap.
+        """
+        text_with_zwsp = "hello\u200bworld"
+        result = normalise_text(text_with_zwsp)
+        # Zero-width space is NOT whitespace in Python regex, so it survives
+        assert "\u200b" in result
+
 
 class TestComputeContentHash:
     """Criteria 1.31: unit test compute_content_hash() — consistent SHA-256."""
@@ -55,3 +79,23 @@ class TestComputeContentHash:
     def test_returns_str_type(self):
         result = compute_content_hash("test")
         assert type(result) is str
+
+    def test_normalises_before_hashing(self):
+        """Bug caught: 'HELLO  WORLD' and 'hello world' must produce same hash.
+
+        If compute_content_hash skipped normalise_text and hashed raw input,
+        the same article from two sources with different whitespace/casing
+        would bypass ON CONFLICT(content_hash) DO NOTHING deduplication.
+        """
+        assert compute_content_hash("HELLO  WORLD") == compute_content_hash("hello world")
+
+    def test_trailing_whitespace_does_not_affect_hash(self):
+        """Trailing whitespace from scraper output must not change hash."""
+        assert compute_content_hash("article text") == compute_content_hash("article text   \n")
+
+    def test_all_whitespace_produces_empty_hash(self):
+        """All-whitespace input normalises to empty string — must produce consistent hash."""
+        h1 = compute_content_hash("   ")
+        h2 = compute_content_hash("\t\n")
+        assert h1 == h2
+        assert len(h1) == 64
