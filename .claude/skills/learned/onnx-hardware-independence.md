@@ -2,6 +2,9 @@
 
 ## When to load: adding any ONNX-based ML model to a service
 
+> See also: `learned/hf-model-label-order-verification.md` — verify id2label from config.json before writing FAKE_INDEX; inverted labels produce confident but wrong predictions
+> See also: `learned/optimum-onnx-export-cleanup.md` — partial file cleanup on export failure; optimum extras; model.onnx rename
+
 ---
 
 ## Pattern: transparent CPU/CUDA via provider list

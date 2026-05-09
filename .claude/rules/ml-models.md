@@ -25,6 +25,18 @@ Consolidated from 8 learned instincts. These apply to all ML model loading, infe
   Hardware upgrades require only environment variable changes, no code modifications
   See: `learned/onnx-hardware-independence.md`
 
+## HuggingFace Model Swaps
+
+- Always verify `id2label` from the model's `config.json` before writing inference code
+  Different models use different label orderings — index 0 can mean "fake" or "real"
+  Use a named `FAKE_INDEX` constant, never bare `probs[1]`
+  See: `learned/hf-model-label-order-verification.md`
+
+- When exporting HF models to ONNX via `optimum`, clean up partial files on failure
+  A partial `.onnx` file passes the idempotent `if exists: skip` check silently
+  `optimum` needs `[onnxruntime,exporters]` extras — base package alone gives `ModuleNotFoundError`
+  See: `learned/optimum-onnx-export-cleanup.md`
+
 ## LLM Output Validation
 
 - All LLM responses are validated through Pydantic `strict=True` models (CLAUDE.md rule 9)

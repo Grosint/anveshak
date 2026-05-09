@@ -127,7 +127,8 @@ Anveshak runs as **19 containers** (+ 1 optional) on a single Docker network (`a
 | `analyst-worker` | anveshak-analyst | — | 6 GB | NLP + embedding + labelling (ARQ) |
 | `reporter` | anveshak-reporter | 8005 | 512 MB | Report API |
 | `reporter-worker` | anveshak-reporter | 8006 | 1 GB | LLM report generator |
-| `vision` | anveshak-vision | 8003 | 512 MB | Vision API |
+| `vision-init` | anveshak-vision | — | 2 GB | Downloads ML models on first startup (runs once) |
+| `vision` | anveshak-vision | 8003 | 512 MB | Vision API (file storage + hashing) |
 | `vision-worker` | anveshak-vision | — | 6 GB | YOLO + CLIP + deepfake (ARQ) |
 | `frontend` | anveshak-frontend | 3000 | 256 MB | Analyst workbench UI |
 | `prometheus` | prom/prometheus | 9090 | 512 MB | Metrics collection |
@@ -447,6 +448,99 @@ Workers are separate container processes that execute heavy background jobs disp
 - `postgres` — reads content for RAG, writes completed reports
 - `redis` — receives jobs from ARQ queue
 - `ollama` — LLM inference (the only container that does heavy Ollama work)
+
+---
+
+### Vision Service (`vision`)
+
+**What it does:** Accepts image/video uploads via `/analyse` endpoint. Computes SHA-256 content hash, stores media to disk, and returns storage path to the API gateway.
+
+**Why it's needed:** Separates file handling (storage, hashing) from ML inference (which runs in the worker). The API gateway forwards uploads here, receives a content_hash and storage_path, then dispatches the ML job to the vision-worker via ARQ.
+
+**Key details:**
+
+- FastAPI app on port 8003
+- Stores media at `/app/media/uploads/YYYY/MM/DD/{content_hash}.{ext}`
+- No ML models loaded — lightweight file-handling service
+- Memory limit: 512 MB
+
+**Connects to:**
+
+- `api` — receives file uploads (HTTP POST)
+- Shared `vision_media` volume — writes media files for the worker to read
+
+---
+
+### Vision Worker (`vision-worker`)
+
+**What it does:** ARQ-based ML inference worker that runs the full vision analysis pipeline on uploaded images and videos.
+
+**Registered ARQ job:**
+
+`run_vision_analysis(media_asset_id)` — the 6-step pipeline:
+
+1. **Load bytes** — read image/video from shared media volume
+2. **EXIF + pHash** (images only) — extract GPS/device metadata, compute 64-bit perceptual hash for reverse image search
+3. **YOLO object detection** (images only) — YOLOv8 (nano on CPU, xlarge on GPU). Detects 80 COCO classes, tags high-interest labels (person, weapon, vehicle, aircraft) to `content_items.labels`
+4. **Deepfake detection** — routing based on face presence:
+   - Face detected (OpenCV Haar cascade) → **FacetorchDetector** (`prithivMLmods/Deep-Fake-Detector-v2-Model`, ViT-base, ~92% accuracy)
+   - No face → **EfficientNetDetector** (`umm-maybe/AI-image-detector`, Swin-base, CIFAKE-trained)
+   - Video → extract keyframes every 5s via ffmpeg → EfficientNet on each frame → worst-case (max) score
+   - GPU upgrade: `VISION_DEEPFAKE_VIDEO_MODEL=dire` for DIRE diffusion-based detection (~94% accuracy, RTX 3080+ required)
+   - All scores are **float 0.0–1.0, never bool** (CLAUDE.md rule 7)
+5. **CLIP classification** (images only, if topic has `clip_categories`) — zero-shot image classification against analyst-defined categories (e.g., "military vehicle", "fighter aircraft", "tank")
+6. **Persist results** — upsert `vision_results` (JSONB for detections/labels, float for scores)
+
+**Model architecture:**
+
+```
+                      ┌──────────────┐
+                      │  Image bytes │
+                      └──────┬───────┘
+                             │
+                      ┌──────▼───────┐
+                      │  Has faces?  │  OpenCV Haar cascade
+                      └──┬───────┬───┘
+                    Yes  │       │  No
+                   ┌─────▼────┐  │
+                   │Facetorch │  │  ┌───────────────┐
+                   │ViT-base  │  └──▶ EfficientNet  │
+                   │ONNX 327MB│     │ Swin-base     │
+                   │FAKE_IDX=1│     │ ONNX 337MB    │
+                   └─────┬────┘     │ FAKE_IDX=0    │
+                         │          └───────┬───────┘
+                         │                  │
+                         └────────┬─────────┘
+                                  │
+                           float 0.0–1.0
+                           (deepfake_score)
+```
+
+**Model sources (HuggingFace → ONNX):**
+
+| Slot | Model | Architecture | Output | FAKE_INDEX | License |
+|------|-------|-------------|--------|------------|---------|
+| Face deepfake | `prithivMLmods/Deep-Fake-Detector-v2-Model` | ViT-base-patch16-224 | [1,2] logits | 1 (`{0:"Realism", 1:"Deepfake"}`) | Apache 2.0 |
+| Non-face deepfake | `umm-maybe/AI-image-detector` | Swin-base (1024 hidden) | [1,2] logits | 0 (`{0:"artificial", 1:"human"}`) | CC-BY-4.0 |
+| GPU upgrade | DIRE (`ZhendongWang6/DIRE`) | ADM diffusion | float | — | MIT |
+
+**Critical design note — label ordering:** Different HuggingFace models use different `id2label` mappings. The `FAKE_INDEX` constant in each detector is verified against the model's `config.json`. Getting this wrong inverts predictions silently (scores look valid but mean the opposite).
+
+**Model download:** The `vision-init` container runs `python -m anveshak.vision.download_models` on first startup, which uses `optimum[onnxruntime]` to download HF models and export to ONNX. Models are stored in the `vision_models` Docker volume. Idempotent — skips if files exist.
+
+**Key details:**
+
+- Memory limit: 6 GB (YOLO + CLIP + 2 deepfake ONNX models, ~2.1 GB total)
+- Models lazy-loaded as module-level singletons (reused across ARQ jobs)
+- All model names and device settings from env vars — zero code change for hardware upgrade
+- Env vars: `VISION_DEVICE`, `YOLO_MODEL_SIZE`, `VISION_DEEPFAKE_IMAGE_MODEL`, `VISION_DEEPFAKE_VIDEO_MODEL`, `CLIP_MODEL_NAME`, `FACETORCH_HF_MODEL`, `EFFICIENTNET_HF_MODEL`
+
+**Connects to:**
+
+- `postgres` — reads media assets + topic CLIP categories, writes vision results
+- `redis` — receives jobs from `arq:vision` queue
+- Shared `vision_models` volume — pre-downloaded ML models
+- Shared `vision_media` volume — reads uploaded media files
 
 ---
 
@@ -1230,7 +1324,8 @@ Every hardware-sensitive parameter comes from environment variables. When produc
 | LLM | `qwen2:7b` Q4_0 | `qwen2:72b` or larger on GPU |
 | Embeddings | `all-MiniLM-L6-v2` (384d) | `e5-large-v2` (1024d) |
 | YOLO | nano | xlarge on GPU |
-| Deepfake | Facetorch CPU, EfficientNet | DIRE full model on GPU |
+| Deepfake (face) | `prithivMLmods/Deep-Fake-Detector-v2-Model` (ViT, ~92%) | Same model, CUDA provider |
+| Deepfake (non-face) | `umm-maybe/AI-image-detector` (Swin, CIFAKE) | DIRE on GPU (~94%) |
 | Translation | NLLB-200 distilled 600M | NLLB-200 1.3B on GPU |
 | Sentiment | VADER (rule-based, ~1 MB) | No GPU benefit |
 | Keywords | YAKE (statistical, pure Python) | No GPU benefit |
@@ -1260,6 +1355,7 @@ Anveshak has a comprehensive validation framework that verifies the system at mu
 |---------|--------|--------|----------------|
 | `make validate` | `validate_pipeline.py` | 7 | Infra, auth, corpus, intelligence, reports, sources, multilingual |
 | `make validate-vision` | `validate_vision.py` | 10 | Deepfake detection, YOLO, pHash dedup, score ranges |
+| `make validate-vision-full` | `validate_vision_full.py` | 6 | 4 deepfake categories (face/no-face × real/AI) + video + CLIP |
 | `make validate-vector` | `validate_vector.py` | 8 | Migrations 002–006, HNSW, dedup, temporal, labels, convergence, backfill |
 | `make validate-all` | All three | 25 | Complete system health |
 
@@ -1382,6 +1478,8 @@ These rules are enforced by code, tests, and CI. They are non-negotiable.
 | `ollama_models` | ollama | Downloaded LLM weights (~4.4 GB for qwen2:7b) |
 | `analyst_models` | analyst | spaCy, NLLB, sentence-transformer models (~3 GB) |
 | `reporter_output` | reporter, reporter-worker | Generated PDFs and report artifacts |
+| `vision_models` | vision-init, vision, vision-worker | YOLO, CLIP, deepfake ONNX models (~700 MB) |
+| `vision_media` | vision, vision-worker | Uploaded images and videos for analysis |
 | `media_store` | scraper-worker | Downloaded images and videos |
 | `prometheus_data` | prometheus | Time-series metrics (15-day retention) |
 | `grafana_data` | grafana | Dashboard state, user prefs |
