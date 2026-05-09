@@ -109,6 +109,14 @@ async def cleanup(pool: asyncpg.Pool) -> int:
         await r.delete(*job_keys)
     await r.aclose()
 
+    # Verify no benchmark data remains
+    async with pool.acquire() as conn:
+        remaining = await conn.fetchval(
+            "SELECT COUNT(*) FROM topics WHERE labels->>'benchmark' = 'true'"
+        )
+    if remaining > 0:
+        log.error("benchmark.cleanup_incomplete", remaining_topics=remaining)
+
     log.info(
         "benchmark.cleanup_complete",
         topics_deleted=topic_count,

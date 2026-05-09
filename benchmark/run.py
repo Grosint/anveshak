@@ -168,93 +168,100 @@ async def run_benchmark(
         print("Cleanup complete.")
         return
 
-    # Phase 2: INJECT
-    print("\n" + "=" * 60)
-    print("PHASE 2: INJECT")
-    print("=" * 60)
-    injection_results = await inject_all(pool, corpus_dir)
-    topic_ids = [r["topic_id"] for r in injection_results]
-    total_items = sum(r["items_inserted"] for r in injection_results)
-    print(f"  Injected {len(injection_results)} events, {total_items} content items")
-
-    if not skip_analyse:
-        # Phase 3: ANALYSE
+    try:
+        # Phase 2: INJECT
         print("\n" + "=" * 60)
-        print("PHASE 3: ANALYSE (enqueue NLP + embedding jobs)")
+        print("PHASE 2: INJECT")
         print("=" * 60)
-        enqueued = await enqueue_analysis_jobs(pool, topic_ids)
-        print(f"  Enqueued {enqueued} analyse_content jobs")
-        print(f"  Waiting for embeddings (timeout: {settings.analyse_timeout_s}s)...")
-        success = await wait_for_embeddings(pool, topic_ids)
-        if not success:
-            print("  WARNING: Embedding timeout — results may be incomplete")
+        injection_results = await inject_all(pool, corpus_dir)
+        topic_ids = [r["topic_id"] for r in injection_results]
+        total_items = sum(r["items_inserted"] for r in injection_results)
+        print(f"  Injected {len(injection_results)} events, {total_items} content items")
 
-        # Phase 4: CLUSTER
+        if not skip_analyse:
+            # Phase 3: ANALYSE
+            print("\n" + "=" * 60)
+            print("PHASE 3: ANALYSE (enqueue NLP + embedding jobs)")
+            print("=" * 60)
+            enqueued = await enqueue_analysis_jobs(pool, topic_ids)
+            print(f"  Enqueued {enqueued} analyse_content jobs")
+            print(f"  Waiting for embeddings (timeout: {settings.analyse_timeout_s}s)...")
+            success = await wait_for_embeddings(pool, topic_ids)
+            if not success:
+                print("  WARNING: Embedding timeout — results may be incomplete")
+
+            # Phase 4: CLUSTER
+            print("\n" + "=" * 60)
+            print("PHASE 4: CLUSTER")
+            print("=" * 60)
+            await trigger_clustering(pool, topic_ids)
+            print("  Waiting for clustering...")
+            await wait_for_clusters(pool, topic_ids)
+
+            # Phase 5: SIGNAL — wait for signal engine to process new clusters
+            # Signal engine runs every 5 min on the scheduler. Wait up to 180s
+            # (guaranteed to catch at least one signal engine cycle).
+            print("\n" + "=" * 60)
+            print("PHASE 5: SIGNAL CHECK (waiting up to 180s)")
+            print("=" * 60)
+            for i in range(18):
+                await asyncio.sleep(10)
+                async with pool.acquire() as conn:
+                    sig_count = await conn.fetchval(
+                        "SELECT COUNT(*) FROM signals WHERE topic_id = ANY($1)",
+                        topic_ids,
+                    )
+                if sig_count > 0:
+                    print(f"  {sig_count} signal(s) detected after {(i+1)*10}s")
+                    break
+            else:
+                print("  No signals fired within 180s window")
+
+        # Phase 6: MEASURE
         print("\n" + "=" * 60)
-        print("PHASE 4: CLUSTER")
+        print("PHASE 6: MEASURE")
         print("=" * 60)
-        await trigger_clustering(pool, topic_ids)
-        print("  Waiting for clustering...")
-        await wait_for_clusters(pool, topic_ids)
+        event_files = sorted((corpus_dir / "events").glob("evt_*.yaml"))
+        event_results = []
 
-        # Phase 5: SIGNAL — wait for signal engine to process new clusters
-        # Signal engine runs every 5 min on the scheduler. Wait up to 180s
-        # (guaranteed to catch at least one signal engine cycle).
+        for event_path, injection_result in zip(event_files, injection_results):
+            with open(event_path) as f:
+                event = yaml.safe_load(f)
+            result = await evaluate_event(pool, injection_result["topic_id"], event)
+            event_results.append(result)
+            status = "✓ SIGNAL" if result.signal_fired else "✗ NO SIGNAL"
+            print(f"  [{status}] {result.event_name[:50]} (ISC={result.achieved_isc})")
+
+        metrics = compute_metrics(event_results)
+
+        # Phase 7: REPORT
         print("\n" + "=" * 60)
-        print("PHASE 5: SIGNAL CHECK (waiting up to 180s)")
+        print("PHASE 7: REPORT")
         print("=" * 60)
-        for i in range(18):
-            await asyncio.sleep(10)
-            async with pool.acquire() as conn:
-                sig_count = await conn.fetchval(
-                    "SELECT COUNT(*) FROM signals WHERE topic_id = ANY($1)",
-                    topic_ids,
-                )
-            if sig_count > 0:
-                print(f"  {sig_count} signal(s) detected after {(i+1)*10}s")
-                break
-        else:
-            print("  No signals fired within 180s window")
+        results_path = save_results(metrics)
+        template_path = fill_template(metrics)
+        print(f"  Results: {results_path}")
+        print(f"  Report:  {template_path}")
 
-    # Phase 6: MEASURE
-    print("\n" + "=" * 60)
-    print("PHASE 6: MEASURE")
-    print("=" * 60)
-    event_files = sorted((corpus_dir / "events").glob("evt_*.yaml"))
-    event_results = []
+        # Summary
+        print("\n" + "=" * 60)
+        print("BENCHMARK SUMMARY")
+        print("=" * 60)
+        print(f"  Events:     {metrics.total_events}")
+        print(f"  Precision:  {metrics.precision}%")
+        print(f"  Recall:     {metrics.recall}%")
+        print(f"  F1 Score:   {metrics.f1_score}%")
+        print(f"  Median Time Advantage: {metrics.median_time_advantage_hours} hours")
+        print(f"  TP={metrics.true_positives} FP={metrics.false_positives} "
+              f"FN={metrics.false_negatives} TN={metrics.true_negatives}")
 
-    for event_path, injection_result in zip(event_files, injection_results):
-        with open(event_path) as f:
-            event = yaml.safe_load(f)
-        result = await evaluate_event(pool, injection_result["topic_id"], event)
-        event_results.append(result)
-        status = "✓ SIGNAL" if result.signal_fired else "✗ NO SIGNAL"
-        print(f"  [{status}] {result.event_name[:50]} (ISC={result.achieved_isc})")
-
-    metrics = compute_metrics(event_results)
-
-    # Phase 7: REPORT
-    print("\n" + "=" * 60)
-    print("PHASE 7: REPORT")
-    print("=" * 60)
-    results_path = save_results(metrics)
-    template_path = fill_template(metrics)
-    print(f"  Results: {results_path}")
-    print(f"  Report:  {template_path}")
-
-    # Summary
-    print("\n" + "=" * 60)
-    print("BENCHMARK SUMMARY")
-    print("=" * 60)
-    print(f"  Events:     {metrics.total_events}")
-    print(f"  Precision:  {metrics.precision}%")
-    print(f"  Recall:     {metrics.recall}%")
-    print(f"  F1 Score:   {metrics.f1_score}%")
-    print(f"  Median Time Advantage: {metrics.median_time_advantage_hours} hours")
-    print(f"  TP={metrics.true_positives} FP={metrics.false_positives} "
-          f"FN={metrics.false_negatives} TN={metrics.true_negatives}")
-
-    await pool.close()
+    finally:
+        # Phase 8: CLEANUP — remove all benchmark data from production DB
+        print("\n" + "=" * 60)
+        print("PHASE 8: CLEANUP")
+        print("=" * 60)
+        await cleanup(pool)
+        await pool.close()
 
 
 def main():
