@@ -3,11 +3,9 @@
 Criteria 4.17: EfficientNetDetector implements DeepfakeDetector ABC.
 Criteria 4.18: VISION_DEEPFAKE_VIDEO_MODEL=efficientnet → this class instantiated.
 
-Model: deepfake_b0.onnx — EfficientNet-B0 fine-tuned on GenImage synthetic dataset.
+Model: umm-maybe/AI-image-detector (Swin-Base, trained on AI vs human images).
 Input:  [1, 3, 224, 224] float32 (ImageNet-normalised)
-Output: [1, 1] float32 logit — sigmoid → fake probability
-Accuracy: ~85% on GenImage benchmark (CPU, ONNX).
-Speed:    ~2s per frame on CPU (see hardware.md).
+Output: [1, 2] float32 logits — softmax → FAKE_INDEX is fake probability
 """
 from __future__ import annotations
 
@@ -18,9 +16,14 @@ from ..settings import settings
 
 log = structlog.get_logger(__name__)
 
+# Label ordering from HF model config.json: {0: "artificial", 1: "human"}
+# Verified against umm-maybe/AI-image-detector config.
+# Index 0 = "artificial" (AI-generated) = fake probability
+FAKE_INDEX = 0
+
 
 class EfficientNetDetector(DeepfakeDetector):
-    """ONNX EfficientNet-B0 proxy classifier for non-face deepfake detection.
+    """ONNX EfficientNet-B0 classifier for non-face deepfake detection.
 
     Used for landscapes, architecture, constructed scenes, and any image
     where Haar cascade face detection returns no faces.
@@ -53,13 +56,14 @@ class EfficientNetDetector(DeepfakeDetector):
 
     def _infer(self, image_bytes: bytes) -> float:
         import numpy as np
+        import scipy.special
 
         arr = self.preprocess_image(image_bytes, self.MODEL_INPUT_SIZE)
 
         input_name = self._model.get_inputs()[0].name
         outputs = self._model.run(None, {input_name: arr})
 
-        # Output: [1, 1] single logit → sigmoid → fake probability
-        logit = float(outputs[0][0][0])
-        prob = 1.0 / (1.0 + (2.718281828 ** -logit))  # sigmoid
-        return prob
+        # Output: [1, 2] logits → softmax → FAKE_INDEX is fake probability
+        logits = outputs[0][0]
+        probs = scipy.special.softmax(logits)
+        return float(probs[FAKE_INDEX])

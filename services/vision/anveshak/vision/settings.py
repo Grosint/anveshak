@@ -31,6 +31,11 @@ class VisionSettings(BaseSettings):
     # CLIP — hardware.md: openai/clip-vit-base-patch32 → clip-vit-large-patch14 on GPU
     clip_model_name: str = "openai/clip-vit-base-patch32"
 
+    # HuggingFace model sources for deepfake detectors
+    # Swappable via env var — no code change to upgrade models
+    facetorch_hf_model: str = "prithivMLmods/Deep-Fake-Detector-v2-Model"
+    efficientnet_hf_model: str = "umm-maybe/AI-image-detector"
+
     # Deepfake model paths (relative to model_dir)
     facetorch_model_path: str = "facetorch/face_deepfake.onnx"
     efficientnet_model_path: str = "efficientnet/deepfake_b0.onnx"

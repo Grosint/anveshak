@@ -33,7 +33,7 @@ COPY services/vision/anveshak/ anveshak/
 RUN uv pip install --system \
         torch torchvision \
         --index-url https://download.pytorch.org/whl/cpu \
-    && uv pip install --system . onnxscript
+    && uv pip install --system . onnxscript "optimum[onnxruntime,exporters]"
 
 # ===== Stage 2: runtime — OpenCV + ffmpeg, no build tools =====
 FROM python:3.12-slim AS runtime

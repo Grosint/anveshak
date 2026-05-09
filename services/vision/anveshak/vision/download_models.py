@@ -5,8 +5,8 @@ Run as: python -m anveshak.vision.download_models
 Downloads:
   - YOLO object detection model (.pt weight file)
   - CLIP zero-shot classifier (HuggingFace, cached to HF_HOME)
-  - Facetorch face deepfake detector (ONNX export)
-  - EfficientNet general deepfake detector (ONNX export)
+  - Facetorch face deepfake detector (real HF model → ONNX export)
+  - EfficientNet general deepfake detector (real HF model → ONNX export)
 
 Idempotent — skips downloads if models already exist.
 Used by the vision-init container in compose.yml.
@@ -68,101 +68,95 @@ def _download_clip() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Facetorch ONNX
+# Facetorch ONNX — real HuggingFace model
 # ---------------------------------------------------------------------------
 
-def _export_facetorch_onnx(model_dir: Path) -> None:
-    """Export face deepfake classifier: [1,3,224,224] → [1,2] logits."""
+def _download_facetorch_onnx(model_dir: Path) -> None:
+    """Download face deepfake model from HuggingFace and export to ONNX.
+
+    Model: settings.facetorch_hf_model (default: prithivMLmods/Deep-Fake-Detector-v2-Model)
+    Output: [1, 2] logits (real vs fake) — softmax → index FAKE_INDEX = fake prob
+    """
     out_path = model_dir / settings.facetorch_model_path
 
     if out_path.exists():
         log.info("download_models.facetorch_already_exists", path=str(out_path))
         return
 
-    log.info("download_models.facetorch_exporting")
+    hf_model = settings.facetorch_hf_model
+    log.info("download_models.facetorch_downloading", hf_model=hf_model)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    import torch
-    import torch.nn as nn
+    from optimum.onnxruntime import ORTModelForImageClassification
 
-    class FaceDeepfakeNet(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.features = nn.Sequential(
-                nn.Conv2d(3, 32, 3, padding=1),
-                nn.ReLU(),
-                nn.AdaptiveAvgPool2d(1),
-            )
-            self.classifier = nn.Linear(32, 2)
+    try:
+        ort_model = ORTModelForImageClassification.from_pretrained(
+            hf_model, export=True,
+        )
+        ort_model.save_pretrained(str(out_path.parent))
 
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            x = self.features(x)
-            x = x.view(x.size(0), -1)
-            return self.classifier(x)
+        # optimum saves as model.onnx — rename to match settings path
+        exported = out_path.parent / "model.onnx"
+        if exported.exists() and exported != out_path:
+            exported.rename(out_path)
+    except Exception:
+        # Remove partial file so idempotent check doesn't skip on next run
+        if out_path.exists():
+            out_path.unlink()
+        raise
 
-    model = FaceDeepfakeNet()
-    model.eval()
-    dummy = torch.randn(1, 3, 224, 224)
-
-    torch.onnx.export(
-        model, dummy, str(out_path),
-        input_names=["input"], output_names=["output"],
-        dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}},
-        opset_version=17,
+    log.info(
+        "download_models.facetorch_done",
+        hf_model=hf_model,
+        path=str(out_path),
+        size_mb=f"{out_path.stat().st_size / 1024 / 1024:.1f}",
     )
-    log.info("download_models.facetorch_done", path=str(out_path),
-             size_kb=out_path.stat().st_size // 1024)
 
 
 # ---------------------------------------------------------------------------
-# EfficientNet ONNX
+# EfficientNet ONNX — real HuggingFace model
 # ---------------------------------------------------------------------------
 
-def _export_efficientnet_onnx(model_dir: Path) -> None:
-    """Export EfficientNet-B0 proxy: [1,3,224,224] → [1,1] logit."""
+def _download_efficientnet_onnx(model_dir: Path) -> None:
+    """Download non-face deepfake model from HuggingFace and export to ONNX.
+
+    Model: settings.efficientnet_hf_model (default: umm-maybe/AI-image-detector)
+    Output: [1, 2] logits (real vs fake) — softmax → index FAKE_INDEX = fake prob
+    """
     out_path = model_dir / settings.efficientnet_model_path
 
     if out_path.exists():
         log.info("download_models.efficientnet_already_exists", path=str(out_path))
         return
 
-    log.info("download_models.efficientnet_exporting")
+    hf_model = settings.efficientnet_hf_model
+    log.info("download_models.efficientnet_downloading", hf_model=hf_model)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    import torch
-    import torch.nn as nn
+    from optimum.onnxruntime import ORTModelForImageClassification
 
-    class DeepfakeB0(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.features = nn.Sequential(
-                nn.Conv2d(3, 32, 3, stride=2, padding=1),
-                nn.BatchNorm2d(32),
-                nn.ReLU(),
-                nn.Conv2d(32, 64, 3, stride=2, padding=1),
-                nn.BatchNorm2d(64),
-                nn.ReLU(),
-                nn.AdaptiveAvgPool2d(1),
-            )
-            self.classifier = nn.Linear(64, 1)
+    try:
+        ort_model = ORTModelForImageClassification.from_pretrained(
+            hf_model, export=True,
+        )
+        ort_model.save_pretrained(str(out_path.parent))
 
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            x = self.features(x)
-            x = x.view(x.size(0), -1)
-            return self.classifier(x)
+        # optimum saves as model.onnx — rename to match settings path
+        exported = out_path.parent / "model.onnx"
+        if exported.exists() and exported != out_path:
+            exported.rename(out_path)
+    except Exception:
+        # Remove partial file so idempotent check doesn't skip on next run
+        if out_path.exists():
+            out_path.unlink()
+        raise
 
-    model = DeepfakeB0()
-    model.eval()
-    dummy = torch.randn(1, 3, 224, 224)
-
-    torch.onnx.export(
-        model, dummy, str(out_path),
-        input_names=["input"], output_names=["output"],
-        dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}},
-        opset_version=17,
+    log.info(
+        "download_models.efficientnet_done",
+        hf_model=hf_model,
+        path=str(out_path),
+        size_mb=f"{out_path.stat().st_size / 1024 / 1024:.1f}",
     )
-    log.info("download_models.efficientnet_done", path=str(out_path),
-             size_kb=out_path.stat().st_size // 1024)
 
 
 # ---------------------------------------------------------------------------
@@ -179,11 +173,11 @@ def main() -> None:
     # 2. CLIP zero-shot classification
     _download_clip()
 
-    # 3. Facetorch face deepfake (ONNX placeholder)
-    _export_facetorch_onnx(model_dir)
+    # 3. Facetorch face deepfake (real HF model → ONNX)
+    _download_facetorch_onnx(model_dir)
 
-    # 4. EfficientNet general deepfake (ONNX placeholder)
-    _export_efficientnet_onnx(model_dir)
+    # 4. EfficientNet general deepfake (real HF model → ONNX)
+    _download_efficientnet_onnx(model_dir)
 
     log.info("download_models.complete")
 

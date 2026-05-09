@@ -95,7 +95,8 @@ _WORK  := $(_CYN)⟳$(_RST)
         lint format typecheck security-scan \
         clean clean-containers clean-volumes clean-cache purge nuke \
         verify-labels verify-reports shell-% \
-        benchmark benchmark-clean benchmark-skip-analyse
+        benchmark benchmark-clean benchmark-skip-analyse \
+        validate-vision-full
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -186,13 +187,9 @@ setup:
 		printf "  $(_DIM)  waiting for services... ($$elapsed/$$timeout s)$(_RST)\r"; \
 	done
 	$(call success,All services started)
-	$(call step,Step 7/8,Downloading deepfake ONNX models)
-	@$(COMPOSE) cp scripts/download_models.py vision:/tmp/download_models.py
-	@$(COMPOSE) exec -T -u root vision pip install -q onnxscript 2>/dev/null || true
-	@$(COMPOSE) exec -T -u root vision python /tmp/download_models.py --model-dir /app/models
-	@$(COMPOSE) exec -T -u root vision chown -R anveshak:anveshak /app/models/
-	@$(COMPOSE) restart vision-worker
-	$(call success,Deepfake models ready — vision worker restarted)
+	$(call step,Step 7/8,Downloading vision models (YOLO + CLIP + deepfake))
+	@$(MAKE) --no-print-directory download-models
+	$(call success,Vision models ready)
 	@$(COMPOSE) exec -T postgres psql -U anveshak -d anveshak < scripts/seed_demo.sql 2>&1 | tail -1
 	$(call success,Demo scenario loaded)
 	$(call step,Step 8/8,Validating pipeline)
@@ -526,6 +523,10 @@ validate-vision:
 validate-vector:
 	$(call header,Vector Pipeline Validation)
 	@$(UV) python scripts/validate_vector.py
+
+validate-vision-full:
+	$(call header,Vision Pipeline Full Validation (4 categories + video + CLIP))
+	@$(UV) python scripts/validate_vision_full.py
 
 validate-all: validate validate-vision validate-vector
 

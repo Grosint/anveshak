@@ -155,10 +155,12 @@ OLLAMA_KEEP_ALIVE=5m  →  OLLAMA_KEEP_ALIVE=-1
 ## Deepfake Detection — Image/Face — `vision` service
 
 **Current implementation:**
-- Model: Facetorch ONNX (CPU)
+- Model: `dima806/deepfake_vs_real_faces` (ConvNeXt-Tiny, HuggingFace → ONNX)
+- ONNX size: ~110MB | Inference RAM: ~300MB
 - Speed: ~8-12s per image on CPU
-- Accuracy: ~91% AUC on FaceForensics++ benchmark
+- Accuracy: ~96% on FaceForensics++/DFDC/GAN faces
 - Detects: face manipulation, face swap, neural rendering artifacts
+- License: Apache 2.0
 
 **Upgrade when available:**
 - Same Facetorch model with CUDA execution provider
@@ -345,10 +347,12 @@ CLIP_MODEL_NAME=openai/clip-vit-base-patch32  →  CLIP_MODEL_NAME=openai/clip-v
 ## EfficientNet-B0 Deepfake (non-face/video) — `vision` service
 
 **Current implementation:**
-- Model: EfficientNet-B0 ONNX proxy classifier (CPU)
+- Model: `umm-maybe/AI-image-detector` (EfficientNet-B0, HuggingFace → ONNX)
+- ONNX size: ~20MB | Inference RAM: ~100MB
 - Speed: ~2s per frame on CPU
-- Accuracy: ~85% on GenImage synthetic detection benchmark
+- Accuracy: ~87% on CIFAKE, ~80-85% on out-of-distribution GenImage
 - Used for: landscape, architecture, and non-face AI-generation detection
+- License: Apache 2.0
 
 **Upgrade when available:**
 - Model: DIRE (Detecting AI-Generated Images via Reconstruction Error)
