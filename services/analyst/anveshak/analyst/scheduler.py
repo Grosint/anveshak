@@ -14,7 +14,13 @@ Entry point: python -m anveshak.analyst.scheduler
 from __future__ import annotations
 
 import asyncio
+import gzip
+import json
+import os
+import uuid
+from collections import defaultdict
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import asyncpg
 import structlog
@@ -58,6 +64,55 @@ SQL_ORPHANED_CONTENT = """
       AND created_at > NOW() - INTERVAL '1 hour'
     ORDER BY captured_at ASC
     LIMIT 100
+"""
+
+SQL_EXPIRED_CONTENT_ITEMS = """
+    SELECT ci.id, ci.topic_id, TO_CHAR(ci.captured_at, 'YYYY-MM') AS month
+    FROM content_items ci
+    WHERE ci.captured_at < NOW() - MAKE_INTERVAL(days => $1)
+      AND ci.narrative_cluster_id IS NOT NULL
+    ORDER BY ci.captured_at ASC
+    LIMIT 500
+"""
+
+SQL_CONTENT_FOR_ARCHIVE = """
+    SELECT ci.id, ci.topic_id, ci.source_id, ci.raw_text, ci.clean_text,
+           ci.language, ci.translated_text, ci.content_hash, ci.url,
+           ci.captured_at, ci.credibility_score_at_capture,
+           ci.topic_relevance_score, ci.narrative_cluster_id,
+           ci.labels,
+           COALESCE(
+               json_agg(json_build_object(
+                   'entity_type', ee.entity_type,
+                   'entity_text', ee.entity_text,
+                   'confidence', ee.confidence
+               )) FILTER (WHERE ee.id IS NOT NULL), '[]'
+           ) AS entities
+    FROM content_items ci
+    LEFT JOIN extracted_entities ee ON ee.content_item_id = ci.id
+    WHERE ci.id = ANY($1)
+    GROUP BY ci.id
+"""
+
+SQL_UPSERT_CONTENT_ARCHIVE = """
+    INSERT INTO content_archives (id, topic_id, month, file_path, item_count, file_size, labels)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    ON CONFLICT (topic_id, month)
+    DO UPDATE SET item_count = content_archives.item_count + EXCLUDED.item_count,
+                  file_size = EXCLUDED.file_size
+"""
+
+SQL_ACTIVE_TOPICS_PRIORITIZED = """
+    SELECT t.id,
+           COUNT(ci.id) FILTER (WHERE ci.narrative_cluster_id IS NULL
+                                  AND ci.embedding IS NOT NULL) AS pending
+    FROM topics t
+    LEFT JOIN content_items ci ON ci.topic_id = t.id
+    WHERE t.status = 'active'
+    GROUP BY t.id
+    HAVING COUNT(ci.id) FILTER (WHERE ci.narrative_cluster_id IS NULL
+                                  AND ci.embedding IS NOT NULL) > 0
+    ORDER BY pending DESC
 """
 
 # ---------------------------------------------------------------------------
@@ -105,6 +160,137 @@ async def _noop_broadcast(payload: dict) -> None:
 # Loops
 # ---------------------------------------------------------------------------
 
+def write_archive_batch(
+    topic_id: str, month: str, items: list[dict], archive_root: str,
+) -> str:
+    """Write items to a gzipped JSONL archive file. Returns the file path."""
+    topic_dir = Path(archive_root) / topic_id
+    topic_dir.mkdir(parents=True, exist_ok=True)
+    path = str(topic_dir / f"{month}.jsonl.gz")
+
+    with gzip.open(path, "at") as f:
+        for item in items:
+            row = {}
+            for k, v in item.items():
+                if hasattr(v, "isoformat"):
+                    row[k] = v.isoformat()
+                elif isinstance(v, str) and k in ("entities", "labels"):
+                    try:
+                        row[k] = json.loads(v)
+                    except (json.JSONDecodeError, TypeError):
+                        row[k] = v
+                else:
+                    row[k] = v
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+    return path
+
+
+async def archive_and_delete_expired(pool: asyncpg.Pool) -> dict:
+    """Archive old clustered content to compressed JSONL, then delete from DB.
+
+    Returns dict with archived/deleted/errors counts.
+    """
+    if settings.content_retention_days == 0:
+        log.info("scheduler.content_retention.disabled", reason="CONTENT_RETENTION_DAYS=0")
+        return {"skipped": "retention_disabled"}
+
+    async with pool.acquire() as conn:
+        expired_rows = await conn.fetch(
+            SQL_EXPIRED_CONTENT_ITEMS, settings.content_retention_days,
+        )
+
+    if not expired_rows:
+        return {"archived": 0, "deleted": 0, "errors": 0}
+
+    # Group by topic_id + month
+    groups: dict[tuple[str, str], list[str]] = defaultdict(list)
+    for row in expired_rows:
+        groups[(row["topic_id"], row["month"])].append(row["id"])
+
+    archived = 0
+    deleted = 0
+    errors = 0
+
+    for (topic_id, month), item_ids in groups.items():
+        try:
+            # Fetch full data for archive
+            async with pool.acquire() as conn:
+                archive_rows = await conn.fetch(SQL_CONTENT_FOR_ARCHIVE, item_ids)
+
+            items = [dict(r) for r in archive_rows]
+
+            # Write to compressed JSONL
+            path = write_archive_batch(
+                topic_id, month, items, settings.content_archive_root,
+            )
+            file_size = os.path.getsize(path)
+
+            # Record in content_archives table
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    SQL_UPSERT_CONTENT_ARCHIVE,
+                    str(uuid.uuid4()), topic_id, month, path,
+                    len(items), file_size,
+                    '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}',
+                )
+
+                # Delete from PostgreSQL (CASCADE handles children)
+                result = await conn.execute(
+                    "DELETE FROM content_items WHERE id = ANY($1)", item_ids,
+                )
+                count = int(result.split()[-1]) if result else 0
+                deleted += count
+
+            archived += len(items)
+            log.info(
+                "scheduler.content_retention.batch",
+                topic_id=topic_id, month=month,
+                archived=len(items), deleted=count, path=path,
+            )
+
+        except Exception as exc:
+            errors += 1
+            log.warning(
+                "scheduler.content_retention.batch_error",
+                topic_id=topic_id, month=month, error=str(exc),
+            )
+
+    log.info(
+        "scheduler.content_retention.complete",
+        cutoff_days=settings.content_retention_days,
+        archived=archived, deleted=deleted, errors=errors,
+    )
+    return {"archived": archived, "deleted": deleted, "errors": errors}
+
+
+async def get_prioritized_topics(pool: asyncpg.Pool) -> list[dict]:
+    """Get active topics with pending unclustered items, sorted by most pending first.
+
+    When max_topics_per_cycle > 0, limits to that many topics.
+    When max_topics_per_cycle == 0, returns all topics with pending items.
+    """
+    async with pool.acquire() as conn:
+        if settings.max_topics_per_cycle > 0:
+            rows = await conn.fetch(
+                SQL_ACTIVE_TOPICS_PRIORITIZED + " LIMIT $1",
+                settings.max_topics_per_cycle,
+            )
+        else:
+            rows = await conn.fetch(SQL_ACTIVE_TOPICS_PRIORITIZED)
+    return [dict(r) for r in rows]
+
+
+async def content_retention_loop(pool: asyncpg.Pool) -> None:
+    """Daily loop: archive old clustered items, then delete from DB."""
+    while True:
+        await asyncio.sleep(86400)  # daily
+        try:
+            await archive_and_delete_expired(pool)
+        except Exception as exc:
+            log.error("scheduler.content_retention.error", error=str(exc))
+
+
 async def cluster_loop(pool: asyncpg.Pool, redis: object) -> None:
     """Cluster content_items by topic using Leiden community detection (criteria 2.1-2.5).
 
@@ -124,8 +310,7 @@ async def cluster_loop(pool: asyncpg.Pool, redis: object) -> None:
                     if archived and archived != "UPDATE 0":
                         log.info("scheduler.cluster_loop.archived", result=archived)
 
-            async with pool.acquire() as conn:
-                topic_rows = await conn.fetch(SQL_ACTIVE_TOPICS)
+            topic_rows = await get_prioritized_topics(pool)
 
             for row in topic_rows:
                 topic_id: str = row["id"]
@@ -250,6 +435,7 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(signal_check_loop(pool)),
         asyncio.create_task(convergence_loop(pool)),
         asyncio.create_task(orphan_sweep(pool, redis)),
+        asyncio.create_task(content_retention_loop(pool)),
     ]
 
     yield

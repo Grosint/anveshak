@@ -45,6 +45,7 @@ SQL_GET_TOPIC_ENTITIES = """
     JOIN content_items ci ON ee.content_item_id = ci.id
     WHERE (ci.topic_id = $1
        OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
+      AND ci.captured_at >= NOW() - make_interval(days => $2)
     GROUP BY ee.entity_type, ee.entity_text
     ORDER BY mention_count DESC
     LIMIT 100
@@ -333,9 +334,9 @@ async def get_trending_keywords(
 
 
 async def get_topic_entities(
-    conn: asyncpg.Connection, topic_id: str
+    conn: asyncpg.Connection, topic_id: str, days: int = 30
 ) -> list[dict[str, Any]]:
-    rows = await conn.fetch(SQL_GET_TOPIC_ENTITIES, topic_id)
+    rows = await conn.fetch(SQL_GET_TOPIC_ENTITIES, topic_id, days)
     return [dict(r) for r in rows]
 
 

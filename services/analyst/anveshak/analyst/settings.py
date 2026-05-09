@@ -91,6 +91,14 @@ class AnalystSettings(BaseSettings):
     backfill_similarity_threshold: float = 0.85  # cosine similarity floor; see hardware.md
     backfill_interval_s: int = 600  # continuous backfill interval (0 = disabled)
 
+    # Content archive + retention (0 = disabled, keep forever in PostgreSQL)
+    # Items older than N days AND already clustered are archived to disk, then deleted.
+    content_retention_days: int = 0
+    content_archive_root: str = "/app/media/archive"
+
+    # Scheduler throttling — max topics per clustering cycle (0 = unlimited)
+    max_topics_per_cycle: int = 0
+
     # Prometheus metrics HTTP server port (8A.17)
     metrics_port: int = 8004  # matches ANALYST_PORT in compose.yml
 

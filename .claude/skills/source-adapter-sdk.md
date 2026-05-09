@@ -4,6 +4,8 @@
 
 > See also: `learned/additive-backfill-join-table.md` — pattern for associating existing content with new topics without copying rows
 > See also: `learned/cross-topic-join-table-queries.md` — every topic-scoped SQL must include topic_content_items OR subquery; backfilled items are invisible otherwise
+> See also: `learned/archive-then-delete-retention.md` — archive to JSONL.gz before deleting from PostgreSQL; record in tracking table; disabled by default
+> See also: `learned/scheduler-prioritized-topic-selection.md` — HAVING + ORDER BY pending DESC + LIMIT for scheduler loops; skip idle topics
 > See also: `learned/url-level-media-dedup.md` — in-memory URL set per scrape job to skip duplicate media downloads
 > See also: `learned/uv-workspace-restructure.md` — safe sequence for moving packages; namespace flattening limits
 > See also: `learned/redis-atomic-budget-guard.md` — X/Twitter spend guard (atomic Redis INCR, monthly TTL)

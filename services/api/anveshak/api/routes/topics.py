@@ -150,10 +150,13 @@ async def get_trending_keywords(
 @router.get("/{topic_id}/entities")
 async def get_topic_entities(
     topic_id: str,
+    days: int = 30,
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    return await topics_db.get_topic_entities(db, topic_id)
+    if days < 1 or days > 365:
+        raise HTTPException(status_code=422, detail="days must be 1-365")
+    return await topics_db.get_topic_entities(db, topic_id, days)
 
 
 @router.get("/{topic_id}/clusters")
