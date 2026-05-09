@@ -116,18 +116,19 @@ async def signal_websocket(
 @router.get("")
 async def list_signals(
     status: str = Query(default="new", pattern="^(new|acknowledged|dismissed)$"),
+    topic_id: Optional[str] = Query(default=None, description="Filter signals to a specific topic"),
     since: Optional[datetime] = Query(default=None, description="ISO datetime — only return signals at or after this time"),
     until: Optional[datetime] = Query(default=None, description="ISO datetime — only return signals at or before this time"),
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """List signals by status with optional time range (criteria 2.14 status flow)."""
+    """List signals by status with optional time range and topic filter (criteria 2.14 status flow)."""
     if since is not None or until is not None:
         # Default until to now if only since is provided, and vice versa
         _since = since or datetime.min.replace(tzinfo=UTC)
         _until = until or datetime.now(UTC)
         return await signals_db.list_signals_filtered(db, status, _since, _until)
-    return await signals_db.list_signals(db, status)
+    return await signals_db.list_signals(db, status, topic_id=topic_id)
 
 
 @router.get("/{signal_id}/connections")

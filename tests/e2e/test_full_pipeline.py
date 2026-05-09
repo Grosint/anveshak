@@ -109,7 +109,7 @@ def test_specific_signal_fields(auth_headers):
     """8F.5 — Demo signal has required fields from list endpoint."""
     status, body = _http(
         "GET",
-        f"{API_BASE}/api/v1/signals?status=new",
+        f"{API_BASE}/api/v1/signals?status=new&topic_id={DEMO_TOPIC_DEEPFAKE}",
         headers=auth_headers,
     )
     assert status == 200
