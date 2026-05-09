@@ -46,8 +46,8 @@ async def wait_for_embeddings(pool: asyncpg.Pool, topic_ids: list[str]) -> bool:
         total = row["total"]
         done = row["with_embedding"]
 
-        # Accept 90% completion (some items may be filtered by quality gate)
-        if total > 0 and done >= total * 0.9:
+        # Wait for 100% embedding completion
+        if total > 0 and done >= total:
             log.info(
                 "benchmark.embeddings_complete",
                 done=done,

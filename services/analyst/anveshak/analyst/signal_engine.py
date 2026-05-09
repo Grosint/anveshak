@@ -78,7 +78,8 @@ SQL_ACTIVE_TOPICS = "SELECT id FROM topics WHERE status = 'active'"
 SQL_SENTIMENT_BASELINE = """
     SELECT AVG((labels->'sentiment'->>'compound')::float) AS baseline_avg
     FROM content_items
-    WHERE topic_id = $1
+    WHERE (topic_id = $1
+       OR id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND captured_at >= NOW() - make_interval(days => $2)
       AND labels->'sentiment' IS NOT NULL
 """
@@ -86,7 +87,8 @@ SQL_SENTIMENT_BASELINE = """
 SQL_SENTIMENT_RECENT = """
     SELECT AVG((labels->'sentiment'->>'compound')::float) AS recent_avg
     FROM content_items
-    WHERE topic_id = $1
+    WHERE (topic_id = $1
+       OR id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND captured_at >= NOW() - make_interval(hours => $2)
       AND labels->'sentiment' IS NOT NULL
 """

@@ -20,10 +20,13 @@ SQL_INSERT_TOPIC = """
 
 SQL_LIST_TOPICS = """
     SELECT t.id, t.name, t.status, t.signal_threshold, t.credibility_min, t.created_at,
-           COUNT(DISTINCT ci.id) AS content_count,
+           (SELECT COUNT(DISTINCT x.id) FROM (
+               SELECT ci.id FROM content_items ci WHERE ci.topic_id = t.id
+               UNION
+               SELECT tci.content_item_id FROM topic_content_items tci WHERE tci.topic_id = t.id
+           ) x) AS content_count,
            COUNT(DISTINCT sig.id) FILTER (WHERE sig.status = 'new') AS signal_count
     FROM topics t
-    LEFT JOIN content_items ci ON ci.topic_id = t.id
     LEFT JOIN signals sig ON sig.topic_id = t.id
     GROUP BY t.id
     ORDER BY t.created_at DESC
@@ -40,7 +43,8 @@ SQL_GET_TOPIC_ENTITIES = """
            AVG(ee.confidence) as avg_confidence
     FROM extracted_entities ee
     JOIN content_items ci ON ee.content_item_id = ci.id
-    WHERE ci.topic_id = $1
+    WHERE (ci.topic_id = $1
+       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
     GROUP BY ee.entity_type, ee.entity_text
     ORDER BY mention_count DESC
     LIMIT 100
@@ -280,7 +284,8 @@ SQL_SENTIMENT_TREND = """
            AVG((labels->'sentiment'->>'compound')::float) AS avg_compound,
            COUNT(*) AS item_count
     FROM content_items
-    WHERE topic_id = $1
+    WHERE (topic_id = $1
+       OR id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND captured_at >= NOW() - make_interval(days => $2)
       AND labels->'sentiment' IS NOT NULL
     GROUP BY DATE(captured_at)
@@ -291,7 +296,8 @@ SQL_TRENDING_KEYWORDS = """
     SELECT kw, COUNT(*) AS frequency
     FROM content_items,
          jsonb_array_elements_text(labels->'keywords') AS kw
-    WHERE topic_id = $1
+    WHERE (topic_id = $1
+       OR id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND captured_at >= NOW() - make_interval(days => $2)
       AND labels->'keywords' IS NOT NULL
     GROUP BY kw

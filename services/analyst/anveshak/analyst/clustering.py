@@ -46,7 +46,8 @@ SQL_TOPIC_EMBEDDINGS = """
            ci.entity_minhash
     FROM content_items ci
     JOIN sources s ON ci.source_id = s.id
-    WHERE ci.topic_id = $1
+    WHERE (ci.topic_id = $1
+       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND ci.embedding IS NOT NULL
       AND (ci.topic_relevance_score IS NULL OR ci.topic_relevance_score >= $2)
     ORDER BY ci.captured_at ASC
@@ -59,7 +60,8 @@ SQL_TOPIC_EMBEDDINGS_WINDOWED = """
            ci.entity_minhash
     FROM content_items ci
     JOIN sources s ON ci.source_id = s.id
-    WHERE ci.topic_id = $1
+    WHERE (ci.topic_id = $1
+       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND ci.embedding IS NOT NULL
       AND (ci.topic_relevance_score IS NULL OR ci.topic_relevance_score >= $2)
       AND ci.captured_at >= NOW() - MAKE_INTERVAL(days => $3)
@@ -74,7 +76,8 @@ SQL_UNCLUSTERED_EMBEDDINGS_WINDOWED = """
            ci.entity_minhash
     FROM content_items ci
     JOIN sources s ON ci.source_id = s.id
-    WHERE ci.topic_id = $1
+    WHERE (ci.topic_id = $1
+       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND ci.embedding IS NOT NULL
       AND ci.narrative_cluster_id IS NULL
       AND (ci.topic_relevance_score IS NULL OR ci.topic_relevance_score >= $2)
@@ -89,7 +92,8 @@ SQL_UNCLUSTERED_EMBEDDINGS = """
            ci.entity_minhash
     FROM content_items ci
     JOIN sources s ON ci.source_id = s.id
-    WHERE ci.topic_id = $1
+    WHERE (ci.topic_id = $1
+       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND ci.embedding IS NOT NULL
       AND ci.narrative_cluster_id IS NULL
       AND (ci.topic_relevance_score IS NULL OR ci.topic_relevance_score >= $2)
