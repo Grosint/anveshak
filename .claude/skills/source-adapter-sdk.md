@@ -3,6 +3,7 @@
 ## When to load: any task involving creating or modifying a source adapter
 
 > See also: `learned/additive-backfill-join-table.md` — pattern for associating existing content with new topics without copying rows
+> See also: `learned/cross-topic-join-table-queries.md` — every topic-scoped SQL must include topic_content_items OR subquery; backfilled items are invisible otherwise
 > See also: `learned/url-level-media-dedup.md` — in-memory URL set per scrape job to skip duplicate media downloads
 > See also: `learned/uv-workspace-restructure.md` — safe sequence for moving packages; namespace flattening limits
 > See also: `learned/redis-atomic-budget-guard.md` — X/Twitter spend guard (atomic Redis INCR, monthly TTL)

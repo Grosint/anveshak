@@ -3,6 +3,8 @@
 ## When to load: any task involving Ollama, report generation, or LLM inference
 
 > See also: `learned/phase-check-pitfalls.md` — transient LLM-output Pydantic models and the labels rule
+> See also: `learned/leiden-threshold-per-model.md` — clustering threshold must be calibrated per embedding model; 0.70 for MiniLM, re-calibrate on model change
+> See also: `learned/benchmark-100-percent-completion.md` — benchmark must wait for 100% embedding completion; 90% causes non-deterministic recall
 > See also: `learned/new-db-func-mock-all-callers.md` — adding new db functions requires updating all test mocks that patch the db module
 > See also: `learned/analysis-jobs-db-source-of-truth.md` — analysis_jobs table is authoritative; don't rely on ARQ Redis for completed jobs
 > See also: `learned/passlib-bcrypt-incompatibility.md` — replace passlib with direct bcrypt wrapper (passlib 1.7 + bcrypt>=4 broken)
