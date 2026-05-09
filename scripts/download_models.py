@@ -1,15 +1,14 @@
-"""Download / generate ONNX deepfake detection models into /app/models.
+"""Download / export ONNX deepfake detection models into /app/models.
 
 Models:
-  - facetorch/face_deepfake.onnx  — binary classifier [1,3,224,224] → [1,2] (real vs fake)
-  - efficientnet/deepfake_b0.onnx — single-logit     [1,3,224,224] → [1,1] (fake logit)
+  - facetorch/face_deepfake.onnx  — real HF model (prithivMLmods/Deep-Fake-Detector-v2-Model)
+  - efficientnet/deepfake_b0.onnx — real HF model (umm-maybe/AI-image-detector)
 
 Usage:
   python scripts/download_models.py [--model-dir /app/models]
 
-If pre-trained weights are not available (no internet or no HuggingFace weights),
-this script exports randomly-initialised ONNX models with the correct architecture.
-Replace with fine-tuned weights when available — the ONNX interface is identical.
+Downloads real pre-trained weights from HuggingFace and exports to ONNX.
+Idempotent — skips if model files already exist.
 """
 from __future__ import annotations
 
@@ -18,110 +17,86 @@ import sys
 from pathlib import Path
 
 
-def export_facetorch_onnx(model_dir: Path) -> Path:
-    """Export a face deepfake classifier: input [1,3,224,224] → output [1,2] logits."""
-    import torch
-    import torch.nn as nn
+# Default HF model repos — same as services/vision/anveshak/vision/settings.py
+DEFAULT_FACETORCH_HF_MODEL = "prithivMLmods/Deep-Fake-Detector-v2-Model"
+DEFAULT_EFFICIENTNET_HF_MODEL = "umm-maybe/AI-image-detector"
 
-    class FaceDeepfakeNet(nn.Module):
-        """Simple CNN binary classifier matching facetorch ONNX contract."""
 
-        def __init__(self) -> None:
-            super().__init__()
-            self.features = nn.Sequential(
-                nn.Conv2d(3, 32, 3, padding=1),
-                nn.ReLU(),
-                nn.AdaptiveAvgPool2d(1),
-            )
-            self.classifier = nn.Linear(32, 2)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            x = self.features(x)
-            x = x.view(x.size(0), -1)
-            return self.classifier(x)
+def _download_facetorch_onnx(model_dir: Path, hf_model: str) -> Path:
+    """Download face deepfake model from HuggingFace and export to ONNX."""
+    from optimum.onnxruntime import ORTModelForImageClassification
 
     out_path = model_dir / "facetorch" / "face_deepfake.onnx"
+    if out_path.exists():
+        print(f"  facetorch already exists: {out_path}")
+        return out_path
+
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    print(f"  Downloading {hf_model} ...")
 
-    model = FaceDeepfakeNet()
-    model.eval()
-    dummy = torch.randn(1, 3, 224, 224)
-
-    torch.onnx.export(
-        model,
-        dummy,
-        str(out_path),
-        input_names=["input"],
-        output_names=["output"],
-        dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}},
-        opset_version=17,
+    ort_model = ORTModelForImageClassification.from_pretrained(
+        hf_model, export=True,
     )
-    print(f"  facetorch/face_deepfake.onnx  ({out_path.stat().st_size / 1024:.0f} KB)")
+    ort_model.save_pretrained(str(out_path.parent))
+
+    exported = out_path.parent / "model.onnx"
+    if exported.exists() and exported != out_path:
+        exported.rename(out_path)
+
+    print(f"  facetorch/face_deepfake.onnx  ({out_path.stat().st_size / 1024 / 1024:.1f} MB)")
     return out_path
 
 
-def export_efficientnet_onnx(model_dir: Path) -> Path:
-    """Export an EfficientNet-B0 proxy: input [1,3,224,224] → output [1,1] logit."""
-    import torch
-    import torch.nn as nn
-
-    class DeepfakeB0(nn.Module):
-        """Lightweight proxy matching EfficientNet-B0 ONNX contract."""
-
-        def __init__(self) -> None:
-            super().__init__()
-            self.features = nn.Sequential(
-                nn.Conv2d(3, 32, 3, stride=2, padding=1),
-                nn.BatchNorm2d(32),
-                nn.ReLU(),
-                nn.Conv2d(32, 64, 3, stride=2, padding=1),
-                nn.BatchNorm2d(64),
-                nn.ReLU(),
-                nn.AdaptiveAvgPool2d(1),
-            )
-            self.classifier = nn.Linear(64, 1)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            x = self.features(x)
-            x = x.view(x.size(0), -1)
-            return self.classifier(x)
+def _download_efficientnet_onnx(model_dir: Path, hf_model: str) -> Path:
+    """Download non-face deepfake model from HuggingFace and export to ONNX."""
+    from optimum.onnxruntime import ORTModelForImageClassification
 
     out_path = model_dir / "efficientnet" / "deepfake_b0.onnx"
+    if out_path.exists():
+        print(f"  efficientnet already exists: {out_path}")
+        return out_path
+
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    print(f"  Downloading {hf_model} ...")
 
-    model = DeepfakeB0()
-    model.eval()
-    dummy = torch.randn(1, 3, 224, 224)
-
-    torch.onnx.export(
-        model,
-        dummy,
-        str(out_path),
-        input_names=["input"],
-        output_names=["output"],
-        dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}},
-        opset_version=17,
+    ort_model = ORTModelForImageClassification.from_pretrained(
+        hf_model, export=True,
     )
-    print(f"  efficientnet/deepfake_b0.onnx ({out_path.stat().st_size / 1024:.0f} KB)")
+    ort_model.save_pretrained(str(out_path.parent))
+
+    exported = out_path.parent / "model.onnx"
+    if exported.exists() and exported != out_path:
+        exported.rename(out_path)
+
+    print(f"  efficientnet/deepfake_b0.onnx ({out_path.stat().st_size / 1024 / 1024:.1f} MB)")
     return out_path
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Download/generate deepfake ONNX models")
+    parser = argparse.ArgumentParser(description="Download deepfake ONNX models from HuggingFace")
     parser.add_argument(
         "--model-dir",
         type=Path,
         default=Path("/app/models"),
         help="Root directory for model files (default: /app/models)",
     )
+    parser.add_argument(
+        "--facetorch-model",
+        default=DEFAULT_FACETORCH_HF_MODEL,
+        help=f"HuggingFace repo for face deepfake model (default: {DEFAULT_FACETORCH_HF_MODEL})",
+    )
+    parser.add_argument(
+        "--efficientnet-model",
+        default=DEFAULT_EFFICIENTNET_HF_MODEL,
+        help=f"HuggingFace repo for non-face deepfake model (default: {DEFAULT_EFFICIENTNET_HF_MODEL})",
+    )
     args = parser.parse_args()
-    model_dir: Path = args.model_dir
 
-    print(f"Model directory: {model_dir}")
-    print("Exporting ONNX models...")
+    print(f"Model directory: {args.model_dir}")
+    print("Downloading real HuggingFace models and exporting to ONNX...")
 
-    export_facetorch_onnx(model_dir)
-    export_efficientnet_onnx(model_dir)
+    _download_facetorch_onnx(args.model_dir, args.facetorch_model)
+    _download_efficientnet_onnx(args.model_dir, args.efficientnet_model)
 
     print("Done. Both deepfake models ready.")
 

@@ -3,9 +3,9 @@
 Criteria 4.13: FacetorchDetector implements DeepfakeDetector ABC.
 Criteria 4.16: CUDAExecutionProvider when device=cuda (from base.onnx_providers()).
 
-Model: face_deepfake.onnx — binary classifier trained on FaceForensics++.
+Model: prithivMLmods/Deep-Fake-Detector-v2-Model (ViT-base, ~92% accuracy).
 Input:  [1, 3, 224, 224] float32 (ImageNet-normalised)
-Output: [1, 2] float32 logits — index 0 = real, index 1 = fake
+Output: [1, 2] float32 logits — softmax → FAKE_INDEX is fake probability
 """
 from __future__ import annotations
 
@@ -16,13 +16,17 @@ from ..settings import settings
 
 log = structlog.get_logger(__name__)
 
+# Label ordering from HF model config.json: {0: "Realism", 1: "Deepfake"}
+# Verified against prithivMLmods/Deep-Fake-Detector-v2-Model config.
+FAKE_INDEX = 1
+
 
 class FacetorchDetector(DeepfakeDetector):
     """ONNX-based face deepfake detector.
 
     Hardware independence: device='cpu' → CPUExecutionProvider,
                            device='cuda' → CUDAExecutionProvider (zero code change).
-    Accuracy: ~91% AUC on FaceForensics++ benchmark (CPU, ONNX).
+    Accuracy: ~92% on FaceForensics++/DFDC/GAN faces (see hardware.md).
     Speed:    ~8–12s per image on CPU; ~0.3s on GPU (see hardware.md).
     """
 
@@ -59,7 +63,7 @@ class FacetorchDetector(DeepfakeDetector):
         input_name = self._model.get_inputs()[0].name
         outputs = self._model.run(None, {input_name: arr})
 
-        # Output: [1, 2] logits → softmax → index 1 is "fake" probability
+        # Output: [1, 2] logits → softmax → FAKE_INDEX is fake probability
         logits = outputs[0][0]  # shape (2,)
         probs = scipy.special.softmax(logits)
-        return float(probs[1])  # probability of being a deepfake
+        return float(probs[FAKE_INDEX])

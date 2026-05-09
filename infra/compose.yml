@@ -27,6 +27,8 @@ x-vision-env: &vision-env
   VIDEO_KEYFRAME_INTERVAL_S: ${VIDEO_KEYFRAME_INTERVAL_S:-5}
   VISION_MAX_VIDEO_SIZE_MB: ${VISION_MAX_VIDEO_SIZE_MB:-500}
   EXIF_BACKEND: ${EXIF_BACKEND:-pillow}
+  FACETORCH_HF_MODEL: ${FACETORCH_HF_MODEL:-prithivMLmods/Deep-Fake-Detector-v2-Model}
+  EFFICIENTNET_HF_MODEL: ${EFFICIENTNET_HF_MODEL:-umm-maybe/AI-image-detector}
 
 x-healthcheck-defaults: &healthcheck-defaults
   interval: 30s
