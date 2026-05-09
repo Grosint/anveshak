@@ -11,6 +11,11 @@
 > See also: `learned/vitest-vite-setup.md` — Vitest + jsdom + tsconfig exclusion for Vite projects
 > See also: `learned/phase-check-pitfalls.md` — pitfalls 12–14 (postcss CJS, missing SQL JOINs, vitest tsconfig)
 > See also: `learned/time-filter-bar-pattern.md` — preset chip + custom date range filter with React Query, UTC ISO strings, conditional pickers
+> See also: `learned/frontend-domain-logic-extraction.md` — extract pure functions from components to lib/domain.ts; tests import the real function, no drift
+> See also: `learned/fake-timers-react-query-trap.md` — vi.useFakeTimers() deadlocks React Query; use fireEvent not userEvent, or avoid fake timers entirely
+> See also: `learned/frontend-seam-testing.md` — 12 cross-system data flows (WS→cache→UI, auth→localStorage→interceptor, etc.); A→cache→B integration tests
+> See also: `learned/mock-shape-unwrap-mismatch.md` — API mocks must return unwrapped shape ([] not {data:[]}); axios .then(r=>r.data) already unwraps
+> See also: `learned/characterization-testing-existing-code.md` — pin current behavior including bugs; TDD is for new code, characterization for existing
 
 ---
 
