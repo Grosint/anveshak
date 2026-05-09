@@ -3,6 +3,8 @@
 ## When to load: any task involving Ollama, report generation, or LLM inference
 
 > See also: `learned/phase-check-pitfalls.md` — transient LLM-output Pydantic models and the labels rule
+> See also: `learned/optional-dep-lazy-import-two-level-log.md` — WeasyPrint/PyMuPDF lazy import with two-level logging
+> See also: `learned/path-parents-index-off-by-one.md` — Path.parents[] off-by-one bug (geocoder custom_locations.json)
 > See also: `learned/leiden-threshold-per-model.md` — clustering threshold must be calibrated per embedding model; 0.70 for MiniLM, re-calibrate on model change
 > See also: `learned/benchmark-100-percent-completion.md` — benchmark must wait for 100% embedding completion; 90% causes non-deterministic recall
 > See also: `learned/new-db-func-mock-all-callers.md` — adding new db functions requires updating all test mocks that patch the db module

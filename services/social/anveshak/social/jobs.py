@@ -13,7 +13,9 @@ from arq import ArqRedis
 from arq.connections import RedisSettings
 
 from .adapters.base import AdapterAuthError, AdapterRateLimitError, AdapterDegradedError
+from .circuit_breaker import AdapterCircuitBreaker
 from .ingest import ingest_raw_item
+from .metrics import social_api_calls_total, social_rate_limit_total, social_poll_duration_seconds
 from .settings import settings
 
 log = structlog.get_logger(__name__)
@@ -39,6 +41,45 @@ SQL_GET_SOURCES_FOR_PLATFORM = """
 # ---------------------------------------------------------------------------
 
 _ADAPTERS: dict = {}   # adapter_id → SourceAdapterBase instance
+_CIRCUIT_BREAKERS: dict[str, AdapterCircuitBreaker] = {}  # adapter_id → breaker
+
+
+# ---------------------------------------------------------------------------
+# Credential validation — checked at startup before instantiation
+# ---------------------------------------------------------------------------
+
+_REQUIRED_CREDENTIALS: dict[str, list[tuple[str, str]]] = {
+    "bluesky": [
+        ("bluesky_handle", "BLUESKY_HANDLE"),
+        ("bluesky_password", "BLUESKY_PASSWORD"),
+    ],
+    "reddit": [
+        ("reddit_client_id", "REDDIT_CLIENT_ID"),
+        ("reddit_client_secret", "REDDIT_CLIENT_SECRET"),
+    ],
+    "telegram": [
+        ("telegram_api_id", "TELEGRAM_API_ID"),
+        ("telegram_api_hash", "TELEGRAM_API_HASH"),
+        ("telegram_session_string", "TELEGRAM_SESSION_STRING"),
+    ],
+    "x": [
+        ("x_bearer_token", "X_BEARER_TOKEN"),
+    ],
+}
+
+
+def _validate_adapter_credentials(adapter_name: str, s) -> list[str]:
+    """Return list of missing credential env var names for the adapter.
+
+    Empty list means all required credentials are present.
+    """
+    required = _REQUIRED_CREDENTIALS.get(adapter_name, [])
+    missing = []
+    for attr, env_name in required:
+        val = getattr(s, attr, None)
+        if val is None:
+            missing.append(env_name)
+    return missing
 
 
 # ---------------------------------------------------------------------------
@@ -59,19 +100,43 @@ async def startup(ctx: dict) -> None:
     from .adapters.x_adapter import make_x_adapter
 
     candidates: list = []
-    if settings.reddit_adapter_enabled:
-        candidates.append(RedditAdapter())
-    if settings.bluesky_adapter_enabled:
-        candidates.append(BlueskyAdapter())
-    if settings.telegram_adapter_enabled:
-        candidates.append(TelegramAdapter())
-    if settings.x_adapter_enabled:
-        candidates.append(make_x_adapter(ctx["arq_pool"]))
+
+    # Validate credentials before instantiation — clear warnings, no crash
+    adapter_configs = [
+        (settings.reddit_adapter_enabled, "reddit", lambda: RedditAdapter()),
+        (settings.bluesky_adapter_enabled, "bluesky", lambda: BlueskyAdapter(
+            quota_guard=__import__("anveshak.social.adapters.bluesky", fromlist=["BlueskyQuotaGuard"]).BlueskyQuotaGuard(
+                ctx["arq_pool"], settings.bluesky_daily_call_cap
+            )
+        )),
+        (settings.telegram_adapter_enabled, "telegram", lambda: TelegramAdapter()),
+        (settings.x_adapter_enabled, "x", lambda: make_x_adapter(ctx["arq_pool"])),
+    ]
+
+    for enabled, name, factory in adapter_configs:
+        if not enabled:
+            continue
+        missing = _validate_adapter_credentials(name, settings)
+        if missing:
+            log.warning(
+                "social.adapter_missing_credentials",
+                adapter=name,
+                missing=missing,
+                hint=f"Set {', '.join(missing)} to enable {name} adapter",
+            )
+            continue
+        candidates.append(factory())
 
     for adapter in candidates:
         try:
             await adapter.authenticate()
             _ADAPTERS[adapter.adapter_id] = adapter
+            _CIRCUIT_BREAKERS[adapter.adapter_id] = AdapterCircuitBreaker(
+                ctx["arq_pool"],
+                adapter.adapter_id,
+                threshold=settings.social_circuit_breaker_threshold,
+                cooldown_s=settings.social_circuit_breaker_cooldown_s,
+            )
             log.info("social.adapter_ready", adapter_id=adapter.adapter_id)
         except AdapterAuthError as exc:
             log.error(
@@ -118,6 +183,12 @@ async def poll_social_topic(ctx: dict, topic_id: str, include_x: bool = True) ->
     for adapter_id, adapter in _ADAPTERS.items():
         platform = adapter.platform
 
+        # Circuit breaker — skip adapters that are in OPEN state
+        cb = _CIRCUIT_BREAKERS.get(adapter_id)
+        if cb and not await cb.allows_call():
+            log.info("social.circuit_breaker.skipped", adapter_id=adapter_id)
+            continue
+
         # Respect X-specific poll interval — skip if not yet due (criteria 3.25)
         if platform == "twitter" and not include_x:
             log.debug("social.x_poll_skipped", adapter_id=adapter_id,
@@ -131,7 +202,10 @@ async def poll_social_topic(ctx: dict, topic_id: str, include_x: bool = True) ->
         source_handles = [r["url_or_handle"] for r in source_rows]
 
         inserted = 0
+        import time as _time
+        _poll_t0 = _time.monotonic()
         try:
+            social_api_calls_total.labels(platform=platform).inc()
             async for raw_item in adapter.collect(keywords, source_handles, topic_id):
                 try:
                     new = await ingest_raw_item(
@@ -147,13 +221,33 @@ async def poll_social_topic(ctx: dict, topic_id: str, include_x: bool = True) ->
                         error=str(exc),
                     )
 
+        except AdapterAuthError as exc:
+            log.warning("social.auth_error_during_collect", adapter_id=adapter_id, error=str(exc))
+            refreshed = await adapter.refresh_credentials()
+            if refreshed:
+                log.info("social.credentials_refreshed", adapter_id=adapter_id)
+            elif cb:
+                await cb.record_failure()
         except AdapterRateLimitError as exc:
             log.warning("social.rate_limited", adapter_id=adapter_id, error=str(exc))
+            social_rate_limit_total.labels(platform=platform).inc()
+            if cb:
+                await cb.record_failure()
         except AdapterDegradedError as exc:
             log.warning("social.degraded", adapter_id=adapter_id, error=str(exc))
+            if cb:
+                await cb.record_failure()
         except Exception as exc:
             log.error("social.adapter_error", adapter_id=adapter_id, error=str(exc))
+            if cb:
+                await cb.record_failure()
+        else:
+            if cb:
+                await cb.record_success()
 
+        social_poll_duration_seconds.labels(platform=platform).observe(
+            _time.monotonic() - _poll_t0
+        )
         summary[platform] = inserted
         log.info(
             "social.poll.done",

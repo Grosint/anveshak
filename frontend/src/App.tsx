@@ -10,6 +10,9 @@ import ImageAnalysis from './pages/ImageAnalysis'
 import SignalsInbox from './pages/SignalsInbox'
 import ReportBuilder from './pages/ReportBuilder'
 import SourceManager from './pages/SourceManager'
+import AnalyticsDashboard from './pages/AnalyticsDashboard'
+import UserManagement from './pages/UserManagement'
+import ScheduledReports from './pages/ScheduledReports'
 
 // ── Error boundary — catches unhandled render errors so the page never
 // goes silently blank. Shows the error message + a reload button.
@@ -87,6 +90,9 @@ export default function App() {
           <Route path="/reports" element={<ReportBuilder />} />
           <Route path="/sources" element={<SourceManager />} />
           <Route path="/source-health" element={<Navigate to="/sources" replace />} />
+          <Route path="/analytics" element={<AnalyticsDashboard />} />
+          <Route path="/users" element={<UserManagement />} />
+          <Route path="/schedules" element={<ScheduledReports />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -85,6 +85,103 @@ class TestAssembleContext:
         assert count == 0
 
 
+class TestRAGCredibilityFiltering:
+    """Verify credibility_min parameter is threaded to fetch_rag_chunks."""
+
+    @pytest.mark.asyncio
+    async def test_credibility_min_passed_to_fetch_rag_chunks(self):
+        """generate_report passes report's credibility_min_filter to fetch_rag_chunks."""
+        from anveshak.reporter.worker import generate_report
+
+        report = {
+            "id": "report-1",
+            "topic_id": "topic-1",
+            "report_type": "intelligence_brief",
+            "credibility_min_filter": 60.0,  # custom threshold
+        }
+        topic = {"id": "topic-1", "name": "Test", "keywords": ["test"]}
+        chunks = [{"id": "c1", "source_id": "s1", "clean_text": "text", "url": "https://x.com"}]
+        rc = MagicMock()
+        rc.executive_summary = "Summary"
+        rc.key_findings = ["F1"]
+        rc.recommendations = ["R1"]
+        rc.source_citations = ["https://x.com"]
+        rc.confidence_level = 0.9
+
+        ctx = {"db": AsyncMock(), "settings": MagicMock(
+            rag_top_k=10, rag_max_context_tokens=4000,
+            ollama_model="test", ollama_host="http://ollama:11434",
+            ollama_report_timeout_s=30, ollama_retry_max=2,
+        )}
+
+        with patch("anveshak.reporter.worker.db") as mock_db, \
+             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed, \
+             patch("anveshak.reporter.worker.assemble_context") as mock_ctx, \
+             patch("anveshak.reporter.worker.render_prompt") as mock_prompt, \
+             patch("anveshak.reporter.worker.call_ollama_with_retry", new_callable=AsyncMock) as mock_llm, \
+             patch("anveshak.reporter.worker.geocode_locations") as mock_geo, \
+             patch("anveshak.reporter.worker.build_geojson") as mock_geojson, \
+             patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract:
+            mock_db.fetch_report = AsyncMock(return_value=report)
+            mock_db.fetch_topic = AsyncMock(return_value=topic)
+            mock_db.fetch_rag_chunks = AsyncMock(return_value=chunks)
+            mock_db.fetch_sources_for_snapshot = AsyncMock(return_value={})
+            mock_db.fetch_topic_location_entities = AsyncMock(return_value=[])
+            mock_db.set_report_generated = AsyncMock(return_value=True)
+            mock_db.update_job_status = AsyncMock()
+            mock_embed.return_value = [0.1] * 384
+            mock_ctx.return_value = ("context", 1, "2026-01-01")
+            mock_prompt.return_value = "prompt"
+            mock_llm.return_value = rc
+            mock_geo.return_value = []
+            mock_geojson.return_value = {"type": "FeatureCollection", "features": []}
+            mock_extract.return_value = []
+
+            await generate_report(ctx, "report-1")
+
+            # Verify credibility_min=60.0 was passed to fetch_rag_chunks
+            # Args: (pool, topic_id, query_embedding, credibility_min, top_k)
+            mock_db.fetch_rag_chunks.assert_awaited_once()
+            call_args = mock_db.fetch_rag_chunks.call_args
+            cred_arg = call_args[0][3]
+            assert cred_arg == 60.0, f"Expected credibility_min=60.0, got {cred_arg}"
+
+    @pytest.mark.asyncio
+    async def test_default_credibility_min_is_30(self):
+        """When report row has no credibility_min_filter, default is 30.0."""
+        from anveshak.reporter.worker import generate_report
+
+        report = {
+            "id": "report-2",
+            "topic_id": "topic-1",
+            "report_type": "intelligence_brief",
+            # credibility_min_filter not set — should default to 30.0
+        }
+        topic = {"id": "topic-1", "name": "Test", "keywords": []}
+
+        ctx = {"db": AsyncMock(), "settings": MagicMock(
+            rag_top_k=10, rag_max_context_tokens=4000,
+            ollama_model="test", ollama_host="http://o:11434",
+            ollama_report_timeout_s=30, ollama_retry_max=2,
+        )}
+
+        with patch("anveshak.reporter.worker.db") as mock_db, \
+             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed:
+            mock_db.fetch_report = AsyncMock(return_value=report)
+            mock_db.fetch_topic = AsyncMock(return_value=topic)
+            mock_db.fetch_rag_chunks = AsyncMock(return_value=[])  # empty → will return early
+            mock_db.set_report_failed = AsyncMock()
+            mock_embed.return_value = [0.1] * 384
+
+            await generate_report(ctx, "report-2")
+
+            # Verify credibility_min=30.0 (default) was passed
+            # Args: (pool, topic_id, query_embedding, credibility_min, top_k)
+            call_args = mock_db.fetch_rag_chunks.call_args
+            cred_arg = call_args[0][3]
+            assert cred_arg == 30.0, f"Expected default 30.0, got {cred_arg}"
+
+
 class TestGenerateQueryEmbedding:
     """generate_query_embedding calls analyst service /internal/embed."""
 

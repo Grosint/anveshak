@@ -6,7 +6,7 @@ paths:
 ---
 # Database Rules
 
-Consolidated from 9 learned instincts. These apply to all PostgreSQL/asyncpg code.
+Consolidated from 14 learned instincts. These apply to all PostgreSQL/asyncpg code.
 
 ## SQL Style
 
@@ -17,9 +17,17 @@ Consolidated from 9 learned instincts. These apply to all PostgreSQL/asyncpg cod
 ## Idempotency
 
 - All inserts that may be replayed use `ON CONFLICT ... DO NOTHING` or `DO UPDATE`
+  See: `learned/idempotent-cron-insert.md`
 - Cron/scheduled jobs that insert rows MUST have a `UNIQUE` constraint preventing duplicates
 - Immutable fields (e.g., `generated_at`) are guarded with `WHERE generated_at IS NULL`
-  to prevent replayed ARQ jobs from overwriting
+  to prevent replayed ARQ jobs from overwriting. See: `learned/immutable-write-idempotency.md`
+- ARQ child jobs enqueued from parent (not scheduler) with scope guard:
+  `if clusters: enqueue(...)` — prevents empty enqueues. See: `learned/causal-arq-job-chaining.md`
+- Orphan sweep: query rows with null completion from last 1h, every 5min, batch of 100.
+  Catches jobs where INSERT succeeded but enqueue failed (not atomic).
+  See: `learned/orphan-sweep-safety-net.md`
+- Redis quota guards use INCR (atomic), never GET→compare→SET (race condition).
+  Decrement on reject to keep counter accurate. See: `learned/redis-atomic-budget-guard.md`
 
 ## Migrations
 

@@ -25,8 +25,10 @@ from .fetch import (
     fetch_url, fetch_url_with_crawler, create_shared_crawler,
     fetch_html, extract_article_links,
     create_tor_crawler, fetch_url_via_tor,
+    check_robots_allowed,
 )
 from .health import run_all_health_checks
+from .lang import detect_language
 from .rss import fetch_rss_items
 from .metrics import (
     scraper_items_fetched_total, scraper_fetch_errors_total,
@@ -175,6 +177,7 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
         quality = score_content_quality(raw_text, effective_clean)
         c_hash = compute_clean_hash(effective_clean)
         title = extract_title(effective_clean)
+        language = detect_language(effective_clean)
         now = datetime.now(UTC)
         async with db_pool.acquire() as conn:
             result = await conn.fetchrow(
@@ -184,7 +187,7 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
                 source_id,
                 raw_text,
                 effective_clean,
-                "en",
+                language,
                 content_hash,
                 url,
                 now,
@@ -210,6 +213,10 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
             source_id: str = source["id"]
             cred_score = float(source["credibility_score"])
             try:
+                # Enforce robots.txt (criteria 1.11)
+                if not await check_robots_allowed(url):
+                    return
+
                 import time as _time
                 _t0 = _time.monotonic()
                 # Per-URL timeout so one slow URL doesn't block others
@@ -222,6 +229,10 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
                     return
 
                 content_item_id = await _insert_content(fetched_text, url, source_id, cred_score)
+
+                # Politeness delay between fetches (criteria 1.11)
+                if settings.scraper_default_delay_s > 0:
+                    await asyncio.sleep(settings.scraper_default_delay_s)
 
                 if content_item_id and settings.media_download_enabled:
                     await _download_page_media(
@@ -271,12 +282,16 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
             async with semaphore:
                 url = source["url_or_handle"]
                 try:
+                    if not await check_robots_allowed(url):
+                        return
                     fetched_text = await fetch_url(url)
                     if fetched_text:
                         await _insert_content(
                             fetched_text, url, source["id"],
                             float(source["credibility_score"]),
                         )
+                        if settings.scraper_default_delay_s > 0:
+                            await asyncio.sleep(settings.scraper_default_delay_s)
                 except Exception as exc:
                     log.warning("scraper.fallback_failed", url=url, error=str(exc))
         await asyncio.gather(*[_process_fallback(s) for s in sources])
@@ -326,6 +341,7 @@ async def poll_rss_sources(ctx: dict, topic_id: str) -> int:
                         quality = score_content_quality(item.raw_text, effective_clean)
                         c_hash = compute_clean_hash(effective_clean)
                         title = extract_title(effective_clean)
+                        rss_language = detect_language(effective_clean)
                         now = datetime.now(UTC)
 
                         async with db_pool.acquire() as conn:
@@ -336,7 +352,7 @@ async def poll_rss_sources(ctx: dict, topic_id: str) -> int:
                                 source["id"],
                                 item.raw_text,              # raw_text (preserved as-is)
                                 effective_clean,            # clean_text (cleaned)
-                                "en",               # language — updated by analyst NLP
+                                rss_language,               # language — detected at scrape time
                                 content_hash,
                                 item.url,
                                 item.published_at,  # captured_at = article publish time
@@ -411,6 +427,7 @@ async def scrape_darkweb_topic(ctx: dict, topic_id: str) -> int:
         quality = score_content_quality(raw_text, effective_clean)
         c_hash = compute_clean_hash(effective_clean)
         title = extract_title(effective_clean)
+        dw_language = detect_language(effective_clean)
         now = datetime.now(UTC)
         async with db_pool.acquire() as conn:
             result = await conn.fetchrow(
@@ -420,7 +437,7 @@ async def scrape_darkweb_topic(ctx: dict, topic_id: str) -> int:
                 source_id,
                 raw_text,
                 effective_clean,
-                "en",
+                dw_language,
                 content_hash,
                 url,
                 now,

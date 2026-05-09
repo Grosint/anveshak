@@ -19,6 +19,7 @@ dependencies = [
     "structlog>=24.1",
     "prometheus-client>=0.20",
     "feedparser>=6.0",
+    "pymupdf>=1.24",
 ]
 [tool.hatch.build.targets.wheel]
 packages = ["anveshak"]

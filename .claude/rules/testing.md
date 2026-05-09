@@ -35,3 +35,29 @@ paths:
   sequential DB fetches that return different column schemas
 - When SQL JOINs change, expand fake_row dicts to include new columns
   See: `learned/new-db-func-mock-all-callers.md`, `learned/mock-sequential-db-calls.md`
+
+## Mock Shape Must Match Reality
+
+- Mock return value must match the shape the code actually unpacks — not a wrapper
+  around it. If the function returns `dict`, mock must return `dict` (not `[dict]`).
+  See: `learned/mock-shape-unwrap-mismatch.md`
+
+## Test-Reality Seams (A→cache→B Boundaries)
+
+- Unit tests pass but integration breaks at service boundaries. Identify and test seams:
+  scraper→DB→analyst, analyst→DB→reporter, API→WebSocket→frontend, etc.
+- Frontend seams: React Query `queryKey` prefix matching, optimistic mutation rollback,
+  WebSocket invalidation. See: `learned/frontend-seam-testing.md`
+- ML pipeline seams: test with real models inside containers via `docker exec`.
+  Host orchestrator + container-side script pattern. See: `learned/docker-exec-integration-test.md`
+- Characterization tests: pin existing behavior before refactoring — prevents regressions
+  on code you don't fully understand. See: `learned/characterization-testing-existing-code.md`
+
+## Test Database Safety
+
+- Hard-block tests from production DB: `if "test" not in POSTGRES_URL: pytest.exit()`
+  See: `learned/pytest-exit-safety-guard.md`
+- Use separate `anveshak_test` DB in same postgres container — pool-based tests
+  can't use transaction rollback. See: `learned/test-db-same-container-isolation.md`
+- FK teardown order matters: delete in reverse dependency order (13 tables).
+  See: `learned/fk-cascade-teardown-order.md`

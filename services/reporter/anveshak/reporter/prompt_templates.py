@@ -175,11 +175,9 @@ def render_prompt(
     Returns:
         Rendered prompt string ready for Ollama.
     """
-    template_str = _TEMPLATE_MAP.get(report_type, _REPORT_TEMPLATE)
-    type_instruction = _TYPE_INSTRUCTIONS.get(
-        report_type, _TYPE_INSTRUCTIONS["intelligence_brief"]
-    )
-    role = _ROLE_MAP.get(report_type, _ROLE_MAP["intelligence_brief"])
+    template_str = _TEMPLATE_MAP[report_type]
+    type_instruction = _TYPE_INSTRUCTIONS[report_type]
+    role = _ROLE_MAP[report_type]
     keywords_str = ", ".join(keywords) if keywords else "(none)"
 
     tmpl = _env.from_string(template_str)

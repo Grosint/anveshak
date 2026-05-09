@@ -410,6 +410,24 @@ OSM) by replacing `geocoder.py` logic. No settings.py change required.
 
 ---
 
+## PDF Text Extraction — `scraper` service
+
+**Current implementation:**
+- Library: PyMuPDF (`pymupdf>=1.24`, ~15MB)
+- Type: CPU-only text extraction from PDF pages
+- Speed: ~50ms per page on CPU (negligible)
+- Memory: ~50MB per open document (released after extraction)
+- Optional dependency: if not installed, feature silently disabled with INFO log
+
+**Upgrade path:** None required — PyMuPDF is CPU-native, no GPU benefit.
+For OCR on scanned PDFs (image-only pages), add Tesseract + pytesseract.
+
+**Config change:** None. Install dependency: `pip install pymupdf`
+
+**Code change:** None. `pdf_extract.py` handles missing import gracefully.
+
+---
+
 ## PDF Rendering — `reporter` service
 
 **Current implementation:**

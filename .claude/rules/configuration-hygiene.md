@@ -1,6 +1,6 @@
 # Configuration Hygiene
 
-Consolidated from 4 learned instincts.
+Consolidated from 9 learned instincts.
 
 ## One Setting, One Purpose
 
@@ -31,6 +31,34 @@ Track timestamps per component (per adapter, per topic) rather than using a sing
 global interval. Different components have different natural cadences.
 
 See: `learned/per-adapter-interval-scheduling.md`
+
+## Startup Preflight Check
+
+Required env vars (those with no default) MUST block startup if missing.
+Extract `${VAR}` references from compose, check presence before `make up`.
+Don't rely on pydantic to catch missing vars — it defaults silently.
+See: `learned/compose-env-preflight-check.md`, `learned/startup-credential-validation.md`
+
+## Dead Variable Cleanup
+
+After migrating algorithms or removing features, delete the old env vars
+from compose, `.env.example`, and `settings.py`. Dead vars are silently
+ignored by pydantic — tuning them has zero effect but looks correct.
+See: `learned/compose-dead-env-var-cleanup.md`
+
+## Path Resolution Verification
+
+Hard-coded `Path.parents[N]` indices are fragile — count starts from the file's
+directory (`parents[0]`), not the file itself. Always verify with a print before
+using. Prefer marker-file search (`while not (p / 'pyproject.toml').exists()`)
+over hard-coded indices.
+See: `learned/path-parents-index-off-by-one.md`
+
+## No Inline Comments on .env Integer Fields
+
+Pydantic reads `PORT=8000 # api` as string `"8000 # api"` and crashes.
+Put comments on separate lines above the variable.
+See: `learned/dotenv-inline-comment-int-fields.md`
 
 ## Invariant Tests
 

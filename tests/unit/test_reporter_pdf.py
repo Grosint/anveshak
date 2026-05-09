@@ -136,6 +136,69 @@ class TestGeneratePdf:
         assert result == expected_path
 
     @pytest.mark.asyncio
+    async def test_weasyprint_failure_raises_pdf_generation_error(self):
+        """WeasyPrint exception → PDFGenerationError with report_id context."""
+        import anveshak.reporter.pdf as pdf_mod
+        from anveshak.reporter.pdf import generate_pdf, PDFGenerationError
+
+        mock_html_obj = MagicMock()
+        mock_html_obj.write_pdf.side_effect = RuntimeError("libpango missing")
+        mock_html_cls = MagicMock(return_value=mock_html_obj)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            original_html = pdf_mod.HTML
+            pdf_mod.HTML = mock_html_cls
+            try:
+                with pytest.raises(PDFGenerationError) as exc_info:
+                    await generate_pdf("report-fail", SAMPLE_REPORT_DATA, tmpdir)
+                assert "report-fail" in str(exc_info.value)
+            finally:
+                pdf_mod.HTML = original_html
+
+    @pytest.mark.asyncio
+    async def test_disk_write_failure_raises_pdf_generation_error(self):
+        """Disk write failure → PDFGenerationError."""
+        import anveshak.reporter.pdf as pdf_mod
+        from anveshak.reporter.pdf import generate_pdf, PDFGenerationError
+
+        mock_html_obj = MagicMock()
+        mock_html_obj.write_pdf.side_effect = OSError("No space left on device")
+        mock_html_cls = MagicMock(return_value=mock_html_obj)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            original_html = pdf_mod.HTML
+            pdf_mod.HTML = mock_html_cls
+            try:
+                with pytest.raises(PDFGenerationError):
+                    await generate_pdf("report-disk-full", SAMPLE_REPORT_DATA, tmpdir)
+            finally:
+                pdf_mod.HTML = original_html
+
+    @pytest.mark.asyncio
+    async def test_empty_report_data_does_not_crash(self):
+        """Empty report_data should still produce a PDF (with defaults)."""
+        import anveshak.reporter.pdf as pdf_mod
+        from anveshak.reporter.pdf import generate_pdf
+
+        mock_html_obj = MagicMock()
+
+        def fake_write(p):
+            with open(p, "wb") as f:
+                f.write(b"%PDF-1.4 stub")
+
+        mock_html_obj.write_pdf.side_effect = fake_write
+        mock_html_cls = MagicMock(return_value=mock_html_obj)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            original_html = pdf_mod.HTML
+            pdf_mod.HTML = mock_html_cls
+            try:
+                path = await generate_pdf("report-empty", {}, tmpdir)
+                assert path.endswith("report-empty.pdf")
+            finally:
+                pdf_mod.HTML = original_html
+
+    @pytest.mark.asyncio
     async def test_creates_output_dir_if_not_exists(self):
         import anveshak.reporter.pdf as pdf_mod
         from anveshak.reporter.pdf import generate_pdf

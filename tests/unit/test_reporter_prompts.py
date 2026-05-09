@@ -73,11 +73,28 @@ class TestRenderPrompt:
         prompt = render_prompt("intelligence_brief", "T", [], "c", source_count=0)
         assert "context_metadata" not in prompt
 
-    def test_unknown_report_type_falls_back_to_default(self):
+    def test_invalid_report_type_raises(self):
+        """render_prompt must reject invalid report_type with KeyError."""
         from anveshak.reporter.prompt_templates import render_prompt
 
-        prompt = render_prompt("nonexistent_type", "T", [], "c")
-        assert "intelligence analyst" in prompt
+        with pytest.raises(KeyError):
+            render_prompt("nonexistent_type", "T", [], "c")
+
+    def test_invalid_report_type_rejected_by_request_model(self):
+        """GenerateReportRequest must reject invalid report_type via Pydantic."""
+        from pydantic import ValidationError
+        from anveshak.reporter.main import GenerateReportRequest
+
+        with pytest.raises(ValidationError):
+            GenerateReportRequest(topic_id="t1", report_type="bogus_type")
+
+    def test_valid_report_types_accepted_by_request_model(self):
+        """All three valid report types must be accepted."""
+        from anveshak.reporter.main import GenerateReportRequest
+
+        for rt in ("intelligence_brief", "research_summary", "weekly_digest"):
+            req = GenerateReportRequest(topic_id="t1", report_type=rt)
+            assert req.report_type == rt
 
     def test_empty_keywords_shows_none(self):
         from anveshak.reporter.prompt_templates import render_prompt

@@ -22,6 +22,7 @@ class SocialSettings(BaseSettings):
     bluesky_handle: Optional[str] = None
     bluesky_password: Optional[str] = None
     bluesky_adapter_enabled: bool = False
+    bluesky_daily_call_cap: int = 7200          # Bluesky free API limit: 7200 calls/day
 
     # X/Twitter — pay-per-use
     x_bearer_token: Optional[str] = None
@@ -31,6 +32,10 @@ class SocialSettings(BaseSettings):
     x_poll_interval_s: int = 900              # 15 minutes
 
     poll_interval_s: int = 900  # default for all adapters
+
+    # Circuit breaker — per-adapter failure tracking
+    social_circuit_breaker_threshold: int = 5   # consecutive failures before opening
+    social_circuit_breaker_cooldown_s: int = 900  # 15 min cooldown before probe
 
     # Prometheus metrics HTTP server port (8A.17)
     metrics_port: int = 8002  # matches SOCIAL_PORT in compose.yml

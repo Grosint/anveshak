@@ -99,6 +99,16 @@ class SourceAdapterBase(ABC):
         return
         yield  # noqa: unreachable — makes mypy happy
 
+    async def refresh_credentials(self) -> bool:
+        """Attempt to refresh expired credentials.
+
+        Called when AdapterAuthError is raised during collect().
+        Returns True if credentials were successfully refreshed.
+        Default implementation returns False (no refresh possible).
+        Override in subclasses that support credential refresh.
+        """
+        return False
+
     @abstractmethod
     async def health(self) -> dict:
         """Return adapter health status.

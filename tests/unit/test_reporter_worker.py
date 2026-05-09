@@ -320,6 +320,130 @@ class TestCheckSourceWarnings:
 
 
 # ---------------------------------------------------------------------------
+# check_scheduled_reports tests
+# ---------------------------------------------------------------------------
+
+def _make_pool_with_topics(topics: list[dict]):
+    """Build a mock asyncpg pool that returns topics from acquire→fetch."""
+    mock_conn = AsyncMock()
+    mock_conn.fetch = AsyncMock(return_value=topics)
+    mock_pool = MagicMock()
+    mock_pool.acquire = MagicMock(return_value=AsyncMock(
+        __aenter__=AsyncMock(return_value=mock_conn),
+        __aexit__=AsyncMock(return_value=False),
+    ))
+    return mock_pool
+
+
+class TestCheckScheduledReports:
+
+    def _make_topic_record(
+        self, *,
+        topic_id="topic-1",
+        cron_expr="0 0 * * 0",
+        scheduled_type=None,
+        last_report_at=None,
+        credibility_min=30.0,
+    ):
+        return {
+            "id": topic_id,
+            "name": "Test Topic",
+            "keywords": ["test"],
+            "scheduled_report_cron": cron_expr,
+            "scheduled_report_type": scheduled_type,
+            "credibility_min": credibility_min,
+            "last_report_at": last_report_at,
+        }
+
+    def _make_sched_ctx(self, topics):
+        pool = _make_pool_with_topics(topics)
+        arq_pool = AsyncMock()
+        return {"db": pool, "settings": _make_settings(), "arq_pool": arq_pool}, arq_pool
+
+    @pytest.mark.asyncio
+    async def test_valid_cron_fires_and_enqueues(self):
+        """Cron that has fired creates report row + enqueues ARQ job."""
+        topic = self._make_topic_record(
+            cron_expr="* * * * *",
+            last_report_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+        ctx, arq_pool = self._make_sched_ctx([topic])
+
+        with patch("anveshak.reporter.db.create_report_row", new_callable=AsyncMock) as mock_create:
+            from anveshak.reporter.worker import check_scheduled_reports
+            await check_scheduled_reports(ctx)
+
+            mock_create.assert_awaited_once()
+            call_kwargs = mock_create.call_args[1]
+            assert call_kwargs["topic_id"] == "topic-1"
+            assert call_kwargs["report_type"] == "intelligence_brief"
+            arq_pool.enqueue_job.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_invalid_cron_skipped(self):
+        """Invalid cron expression is logged and skipped."""
+        topic = self._make_topic_record(cron_expr="INVALID CRON")
+        ctx, _ = self._make_sched_ctx([topic])
+
+        with patch("anveshak.reporter.db.create_report_row", new_callable=AsyncMock) as mock_create:
+            from anveshak.reporter.worker import check_scheduled_reports
+            await check_scheduled_reports(ctx)
+            mock_create.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_null_last_report_fires_immediately(self):
+        """First-ever report (NULL last_report_at) fires immediately."""
+        topic = self._make_topic_record(cron_expr="* * * * *", last_report_at=None)
+        ctx, _ = self._make_sched_ctx([topic])
+
+        with patch("anveshak.reporter.db.create_report_row", new_callable=AsyncMock) as mock_create:
+            from anveshak.reporter.worker import check_scheduled_reports
+            await check_scheduled_reports(ctx)
+            mock_create.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_scheduled_type_used_when_set(self):
+        """scheduled_report_type overrides default intelligence_brief."""
+        topic = self._make_topic_record(
+            cron_expr="* * * * *",
+            scheduled_type="weekly_digest",
+            last_report_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+        ctx, _ = self._make_sched_ctx([topic])
+
+        with patch("anveshak.reporter.db.create_report_row", new_callable=AsyncMock) as mock_create:
+            from anveshak.reporter.worker import check_scheduled_reports
+            await check_scheduled_reports(ctx)
+            assert mock_create.call_args[1]["report_type"] == "weekly_digest"
+
+    @pytest.mark.asyncio
+    async def test_time_window_is_7_days(self):
+        """Scheduled reports use 168-hour (7-day) time window."""
+        topic = self._make_topic_record(
+            cron_expr="* * * * *",
+            last_report_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+        ctx, _ = self._make_sched_ctx([topic])
+
+        with patch("anveshak.reporter.db.create_report_row", new_callable=AsyncMock) as mock_create:
+            from anveshak.reporter.worker import check_scheduled_reports
+            await check_scheduled_reports(ctx)
+            kw = mock_create.call_args[1]
+            delta = kw["time_window_end"] - kw["time_window_start"]
+            assert delta.total_seconds() == 168 * 3600
+
+    @pytest.mark.asyncio
+    async def test_no_topics_no_crash(self):
+        """Empty topic list → nothing enqueued, no crash."""
+        ctx, _ = self._make_sched_ctx([])
+
+        with patch("anveshak.reporter.db.create_report_row", new_callable=AsyncMock) as mock_create:
+            from anveshak.reporter.worker import check_scheduled_reports
+            await check_scheduled_reports(ctx)
+            mock_create.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
 # _build_content_md tests
 # ---------------------------------------------------------------------------
 

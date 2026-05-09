@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import os
 import re
+import time
 from contextlib import asynccontextmanager
 from typing import AsyncIterator, Optional
 from urllib.parse import urljoin, urlparse
+from urllib.robotparser import RobotFileParser
 
 import structlog
 import trafilatura
@@ -17,6 +19,75 @@ import trafilatura
 from .settings import settings
 
 log = structlog.get_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# robots.txt enforcement — cached per domain, TTL 1 hour
+# ---------------------------------------------------------------------------
+
+_robots_cache: dict[str, tuple[RobotFileParser | None, float]] = {}
+_ROBOTS_CACHE_TTL = 3600  # 1 hour
+
+
+async def _fetch_robots_txt(robots_url: str) -> Optional[str]:
+    """Fetch robots.txt content via httpx. Returns None on failure."""
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+            resp = await client.get(robots_url)
+            if resp.status_code == 200:
+                return resp.text
+    except Exception:
+        pass
+    return None
+
+
+async def check_robots_allowed(url: str) -> bool:
+    """Check if URL is allowed by the site's robots.txt.
+
+    Returns True (allow) when:
+    - settings.respect_robots_txt is False
+    - URL is a .onion address (no robots.txt on dark web)
+    - robots.txt cannot be fetched (permissive default)
+    - robots.txt allows the path
+
+    Returns False when robots.txt explicitly disallows the path.
+    """
+    if not settings.respect_robots_txt:
+        return True
+
+    parsed = urlparse(url)
+    if parsed.netloc.endswith(".onion"):
+        return True
+
+    domain = f"{parsed.scheme}://{parsed.netloc}"
+    now = time.monotonic()
+
+    # Check cache
+    if domain in _robots_cache:
+        parser, cached_at = _robots_cache[domain]
+        if now - cached_at < _ROBOTS_CACHE_TTL:
+            if parser is None:
+                return True  # unreachable robots.txt → allow
+            return parser.can_fetch("*", url)
+
+    # Fetch and parse robots.txt
+    robots_url = f"{domain}/robots.txt"
+    content = await _fetch_robots_txt(robots_url)
+
+    if content is None:
+        _robots_cache[domain] = (None, now)
+        log.debug("scraper.robots_unreachable", domain=domain)
+        return True
+
+    parser = RobotFileParser()
+    parser.parse(content.splitlines())
+    _robots_cache[domain] = (parser, now)
+
+    allowed = parser.can_fetch("*", url)
+    if not allowed:
+        log.info("scraper.robots_blocked", url=url, domain=domain)
+    return allowed
 
 # ---------------------------------------------------------------------------
 # Shared browser context manager — one Chromium per job, not per URL
@@ -125,9 +196,10 @@ async def fetch_url(url: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 _SKIP_EXTENSIONS = {
-    ".pdf", ".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp",
+    ".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp",
     ".mp4", ".mp3", ".avi", ".mov", ".zip", ".tar", ".gz",
 }
+# Note: .pdf removed — PDFs are now fetched and text-extracted by pdf_extract.py
 
 
 def extract_article_links(html: str, base_url: str) -> list[str]:

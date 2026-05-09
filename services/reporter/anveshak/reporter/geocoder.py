@@ -48,7 +48,7 @@ def _load_custom_locations() -> None:
     """Load custom_locations.json overlay for defence-specific locations."""
     candidates = [
         Path("/app/infra/configs/geocoder/custom_locations.json"),
-        Path(__file__).resolve().parents[5] / "infra" / "configs" / "geocoder" / "custom_locations.json",
+        Path(__file__).resolve().parents[4] / "infra" / "configs" / "geocoder" / "custom_locations.json",
     ]
     for path in candidates:
         if path.is_file():

@@ -63,6 +63,13 @@ async def main() -> None:
 
     log.info("social.ready", adapters=enabled)
 
+    # Detect missed polling window on restart
+    from .backfill import get_last_poll_at, save_last_poll_at, detect_poll_gap
+    last_poll = await get_last_poll_at(arq_pool)
+    gap = detect_poll_gap(last_poll, settings.poll_interval_s)
+    if gap:
+        log.warning("social.startup_gap", missed_duration=str(gap))
+
     # Track last X poll time separately — X uses x_poll_interval_s (criteria 3.25)
     last_x_poll_at: datetime | None = None
 
@@ -78,6 +85,7 @@ async def main() -> None:
             )
 
             await enqueue_topic_polls(db_pool, arq_pool, include_x=x_due)
+            await save_last_poll_at(arq_pool, now)
 
             if x_due:
                 last_x_poll_at = now

@@ -86,6 +86,39 @@ async def update_topic_status(
     return {"topic_id": topic_id, "status": req.status}
 
 
+class UpdateScheduleRequest(BaseModel):
+    model_config = ConfigDict(strict=True)
+    scheduled_report_cron: Optional[str] = None
+    scheduled_report_type: Optional[str] = None
+
+
+@router.patch("/{topic_id}/schedule")
+async def update_topic_schedule(
+    topic_id: str,
+    req: UpdateScheduleRequest,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Update or clear scheduled report configuration for a topic."""
+    if not await topics_db.topic_exists(db, topic_id):
+        raise HTTPException(status_code=404, detail="Topic not found")
+    # Validate cron expression if provided
+    if req.scheduled_report_cron:
+        try:
+            from croniter import croniter
+            croniter(req.scheduled_report_cron)
+        except (ValueError, KeyError) as exc:
+            raise HTTPException(status_code=422, detail=f"Invalid cron expression: {exc}")
+    await topics_db.update_topic_schedule(
+        db, topic_id, req.scheduled_report_cron, req.scheduled_report_type,
+    )
+    return {
+        "topic_id": topic_id,
+        "scheduled_report_cron": req.scheduled_report_cron,
+        "scheduled_report_type": req.scheduled_report_type,
+    }
+
+
 @router.get("/{topic_id}")
 async def get_topic(
     topic_id: str,

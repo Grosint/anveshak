@@ -140,6 +140,28 @@ async def update_topic_status(
     await conn.execute(SQL_UPDATE_TOPIC_STATUS, status, now, topic_id)
 
 
+SQL_UPDATE_TOPIC_SCHEDULE = """
+    UPDATE topics
+    SET scheduled_report_cron = $1,
+        scheduled_report_type = $2,
+        updated_at = NOW()
+    WHERE id = $3
+"""
+
+
+async def update_topic_schedule(
+    conn: asyncpg.Connection,
+    topic_id: str,
+    scheduled_report_cron: str | None,
+    scheduled_report_type: str | None,
+) -> None:
+    """Update or clear scheduled report configuration."""
+    await conn.execute(
+        SQL_UPDATE_TOPIC_SCHEDULE,
+        scheduled_report_cron, scheduled_report_type, topic_id,
+    )
+
+
 _DEFAULT_RELEVANCE_THRESHOLD = 0.42
 
 

@@ -18,6 +18,10 @@ HTML = None  # populated on first use inside generate_pdf()
 
 log = structlog.get_logger(__name__)
 
+
+class PDFGenerationError(Exception):
+    """Raised when PDF generation fails (WeasyPrint, disk I/O, etc.)."""
+
 # ---------------------------------------------------------------------------
 # Jinja2 environment
 # ---------------------------------------------------------------------------
@@ -141,6 +145,12 @@ async def generate_pdf(
 
     html_content = render_pdf_html(report_data)
     log.info("reporter.pdf_rendering", report_id=report_id)
-    HTML(string=html_content).write_pdf(pdf_path)
+    try:
+        HTML(string=html_content).write_pdf(pdf_path)
+    except Exception as exc:
+        log.error("reporter.pdf_generation_failed", report_id=report_id, error=str(exc))
+        raise PDFGenerationError(
+            f"PDF generation failed for report {report_id}: {exc}"
+        ) from exc
     log.info("reporter.pdf_written", report_id=report_id, path=pdf_path)
     return pdf_path

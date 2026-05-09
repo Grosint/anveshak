@@ -209,3 +209,118 @@ class TestScrapeTopic:
 
         # Duplicate → counter stays at 0
         assert result == 0
+
+
+class TestLanguageDetection:
+    """Tests for scraper language detection (not hardcoded 'en')."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("anveshak.scraper.jobs.check_robots_allowed", new_callable=AsyncMock, return_value=True)
+    @patch("anveshak.scraper.jobs.fetch_url", new_callable=AsyncMock)
+    @patch("anveshak.scraper.jobs.create_shared_crawler")
+    @patch("anveshak.scraper.jobs.detect_language")
+    async def test_language_detected_not_hardcoded(
+        self, mock_detect, mock_crawler, mock_fetch_url, mock_robots,
+    ):
+        """Language should be detected from text, not hardcoded to 'en'."""
+        mock_crawler.return_value.__aenter__ = AsyncMock(
+            side_effect=RuntimeError("force fallback")
+        )
+        mock_crawler.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_fetch_url.return_value = "Ceci est un article en français avec suffisamment de texte."
+        mock_detect.return_value = "fr"
+
+        source = _make_fake_record({
+            "id": "src-1",
+            "url_or_handle": "https://example.fr/article",
+            "credibility_score": 0.8,
+        })
+
+        mock_conn = AsyncMock()
+        call_count = {"n": 0}
+
+        async def _fetchrow_side_effect(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return {"id": "topic-1"}
+            return {"id": "content-item-1"}
+
+        mock_conn.fetchrow = AsyncMock(side_effect=_fetchrow_side_effect)
+        mock_conn.fetch = AsyncMock(return_value=[source])
+
+        mock_pool = _make_pool_mock(mock_conn)
+        ctx = {"db_pool": mock_pool, "redis": AsyncMock()}
+
+        with patch("anveshak.scraper.jobs.asyncio.sleep", new_callable=AsyncMock), \
+             patch("anveshak.scraper.jobs.settings") as mock_settings:
+            mock_settings.scraper_default_delay_s = 0
+            mock_settings.scraper_concurrency = 5
+            mock_settings.scraper_request_timeout_s = 30
+            mock_settings.media_download_enabled = False
+            mock_settings.scraper_follow_links = False
+            mock_settings.respect_robots_txt = True
+
+            result = await scrape_topic(ctx, "topic-1")
+
+            mock_detect.assert_called_once()
+            # Verify the INSERT got "fr" not "en"
+            insert_call = mock_conn.fetchrow.call_args_list[1]
+            # SQL_INSERT_CONTENT language param is at index 6 (0-based in args)
+            insert_args = insert_call[0]
+            lang_arg = insert_args[6]  # $7 = language
+            assert lang_arg == "fr", f"Expected 'fr', got '{lang_arg}'"
+
+
+class TestRateDelay:
+    """Tests for per-source rate delay enforcement."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("anveshak.scraper.jobs.check_robots_allowed", new_callable=AsyncMock, return_value=True)
+    @patch("anveshak.scraper.jobs.fetch_url", new_callable=AsyncMock)
+    @patch("anveshak.scraper.jobs.create_shared_crawler")
+    async def test_delay_called_after_fetch(self, mock_crawler, mock_fetch_url, mock_robots):
+        """asyncio.sleep called with scraper_default_delay_s after successful fetch."""
+        mock_crawler.return_value.__aenter__ = AsyncMock(
+            side_effect=RuntimeError("force fallback")
+        )
+        mock_crawler.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_fetch_url.return_value = "Article content sufficient for testing delay."
+
+        source = _make_fake_record({
+            "id": "src-1",
+            "url_or_handle": "https://example.com/article",
+            "credibility_score": 0.8,
+        })
+
+        mock_conn = AsyncMock()
+        call_count = {"n": 0}
+
+        async def _fetchrow_side_effect(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return {"id": "topic-1"}
+            return {"id": "content-item-1"}
+
+        mock_conn.fetchrow = AsyncMock(side_effect=_fetchrow_side_effect)
+        mock_conn.fetch = AsyncMock(return_value=[source])
+
+        mock_pool = _make_pool_mock(mock_conn)
+        ctx = {"db_pool": mock_pool, "redis": AsyncMock()}
+
+        with patch("anveshak.scraper.jobs.asyncio.sleep", new_callable=AsyncMock) as mock_sleep, \
+             patch("anveshak.scraper.jobs.settings") as mock_settings:
+            mock_settings.scraper_default_delay_s = 2.0
+            mock_settings.scraper_concurrency = 5
+            mock_settings.scraper_request_timeout_s = 30
+            mock_settings.media_download_enabled = False
+            mock_settings.scraper_follow_links = False
+            mock_settings.respect_robots_txt = True
+
+            result = await scrape_topic(ctx, "topic-1")
+
+            mock_sleep.assert_awaited_once_with(2.0)
+            assert result == 1

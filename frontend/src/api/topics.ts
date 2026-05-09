@@ -93,4 +93,10 @@ export const topicsApi = {
     api.get<{ keyword: string; frequency: number }[]>(
       `/api/v1/topics/${topicId}/trending-keywords`, { params: { days, limit } },
     ).then((r) => r.data),
+
+  updateSchedule: (topicId: string, cron: string | null, reportType: string | null) =>
+    api.patch<{ topic_id: string; scheduled_report_cron: string | null; scheduled_report_type: string | null }>(
+      `/api/v1/topics/${topicId}/schedule`,
+      { scheduled_report_cron: cron, scheduled_report_type: reportType },
+    ).then((r) => r.data),
 }

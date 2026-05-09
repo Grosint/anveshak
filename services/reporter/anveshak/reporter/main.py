@@ -13,6 +13,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from prometheus_client import make_asgi_app
 from pydantic import BaseModel, ConfigDict
+from typing import Literal
 
 from .metrics import REGISTRY as REPORTER_REGISTRY
 
@@ -67,7 +68,7 @@ app.mount("/metrics", make_asgi_app(registry=REPORTER_REGISTRY))
 class GenerateReportRequest(BaseModel):
     model_config = ConfigDict(strict=True)
     topic_id: str
-    report_type: str = "intelligence_brief"  # intelligence_brief|research_summary|weekly_digest
+    report_type: Literal["intelligence_brief", "research_summary", "weekly_digest"] = "intelligence_brief"
     # Explicit window takes precedence; time_window_hours is a convenience fallback
     time_window_start: Optional[datetime] = None
     time_window_end: Optional[datetime] = None

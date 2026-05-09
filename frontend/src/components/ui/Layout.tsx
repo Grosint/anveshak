@@ -6,11 +6,14 @@ import { useWS } from '../../contexts/WSContext'
 import { sourcesApi } from '../../api/sources'
 
 const navItems = [
-  { to: '/topics',  label: 'Topics',        icon: <TargetIcon /> },
-  { to: '/signals', label: 'Signals',       icon: <ZapIcon /> },
-  { to: '/vision',  label: 'Image Analysis', icon: <EyeIcon /> },
-  { to: '/reports', label: 'Reports',       icon: <FileIcon /> },
-  { to: '/sources', label: 'Sources',       icon: <RadioIcon /> },
+  { to: '/topics',    label: 'Topics',     icon: <TargetIcon /> },
+  { to: '/signals',   label: 'Signals',    icon: <ZapIcon /> },
+  { to: '/vision',    label: 'Vision',     icon: <EyeIcon /> },
+  { to: '/reports',   label: 'Reports',    icon: <FileIcon /> },
+  { to: '/sources',   label: 'Sources',    icon: <RadioIcon /> },
+  { to: '/analytics', label: 'Analytics',  icon: <ChartIcon /> },
+  { to: '/schedules', label: 'Schedules',  icon: <ClockIcon /> },
+  { to: '/users',     label: 'Users',      icon: <UsersIcon /> },
 ]
 
 export default function Layout() {
@@ -171,6 +174,27 @@ function RadioIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
       <circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 010 8.49m-8.48-.01a6 6 0 010-8.49m11.31-2.82a10 10 0 010 14.14m-14.14 0a10 10 0 010-14.14"/>
+    </svg>
+  )
+}
+function ChartIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
+      <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+    </svg>
+  )
+}
+function ClockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
+      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+    </svg>
+  )
+}
+function UsersIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
+      <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
     </svg>
   )
 }

@@ -113,7 +113,7 @@ class TestExtractArticleLinks:
 
     @patch("anveshak.scraper.fetch.settings")
     def test_skips_media_extensions(self, mock_settings):
-        """Binary/media links (.jpg, .pdf, .mp4, etc.) must be excluded."""
+        """Binary/media links (.jpg, .mp4, etc.) excluded. PDFs are now allowed."""
         from anveshak.scraper.fetch import extract_article_links
 
         mock_settings.scraper_follow_same_domain = True
@@ -126,8 +126,11 @@ class TestExtractArticleLinks:
         <a href="/real-article">Article</a>
         """
         links = extract_article_links(html, "http://example.com")
-        assert len(links) == 1
-        assert "real-article" in links[0]
+        # .pdf is allowed (text extracted by pdf_extract.py), .jpg/.mp4 still skipped
+        assert len(links) == 2
+        urls_str = " ".join(links)
+        assert "doc.pdf" in urls_str
+        assert "real-article" in urls_str
 
     @patch("anveshak.scraper.fetch.settings")
     def test_caps_at_max_links(self, mock_settings):
