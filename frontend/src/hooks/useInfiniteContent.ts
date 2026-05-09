@@ -1,18 +1,9 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
-import { contentApi, ContentItem, ContentFilters } from '../api/content'
+import { contentApi, ContentFilters } from '../api/content'
+import { applyClientFilters } from '../lib/domain'
 
 const PAGE_SIZE = 50
-
-function applyClientFilters(items: ContentItem[], filters: ContentFilters): ContentItem[] {
-  return items.filter((item) => {
-    if (filters.language && item.language !== filters.language) return false
-    if (filters.credibility_min !== undefined && item.credibility_score_at_capture < filters.credibility_min) return false
-    if (filters.date_from && item.captured_at < filters.date_from) return false
-    if (filters.date_to && item.captured_at > filters.date_to) return false
-    return true
-  })
-}
 
 export function useInfiniteContent(topicId: string, filters: ContentFilters = {}) {
   const query = useInfiniteQuery({

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import Login from '../../pages/Login'
@@ -30,22 +30,19 @@ vi.mock('../../contexts/AuthContext', () => ({
 describe('Login page', () => {
   it('renders username and password fields', () => {
     renderWithProviders(<Login />)
-
     expect(screen.getByLabelText(/username/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/password/i)).toBeInTheDocument()
+    // Use getByPlaceholderText to avoid matching the "Show password" button
+    expect(screen.getByPlaceholderText('••••••••')).toBeInTheDocument()
   })
 
   it('renders a submit button', () => {
     renderWithProviders(<Login />)
-
     const button = screen.getByRole('button', { name: /sign in|log in|enter/i })
     expect(button).toBeInTheDocument()
   })
 
   it('renders the brand mark', () => {
     renderWithProviders(<Login />)
-
-    // The brand name "Anveshak" should appear somewhere on the login page
     const matches = screen.getAllByText(/anveshak/i)
     expect(matches.length).toBeGreaterThan(0)
   })
@@ -53,7 +50,6 @@ describe('Login page', () => {
   it('username field accepts input', async () => {
     renderWithProviders(<Login />)
     const user = userEvent.setup()
-
     const input = screen.getByLabelText(/username/i)
     await user.type(input, 'analyst1')
     expect(input).toHaveValue('analyst1')

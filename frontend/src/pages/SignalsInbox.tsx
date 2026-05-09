@@ -7,10 +7,7 @@ import { SignalTimeline } from '../components/signals/SignalTimeline'
 import { SignalGraph } from '../components/signals/SignalGraph'
 import { Spinner } from '../components/ui/Spinner'
 import { EmptyState } from '../components/ui/EmptyState'
-
-// ── Types ────────────────────────────────────────────────────────────────
-
-type TimePreset = 'today' | '7d' | '30d' | 'custom'
+import { resolveTimeRange, type TimePreset } from '../lib/domain'
 type ViewMode = 'list' | 'timeline'
 
 const TABS: { key: SignalStatus; label: string }[] = [
@@ -32,36 +29,6 @@ function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10)
 }
 
-function resolveRange(
-  preset: TimePreset,
-  customFrom: string,
-  customTo: string,
-): { since: string; until: string } {
-  const now = new Date()
-  const until = now.toISOString()
-
-  if (preset === 'today') {
-    const startOfDay = new Date(now)
-    startOfDay.setUTCHours(0, 0, 0, 0)
-    return { since: startOfDay.toISOString(), until }
-  }
-  if (preset === '7d') {
-    const d = new Date(now)
-    d.setUTCDate(d.getUTCDate() - 7)
-    return { since: d.toISOString(), until }
-  }
-  if (preset === '30d') {
-    const d = new Date(now)
-    d.setUTCDate(d.getUTCDate() - 30)
-    return { since: d.toISOString(), until }
-  }
-  const since = customFrom ? new Date(customFrom + 'T00:00:00Z').toISOString() : ''
-  const customUntil = customTo
-    ? new Date(customTo + 'T23:59:59Z').toISOString()
-    : until
-  return { since, until: customUntil }
-}
-
 // ── Component ────────────────────────────────────────────────────────────
 
 export default function SignalsInbox() {
@@ -77,7 +44,7 @@ export default function SignalsInbox() {
   const { subscribe } = useWS()
 
   const { since, until } = useMemo(
-    () => resolveRange(preset, customFrom, customTo),
+    () => resolveTimeRange(preset, customFrom, customTo),
     [preset, customFrom, customTo],
   )
 

@@ -1,16 +1,9 @@
 /**
- * Unit tests for Signal domain logic (criterion 6.44).
+ * Unit tests for Signal severity logic — imports the REAL function from lib/domain.
  */
 import { describe, it, expect } from 'vitest'
+import { inferSeverity } from '../lib/domain'
 import type { Signal } from '../api/signals'
-
-function inferSeverity(signal: Signal): string {
-  const t = signal.signal_type.toUpperCase()
-  if (t.includes('HIGH') || t.includes('CRITICAL')) return 'HIGH'
-  if (t.includes('MED')) return 'MED'
-  if (t.includes('LOW')) return 'LOW'
-  return 'HIGH'
-}
 
 const baseSignal: Signal = {
   id: 'sig-1',
@@ -23,47 +16,45 @@ const baseSignal: Signal = {
   created_at: new Date().toISOString(),
   cluster_label: 'Disinformation cluster alpha',
   independent_source_count: 4,
+  cluster_item_count: null,
+  executive_summary: null,
+  topic_name: null,
+  sources: [],
+  first_seen: null,
+  last_seen: null,
 }
 
 describe('inferSeverity', () => {
-  it('returns HIGH for CRITICAL signal types', () => {
-    expect(inferSeverity({ ...baseSignal, signal_type: 'critical_threshold' })).toBe('HIGH')
+  it('returns HIGH when independent_source_count >= 3', () => {
+    expect(inferSeverity({ ...baseSignal, independent_source_count: 3 })).toBe('HIGH')
+    expect(inferSeverity({ ...baseSignal, independent_source_count: 5 })).toBe('HIGH')
   })
 
-  it('returns HIGH for HIGH signal types', () => {
-    expect(inferSeverity({ ...baseSignal, signal_type: 'high_velocity_spread' })).toBe('HIGH')
+  it('returns MEDIUM when independent_source_count = 2', () => {
+    expect(inferSeverity({ ...baseSignal, independent_source_count: 2 })).toBe('MEDIUM')
   })
 
-  it('returns MED for MED signal types', () => {
-    expect(inferSeverity({ ...baseSignal, signal_type: 'medium_cluster_growth' })).toBe('MED')
+  it('returns HIGH for CRITICAL signal types (isc < 2)', () => {
+    expect(inferSeverity({ ...baseSignal, independent_source_count: 1, signal_type: 'critical_threshold' })).toBe('HIGH')
+  })
+
+  it('returns HIGH for HIGH signal types (isc < 2)', () => {
+    expect(inferSeverity({ ...baseSignal, independent_source_count: 1, signal_type: 'high_velocity_spread' })).toBe('HIGH')
+  })
+
+  it('returns MEDIUM for MED signal types', () => {
+    expect(inferSeverity({ ...baseSignal, independent_source_count: 1, signal_type: 'medium_cluster_growth' })).toBe('MEDIUM')
   })
 
   it('returns LOW for LOW signal types', () => {
-    expect(inferSeverity({ ...baseSignal, signal_type: 'low_volume_mention' })).toBe('LOW')
+    expect(inferSeverity({ ...baseSignal, independent_source_count: 1, signal_type: 'low_volume_mention' })).toBe('LOW')
   })
 
-  it('defaults to HIGH for unknown signal types', () => {
-    expect(inferSeverity({ ...baseSignal, signal_type: 'narrative_spike' })).toBe('HIGH')
-  })
-})
-
-describe('Signal type shape', () => {
-  it('includes cluster_label and independent_source_count', () => {
-    expect(baseSignal.cluster_label).toBe('Disinformation cluster alpha')
-    expect(baseSignal.independent_source_count).toBe(4)
+  it('BUG R2: defaults to HIGH for unknown signal types — should arguably be LOW', () => {
+    expect(inferSeverity({ ...baseSignal, independent_source_count: 1, signal_type: 'narrative_spike' })).toBe('HIGH')
   })
 
-  it('allows null cluster_label (signal not linked to cluster)', () => {
-    const s: Signal = { ...baseSignal, cluster_id: null, cluster_label: null, independent_source_count: null }
-    expect(s.cluster_label).toBeNull()
-    expect(s.independent_source_count).toBeNull()
-  })
-
-  it('status transitions are well-typed', () => {
-    const statuses = ['new', 'acknowledged', 'dismissed'] as const
-    statuses.forEach((st) => {
-      const s: Signal = { ...baseSignal, status: st }
-      expect(['new', 'acknowledged', 'dismissed']).toContain(s.status)
-    })
+  it('BUG R2: null independent_source_count coerces to 0, falls through to string match', () => {
+    expect(inferSeverity({ ...baseSignal, independent_source_count: null, signal_type: 'narrative_spike' })).toBe('HIGH')
   })
 })

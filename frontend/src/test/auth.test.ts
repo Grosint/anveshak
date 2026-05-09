@@ -1,46 +1,20 @@
 /**
- * Unit tests for AuthContext JWT decode and expiry logic (criterion 6.44).
- * These are pure logic tests — no React rendering required.
+ * Unit tests for AuthContext JWT decode and expiry logic.
+ * Imports the REAL functions from AuthContext — no inline re-implementations.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { decodeJWT, isExpired } from '../contexts/AuthContext'
 
-// ---------------------------------------------------------------------------
-// Helpers mirroring AuthContext implementation
-// ---------------------------------------------------------------------------
-
-interface JWTPayload {
-  sub: string
-  exp: number
-  iat: number
-}
-
-function decodeJWT(token: string): JWTPayload | null {
-  try {
-    const payload = token.split('.')[1]
-    return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
-  } catch {
-    return null
-  }
-}
-
-function isExpired(payload: JWTPayload): boolean {
-  return Date.now() / 1000 >= payload.exp
-}
-
-function makeToken(payload: JWTPayload): string {
+function makeToken(payload: { sub: string; exp: number; iat: number }): string {
   const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
   const body = btoa(JSON.stringify(payload))
   return `${header}.${body}.fakesig`
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe('JWT decode', () => {
   it('decodes a valid token', () => {
     const now = Math.floor(Date.now() / 1000)
-    const payload: JWTPayload = { sub: 'analyst1', exp: now + 3600, iat: now }
+    const payload = { sub: 'analyst1', exp: now + 3600, iat: now }
     const token = makeToken(payload)
     const decoded = decodeJWT(token)
     expect(decoded).not.toBeNull()
@@ -57,12 +31,12 @@ describe('JWT decode', () => {
 
 describe('isExpired', () => {
   it('returns false for a future exp', () => {
-    const payload: JWTPayload = { sub: 'u', exp: Math.floor(Date.now() / 1000) + 3600, iat: 0 }
+    const payload = { sub: 'u', exp: Math.floor(Date.now() / 1000) + 3600, iat: 0 }
     expect(isExpired(payload)).toBe(false)
   })
 
   it('returns true for a past exp', () => {
-    const payload: JWTPayload = { sub: 'u', exp: Math.floor(Date.now() / 1000) - 1, iat: 0 }
+    const payload = { sub: 'u', exp: Math.floor(Date.now() / 1000) - 1, iat: 0 }
     expect(isExpired(payload)).toBe(true)
   })
 
@@ -70,7 +44,7 @@ describe('isExpired', () => {
     vi.useFakeTimers()
     const now = 1_700_000_000
     vi.setSystemTime(now * 1000)
-    const payload: JWTPayload = { sub: 'u', exp: now, iat: 0 }
+    const payload = { sub: 'u', exp: now, iat: 0 }
     expect(isExpired(payload)).toBe(true)
     vi.useRealTimers()
   })

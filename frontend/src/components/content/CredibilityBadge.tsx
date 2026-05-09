@@ -1,17 +1,12 @@
+import { credibilityLabel } from '../../lib/domain'
+
 interface CredibilityBadgeProps {
   score: number
   showValue?: boolean
 }
 
 export function CredibilityBadge({ score, showValue = true }: CredibilityBadgeProps) {
-  const color =
-    score >= 70
-      ? 'bg-cred-high/20 text-cred-high'
-      : score >= 40
-      ? 'bg-cred-mid/20 text-cred-mid'
-      : 'bg-cred-low/20 text-cred-low'
-
-  const label = score >= 70 ? 'High' : score >= 40 ? 'Medium' : 'Low'
+  const { label, color } = credibilityLabel(score)
 
   return (
     <span

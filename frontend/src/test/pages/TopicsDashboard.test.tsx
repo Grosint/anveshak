@@ -3,17 +3,15 @@ import { screen, waitFor } from '@testing-library/react'
 import TopicsDashboard from '../../pages/TopicsDashboard'
 import { renderWithProviders } from '../test-utils'
 
-// Mock the topics API
+// Mock the topics API — returns unwrapped arrays (not { data: [] })
 vi.mock('../../api/topics', () => ({
   topicsApi: {
-    list: vi.fn().mockResolvedValue({ data: [] }),
+    list: vi.fn().mockResolvedValue([]),
     create: vi.fn(),
     get: vi.fn(),
     updateStatus: vi.fn(),
     listClusters: vi.fn(),
   },
-  Topic: {},
-  CreateTopicPayload: {},
 }))
 
 // Mock AuthContext
@@ -30,19 +28,17 @@ vi.mock('../../contexts/AuthContext', () => ({
 }))
 
 describe('TopicsDashboard page', () => {
-  it('renders without crashing', () => {
+  it('shows empty state when no topics exist', async () => {
     renderWithProviders(<TopicsDashboard />)
-    // Should render something — loading state, empty state, or topics
-    expect(document.body).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('No topics yet')).toBeInTheDocument()
+    })
   })
 
-  it('shows a create topic button', async () => {
+  it('shows a "New topic" button', async () => {
     renderWithProviders(<TopicsDashboard />)
-
     await waitFor(() => {
-      const buttons = screen.queryAllByRole('button')
-      // Should have at least one button (create topic or similar)
-      expect(buttons.length).toBeGreaterThan(0)
+      expect(screen.getByRole('button', { name: /new topic|create/i })).toBeInTheDocument()
     })
   })
 })

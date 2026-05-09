@@ -30,9 +30,17 @@ describe('Button component', () => {
 })
 
 describe('Spinner component', () => {
-  it('renders without crashing', () => {
-    const { container } = render(<Spinner />)
-    expect(container.firstChild).toBeTruthy()
+  it('renders with role="status" and default aria-label', () => {
+    render(<Spinner />)
+    const spinner = screen.getByRole('status')
+    expect(spinner).toBeInTheDocument()
+    expect(spinner).toHaveAttribute('aria-label', 'Loading')
+  })
+
+  it('renders custom label text', () => {
+    render(<Spinner label="Processing…" />)
+    expect(screen.getByText('Processing…')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveAttribute('aria-label', 'Processing…')
   })
 })
 

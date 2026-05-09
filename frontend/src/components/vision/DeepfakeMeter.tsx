@@ -2,6 +2,8 @@
  * Semicircular SVG gauge for deepfake probability score (0.0–1.0).
  * Green < 0.3 · Amber 0.3–0.7 · Red > 0.7
  */
+import { deepfakeLabel } from '../../lib/domain'
+
 interface DeepfakeMeterProps {
   score: number // 0.0–1.0
   modelName?: string | null
@@ -27,15 +29,9 @@ export function DeepfakeMeter({ score, modelName }: DeepfakeMeterProps) {
     ? ''
     : `M ${cx - R} ${cy} A ${R} ${R} 0 ${pct > 0.5 ? 1 : 0} 1 ${arcX} ${arcY}`
 
-  const color =
-    pct < 0.3 ? '#10b981' :
-    pct < 0.7 ? '#f59e0b' :
-                '#ef4444'
-
-  const label =
-    pct < 0.3 ? 'Likely authentic' :
-    pct < 0.7 ? 'Inconclusive'    :
-                'Likely synthetic'
+  const dfInfo = deepfakeLabel(pct)
+  const color = dfInfo.color
+  const label = dfInfo.label
 
   return (
     <div className="flex flex-col items-center gap-2">
@@ -56,7 +52,7 @@ export function DeepfakeMeter({ score, modelName }: DeepfakeMeterProps) {
       </svg>
       <p
         className={`text-xs font-semibold ${
-          pct < 0.3 ? 'text-cred-high' : pct < 0.7 ? 'text-signal-med' : 'text-signal-high'
+          dfInfo.cssClass
         }`}
         role="status"
         aria-live="polite"

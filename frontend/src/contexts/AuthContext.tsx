@@ -17,7 +17,7 @@ interface AuthContextValue {
   logout: () => void
 }
 
-function decodeJWT(token: string): JWTPayload | null {
+export function decodeJWT(token: string): JWTPayload | null {
   try {
     const payload = token.split('.')[1]
     return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
@@ -26,7 +26,7 @@ function decodeJWT(token: string): JWTPayload | null {
   }
 }
 
-function isExpired(payload: JWTPayload): boolean {
+export function isExpired(payload: JWTPayload): boolean {
   return Date.now() / 1000 >= payload.exp
 }
 

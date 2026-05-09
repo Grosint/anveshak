@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { Signal, SignalSource } from '../../api/signals'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
+import { inferSeverity } from '../../lib/domain'
 import { formatDistanceToNow } from 'date-fns'
 
 const severityVariantMap: Record<string, 'danger' | 'warning' | 'success' | 'default'> = {
@@ -18,17 +19,6 @@ const platformIcons: Record<string, string> = {
   reddit: 'RDT',
   bluesky: 'BSK',
   x: 'X',
-}
-
-function inferSeverity(signal: Signal): string {
-  const isc = signal.independent_source_count ?? 0
-  if (isc >= 3) return 'HIGH'
-  if (isc >= 2) return 'MEDIUM'
-  const t = signal.signal_type.toUpperCase()
-  if (t.includes('HIGH') || t.includes('CRITICAL')) return 'HIGH'
-  if (t.includes('MED')) return 'MEDIUM'
-  if (t.includes('LOW')) return 'LOW'
-  return 'HIGH'
 }
 
 function SourceChip({ source }: { source: SignalSource }) {

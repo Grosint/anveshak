@@ -440,6 +440,16 @@ test-e2e:
 	$(call header,End-to-End Tests (~2min — requires make up + seed-demo))
 	@$(UV) pytest tests/e2e/ tests/resilience/ -v --tb=short -m "e2e or resilience"
 
+# ── Frontend tests ─────────────────────────────────────────
+
+test-frontend:
+	$(call header,Frontend Tests)
+	@cd frontend && npx vitest run
+
+test-frontend-coverage:
+	$(call header,Frontend Coverage Report)
+	@cd frontend && npx vitest run --coverage
+
 # ── Composite targets ──────────────────────────────────────
 
 test: test-unit test-integration test-e2e
@@ -448,6 +458,7 @@ test: test-unit test-integration test-e2e
 test-full:
 	$(call header,Full Test Suite + Coverage Gate (pre-release))
 	@$(MAKE) --no-print-directory test
+	@$(MAKE) --no-print-directory test-frontend
 	@$(UV) pytest tests/unit/ tests/contracts/ tests/integration/ \
 		--cov=services --cov=sdk \
 		--cov-report=term-missing --cov-report=html:htmlcov \
