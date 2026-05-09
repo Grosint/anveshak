@@ -1,6 +1,6 @@
 # Configuration Hygiene
 
-Consolidated from 3 learned instincts.
+Consolidated from 4 learned instincts.
 
 ## One Setting, One Purpose
 
@@ -9,7 +9,7 @@ different contexts with different semantics, create two settings — even if the
 values happen to be the same today.
 
 Example: `credibility_deepfake_drop` (penalty per item) vs `credibility_min_auto_drop`
-(noise filter threshold). See: `learned/credibility-settings-separation.md`
+(noise filter threshold). See: `learned/threshold-and-setting-invariants.md`
 
 ## Separate Thresholds for Separate Directions
 
@@ -17,7 +17,13 @@ When a feature has both positive and negative paths (boost vs drop), use separat
 thresholds. A single threshold silently blocks whichever direction has a smaller delta.
 
 Example: `credibility_min_auto_drop` vs `credibility_min_auto_boost`
-See: `learned/bidirectional-auto-scoring.md`
+See: `learned/threshold-and-setting-invariants.md`
+
+## Compose Environment Forwarding
+
+Every env var in `settings.py` MUST be in compose `environment:` block.
+Missing vars silently default to `false`/`""` — features disabled with no error.
+See: `learned/compose-environment-consistency.md`
 
 ## Per-Component Scheduling
 

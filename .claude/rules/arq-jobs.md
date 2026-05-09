@@ -1,6 +1,6 @@
 # ARQ Jobs & Async Orchestration
 
-Consolidated from 8 learned instincts. These apply to all ARQ job design and async workflows.
+Consolidated from 10 learned instincts. These apply to all ARQ job design and async workflows.
 
 ## Worker Design
 
@@ -46,6 +46,16 @@ Consolidated from 8 learned instincts. These apply to all ARQ job design and asy
   INCR then check, decrement on block to keep counter accurate
   Month-keyed keys with TTL auto-reset at boundaries
   See: `learned/redis-atomic-budget-guard.md`
+
+## Replay Safety
+
+- One-time writes: guard with sentinel column `WHERE generated_at IS NULL`
+  Replayed ARQ jobs must not overwrite completed work
+  See: `learned/immutable-write-idempotency.md`
+
+- Cron jobs that insert rows: use UNIQUE constraint + `ON CONFLICT DO NOTHING`
+  Prevents duplicate rows when cron fires while a previous run is still processing
+  See: `learned/idempotent-cron-insert.md`
 
 ## Testing
 

@@ -26,11 +26,16 @@ Consolidated from 7 learned instincts. Silent failures are the #1 source of prod
 
 - When you compute a quality signal, apply it at EVERY consumption point (SQL, API, reports)
   Use `WHERE quality IS NULL OR quality >= threshold` for backward compat
+  Checklist: compute point → SQL filter → API filter → RAG context → report display
   See: `learned/quality-gate-all-consumers.md`
 
 - Word-counting regex must cover all supported languages (Devanagari, Arabic, CJK)
   Missing ranges silently drop content with zero detected words
   See: `learned/quality-gate-unicode-ranges.md`
+
+- Language detection must not gatekeep — return the real detected language even if
+  no downstream model supports it. Filtering on model availability silently drops content.
+  See: `learned/detect-language-must-not-gatekeep.md`
 
 ## ML Models
 
@@ -44,4 +49,4 @@ Consolidated from 7 learned instincts. Silent failures are the #1 source of prod
   with the same directory name — fresh clones break with `ImportError`, but developer
   machines work fine (files exist in working tree). Always use negation rules for
   Python packages: `!sdk/anveshak/models/`
-  See: `learned/gitignore-blanket-pattern-collision.md`
+  See: `rules/git-build.md`
