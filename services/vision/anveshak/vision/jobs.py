@@ -22,7 +22,9 @@ from arq.connections import RedisSettings
 from .metrics import vision_analyses_total, vision_analysis_duration_seconds, vision_deepfake_score, arq_jobs_failed_total
 
 from .db import (
+    clear_media_storage_path,
     create_pool,
+    get_expired_media_assets,
     get_media_asset,
     get_topic_clip_categories,
     insert_vision_result,
@@ -292,6 +294,56 @@ async def _analyse_video(storage_path: str, media_asset_id: str) -> tuple[float 
 
 
 # ---------------------------------------------------------------------------
+# Media retention cleanup
+# ---------------------------------------------------------------------------
+
+async def cleanup_expired_media(ctx: dict) -> dict:
+    """Delete media files older than MEDIA_RETENTION_DAYS where vision analysis is complete.
+
+    Runs as ARQ cron job. Files are deleted from disk; DB metadata (pHash, EXIF,
+    deepfake_score) is preserved. storage_path is set to NULL to indicate deletion.
+    Processes up to 100 files per run to avoid long-running transactions.
+    """
+    if settings.media_retention_days == 0:
+        log.info("vision.cleanup.disabled", reason="MEDIA_RETENTION_DAYS=0")
+        return {"skipped": "retention_disabled"}
+
+    from datetime import datetime, timedelta, UTC
+    from pathlib import Path
+
+    cutoff = datetime.now(UTC) - timedelta(days=settings.media_retention_days)
+    pool: asyncpg.Pool = ctx["db_pool"]
+    deleted = 0
+    errors = 0
+
+    async with pool.acquire() as conn:
+        rows = await get_expired_media_assets(conn, cutoff)
+        for row in rows:
+            storage_path = row["storage_path"]
+            try:
+                Path(storage_path).unlink(missing_ok=True)
+                await clear_media_storage_path(conn, row["id"])
+                deleted += 1
+            except Exception as exc:
+                errors += 1
+                log.warning(
+                    "vision.cleanup.file_error",
+                    media_asset_id=row["id"],
+                    path=storage_path,
+                    error=str(exc),
+                )
+
+    log.info(
+        "vision.cleanup.complete",
+        cutoff_days=settings.media_retention_days,
+        deleted=deleted,
+        errors=errors,
+        candidates=len(rows),
+    )
+    return {"deleted": deleted, "errors": errors, "candidates": len(rows)}
+
+
+# ---------------------------------------------------------------------------
 # ARQ worker lifecycle
 # ---------------------------------------------------------------------------
 
@@ -423,6 +475,9 @@ class WorkerSettings:
         arq.func(run_vision_analysis, max_tries=2),  # idempotent via content_hash dedup
         arq.func(run_yolo, max_tries=2),
         arq.func(run_clip, max_tries=2),
+    ]
+    cron_jobs = [
+        arq.cron(cleanup_expired_media, hour=3, minute=0),  # daily at 03:00 UTC
     ]
     on_startup = on_startup
     on_shutdown = on_shutdown

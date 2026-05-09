@@ -90,6 +90,19 @@ SQL_GET_VISION_RESULTS_FOR_CONTENT = """
     WHERE ci.id = $1
 """
 
+SQL_GET_EXPIRED_MEDIA_ASSETS = """
+    SELECT ma.id, ma.storage_path
+    FROM media_assets ma
+    JOIN vision_results vr ON vr.media_asset_id = ma.id
+    WHERE ma.created_at < $1
+      AND ma.storage_path IS NOT NULL
+    LIMIT 100
+"""
+
+SQL_CLEAR_MEDIA_STORAGE_PATH = """
+    UPDATE media_assets SET storage_path = NULL WHERE id = $1
+"""
+
 # ---------------------------------------------------------------------------
 # Connection pool lifecycle
 # ---------------------------------------------------------------------------
@@ -170,3 +183,19 @@ async def get_vision_results_for_content(
     content_item_id: str,
 ) -> list[asyncpg.Record]:
     return await conn.fetch(SQL_GET_VISION_RESULTS_FOR_CONTENT, content_item_id)
+
+
+async def get_expired_media_assets(
+    conn: asyncpg.Connection,
+    cutoff: datetime,
+) -> list[asyncpg.Record]:
+    """Fetch media assets older than cutoff that have completed vision analysis."""
+    return await conn.fetch(SQL_GET_EXPIRED_MEDIA_ASSETS, cutoff)
+
+
+async def clear_media_storage_path(
+    conn: asyncpg.Connection,
+    media_asset_id: str,
+) -> None:
+    """Set storage_path to NULL after file deletion (preserves metadata)."""
+    await conn.execute(SQL_CLEAR_MEDIA_STORAGE_PATH, media_asset_id)

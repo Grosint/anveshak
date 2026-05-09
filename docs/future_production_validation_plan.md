@@ -2,7 +2,7 @@
 
 ## Context
 
-Anveshak's benchmark shows **43.3% recall / 90.7% precision** on synthetic fixtures (858 articles, 100 events). The low recall is largely driven by insufficient article volume per event (8 articles → ~35% recall vs 15 articles → 80% recall). False negatives dominate: 38 of 51 misses were due to "not enough articles to form a cluster."
+Anveshak's last benchmark (v3.0, 2026-05-06) showed **43.3% recall / 90.7% precision** on synthetic fixtures (858 articles, 100 events). **These numbers are stale — measured with HDBSCAN clustering and dummy deepfake models.** Since then, clustering migrated to Leiden community detection (May 8) and vision got real HuggingFace deepfake models (May 9). **Benchmark must be re-run before starting validation.** The previous root cause ("not enough articles to form a cluster") was an HDBSCAN density problem that may no longer apply with Leiden.
 
 We've never tested with **live, continuous, real-world data**. This 7-10 day production validation will:
 1. Monitor real defence/security topics with real sources
@@ -119,24 +119,24 @@ ISC of 2 is easily achievable with RSS + web. Telegram and X add ISC 3-4.
 
 ---
 
-## Pre-requisite: Compose Config Bug Fix
+## Pre-requisite: Compose Config Fixes (DONE)
 
-**CRITICAL FINDING:** The social container in `infra/compose.yml` is missing env vars needed for Telegram and X adapters:
+The following compose config issues were identified and **fixed**:
 
-```yaml
-# MISSING from social service environment block:
-TELEGRAM_ADAPTER_ENABLED: ${TELEGRAM_ADAPTER_ENABLED:-false}
-X_ADAPTER_ENABLED: ${X_ADAPTER_ENABLED:-false}
-X_BEARER_TOKEN: ${X_BEARER_TOKEN:-}
-X_MONTHLY_READ_CAP: ${X_MONTHLY_READ_CAP:-40000}
-X_POLL_INTERVAL_S: ${X_POLL_INTERVAL_S:-900}
-```
+1. **Social service** — Reddit and Bluesky adapter env vars were missing from compose.
+   Added: `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USER_AGENT`, `REDDIT_ADAPTER_ENABLED`,
+   `BLUESKY_HANDLE`, `BLUESKY_PASSWORD`, `BLUESKY_ADAPTER_ENABLED`, `X_ADAPTER_MODE`,
+   `POLL_INTERVAL_S`, `METRICS_PORT`. Telegram and X vars were already present.
 
-Also: compose uses `TWITTER_BEARER_TOKEN` but the social service code expects `X_BEARER_TOKEN` — naming mismatch.
+2. **Orphaned Instagram vars** — `INSTAGRAM_USERNAME` and `INSTAGRAM_PASSWORD` were in compose
+   but no Instagram adapter exists. Removed.
 
-**Impact:** Even though `.env` has `TELEGRAM_ADAPTER_ENABLED=true` and `X_ADAPTER_ENABLED=true`, these are never passed to the social container. Both adapters silently default to disabled.
+3. **Dead HDBSCAN vars** — `HDBSCAN_MIN_CLUSTER_SIZE` and `HDBSCAN_MIN_SAMPLES` were in
+   analyst-scheduler and analyst-worker but `settings.py` now uses Leiden params.
+   Replaced with `CLUSTERING_SIMILARITY_THRESHOLD` and `CLUSTERING_MIN_CLUSTER_SIZE`.
 
-**Fix:** Add missing env vars to the social service in `infra/compose.yml` before starting the production validation.
+4. **Env var pre-flight check** — `make up` now runs `scripts/check_env.sh` which parses
+   compose files for required vars (no default) and blocks startup if any are missing from `.env`.
 
 ---
 
@@ -185,6 +185,14 @@ Key diagnostics:
 5. **ISC distribution**: How many clusters at ISC=1, 2, 3+?
 6. **Signal fire rate**: Signals fired vs eligible clusters
 7. **Report success**: Did scheduled reports generate successfully?
+8. **Media download yield**: Media assets downloaded vs content items with media URLs
+9. **Vision job throughput**: Jobs completed/failed/pending in 24h
+10. **Deepfake score distribution**: Count of scores > 0.5 (suspicious), > 0.8 (high risk)
+11. **YOLO detections**: Object categories detected, count per category
+12. **CLIP classifications**: Top labels assigned, confidence distribution
+
+**Note:** `scripts/validate_vision_full.py` (650 lines) is available for standalone vision validation
+with 6 test categories (real/fake face, real/fake no-face, real/fake video) + CLIP classification.
 
 ---
 
@@ -224,6 +232,8 @@ Create `scripts/setup_production_topics.py`:
 - False negatives: known real-world events that Anveshak missed
 - Pipeline failures: scrape errors, embedding nulls, clustering hangs
 - Report quality: are LLM-generated reports coherent and sourced?
+- Vision analysis: deepfake detections, suspicious media flagged (score > 0.5)
+- Media pipeline: download success rate, vision job backlog, YOLO/CLIP detections
 
 **Ground truth tracking:**
 Maintain a simple log (markdown file or spreadsheet) of real-world events we know happened, then check if Anveshak detected them.
@@ -272,6 +282,7 @@ After 7-10 days:
 
 1. **Replace** existing 3 topics entirely with 4 new production topics
 2. **Reddit:** Not available — skip. **Telegram:** Session available. **X/Twitter:** Credentials available.
-3. **Signal threshold:** Set to 2 (no adaptive logic exists for signal firing; adaptive `min_cluster_size` only applies to HDBSCAN clustering). Can raise to 3 later if too noisy.
+3. **Signal threshold:** Set to 2. Clustering uses Leiden community detection with `clustering_similarity_threshold=0.75`. Can raise to 3 later if too noisy.
 4. **Report time:** 8:30 AM IST daily (`0 3 * * *` UTC)
-5. **Compose bug must be fixed first** — social adapter env vars not passed to container (see Pre-requisite section)
+5. **Compose config fixed** — see Pre-requisite section above
+6. **Benchmark must be re-run** with Leiden clustering + real vision models before starting validation

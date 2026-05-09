@@ -52,6 +52,10 @@ class VisionSettings(BaseSettings):
     # Media storage root (must match scraper/social MEDIA_STORAGE_ROOT)
     media_storage_root: Path = Path("/app/media")
 
+    # Media retention: delete files older than N days where vision analysis is complete.
+    # 0 = disabled (keep forever). Files are deleted, DB metadata is preserved.
+    media_retention_days: int = 30
+
     # EXIF backend — pillow (stdlib) or exiftool (binary must be on PATH)
     exif_backend: str = "pillow"                        # pillow → exiftool via env
 

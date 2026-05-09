@@ -128,13 +128,14 @@ define warn
 	@printf "  $(_WARN) $(_YEL)$(1)$(_RST)\n"
 endef
 
-# Check .env exists
+# Check .env exists + required vars are set
 define check_env
 	@if [ ! -f .env ]; then \
 		printf "\n$(_BOLD)$(_RED)  ERROR: .env file not found$(_RST)\n"; \
 		printf "  $(_INFO) Run: $(_BOLD)cp .env.example .env$(_RST) and fill in your secrets\n\n"; \
 		exit 1; \
 	fi
+	@bash scripts/check_env.sh $(1)
 endef
 
 # ---------------------------------------------------------------------------
@@ -151,7 +152,7 @@ setup:
 		read confirm; \
 		if [ "$$confirm" != "y" ] && [ "$$confirm" != "Y" ]; then exit 1; fi; \
 	}
-	$(call check_env)
+	$(call check_env,infra/compose.yml)
 	$(call step,Step 2/8,Building Docker images)
 	@$(COMPOSE) build
 	$(call success,Images built)
@@ -213,25 +214,25 @@ setup:
 
 build:
 	$(call header,Building Docker Images)
-	$(call check_env)
+	$(call check_env,infra/compose.yml)
 	@$(COMPOSE) build
 	$(call success,All images built)
 
 build-nocache:
 	$(call header,Building Docker Images (no cache))
-	$(call check_env)
+	$(call check_env,infra/compose.yml)
 	@$(COMPOSE) build --no-cache
 	$(call success,All images built (no cache))
 
 build-vision:
 	$(call header,Building Docker Images (+ Vision))
-	$(call check_env)
+	$(call check_env,infra/compose.yml infra/compose.vision.yml)
 	@$(COMPOSE_VIS) build
 	$(call success,All images built (including vision))
 
 up:
 	$(call header,Starting Anveshak Core Stack)
-	$(call check_env)
+	$(call check_env,infra/compose.yml)
 	@$(COMPOSE) up -d --remove-orphans
 	$(call success,Core stack started)
 	@printf "\n  Run $(_BOLD)make ps$(_RST) to check health status\n"
@@ -239,13 +240,13 @@ up:
 
 up-vision:
 	$(call header,Starting Anveshak + Vision GPU Overlay)
-	$(call check_env)
+	$(call check_env,infra/compose.yml infra/compose.vision.yml)
 	@$(COMPOSE_VIS) up -d --remove-orphans
 	$(call success,Core + Vision (GPU) stack started)
 
 up-bridge:
 	$(call header,Starting Anveshak + Drishti Bridge)
-	$(call check_env)
+	$(call check_env,infra/compose.yml infra/compose.bridge.yml)
 	@$(COMPOSE_BRG) up -d --remove-orphans
 	$(call success,Core + Bridge stack started)
 

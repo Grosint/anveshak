@@ -22,6 +22,15 @@ Consolidated from 7 learned instincts. These apply to all Docker Compose and con
 - `docker run --env-file` does NOT pick up vars set in compose's `environment:` block —
   pass them explicitly with `-e` flags when running one-off containers
 
+## Volume Naming
+
+- All services sharing a data directory MUST mount the same named volume
+  `media_store:/app/media` and `vision_media:/app/media` are TWO SEPARATE directories
+  on the host — mismatched names create invisible data silos with no error or log
+- After any compose volume change, grep for the mount path across all services:
+  `grep -n '/app/media' infra/compose.yml` — verify volume name consistency
+  See: `learned/docker-volume-name-consistency.md`
+
 ## Build Context
 
 - Build context paths resolve relative to the compose file location, not CWD

@@ -33,3 +33,6 @@ Fix: pass compose vars explicitly with `-e` flags when running one-off container
 2. Add to `infra/compose.yml` service environment block (or x-*-env anchor)
 3. Add to `.env.example` with comment
 4. Verify: `docker exec <container> env | grep NEW_VAR`
+
+See also: `learned/compose-env-preflight-check.md` — `scripts/check_env.sh` blocks `make up` if required (no-default) vars are missing from `.env`
+See also: `learned/compose-dead-env-var-cleanup.md` — algorithm migrations leave dead env vars in compose; audit after every migration
