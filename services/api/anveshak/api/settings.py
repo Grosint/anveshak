@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 480               # 8 hours
 
+    # CORS
+    allowed_origins: list[str] = ["http://localhost:3000", "http://frontend:3000"]
+
+    # Security headers
+    hsts_enabled: bool = False  # enable when TLS is terminated upstream
+
     # Drishti bridge
     anveshak_drishti_bridge: bool = False
     drishti_redpanda_bootstrap: Optional[str] = None

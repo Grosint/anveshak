@@ -10,7 +10,7 @@ import asyncpg
 # ---------------------------------------------------------------------------
 
 SQL_GET_USER_BY_USERNAME = (
-    "SELECT id, password_hash FROM users WHERE username = $1"
+    "SELECT id, password_hash, role FROM users WHERE username = $1"
 )
 
 # ---------------------------------------------------------------------------

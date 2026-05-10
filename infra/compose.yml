@@ -72,6 +72,8 @@ services:
       --maxmemory 200mb
       --maxmemory-policy allkeys-lru
       --save 60 1
+      --appendonly yes
+      --appendfsync everysec
       --loglevel warning
     volumes:
       - redis_data:/data
@@ -142,7 +144,9 @@ services:
     environment:
       <<: *common-env
       API_SECRET_KEY: ${API_SECRET_KEY}
+      JWT_SECRET_KEY: ${API_SECRET_KEY}
       API_ALLOWED_ORIGINS: ${API_ALLOWED_ORIGINS:-http://localhost:3000}
+      HSTS_ENABLED: ${HSTS_ENABLED:-false}
       SCRAPER_SERVICE_URL: http://scraper:8001
       SOCIAL_SERVICE_URL: http://social:8002
       ANALYST_SERVICE_URL: http://analyst-scheduler:8007
@@ -391,6 +395,8 @@ services:
       REPORT_OUTPUT_DIR: /app/reports
       REPORT_TEMPLATE_DIR: /app/templates
       ANALYST_SERVICE_URL: http://analyst-scheduler:8007
+      OLLAMA_CIRCUIT_BREAKER_THRESHOLD: ${OLLAMA_CIRCUIT_BREAKER_THRESHOLD:-5}
+      OLLAMA_CIRCUIT_BREAKER_COOLDOWN_S: ${OLLAMA_CIRCUIT_BREAKER_COOLDOWN_S:-120}
     volumes:
       - reporter_output:/app/reports
     ports:
@@ -421,6 +427,8 @@ services:
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2:7b}
       ANALYST_SERVICE_URL: http://analyst-scheduler:8007
       OLLAMA_REPORT_TIMEOUT_S: ${OLLAMA_REPORT_TIMEOUT_S:-540}
+      OLLAMA_CIRCUIT_BREAKER_THRESHOLD: ${OLLAMA_CIRCUIT_BREAKER_THRESHOLD:-5}
+      OLLAMA_CIRCUIT_BREAKER_COOLDOWN_S: ${OLLAMA_CIRCUIT_BREAKER_COOLDOWN_S:-120}
       METRICS_PORT: 8006
     volumes:
       - reporter_output:/app/reports
@@ -650,6 +658,23 @@ services:
       - "9090:9090"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/ready || exit 1"]
+      <<: *healthcheck-defaults
+    networks:
+      - anveshak-net
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    restart: unless-stopped
+    mem_limit: 128m
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    volumes:
+      - ./configs/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "9093:9093"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9093/-/ready || exit 1"]
       <<: *healthcheck-defaults
     networks:
       - anveshak-net

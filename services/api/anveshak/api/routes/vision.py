@@ -20,7 +20,7 @@ import structlog
 from arq import ArqRedis
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 
-from ..auth.jwt import get_current_user
+from ..auth.rbac import require_role
 from ..db.pool import get_db
 from ..db import vision as vision_db
 from ..settings import settings
@@ -51,7 +51,7 @@ async def analyse_image(
         description="Associate upload with an existing content_item (optional for ad-hoc analysis)",
     ),
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Accept image/video upload → store via vision service → dispatch ARQ job.
 
@@ -128,7 +128,7 @@ async def get_vision_job(
     job_id: str,
     request: Request,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Poll vision job status. Returns results when complete.
 
@@ -193,7 +193,7 @@ async def reverse_image_search(
         description="Max Hamming distance (default from settings)",
     ),
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Find near-duplicate media assets by pHash Hamming distance.
 
@@ -238,7 +238,7 @@ content_vision_router = APIRouter(prefix="/api/v1/content", tags=["vision"])
 async def get_vision_for_content(
     content_id: str,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     """All vision_results for all media assets linked to a content_item.
 

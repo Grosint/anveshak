@@ -11,7 +11,7 @@ import httpx
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from ..auth.jwt import get_current_user
+from ..auth.rbac import require_role
 from ..db.pool import get_db
 from ..db import content as content_db
 from ..settings import settings
@@ -44,7 +44,7 @@ async def _embed_query(query: str) -> str:
 async def get_content_item(
     content_id: str,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Full content item including extracted entities (criteria 1.21)."""
     row = await content_db.get_content_item(db, content_id)
@@ -59,7 +59,7 @@ async def search_content(
     q: str = Query(..., min_length=1, description="Search query text"),
     topic_id: str = Query(..., description="Topic to search within"),
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     """pgvector cosine similarity search within a topic (criteria 1.23, 1.24)."""
     try:

@@ -3,7 +3,7 @@ import api from './client'
 export interface User {
   id: string
   username: string
-  role: 'analyst' | 'admin'
+  role: 'viewer' | 'analyst' | 'admin'
   created_at: string
   updated_at: string
 }
@@ -11,7 +11,7 @@ export interface User {
 export interface CreateUserPayload {
   username: string
   password: string
-  role: 'analyst' | 'admin'
+  role: 'viewer' | 'analyst' | 'admin'
 }
 
 export const usersApi = {
@@ -24,7 +24,7 @@ export const usersApi = {
   delete: (userId: string) =>
     api.delete(`/api/v1/users/${userId}`).then((r) => r.data),
 
-  updateRole: (userId: string, role: 'analyst' | 'admin') =>
+  updateRole: (userId: string, role: 'viewer' | 'analyst' | 'admin') =>
     api.patch<{ user_id: string; role: string }>(
       `/api/v1/users/${userId}/role`, { role },
     ).then((r) => r.data),

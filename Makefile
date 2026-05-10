@@ -547,6 +547,10 @@ verify-labels:
 	$(call header,Verifying Labels Constraint)
 	@$(UV) --package anveshak-sdk python scripts/verify_labels.py
 
+# Check .env is in sync with .env.example (no missing keys)
+check-env-sync:
+	@bash scripts/check_env_sync.sh
+
 # Verify report immutability constraints
 verify-reports:
 	$(call header,Verifying Report Immutability)

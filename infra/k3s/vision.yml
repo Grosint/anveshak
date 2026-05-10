@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vision
+  namespace: anveshak
+  labels:
+    app: vision
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vision
+  template:
+    metadata:
+      labels:
+        app: vision
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: vision
+          image: anveshak-vision:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8003
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: anveshak-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_URL
+              value: "postgresql://anveshak:$(POSTGRES_PASSWORD)@postgres:5432/anveshak"
+            - name: REDIS_URL
+              value: "redis://redis:6379/0"
+            - name: VISION_DEVICE
+              value: "cpu"
+          securityContext:
+            allowPrivilegeEscalation: false
+          resources:
+            requests:
+              memory: 2Gi
+              cpu: 500m
+            limits:
+              memory: 4Gi
+          volumeMounts:
+            - name: media
+              mountPath: /app/media
+            - name: models
+              mountPath: /app/models
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8003
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8003
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      volumes:
+        - name: media
+          persistentVolumeClaim:
+            claimName: vision-media-pvc
+        - name: models
+          persistentVolumeClaim:
+            claimName: vision-models-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vision-media-pvc
+  namespace: anveshak
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vision-models-pvc
+  namespace: anveshak
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vision
+  namespace: anveshak
+spec:
+  selector:
+    app: vision
+  ports:
+    - port: 8003
+      targetPort: 8003

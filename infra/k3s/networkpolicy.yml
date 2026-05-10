@@ -1,0 +1,134 @@
+# Default deny all ingress — zero-trust baseline.
+# Each service gets explicit allow rules below.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: anveshak
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+# Allow frontend -> api
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-to-api
+  namespace: anveshak
+spec:
+  podSelector:
+    matchLabels:
+      app: api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: frontend
+      ports:
+        - port: 8000
+---
+# Allow api -> postgres
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-services-to-postgres
+  namespace: anveshak
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: api
+        - podSelector:
+            matchLabels:
+              app: analyst
+        - podSelector:
+            matchLabels:
+              app: scraper
+        - podSelector:
+            matchLabels:
+              app: reporter
+        - podSelector:
+            matchLabels:
+              app: vision
+      ports:
+        - port: 5432
+---
+# Allow services -> redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-services-to-redis
+  namespace: anveshak
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: api
+        - podSelector:
+            matchLabels:
+              app: analyst
+        - podSelector:
+            matchLabels:
+              app: scraper
+        - podSelector:
+            matchLabels:
+              app: reporter
+        - podSelector:
+            matchLabels:
+              app: vision
+      ports:
+        - port: 6379
+---
+# Allow services -> ollama
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-services-to-ollama
+  namespace: anveshak
+spec:
+  podSelector:
+    matchLabels:
+      app: ollama
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: analyst
+        - podSelector:
+            matchLabels:
+              app: reporter
+      ports:
+        - port: 11434
+---
+# Allow ingress controller -> frontend + api
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-frontend
+  namespace: anveshak
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: 3000

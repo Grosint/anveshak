@@ -28,6 +28,10 @@ class ReporterSettings(BaseSettings):
     ollama_report_timeout_s: int = 300
     ollama_retry_max: int = 2
 
+    # Circuit breaker — prevents thundering herd during Ollama outages
+    ollama_circuit_breaker_threshold: int = 5
+    ollama_circuit_breaker_cooldown_s: int = 120
+
     # Cron intervals
     scheduled_report_check_interval_s: int = 900
     source_warning_check_interval_s: int = 21600

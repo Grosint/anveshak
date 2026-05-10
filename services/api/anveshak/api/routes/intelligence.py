@@ -8,10 +8,11 @@ from typing import Any
 
 import asyncpg
 import structlog
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
-from ..auth.jwt import get_current_user
+from ..auth.rbac import require_role
 from ..db.pool import get_db
+from ..db import audit as audit_db
 
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["intelligence"])
@@ -112,7 +113,7 @@ async def get_entity_cooccurrence(
     min_count: int = Query(2, ge=1, description="Minimum co-occurrence count"),
     limit: int = Query(100, ge=1, le=500, description="Max edges to return"),
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     """Entity co-occurrence graph — who appears with whom.
 
@@ -142,7 +143,7 @@ async def get_similar_topics(
     topic_id: str,
     limit: int = Query(5, ge=1, le=20, description="Max similar topics"),
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ) -> list[dict[str, Any]]:
     """Find topics with similar narrative clusters by centroid distance.
 
@@ -156,7 +157,7 @@ async def get_similar_topics(
 async def discover_sources(
     topic_id: str,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     """Extract outbound URLs from scraped content and suggest new sources.
 
@@ -205,7 +206,7 @@ async def get_cluster_duplicates(
     min_similarity: float = Query(0.85, ge=0.5, le=1.0, description="Min cosine similarity"),
     limit: int = Query(20, ge=1, le=100, description="Max pairs"),
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ) -> list[dict[str, Any]]:
     """Detect near-duplicate clusters by centroid cosine similarity.
 
@@ -251,10 +252,11 @@ SQL_GET_CLUSTER = """
 
 @router.post("/clusters/merge")
 async def merge_clusters(
+    request: Request,
     keep_id: str = Body(..., description="Cluster ID to keep (absorbs items)"),
     remove_id: str = Body(..., description="Cluster ID to remove (items reassigned)"),
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     """Merge two clusters — reassign content items from remove_id to keep_id, delete remove_id.
 
@@ -283,6 +285,11 @@ async def merge_clusters(
         keep_id=keep_id,
         remove_id=remove_id,
         topic_id=keep["topic_id"],
+    )
+    await audit_db.log_action(
+        db, user["sub"], "cluster.merge", "cluster", keep_id,
+        {"removed_cluster_id": remove_id, "topic_id": keep["topic_id"]},
+        request.client.host if request.client else "",
     )
 
     return {

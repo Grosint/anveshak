@@ -1,6 +1,7 @@
 """PostgreSQL connection pool and FastAPI dependency."""
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import AsyncGenerator
 
@@ -65,3 +66,35 @@ async def get_db() -> AsyncGenerator[asyncpg.Connection, None]:
 def get_pool() -> asyncpg.Pool | None:
     """Return the raw pool (used by WebSocket handlers that can't use Depends)."""
     return _pool
+
+
+async def create_pool_with_retry(
+    dsn: str,
+    max_retries: int = 5,
+    backoff_base: float = 2.0,
+    **kwargs,
+) -> asyncpg.Pool:
+    """Create asyncpg pool with exponential backoff on connection failure.
+
+    Prevents permanent failure if Postgres is slow to start.
+    """
+    last_exc: Exception | None = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            pool = await asyncpg.create_pool(dsn, **kwargs)
+            if attempt > 1:
+                log.info("database.pool_retry_succeeded", attempt=attempt)
+            return pool
+        except Exception as exc:
+            last_exc = exc
+            if attempt < max_retries:
+                delay = backoff_base ** (attempt - 1)
+                log.warning(
+                    "database.pool_retry",
+                    attempt=attempt,
+                    max_retries=max_retries,
+                    delay_s=delay,
+                    error=str(exc),
+                )
+                await asyncio.sleep(delay)
+    raise last_exc  # type: ignore[misc]

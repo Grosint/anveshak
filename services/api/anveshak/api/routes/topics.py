@@ -1,5 +1,5 @@
 """Topic management endpoints."""
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
 import asyncpg
@@ -10,7 +10,8 @@ from arq.connections import RedisSettings
 from ..db.pool import get_db
 from ..db import topics as topics_db
 from ..db import sources as sources_db
-from ..auth.jwt import get_current_user
+from ..db import audit as audit_db
+from ..auth.rbac import require_role
 from ..settings import settings
 from anveshak.models import Labels, Topic, TopicStatus
 
@@ -34,8 +35,9 @@ class CreateTopicRequest(BaseModel):
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_topic(
     req: CreateTopicRequest,
+    request: Request,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     topic_id = str(uuid.uuid4())
     now = datetime.now(UTC)
@@ -55,13 +57,18 @@ async def create_topic(
             topic_id=topic_id,
             error=str(exc),
         )
+    await audit_db.log_action(
+        db, user["sub"], "topic.create", "topic", topic_id,
+        {"name": req.name, "keywords": req.keywords},
+        request.client.host if request.client else "",
+    )
     return {"id": topic_id, "name": req.name, "status": "active"}
 
 
 @router.get("")
 async def list_topics(
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ):
     return await topics_db.list_topics(db)
 
@@ -75,14 +82,20 @@ class UpdateTopicStatusRequest(BaseModel):
 async def update_topic_status(
     topic_id: str,
     req: UpdateTopicStatusRequest,
+    request: Request,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     if req.status not in ("active", "paused", "archived"):
         raise HTTPException(status_code=422, detail="status must be active|paused|archived")
     if not await topics_db.topic_exists(db, topic_id):
         raise HTTPException(status_code=404, detail="Topic not found")
     await topics_db.update_topic_status(db, topic_id, req.status, datetime.now(UTC))
+    await audit_db.log_action(
+        db, user["sub"], "topic.status_change", "topic", topic_id,
+        {"new_status": req.status},
+        request.client.host if request.client else "",
+    )
     return {"topic_id": topic_id, "status": req.status}
 
 
@@ -97,7 +110,7 @@ async def update_topic_schedule(
     topic_id: str,
     req: UpdateScheduleRequest,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Update or clear scheduled report configuration for a topic."""
     if not await topics_db.topic_exists(db, topic_id):
@@ -123,7 +136,7 @@ async def update_topic_schedule(
 async def get_topic(
     topic_id: str,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     row = await topics_db.get_topic(db, topic_id)
     if not row:
@@ -141,7 +154,7 @@ async def get_topic_content(
     include_low_quality: bool = False,
     sentiment: Optional[str] = None,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     if sentiment and sentiment not in ("positive", "negative", "neutral"):
         raise HTTPException(status_code=422, detail="sentiment must be positive|negative|neutral")
@@ -158,7 +171,7 @@ async def get_sentiment_trend(
     topic_id: str,
     days: int = 30,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     if days < 1 or days > 365:
         raise HTTPException(status_code=422, detail="days must be 1-365")
@@ -171,7 +184,7 @@ async def get_trending_keywords(
     days: int = 7,
     limit: int = 15,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     if days < 1 or days > 365:
         raise HTTPException(status_code=422, detail="days must be 1-365")
@@ -185,7 +198,7 @@ async def get_topic_entities(
     topic_id: str,
     days: int = 30,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     if days < 1 or days > 365:
         raise HTTPException(status_code=422, detail="days must be 1-365")
@@ -196,7 +209,7 @@ async def get_topic_entities(
 async def get_topic_clusters(
     topic_id: str,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     return await topics_db.get_topic_clusters(db, topic_id)
 
@@ -205,7 +218,7 @@ async def get_topic_clusters(
 async def get_topic_sources(
     topic_id: str,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Return all sources assigned to this topic via topic_sources.
 
@@ -221,8 +234,9 @@ async def get_topic_sources(
 async def add_topic_source(
     topic_id: str,
     source_id: str,
+    request: Request,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Associate a source with a topic so the scraper monitors it."""
     if not await topics_db.topic_exists(db, topic_id):
@@ -230,6 +244,11 @@ async def add_topic_source(
     if not await sources_db.source_exists(db, source_id):
         raise HTTPException(status_code=404, detail="Source not found")
     await sources_db.add_topic_source(db, topic_id, source_id)
+    await audit_db.log_action(
+        db, user["sub"], "topic.source_link", "topic", topic_id,
+        {"source_id": source_id},
+        request.client.host if request.client else "",
+    )
     return {"topic_id": topic_id, "source_id": source_id, "status": "linked"}
 
 
@@ -237,11 +256,17 @@ async def add_topic_source(
 async def remove_topic_source(
     topic_id: str,
     source_id: str,
+    request: Request,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Remove a source from a topic's monitoring list."""
     if not await topics_db.topic_exists(db, topic_id):
         raise HTTPException(status_code=404, detail="Topic not found")
     await sources_db.remove_topic_source(db, topic_id, source_id)
+    await audit_db.log_action(
+        db, user["sub"], "topic.source_unlink", "topic", topic_id,
+        {"source_id": source_id},
+        request.client.host if request.client else "",
+    )
     return {"topic_id": topic_id, "source_id": source_id, "status": "unlinked"}

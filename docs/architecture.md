@@ -94,10 +94,11 @@ Anveshak (Sanskrit: investigator, seeker) is a standalone, sovereign AI-OSINT an
 
   ┌─────────────────────────────────────────────┐
   │           Observability Stack                │
+  │  Prometheus → Alertmanager → webhook        │
   │  Prometheus → Grafana (8 dashboards)         │
   │  Loki ← Promtail (structured logs)          │
   │  Jaeger (opt-in distributed tracing)         │
-  │  postgres-exporter, redis-exporter           │
+  │  cAdvisor, postgres-exporter, redis-exporter │
   └─────────────────────────────────────────────┘
 
   ┌─────────────┐    (optional, one-way only)
@@ -110,7 +111,7 @@ Anveshak (Sanskrit: investigator, seeker) is a standalone, sovereign AI-OSINT an
 
 ## Container Map
 
-Anveshak runs as **19 containers** (+ 1 optional) on a single Docker network (`anveshak-net`). Here is every container, what it does, why it exists, and how it connects to the rest of the system.
+Anveshak runs as **23 containers** (+ 1 optional) on a single Docker network (`anveshak-net`). Here is every container, what it does, why it exists, and how it connects to the rest of the system.
 
 ### At a Glance
 
@@ -137,9 +138,11 @@ Anveshak runs as **19 containers** (+ 1 optional) on a single Docker network (`a
 | `promtail` | grafana/promtail:3.0.0 | — | 128 MB | Log shipping |
 | `postgres-exporter` | postgres-exporter | 9187 | 64 MB | DB metrics |
 | `redis-exporter` | redis_exporter | 9121 | 64 MB | Cache metrics |
+| `alertmanager` | prom/alertmanager | 9093 | 128 MB | Alert delivery (webhook) |
+| `cadvisor` | cadvisor:v0.49.1 | 8080 | 256 MB | Container resource monitoring |
 | `jaeger` | jaeger-all-in-one | 16686 | 512 MB | Tracing (opt-in) |
 
-**Total baseline memory:** ~21 GB (without vision overlay)
+**Total baseline memory:** ~22 GB (without vision overlay)
 
 ---
 
@@ -176,8 +179,9 @@ Anveshak runs as **19 containers** (+ 1 optional) on a single Docker network (`a
 
 - Image: `redis:7-alpine`
 - Max memory: 200 MB with LRU eviction
-- Persistence: RDB snapshot every 60 seconds
+- Persistence: RDB snapshot every 60 seconds + AOF (`appendonly yes`, `appendfsync everysec`)
 - Data persisted to `redis_data` volume
+- AOF ensures ARQ job queues survive Redis crashes (RDB-only had a 60s data-loss window)
 
 **ARQ queues:**
 
@@ -228,7 +232,11 @@ Anveshak runs as **19 containers** (+ 1 optional) on a single Docker network (`a
 
 **Key responsibilities:**
 
-- **JWT authentication** — login endpoint issues tokens, all other routes require valid JWT
+- **JWT authentication + RBAC** — login issues JWT with `role` and `jti` fields. Three roles enforced on every route: `admin` (full access + user management), `analyst` (read + write), `viewer` (read-only). `require_role()` dependency on all route handlers.
+- **Token revocation** — `POST /auth/logout` revokes current token by storing `jti` in Redis blocklist with TTL. `GET /auth/me` returns current user info.
+- **JWT startup guard** — API refuses to start if `JWT_SECRET_KEY` is the insecure default `"change-me-in-production"`.
+- **Audit trail** — every mutating API operation (14 actions across topics, sources, signals, reports, users, clusters) is logged to `audit_trail` table with user_id, IP address, action, and details. Admin-only query via `GET /system/audit-trail`.
+- **Dead-letter queue** — failed ARQ jobs are persisted to `failed_jobs` table for admin review via `GET /system/failed-jobs`.
 - **Topic management** — CRUD for topics (keywords, signal thresholds, languages)
 - **Source management** — CRUD for OSINT sources (URLs, platforms, credibility scores)
 - **Content search** — pgvector cosine similarity search across the corpus
@@ -241,9 +249,10 @@ Anveshak runs as **19 containers** (+ 1 optional) on a single Docker network (`a
 
 **Middleware (applied in order):**
 
-1. CORS (configurable origins)
-2. Rate limiting
-3. Security headers (X-Content-Type-Options, X-Frame-Options, etc.)
+1. CORS (configurable origins via `ALLOWED_ORIGINS`, explicit method list — no wildcard)
+2. Rate limiting (4-tier sliding window: login 10/min, vision 30/min, auth 120/min, anon 60/min)
+3. Security headers (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, Content-Security-Policy, Strict-Transport-Security when `HSTS_ENABLED=true`)
+4. RBAC enforcement (`require_role()` dependency on every route handler)
 
 **Connects to:**
 
@@ -442,11 +451,12 @@ Workers are separate container processes that execute heavy background jobs disp
 - Memory limit: 1 GB
 - Prometheus metrics on port 8006
 - Idempotency guard: `WHERE generated_at IS NULL` prevents re-generation
+- **Ollama circuit breaker** — Redis-backed 3-state machine (CLOSED → OPEN → HALF_OPEN). After 5 consecutive Ollama failures, all LLM calls are blocked immediately (no 300s timeout wait). After 120s cooldown, one probe call is allowed. Prevents thundering herd during Ollama outages. Configurable via `OLLAMA_CIRCUIT_BREAKER_THRESHOLD` and `OLLAMA_CIRCUIT_BREAKER_COOLDOWN_S`.
 
 **Connects to:**
 
 - `postgres` — reads content for RAG, writes completed reports
-- `redis` — receives jobs from ARQ queue
+- `redis` — receives jobs from ARQ queue + circuit breaker state
 - `ollama` — LLM inference (the only container that does heavy Ollama work)
 
 ---
@@ -558,6 +568,7 @@ Workers are separate container processes that execute heavy background jobs disp
 - MapLibre GL for geographic visualization (GeoJSON from reports)
 - WebSocket connection for real-time signal notifications
 - JWT authentication with expiry countdown and warning dialog
+- Export buttons (CSV/JSON) on ContentFeed, wired to backend `/api/v1/export/*` endpoints via reusable `ExportButton` component
 - Built into a static bundle, served by Nginx inside the container
 - Depends on `api` being healthy before starting
 
@@ -588,9 +599,12 @@ Workers are separate container processes that execute heavy background jobs disp
 - `SignalEngineSilent` — no signals in 30 min while content is being ingested
 - And more (credibility loop, Loki ingestion, Ollama model status)
 
+**Alert delivery:** Alerts are routed to **Alertmanager** (`prom/alertmanager:latest`, port 9093) which delivers via webhook to the API's alert endpoint. Suitable for air-gap sovereign deployment — no email/Slack cloud dependency required. Config: `infra/configs/alertmanager/alertmanager.yml`.
+
 **Connects to:**
 
 - All services — scrapes `/metrics` endpoints
+- `alertmanager` — routes fired alerts for delivery
 - `grafana` — serves as primary data source
 
 ---
@@ -794,7 +808,7 @@ Step 10: Analyst reads report
 
 ## Database Schema
 
-15 tables, all following conventions: `snake_case` names, `created_at`/`updated_at` timestamps, `labels JSONB` field (never Optional).
+18 tables, all following conventions: `snake_case` names, `created_at`/`updated_at` timestamps, `labels JSONB` field (never Optional).
 
 ### Entity Relationship Overview
 
@@ -819,7 +833,11 @@ topics ─────────────┬──────────�
   reports ── (references topic, immutable once generated)
   report_source_warnings ── (links report ↔ source degradation)
   analysis_jobs ── (ARQ job tracking)
-  users ── (JWT authentication)
+  users ── (JWT authentication, RBAC roles: admin/analyst/viewer)
+    └── CHECK (role IN ('admin', 'analyst', 'viewer'))
+  token_blocklist ── (revoked JWT IDs, Redis-backed with DB fallback)
+  audit_trail ── (who did what when — 14 audited actions)
+  failed_jobs ── (dead-letter queue for failed ARQ jobs)
 ```
 
 ### Table Details
@@ -841,6 +859,9 @@ topics ─────────────┬──────────�
 | `report_source_warnings` | ~50 | Post-generation credibility downgrade alerts |
 | `topic_content_items` | ~100K | Many-to-many join (content can appear in multiple topics via backfill) |
 | `analysis_jobs` | ~10K | ARQ job tracking (status, payload, result, error) |
+| `token_blocklist` | ~100 | Revoked JWT IDs (jti) with TTL — logout support |
+| `audit_trail` | ~10K+ | User action log: who, what, when, IP address, details JSONB |
+| `failed_jobs` | ~100 | Dead-letter queue for ARQ jobs that fail after max retries |
 
 ---
 
@@ -1195,6 +1216,13 @@ Without near-duplicate detection, a single-source story paraphrased across 3 pla
 | 006 | `idx_signals_cross_topic` | Partial index for `cross_topic_convergence` signal type |
 | 010 | `content_items.entity_minhash` | BIGINT[] column for MinHash fingerprint (128 permutations) |
 
+**Production hardening migrations (Phase 1-2 audit, 2026-05-10):**
+
+| Migration | Table/Index | Change |
+|-----------|------------|--------|
+| 004 | `token_blocklist`, `users.role` | Token revocation table + CHECK constraint (admin/analyst/viewer) |
+| 005 | `audit_trail`, `failed_jobs` | User action audit log + dead-letter queue for failed ARQ jobs |
+
 All migrations are additive — no columns dropped, no data modified, backward compatible with existing deployments.
 
 ---
@@ -1301,14 +1329,19 @@ Reports are Anveshak's court-admissible output. They are **immutable** — once 
 ## Security Model
 
 - **No cloud LLM:** All inference runs on Ollama (localhost/container). Intelligence data never leaves the deployment boundary.
-- **JWT authentication:** Tokens issued on login, checked on every request. Expiry countdown shown in UI.
+- **RBAC (3 roles):** `admin` (full access + user management + system endpoints), `analyst` (read + write on topics/sources/signals/reports), `viewer` (read-only). Every route handler enforced via `require_role()` dependency. Role stored in JWT payload and checked on every request.
+- **JWT authentication + revocation:** Tokens include `jti` (unique ID) and `role`. `POST /auth/logout` revokes token by storing `jti` in Redis blocklist with TTL matching token expiry. API refuses to start if `JWT_SECRET_KEY` is the insecure default.
+- **Audit trail:** Every mutating API operation (14 actions) is logged to `audit_trail` table with user_id, action, resource_type, resource_id, details JSONB, and IP address. Defence/LEA requirement — "who saw what when" is not optional.
 - **No hardcoded secrets:** All credentials come from environment variables (`.env` file, never committed).
 - **Content hash logging only:** Raw scraped content is never logged — only `content_hash` and URL appear in logs.
 - **LLM output validation:** Every LLM response is parsed through a Pydantic model before storage. Raw LLM strings are never trusted.
 - **Prompt injection protection:** User input is sanitized and wrapped in boundary markers before inclusion in LLM prompts.
 - **X/Twitter spend guard:** Monthly read count checked against `X_MONTHLY_READ_CAP` before every API call.
-- **Rate limiting:** API gateway enforces per-IP request limits.
-- **Security headers:** X-Content-Type-Options, X-Frame-Options, Strict-Transport-Security on all responses.
+- **Rate limiting:** 4-tier sliding window — login 10/min, vision 30/min, authenticated 120/min, anonymous 60/min.
+- **Security headers:** X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, Content-Security-Policy (`default-src 'self'`), Strict-Transport-Security (when `HSTS_ENABLED=true`).
+- **CORS hardening:** Explicit method list (no wildcard), configurable origins via `ALLOWED_ORIGINS` env var.
+- **Circuit breakers:** Ollama (reporter) and social adapters both have Redis-backed 3-state circuit breakers preventing cascading failures during outages.
+- **DB connection resilience:** `create_pool_with_retry()` with exponential backoff prevents permanent failure when Postgres is slow to start.
 
 ---
 
@@ -1400,14 +1433,36 @@ make ps                        # Check container health
 
 ### Production (k3s)
 
-Single-node Kubernetes deployment using Kustomize:
+Single-node Kubernetes deployment using Kustomize. 13 manifests covering all services with production-grade hardening.
 
 ```bash
 make k3s-deploy                # Apply all manifests to k3s
 make k3s-teardown              # Remove namespace
 ```
 
-Manifests in `infra/k3s/`: namespace, secrets, postgres (20 Gi PVC), redis, api, analyst (6 Gi memory limit).
+Manifests in `infra/k3s/`:
+
+| Manifest | Key Specs |
+|----------|-----------|
+| `namespace.yml` | `anveshak` namespace |
+| `secrets-template.yml` | Manual secret injection via kubectl |
+| `postgres.yml` | pgvector:pg16, 20Gi PVC |
+| `redis.yml` | redis:7-alpine, 512Mi limit |
+| `api.yml` | 512Mi, health probes, PodDisruptionBudget (minAvailable: 1) |
+| `analyst.yml` | 6Gi limit (NLP + embedding models) |
+| `ollama.yml` | 8Gi limit, 20Gi PVC for model weights |
+| `scraper.yml` | 1Gi, shared media PVC |
+| `reporter.yml` | 512Mi, Ollama + analyst service URLs |
+| `vision.yml` | 4Gi, media + models PVCs |
+| `frontend.yml` | 128Mi, readOnlyRootFilesystem |
+| `ingress.yml` | Traefik IngressClass, `/api` → api, `/` → frontend |
+| `networkpolicy.yml` | Default-deny + 5 allow rules (frontend→api, services→postgres, services→redis, analyst+reporter→ollama, ingress→frontend) |
+
+**Security hardening on all pods:**
+- `securityContext.runAsNonRoot: true` + `allowPrivilegeEscalation: false`
+- `livenessProbe` on all service pods (catches hung processes, distinct from readinessProbe)
+- `readOnlyRootFilesystem` where feasible (api, frontend)
+- `POSTGRES_PASSWORD` env var ordered before `POSTGRES_URL` for `$(VAR)` substitution
 
 ### Backup / Restore
 
@@ -1453,6 +1508,14 @@ These rules are enforced by code, tests, and CI. They are non-negotiable.
 | Cluster labels reflect composition | `label_item_hash` detects drift, triggers Ollama re-label |
 | Archived clusters don't fire signals | `AND nc.archived_at IS NULL` in signal engine SQL |
 | Cross-topic convergence detected | Centroid comparison across topics, HIGH severity signal |
+| RBAC enforced on every route | `require_role()` dependency, 3 roles (admin/analyst/viewer), 403 on violation |
+| Token revocation works | `jti` in JWT, Redis blocklist checked on verify, `POST /auth/logout` |
+| User actions are audit-logged | 14 mutating actions → `audit_trail` table with user_id, IP, details |
+| Failed jobs are preserved | ARQ failures → `failed_jobs` DLQ table, admin-queryable |
+| Ollama circuit breaker prevents cascade | 5 failures → OPEN (block), 120s → HALF_OPEN (probe), success → CLOSED |
+| Redis AOF prevents job loss | `appendonly yes` + `appendfsync everysec` — no 60s data-loss window |
+| K3s pods run as non-root | `securityContext.runAsNonRoot: true` on all app pods |
+| K3s network is zero-trust | Default-deny NetworkPolicy + explicit allow rules per service |
 
 ---
 

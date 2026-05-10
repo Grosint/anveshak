@@ -21,12 +21,12 @@ async def test_login_success(mock_conn: AsyncMock) -> None:
 
     hashed = pwd_context.hash("correct-password")
     mock_conn.fetchrow = AsyncMock(
-        return_value={"id": "user-001", "password_hash": hashed}
+        return_value={"id": "user-001", "password_hash": hashed, "role": "analyst"}
     )
 
     with patch(
         "services.api.anveshak.api.routes.auth.auth_db.get_user_by_username",
-        new=AsyncMock(return_value={"id": "user-001", "password_hash": hashed}),
+        new=AsyncMock(return_value={"id": "user-001", "password_hash": hashed, "role": "analyst"}),
     ):
         from services.api.anveshak.api.routes.auth import login, LoginRequest
 

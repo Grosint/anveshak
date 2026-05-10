@@ -28,6 +28,16 @@ _robots_cache: dict[str, tuple[RobotFileParser | None, float]] = {}
 _ROBOTS_CACHE_TTL = 3600  # 1 hour
 
 
+# ---------------------------------------------------------------------------
+# PDF URL detection
+# ---------------------------------------------------------------------------
+
+def is_pdf_url(url: str) -> bool:
+    """Return True if the URL likely points to a PDF file."""
+    path = urlparse(url).path.lower()
+    return path.endswith(".pdf")
+
+
 async def _fetch_robots_txt(robots_url: str) -> Optional[str]:
     """Fetch robots.txt content via httpx. Returns None on failure."""
     import httpx

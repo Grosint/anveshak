@@ -12,10 +12,11 @@ from typing import Any
 
 import asyncpg
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
-from ..auth.jwt import get_current_user
+from ..auth.rbac import require_role
+from ..db import audit as audit_db
 from ..db.pool import get_db
 
 log = structlog.get_logger(__name__)
@@ -128,11 +129,12 @@ ENTITY_COLUMNS = [
 
 @router.get("/content")
 async def export_content(
+    request: Request,
     topic_id: str = Query(..., description="Topic ID to export"),
     format: str = Query("csv", pattern="^(csv|json)$", description="Export format"),
     limit: int = Query(1000, ge=1, le=MAX_EXPORT_ROWS, description="Max rows"),
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Export content items for a topic as CSV or JSON."""
     rows = await _fetch_rows(db, SQL_EXPORT_CONTENT, topic_id, limit)
@@ -141,16 +143,22 @@ async def export_content(
 
     data = _rows_to_csv(rows, CONTENT_COLUMNS) if format == "csv" else _rows_to_json(rows)
     log.info("export.content", topic_id=topic_id, format=format, rows=len(rows))
+    await audit_db.log_action(
+        db, user["sub"], "export.content", "topic", topic_id,
+        {"format": format, "rows": len(rows)},
+        request.client.host if request.client else "",
+    )
     return _make_response(data, format, f"anveshak_content_{topic_id[:8]}")
 
 
 @router.get("/signals")
 async def export_signals(
+    request: Request,
     topic_id: str = Query(..., description="Topic ID to export"),
     format: str = Query("csv", pattern="^(csv|json)$", description="Export format"),
     limit: int = Query(1000, ge=1, le=MAX_EXPORT_ROWS, description="Max rows"),
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Export signals for a topic as CSV or JSON."""
     rows = await _fetch_rows(db, SQL_EXPORT_SIGNALS, topic_id, limit)
@@ -159,16 +167,22 @@ async def export_signals(
 
     data = _rows_to_csv(rows, SIGNAL_COLUMNS) if format == "csv" else _rows_to_json(rows)
     log.info("export.signals", topic_id=topic_id, format=format, rows=len(rows))
+    await audit_db.log_action(
+        db, user["sub"], "export.signals", "topic", topic_id,
+        {"format": format, "rows": len(rows)},
+        request.client.host if request.client else "",
+    )
     return _make_response(data, format, f"anveshak_signals_{topic_id[:8]}")
 
 
 @router.get("/entities")
 async def export_entities(
+    request: Request,
     topic_id: str = Query(..., description="Topic ID to export"),
     format: str = Query("csv", pattern="^(csv|json)$", description="Export format"),
     limit: int = Query(5000, ge=1, le=MAX_EXPORT_ROWS, description="Max rows"),
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Export extracted entities for a topic as CSV or JSON."""
     rows = await _fetch_rows(db, SQL_EXPORT_ENTITIES, topic_id, limit)
@@ -177,4 +191,9 @@ async def export_entities(
 
     data = _rows_to_csv(rows, ENTITY_COLUMNS) if format == "csv" else _rows_to_json(rows)
     log.info("export.entities", topic_id=topic_id, format=format, rows=len(rows))
+    await audit_db.log_action(
+        db, user["sub"], "export.entities", "topic", topic_id,
+        {"format": format, "rows": len(rows)},
+        request.client.host if request.client else "",
+    )
     return _make_response(data, format, f"anveshak_entities_{topic_id[:8]}")

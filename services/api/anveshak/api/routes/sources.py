@@ -10,11 +10,12 @@ from urllib.parse import urlparse
 import asyncpg
 import httpx
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
 
-from ..auth.jwt import get_current_user
+from ..auth.rbac import require_role
 from ..db import sources as sources_db
+from ..db import audit as audit_db
 from ..db.pool import get_db
 
 router = APIRouter(prefix="/api/v1/sources", tags=["sources"])
@@ -98,8 +99,9 @@ async def _probe_web(url: str) -> tuple[str, Optional[str], bool]:
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_source(
     req: CreateSourceRequest,
+    request: Request,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     initial_health = "unverified"
     health_error: Optional[str] = None
@@ -160,6 +162,11 @@ async def create_source(
         platform=req.platform,
         health=initial_health,
     )
+    await audit_db.log_action(
+        db, user["sub"], "source.create", "source", source_id,
+        {"name": req.name, "platform": req.platform},
+        request.client.host if request.client else "",
+    )
     result: dict = {"id": source_id, "name": req.name, "health_status": initial_health}
     if warning:
         result["warning"] = warning
@@ -170,7 +177,7 @@ async def create_source(
 async def list_sources(
     credibility_below: float | None = None,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     if credibility_below is not None:
         return await sources_db.list_sources_below(db, credibility_below)
@@ -181,7 +188,7 @@ async def list_sources(
 async def check_source_health(
     source_id: str,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Trigger an immediate health probe for one source. Updates health_status in DB."""
     source = await sources_db.get_source_for_health(db, source_id)
@@ -240,8 +247,9 @@ async def update_credibility(
     source_id: str,
     new_score: float,
     reason: str,
+    request: Request,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Update source credibility — always audit-logged."""
     old_score = await sources_db.get_source_score(db, source_id)
@@ -255,6 +263,11 @@ async def update_credibility(
             old_score, new_score, reason,
             f"user:{user['sub']}", now, _LABELS_JSON,
         )
+    await audit_db.log_action(
+        db, user["sub"], "source.credibility_update", "source", source_id,
+        {"old_score": old_score, "new_score": new_score, "reason": reason},
+        request.client.host if request.client else "",
+    )
     return {"source_id": source_id, "old_score": old_score, "new_score": new_score}
 
 
@@ -263,7 +276,7 @@ async def toggle_source_active(
     source_id: str,
     is_active: bool,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     if not await sources_db.source_exists(db, source_id):
         raise HTTPException(status_code=404, detail="Source not found")
@@ -275,7 +288,7 @@ async def toggle_source_active(
 async def get_report_warnings_count(
     source_id: str,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     if not await sources_db.source_exists(db, source_id):
         raise HTTPException(status_code=404, detail="Source not found")
@@ -294,7 +307,7 @@ async def update_source(
     source_id: str,
     req: UpdateSourceRequest,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Update source name and/or URL. Both fields are optional (patch semantics)."""
     if not await sources_db.source_exists(db, source_id):
@@ -310,9 +323,10 @@ async def update_source(
 @router.delete("/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_source(
     source_id: str,
+    request: Request,
     force: bool = False,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Delete a source. Returns 409 if content items exist unless force=true."""
     if not await sources_db.source_exists(db, source_id):
@@ -324,6 +338,11 @@ async def delete_source(
             detail=f"Source has {content_count} content item(s). Use force=true to delete anyway.",
         )
     await sources_db.delete_source(db, source_id)
+    await audit_db.log_action(
+        db, user["sub"], "source.delete", "source", source_id,
+        {"force": force, "content_items_removed": content_count},
+        request.client.host if request.client else "",
+    )
     log.info("sources.deleted", source_id=source_id, content_items_removed=content_count)
 
 
@@ -331,7 +350,7 @@ async def delete_source(
 async def get_audit_log(
     source_id: str,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     if not await sources_db.source_exists(db, source_id):
         raise HTTPException(status_code=404, detail="Source not found")

@@ -7,11 +7,12 @@ from typing import Optional
 
 import asyncpg
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 
-from ..auth.jwt import get_current_user
+from ..auth.rbac import require_role
 from ..db.pool import get_db, get_pool
 from ..db import signals as signals_db
+from ..db import audit as audit_db
 
 log = structlog.get_logger(__name__)
 
@@ -120,7 +121,7 @@ async def list_signals(
     since: Optional[datetime] = Query(default=None, description="ISO datetime — only return signals at or after this time"),
     until: Optional[datetime] = Query(default=None, description="ISO datetime — only return signals at or before this time"),
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ):
     """List signals by status with optional time range and topic filter (criteria 2.14 status flow)."""
     if since is not None or until is not None:
@@ -135,7 +136,7 @@ async def list_signals(
 async def get_signal_connections(
     signal_id: str,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ):
     """Return graph data (nodes + edges) for a signal's connections."""
     return await signals_db.get_signal_connections(db, signal_id)
@@ -144,21 +145,27 @@ async def get_signal_connections(
 @router.patch("/{signal_id}/acknowledge")
 async def acknowledge_signal(
     signal_id: str,
+    request: Request,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Transition signal: new → acknowledged (criteria 2.15)."""
     row = await signals_db.acknowledge_signal(db, signal_id, datetime.now(UTC))
     if not row:
         raise HTTPException(status_code=404, detail="Signal not found or not in 'new' state")
+    await audit_db.log_action(
+        db, user["sub"], "signal.acknowledge", "signal", signal_id,
+        ip_address=request.client.host if request.client else "",
+    )
     return {"signal_id": signal_id, "status": "acknowledged"}
 
 
 @router.patch("/{signal_id}/dismiss")
 async def dismiss_signal(
     signal_id: str,
+    request: Request,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Transition signal: new|acknowledged → dismissed (criteria 2.16)."""
     row = await signals_db.dismiss_signal(db, signal_id, datetime.now(UTC))
@@ -167,4 +174,8 @@ async def dismiss_signal(
             status_code=404,
             detail="Signal not found or already dismissed",
         )
+    await audit_db.log_action(
+        db, user["sub"], "signal.dismiss", "signal", signal_id,
+        ip_address=request.client.host if request.client else "",
+    )
     return {"signal_id": signal_id, "status": "dismissed"}

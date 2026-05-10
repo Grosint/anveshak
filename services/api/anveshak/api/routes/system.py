@@ -1,12 +1,16 @@
-"""System endpoints — pipeline health metrics."""
+"""System endpoints — pipeline health, audit trail, failed jobs."""
 from __future__ import annotations
+
+from typing import Optional
 
 import asyncpg
 import structlog
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
-from ..auth.jwt import get_current_user
+from ..auth.rbac import require_role
 from ..db import system as system_db
+from ..db import audit as audit_db
+from ..db import failed_jobs as failed_jobs_db
 from ..db.pool import get_db
 
 router = APIRouter(prefix="/api/v1/system", tags=["system"])
@@ -16,7 +20,7 @@ log = structlog.get_logger(__name__)
 @router.get("/pipeline-health")
 async def pipeline_health(
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("admin")),
 ):
     """Return live pipeline metrics for validation and monitoring.
 
@@ -31,7 +35,7 @@ async def pipeline_health(
 @router.get("/vector-health")
 async def vector_health(
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("admin")),
 ):
     """Return vector pipeline health metrics for validation.
 
@@ -41,3 +45,26 @@ async def vector_health(
     metrics = await system_db.get_vector_health(db)
     log.info("system.vector_health_queried", user=user.get("sub"))
     return metrics
+
+
+@router.get("/audit-trail")
+async def get_audit_trail(
+    resource_type: str = Query("topic", description="Filter by resource type"),
+    resource_id: Optional[str] = Query(None, description="Filter by resource ID"),
+    limit: int = Query(100, ge=1, le=1000),
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("admin")),
+):
+    """Return audit trail entries (admin only)."""
+    return await audit_db.get_audit_trail(db, resource_type, resource_id, limit)
+
+
+@router.get("/failed-jobs")
+async def get_failed_jobs(
+    queue_name: Optional[str] = Query(None, description="Filter by ARQ queue"),
+    limit: int = Query(100, ge=1, le=1000),
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("admin")),
+):
+    """Return dead-letter queue entries (admin only)."""
+    return await failed_jobs_db.list_failed_jobs(db, queue_name, limit)

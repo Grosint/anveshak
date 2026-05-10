@@ -10,6 +10,13 @@ resources:
   - redis.yml
   - api.yml
   - analyst.yml
+  - ollama.yml
+  - scraper.yml
+  - reporter.yml
+  - vision.yml
+  - frontend.yml
+  - ingress.yml
+  - networkpolicy.yml
 
 commonLabels:
   app.kubernetes.io/part-of: anveshak

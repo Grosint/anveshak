@@ -1,0 +1,19 @@
+# Alertmanager configuration for Anveshak
+# Sovereign deployment: webhook receiver for air-gap environments.
+# Replace webhook_url with your internal notification endpoint.
+
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: default
+  group_by: ['alertname', 'job']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: default
+    webhook_configs:
+      - url: 'http://api:8000/api/v1/system/alert-webhook'
+        send_resolved: true

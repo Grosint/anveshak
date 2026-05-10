@@ -13,6 +13,7 @@ import { TrendingKeywords } from '../components/topics/TrendingKeywords'
 import { Spinner } from '../components/ui/Spinner'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Button } from '../components/ui/Button'
+import ExportButton from '../components/ui/ExportButton'
 
 export default function ContentFeed() {
   const { topicId } = useParams<{ topicId: string }>()
@@ -111,6 +112,12 @@ export default function ContentFeed() {
               </svg>
               Manage Sources
             </Button>
+            <ExportButton
+              endpoint="/api/v1/export/content"
+              params={{ topic_id: topicId }}
+              label="Export CSV"
+              format="csv"
+            />
           </div>
         </div>
       </div>

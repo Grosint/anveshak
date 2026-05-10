@@ -5,6 +5,8 @@ Security headers applied to every response:
   X-Frame-Options: DENY
   X-XSS-Protection: 1; mode=block
   Referrer-Policy: strict-origin
+  Strict-Transport-Security: max-age=31536000; includeSubDomains (when HSTS_ENABLED)
+  Content-Security-Policy: default-src 'self'
   Cache-Control: no-store (auth routes only)
 
 Request logging: method, path, status_code, duration_ms, analyst_id (from JWT).
@@ -17,6 +19,8 @@ import time
 import structlog
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
+
+from ..settings import settings as _settings
 
 log = structlog.get_logger(__name__)
 
@@ -41,6 +45,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin"
+        response.headers["Content-Security-Policy"] = "default-src 'self'"
+
+        # HSTS — only when TLS is terminated upstream (avoid breaking HTTP-only dev)
+        if _settings.hsts_enabled:
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
 
         # Cache-Control: no-store on auth paths — auth tokens must never be cached
         if any(request.url.path.startswith(p) for p in _AUTH_PREFIXES):

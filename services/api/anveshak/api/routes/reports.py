@@ -20,12 +20,13 @@ import asyncpg
 import structlog
 from arq.connections import RedisSettings
 from arq import create_pool as arq_create_pool
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
 
-from ..auth.jwt import get_current_user
+from ..auth.rbac import require_role
 from ..db.pool import get_db
 from ..db import reports as reports_db
+from ..db import audit as audit_db
 from ..settings import settings
 
 log = structlog.get_logger(__name__)
@@ -55,8 +56,9 @@ class GenerateReportRequest(BaseModel):
 @router.post("/api/v1/reports", status_code=status.HTTP_202_ACCEPTED)
 async def create_report(
     req: GenerateReportRequest,
+    request: Request,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict:
     """Create a pending report row and enqueue the generation job.
 
@@ -95,6 +97,11 @@ async def create_report(
         topic_id=req.topic_id,
         arq_job_id=arq_job_id,
     )
+    await audit_db.log_action(
+        db, user["sub"], "report.generate", "report", report_id,
+        {"topic_id": req.topic_id, "report_type": req.report_type},
+        request.client.host if request.client else "",
+    )
     return {"report_id": report_id, "status": "queued", "arq_job_id": arq_job_id}
 
 
@@ -106,7 +113,7 @@ async def create_report(
 async def get_report(
     report_id: str,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict:
     """Return report metadata, generation status, and source warnings."""
     row = await reports_db.fetch_report(db, report_id)
@@ -129,7 +136,7 @@ async def get_report(
 async def list_topic_reports(
     topic_id: str,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ) -> list[dict]:
     """Return all reports for a topic, newest first."""
     return await reports_db.list_topic_reports(db, topic_id)
@@ -143,7 +150,7 @@ async def list_topic_reports(
 async def get_report_geojson(
     report_id: str,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict:
     """Return the GeoJSON FeatureCollection for a generated report."""
     row = await reports_db.get_report_geojson(db, report_id)

@@ -87,9 +87,9 @@ fi
 # ---------------------------------------------------------------------------
 
 log "Archiving media assets..."
-if docker volume inspect anveshak_media_store > /dev/null 2>&1; then
+if docker volume inspect anveshak_vision_media > /dev/null 2>&1; then
     docker run --rm \
-        -v anveshak_media_store:/data:ro \
+        -v anveshak_vision_media:/data:ro \
         -v "$(realpath "${BACKUP_DIR}"):/backup" \
         alpine:3.19 \
         tar czf /backup/media.tar.gz -C /data . 2>/dev/null
