@@ -6,6 +6,7 @@ import { topicsApi } from '../api/topics'
 import { reportsApi, Report, ReportType, ReportSummary, CreateReportPayload } from '../api/reports'
 import { SourceWarningsBanner } from '../components/reports/SourceWarningsBanner'
 import { ReportProgress } from '../components/reports/ReportProgress'
+import ScheduleManager from '../components/reports/ScheduleManager'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Spinner } from '../components/ui/Spinner'
@@ -15,7 +16,7 @@ import { format, formatDistanceToNow } from 'date-fns'
 // Lazy-load MapLibre so it only ships when the GIS tab opens (~700KB saved from initial bundle)
 const GeoMap = lazy(() => import('../components/map/GeoMap'))
 
-type Tab = 'report' | 'gis' | 'history'
+type Tab = 'report' | 'gis' | 'history' | 'schedules'
 
 const REPORT_TYPES: { value: ReportType; label: string; description: string }[] = [
   { value: 'intelligence_brief',  label: 'Intelligence Brief',  description: '1–3 page executive summary' },
@@ -106,9 +107,10 @@ export default function ReportBuilder() {
   }, [history, historyTypeFilter, historyFrom, historyTo])
 
   const TABS: { key: Tab; label: string }[] = [
-    { key: 'report',  label: 'Report' },
-    { key: 'gis',     label: 'GIS Map' },
-    { key: 'history', label: 'History' },
+    { key: 'report',    label: 'Report' },
+    { key: 'gis',       label: 'GIS Map' },
+    { key: 'history',   label: 'History' },
+    { key: 'schedules', label: 'Schedules' },
   ]
 
   return (
@@ -116,11 +118,11 @@ export default function ReportBuilder() {
       {/* Header */}
       <div className="px-6 pt-6 pb-4 border-b border-anveshak-border">
         <h1 className="text-xl font-semibold text-text-primary">Report Builder</h1>
-        <p className="text-sm text-text-muted mt-0.5">RAG-grounded intelligence reports via Ollama LLM</p>
+        <p className="text-sm text-text-muted mt-0.5">Generate and manage intelligence reports from collected sources</p>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-3xl space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(360px,1fr)_minmax(400px,2fr)] gap-6">
           {/* ── Generation form ─────────────────────────────────────────────── */}
           <section className="bg-anveshak-card border border-anveshak-border rounded-lg p-5 space-y-4" aria-labelledby="form-heading">
             <h2 id="form-heading" className="text-sm font-semibold text-text-primary">Generate report</h2>
@@ -202,7 +204,6 @@ export default function ReportBuilder() {
           </section>
 
           {/* ── Tabs ──────────────────────────────────────────────────────────── */}
-          {(currentReportId || selectedTopicId) && (
             <section aria-labelledby="report-output-heading">
               <h2 id="report-output-heading" className="sr-only">Report output</h2>
 
@@ -258,7 +259,9 @@ export default function ReportBuilder() {
                 {/* Report tab */}
                 {activeTab === 'report' && (
                   <div className="space-y-4">
-                    {!currentReportId ? (
+                    {!currentReportId && !selectedTopicId ? (
+                      null  /* empty state handled below the tabs */
+                    ) : !currentReportId ? (
                       <EmptyState icon="📄" title="Generate a report or select one from History" />
                     ) : (
                       <>
@@ -400,9 +403,26 @@ export default function ReportBuilder() {
                     )}
                   </div>
                 )}
+
+                {/* Schedules tab */}
+                {activeTab === 'schedules' && (
+                  <ScheduleManager topics={topics} />
+                )}
+
+                {/* Empty state when no topic selected and not on schedules */}
+                {!selectedTopicId && !currentReportId && activeTab !== 'schedules' && (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div className="w-16 h-16 rounded-full bg-anveshak-muted flex items-center justify-center mb-4">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-7 h-7 text-text-muted">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                      </svg>
+                    </div>
+                    <p className="text-sm font-medium text-text-primary mb-1">Select a topic to get started</p>
+                    <p className="text-xs text-text-muted max-w-xs">Choose a topic from the form, then generate a new report or browse existing ones from History.</p>
+                  </div>
+                )}
               </div>
             </section>
-          )}
         </div>
       </div>
     </div>

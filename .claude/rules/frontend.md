@@ -9,6 +9,10 @@ Consolidated from 6 learned instincts. These apply to the React + TypeScript ana
   Never use Tailwind `dark:` prefixes — use CSS variable swapping instead
   See: `learned/css-variable-theming.md`
 
+- Recharts `fill`/`stroke` props don't resolve CSS `var(--...)` — hardcode hex values in a
+  const object with comments noting which CSS variable each mirrors
+  See: `learned/recharts-css-variable-limitation.md`
+
 ## Auth Lifecycle
 
 - JWT expiry countdown: 1-second timer warns analysts 5 minutes before token expiry
@@ -44,3 +48,16 @@ Consolidated from 6 learned instincts. These apply to the React + TypeScript ana
   Include derived UTC ISO strings in React Query key for per-range caching
   Use prefix match for WebSocket invalidation, full key for optimistic mutations
   See: `learned/time-filter-bar-pattern.md`
+
+## Component Reuse
+
+- Embedded prop pattern: add `embedded?: boolean` (default `false`) to page components
+  that need to render inside another page (e.g. Settings tabs). When embedded, skip the
+  page-level header/h1; parent provides its own. Functional content stays identical.
+  See: `learned/embedded-prop-page-reuse.md`
+
+## Testing
+
+- jsdom renders both desktop sidebar and mobile bottom nav (no CSS media queries).
+  Use `getAllByRole` not `getByRole` for nav link assertions to handle duplicates.
+  See: `learned/jsdom-dual-nav-testing.md`

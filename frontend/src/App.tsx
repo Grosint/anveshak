@@ -9,10 +9,8 @@ import ContentFeed from './pages/ContentFeed'
 import ImageAnalysis from './pages/ImageAnalysis'
 import SignalsInbox from './pages/SignalsInbox'
 import ReportBuilder from './pages/ReportBuilder'
-import SourceManager from './pages/SourceManager'
 import AnalyticsDashboard from './pages/AnalyticsDashboard'
-import UserManagement from './pages/UserManagement'
-import ScheduledReports from './pages/ScheduledReports'
+import Settings from './pages/Settings'
 
 // ── Error boundary — catches unhandled render errors so the page never
 // goes silently blank. Shows the error message + a reload button.
@@ -88,11 +86,14 @@ export default function App() {
           <Route path="/vision" element={<ImageAnalysis />} />
           <Route path="/signals" element={<SignalsInbox />} />
           <Route path="/reports" element={<ReportBuilder />} />
-          <Route path="/sources" element={<SourceManager />} />
-          <Route path="/source-health" element={<Navigate to="/sources" replace />} />
           <Route path="/analytics" element={<AnalyticsDashboard />} />
-          <Route path="/users" element={<UserManagement />} />
-          <Route path="/schedules" element={<ScheduledReports />} />
+          <Route path="/settings/:tab" element={<Settings />} />
+          <Route path="/settings" element={<Settings />} />
+          {/* Redirects for old routes */}
+          <Route path="/sources" element={<Navigate to="/settings/sources" replace />} />
+          <Route path="/source-health" element={<Navigate to="/settings/sources" replace />} />
+          <Route path="/users" element={<Navigate to="/settings/users" replace />} />
+          <Route path="/schedules" element={<Navigate to="/reports" replace />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -5,16 +5,22 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useWS } from '../../contexts/WSContext'
 import { sourcesApi } from '../../api/sources'
 
-const navItems = [
+const primaryNav = [
   { to: '/topics',    label: 'Topics',     icon: <TargetIcon /> },
   { to: '/signals',   label: 'Signals',    icon: <ZapIcon /> },
   { to: '/vision',    label: 'Vision',     icon: <EyeIcon /> },
   { to: '/reports',   label: 'Reports',    icon: <FileIcon /> },
-  { to: '/sources',   label: 'Sources',    icon: <RadioIcon /> },
   { to: '/analytics', label: 'Analytics',  icon: <ChartIcon /> },
-  { to: '/schedules', label: 'Schedules',  icon: <ClockIcon /> },
-  { to: '/users',     label: 'Users',      icon: <UsersIcon /> },
 ]
+
+const settingsNav = { to: '/settings', label: 'Settings', icon: <GearIcon /> }
+
+function getInitials(name: string): string {
+  const clean = name.replace(/@.*/, '')
+  const parts = clean.split(/[_.\-\s]+/)
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+  return clean.slice(0, 2).toUpperCase()
+}
 
 export default function Layout() {
   const { toggle, isDark } = useTheme()
@@ -60,7 +66,7 @@ export default function Layout() {
 
         {/* Nav links */}
         <div className="flex-1 p-2 space-y-0.5 overflow-y-auto">
-          {navItems.map((item) => (
+          {primaryNav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -74,40 +80,66 @@ export default function Layout() {
             >
               <span className="w-4 h-4 shrink-0" aria-hidden="true">{item.icon}</span>
               <span className="flex-1">{item.label}</span>
-              {item.to === '/sources' && downCount > 0 && (
+            </NavLink>
+          ))}
+
+        </div>
+
+        {/* Footer: user profile + utility row */}
+        <div className="p-3 border-t border-anveshak-border space-y-2">
+          {user && (
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-anveshak-accent/20 text-anveshak-accent flex items-center justify-center text-xs font-bold shrink-0">
+                {getInitials(user.username || user.sub)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-text-primary font-medium truncate">
+                  {user.username || user.sub}
+                </p>
+                <p className="text-[10px] text-text-muted">Signed in</p>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="p-1.5 rounded hover:bg-signal-high/10 text-text-muted hover:text-signal-high transition-colors shrink-0"
+                aria-label="Sign out"
+              >
+                <span className="w-4 h-4 block"><LogOutIcon /></span>
+              </button>
+            </div>
+          )}
+          {/* Utility row: Settings + Theme toggle */}
+          <div className="flex items-center gap-1">
+            <NavLink
+              to={settingsNav.to}
+              className={({ isActive }) =>
+                `flex items-center gap-2 flex-1 px-2.5 py-1.5 rounded text-xs transition-colors ${
+                  isActive
+                    ? 'bg-anveshak-accent text-white font-medium'
+                    : 'text-text-muted hover:bg-anveshak-muted hover:text-text-primary'
+                }`
+              }
+            >
+              <span className="w-3.5 h-3.5 shrink-0" aria-hidden="true">{settingsNav.icon}</span>
+              <span>{settingsNav.label}</span>
+              {downCount > 0 && (
                 <span
-                  className="text-[10px] font-bold min-w-[20px] h-[20px] flex items-center justify-center rounded-full bg-signal-high text-white shrink-0"
+                  className="text-[9px] font-bold min-w-[16px] h-[16px] flex items-center justify-center rounded-full bg-signal-high text-white shrink-0 ml-auto"
                   aria-label={`${downCount} source${downCount > 1 ? 's' : ''} down`}
                 >
                   {downCount}
                 </span>
               )}
             </NavLink>
-          ))}
-        </div>
-
-        {/* Footer: theme toggle + logout */}
-        <div className="p-2 border-t border-anveshak-border space-y-0.5">
-          <button
-            onClick={toggle}
-            className="flex items-center gap-2 w-full px-3 py-2 rounded text-sm text-text-secondary hover:bg-anveshak-muted hover:text-text-primary transition-colors"
-            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            <span className="w-4 h-4 shrink-0" aria-hidden="true">
-              {isDark ? <SunIcon /> : <MoonIcon />}
-            </span>
-            <span>{isDark ? 'Light mode' : 'Dark mode'}</span>
-          </button>
-          {user && (
             <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 w-full px-3 py-2 rounded text-sm text-text-muted hover:text-signal-high hover:bg-signal-high/10 transition-colors"
-              aria-label="Sign out"
+              onClick={toggle}
+              className="p-1.5 rounded text-text-muted hover:bg-anveshak-muted hover:text-text-primary transition-colors shrink-0"
+              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
             >
-              <span className="w-4 h-4 shrink-0" aria-hidden="true"><LogOutIcon /></span>
-              <span className="truncate text-xs">{user.username || user.sub}</span>
+              <span className="w-3.5 h-3.5 block" aria-hidden="true">
+                {isDark ? <SunIcon /> : <MoonIcon />}
+              </span>
             </button>
-          )}
+          </div>
         </div>
       </nav>
 
@@ -116,7 +148,7 @@ export default function Layout() {
         aria-label="Mobile navigation"
         className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-anveshak-card border-t border-anveshak-border flex justify-around py-1.5"
       >
-        {navItems.map((item) => (
+        {[...primaryNav, settingsNav].map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -170,13 +202,6 @@ function FileIcon() {
     </svg>
   )
 }
-function RadioIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
-      <circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 010 8.49m-8.48-.01a6 6 0 010-8.49m11.31-2.82a10 10 0 010 14.14m-14.14 0a10 10 0 010-14.14"/>
-    </svg>
-  )
-}
 function ChartIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
@@ -184,17 +209,10 @@ function ChartIcon() {
     </svg>
   )
 }
-function ClockIcon() {
+function GearIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
-      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-    </svg>
-  )
-}
-function UsersIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
-      <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
+      <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
     </svg>
   )
 }

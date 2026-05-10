@@ -106,12 +106,12 @@ export default function ImageAnalysis() {
       <div className="px-6 pt-6 pb-4 border-b border-anveshak-border">
         <h1 className="text-xl font-semibold text-text-primary">Image Analysis</h1>
         <p className="text-sm text-text-muted mt-0.5">
-          Deepfake detection · YOLO object detection · EXIF forensics
+          Upload an image or video for deepfake detection, object detection, and metadata extraction
         </p>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-2xl space-y-6">
+        <div className="max-w-4xl space-y-6">
           {/* Drop zone */}
           <DropZone onFile={handleFile} disabled={uploading} />
 

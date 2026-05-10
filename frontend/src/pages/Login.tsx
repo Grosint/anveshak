@@ -157,8 +157,8 @@ export default function Login() {
           {/* Middle: description + features */}
           <div className="relative z-10 space-y-7">
             <p className="text-sm text-[#374151] leading-relaxed max-w-xs">
-              Sovereign, standalone intelligence analysis built for the Indian Air Force.
-              Monitor open sources, verify media, and generate immutable court-ready
+              Sovereign, standalone intelligence analysis for defence and law enforcement.
+              Monitor open sources, verify media, and generate auditable, traceable
               reports — data never leaves your deployment boundary.
             </p>
             <ul className="space-y-3.5">
@@ -173,7 +173,7 @@ export default function Login() {
           <div className="relative z-10">
             <div className="w-10 h-px mb-4" style={{ background: 'rgba(245,166,35,0.22)' }} />
             <p className="text-[11px] text-[#2d3748] tracking-wide">
-              Indian Air Force · iDEX ADITI 4.0 · PS-18
+              iDEX ADITI 4.0 · PS-18
             </p>
             <p className="text-[10px] text-[#1e2535] mt-0.5 tracking-wide">
               Anveshak v1.0.0 · Standalone Deployment

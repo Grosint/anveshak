@@ -166,8 +166,8 @@ export default function ContentFeed() {
         />
       )}
 
-      {/* Analytics panel */}
-      {showAnalytics && !searchActive && (
+      {/* Analytics panel — only show when content exists */}
+      {showAnalytics && !searchActive && items.length > 0 && (
         <div className="px-6 py-4 border-b border-anveshak-border">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <SentimentTrend topicId={topicId} />

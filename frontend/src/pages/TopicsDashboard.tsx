@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { topicsApi, Topic, CreateTopicPayload } from '../api/topics'
@@ -81,8 +81,14 @@ function TopicCard({
   )
 }
 
+type StatusFilter = 'all' | 'active' | 'paused'
+type SortBy = 'newest' | 'oldest' | 'most_content' | 'most_signals'
+
 export default function TopicsDashboard() {
   const [showModal, setShowModal] = useState(false)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [sortBy, setSortBy] = useState<SortBy>('newest')
   const qc = useQueryClient()
   const navigate = useNavigate()
 
@@ -90,6 +96,40 @@ export default function TopicsDashboard() {
     queryKey: ['topics'],
     queryFn: topicsApi.list,
   })
+
+  const activeCount = topics.filter((t) => t.status === 'active').length
+  const pausedCount = topics.filter((t) => t.status === 'paused').length
+
+  const filteredTopics = useMemo(() => {
+    let list = [...topics]
+
+    if (search) {
+      const q = search.toLowerCase()
+      list = list.filter((t) => t.name.toLowerCase().includes(q))
+    }
+
+    if (statusFilter !== 'all') {
+      list = list.filter((t) => t.status === statusFilter)
+    }
+
+    list.sort((a, b) => {
+      switch (sortBy) {
+        case 'oldest':
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        case 'most_content':
+          return (b.content_count ?? 0) - (a.content_count ?? 0)
+        case 'most_signals':
+          return (b.signal_count ?? 0) - (a.signal_count ?? 0)
+        case 'newest':
+        default:
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      }
+    })
+
+    return list
+  }, [topics, search, statusFilter, sortBy])
+
+  const isFiltered = search || statusFilter !== 'all'
 
   const createTopic = useMutation({
     mutationFn: (payload: CreateTopicPayload) => topicsApi.create(payload),
@@ -109,17 +149,85 @@ export default function TopicsDashboard() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="px-6 pt-6 pb-4 border-b border-anveshak-border flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-text-primary">Topics</h1>
-          <p className="text-sm text-text-muted mt-0.5">Active intelligence monitoring topics</p>
+      <div className="px-6 pt-6 pb-4 border-b border-anveshak-border space-y-3">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold text-text-primary">Topics</h1>
+            <p className="text-sm text-text-muted mt-0.5">
+              {isFiltered
+                ? `${filteredTopics.length} of ${topics.length} topics`
+                : `${topics.length} topics`}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search topics..."
+                className="bg-anveshak-bg border border-anveshak-border rounded px-3 py-1.5 pl-8 text-sm text-text-primary focus:border-anveshak-accent outline-none w-56"
+              />
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 absolute left-2.5 top-2 text-text-muted" aria-hidden="true">
+                <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <Button onClick={() => setShowModal(true)} aria-label="Create new topic">
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
+                <path d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" />
+              </svg>
+              New topic
+            </Button>
+          </div>
         </div>
-        <Button onClick={() => setShowModal(true)} aria-label="Create new topic">
-          <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
-            <path d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" />
-          </svg>
-          New topic
-        </Button>
+
+        {/* Filter chips + sort */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex gap-1.5" role="group" aria-label="Filter by status">
+            {([
+              { value: 'all' as StatusFilter, label: 'All', count: topics.length },
+              { value: 'active' as StatusFilter, label: 'Active', count: activeCount },
+              { value: 'paused' as StatusFilter, label: 'Paused', count: pausedCount },
+            ]).map((f) => (
+              <button
+                key={f.value}
+                onClick={() => setStatusFilter(f.value)}
+                aria-pressed={statusFilter === f.value}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  statusFilter === f.value
+                    ? 'bg-anveshak-accent text-white'
+                    : 'bg-anveshak-muted text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                {f.label}
+                <span
+                  className={`text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full ${
+                    statusFilter === f.value
+                      ? 'bg-white/20 text-white'
+                      : 'bg-anveshak-border text-text-muted'
+                  }`}
+                >
+                  {f.count}
+                </span>
+              </button>
+            ))}
+          </div>
+          <div>
+            <label htmlFor="topic-sort" className="sr-only">Sort topics</label>
+            <select
+              id="topic-sort"
+              aria-label="Sort topics"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortBy)}
+              className="bg-anveshak-bg border border-anveshak-border rounded px-2.5 py-1.5 text-xs text-text-primary focus:border-anveshak-accent outline-none"
+            >
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="most_content">Most content</option>
+              <option value="most_signals">Most signals</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       {/* List */}
@@ -133,9 +241,16 @@ export default function TopicsDashboard() {
             description="Create a topic to start monitoring open-source intelligence."
             action={<Button onClick={() => setShowModal(true)}>Create your first topic</Button>}
           />
+        ) : filteredTopics.length === 0 ? (
+          <EmptyState
+            icon="🔍"
+            title="No matching topics"
+            description="Try adjusting your search or filter."
+            action={<Button variant="secondary" onClick={() => { setSearch(''); setStatusFilter('all') }}>Clear filters</Button>}
+          />
         ) : (
-          <div className="max-w-2xl space-y-3">
-            {topics.map((topic) => (
+          <div className="max-w-4xl space-y-3">
+            {filteredTopics.map((topic) => (
               <TopicCard
                 key={topic.id}
                 topic={topic}

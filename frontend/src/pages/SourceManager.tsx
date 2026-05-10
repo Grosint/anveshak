@@ -499,7 +499,7 @@ function DetailPanel({
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-export default function SourceManager() {
+export default function SourceManager({ embedded = false }: { embedded?: boolean }) {
   const [showModal, setShowModal]     = useState(false)
   const [selectedId, setSelectedId]   = useState<string | null>(null)
   const [detailTab, setDetailTab]     = useState<DetailTab>('overview')
@@ -556,8 +556,9 @@ export default function SourceManager() {
   })
 
   return (
-    <div className="h-full flex flex-col">
+    <div className={embedded ? 'h-full flex flex-col' : 'h-full flex flex-col'}>
       {/* Header */}
+      {!embedded && (
       <div className="px-6 pt-6 pb-4 border-b border-anveshak-border space-y-3">
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -573,6 +574,20 @@ export default function SourceManager() {
         </div>
         <FilterBar active={filter} onChange={setFilter} counts={healthCounts} />
       </div>
+      )}
+      {embedded && (
+      <div className="px-4 pt-3 pb-3 border-b border-anveshak-border space-y-3">
+        <div className="flex items-center justify-between gap-4">
+          <FilterBar active={filter} onChange={setFilter} counts={healthCounts} />
+          <Button size="sm" onClick={() => setShowModal(true)} aria-label="Add new source">
+            <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
+              <path d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" />
+            </svg>
+            Add source
+          </Button>
+        </div>
+      </div>
+      )}
 
       <div className="flex-1 flex overflow-hidden">
         {/* Source list */}

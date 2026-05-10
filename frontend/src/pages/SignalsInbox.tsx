@@ -114,7 +114,7 @@ export default function SignalsInbox() {
         <div>
           <h1 className="text-xl font-semibold text-text-primary">Signals Intelligence</h1>
           <p className="text-sm text-text-muted mt-0.5">
-            Threshold-based intelligence alerts — real-time via WebSocket
+            Real-time intelligence alerts from monitored sources
           </p>
         </div>
 

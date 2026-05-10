@@ -167,7 +167,7 @@ function SortArrow({ active, dir }: { active: boolean; dir: SortDir }) {
 // Main Page
 // ---------------------------------------------------------------------------
 
-export default function UserManagement() {
+export default function UserManagement({ embedded = false }: { embedded?: boolean }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState<'all' | Role>('all')
   const [sortField, setSortField] = useState<SortField>('created_at')
@@ -240,7 +240,8 @@ export default function UserManagement() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="px-6 pt-6 pb-4 border-b border-anveshak-border">
+      <div className={embedded ? 'px-4 pt-3 pb-3 border-b border-anveshak-border' : 'px-6 pt-6 pb-4 border-b border-anveshak-border'}>
+        {!embedded && (
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-semibold text-text-primary">User Management</h1>
@@ -267,9 +268,34 @@ export default function UserManagement() {
             <Button onClick={() => setShowCreate(true)}>Create User</Button>
           </div>
         </div>
+        )}
+        {embedded && (
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+                placeholder="Search username..."
+                className="bg-anveshak-bg border border-anveshak-border rounded px-3 py-1.5 pl-8 text-sm text-text-primary focus:border-anveshak-accent outline-none w-48"
+              />
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 absolute left-2.5 top-2 text-text-muted" aria-hidden="true">
+                <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <span className="text-xs text-text-muted">
+              {totalFiltered === users.length
+                ? `${users.length} users`
+                : `${totalFiltered} of ${users.length} users`}
+            </span>
+          </div>
+          <Button size="sm" onClick={() => setShowCreate(true)}>Create User</Button>
+        </div>
+        )}
 
         {/* Role filter chips */}
-        <div className="flex gap-2 mt-3">
+        <div className={`flex gap-2 ${embedded ? 'mt-2' : 'mt-3'}`}>
           {roleChips.map((chip) => (
             <button
               key={chip.value}
