@@ -2,15 +2,120 @@
 
 ## Context
 
-Anveshak's last benchmark (v3.0, 2026-05-06) showed **43.3% recall / 90.7% precision** on synthetic fixtures (858 articles, 100 events). **These numbers are stale — measured with HDBSCAN clustering and dummy deepfake models.** Since then, clustering migrated to Leiden community detection (May 8) and vision got real HuggingFace deepfake models (May 9). **Benchmark must be re-run before starting validation.** The previous root cause ("not enough articles to form a cluster") was an HDBSCAN density problem that may no longer apply with Leiden.
+Anveshak's codebase is **frozen as of 2026-05-10**. No code changes for 10-12 days.
+Current state: Leiden community detection (threshold 0.70) is live, real HuggingFace
+deepfake models deployed (facetorch + efficientnet), RBAC + audit trail enforced,
+UX overhaul complete (ScheduleManager, Analytics Dashboard, Settings page).
 
-We've never tested with **live, continuous, real-world data**. This 7-10 day production validation will:
-1. Monitor real defence/security topics with real sources
-2. Measure actual recall/precision against ground-truth events
-3. Identify pipeline failures, silent drops, and robustness issues
-4. Generate daily reports for evening review sessions
+We've never tested with **live, continuous, real-world data**. This 7-10 day production
+validation will:
+1. Deploy the frozen codebase on an AWS VM
+2. Monitor real defence/security topics with real sources
+3. Measure actual recall/precision against ground-truth events
+4. Identify pipeline failures, silent drops, and robustness issues
+5. Generate daily reports for morning review sessions
 
-**Key constraint:** No manual data insertion. Everything flows through the real pipeline: scrape → NLP → clustering → signals → reports.
+**Key constraint:** No manual data insertion. Everything flows through the real pipeline:
+scrape → NLP → clustering → signals → reports. No code changes during validation —
+issues are logged and fixed after the trial.
+
+---
+
+## VM Deployment (AWS g4dn.2xlarge)
+
+### Instance Spec
+
+| Spec | Value |
+|------|-------|
+| Instance | g4dn.2xlarge |
+| GPU | NVIDIA T4 16GB VRAM |
+| CPU | 8 vCPU |
+| RAM | 32 GB |
+| Storage | 200 GB EBS gp3 |
+| OS | Ubuntu 22.04 LTS (Deep Learning AMI — Docker + NVIDIA pre-installed) |
+| Cost | ~$0.75/hr × 240h = ~$180 (on-demand) |
+
+### Why GPU
+
+- Ollama report gen: ~30s/report (vs ~3 min on CPU)
+- Vision deepfake/YOLO/CLIP: seconds per image (vs minutes on CPU)
+- NLLB translation: ~15s/article (vs ~4 min on CPU)
+- 4 daily scheduled reports + ad-hoc + 100-200 articles/day with non-English content
+
+### Setup Steps (one-time, ~20 min)
+
+```bash
+# 1. Launch g4dn.2xlarge with 200GB gp3 EBS
+#    Security group: 22 (your IP), 3000 (analyst network), 8000 (API)
+#    Use Deep Learning AMI (Docker + NVIDIA Container Toolkit pre-installed)
+
+# 2. SSH in, verify GPU and Docker
+ssh -i key.pem ubuntu@<VM_IP>
+nvidia-smi                    # T4 visible
+docker compose version        # v2+ required
+
+# 3. Clone and configure
+git clone <repo-url> anveshak && cd anveshak
+cp .env.example .env
+
+# 4. Edit .env — set these mandatory values:
+#    POSTGRES_PASSWORD=<openssl rand -hex 16>
+#    API_SECRET_KEY=<openssl rand -hex 32>
+#    GRAFANA_ADMIN_PASSWORD=<secure-password>
+#    VISION_DEVICE=cuda
+#    OLLAMA_KEEP_ALIVE=-1              (GPU keeps model resident)
+#    TELEGRAM_API_ID=<your-id>
+#    TELEGRAM_API_HASH=<your-hash>
+#    TELEGRAM_SESSION_STRING=<your-session>
+#    TELEGRAM_ADAPTER_ENABLED=true
+#    X_BEARER_TOKEN=<your-token>
+#    X_ADAPTER_ENABLED=true
+#    X_MONTHLY_READ_CAP=10000
+
+# 5. Full automated setup (~15 min)
+make setup    # builds images, starts containers, runs migrations, pulls qwen2:7b
+
+# 6. Verify
+make health                   # all 23 containers healthy
+make ps                       # status table
+nvidia-smi                    # GPU utilisation visible
+
+# 7. Run setup script to create topics and sources
+python scripts/setup_production_topics.py
+```
+
+### Security
+
+- SSH key-based auth only (no password login)
+- Security group: port 22 (your IP only), 3000+8000 (analyst network)
+- Grafana (3001) and Prometheus (9090) restricted to your IP only
+- Sovereign: Ollama on localhost inside Docker network, no outbound LLM calls
+- All secrets in `.env`, never committed to git
+
+### Daily Operations (on VM)
+
+```bash
+make ps                            # Container status
+make health                        # All-service health check
+python scripts/pipeline_health.py  # Full pipeline diagnostics
+make logs-<service>                # Tail specific service logs
+
+# Backup (run before any changes)
+make backup BACKUP_DIR=./backups/$(date +%Y%m%d)
+
+# Monitor disk
+df -h /var/lib/docker
+docker system df
+```
+
+### If Something Breaks
+
+```bash
+make restart                       # Restart all containers
+docker compose -p anveshak logs --tail=200 <service>
+# Code is FROZEN — log the issue, don't fix on VM
+# Track in docs/production_validation_log.md
+```
 
 ---
 
@@ -131,12 +236,12 @@ The following compose config issues were identified and **fixed**:
 2. **Orphaned Instagram vars** — `INSTAGRAM_USERNAME` and `INSTAGRAM_PASSWORD` were in compose
    but no Instagram adapter exists. Removed.
 
-3. **Dead HDBSCAN vars** — `HDBSCAN_MIN_CLUSTER_SIZE` and `HDBSCAN_MIN_SAMPLES` were in
-   analyst-scheduler and analyst-worker but `settings.py` now uses Leiden params.
-   Replaced with `CLUSTERING_SIMILARITY_THRESHOLD` and `CLUSTERING_MIN_CLUSTER_SIZE`.
+3. **Dead HDBSCAN vars** — Replaced with `CLUSTERING_SIMILARITY_THRESHOLD` and
+   `CLUSTERING_MIN_CLUSTER_SIZE` (Leiden community detection).
 
-4. **Env var pre-flight check** — `make up` now runs `scripts/check_env.sh` which parses
-   compose files for required vars (no default) and blocks startup if any are missing from `.env`.
+4. **Env var pre-flight check** — `make up` runs `scripts/check_env.sh` which parses
+   compose files for required vars and blocks startup if any are missing from `.env`.
+   Additional `scripts/check_env_sync.sh` validates bidirectional sync.
 
 ---
 
@@ -156,7 +261,7 @@ Currently, when a signal does NOT fire, there's no easy way to know why. Was it:
 Create `scripts/pipeline_health.py` that runs daily (or on-demand) and outputs:
 
 ```
-=== PIPELINE HEALTH REPORT (2026-05-08) ===
+=== PIPELINE HEALTH REPORT (2026-05-12) ===
 
 TOPIC: India-China LAC Military Posturing
   Content scraped (24h):     47 items
@@ -172,7 +277,18 @@ TOPIC: India-China LAC Military Posturing
   Unassigned items:           9 (not in any cluster)
   Signals fired (24h):       2
   Signals deduped:           0
-  Report generated:          Yes (07:30 PM IST)
+  Report generated:          Yes (08:30 AM IST)
+
+DEAD LETTER QUEUE:
+  analyst: 0 failed jobs
+  vision:  1 failed job (deepfake_analyse — OOM on 4K image)
+  reporter: 0 failed jobs
+
+SOURCE HEALTH:
+  healthy: 18    degraded: 2    down: 1
+
+GPU UTILIZATION:
+  T4: 34% memory, 22% compute
 
 PIPELINE BOTTLENECK: 9 unassigned items → may need lower cluster_assign_threshold
 ```
@@ -190,6 +306,9 @@ Key diagnostics:
 10. **Deepfake score distribution**: Count of scores > 0.5 (suspicious), > 0.8 (high risk)
 11. **YOLO detections**: Object categories detected, count per category
 12. **CLIP classifications**: Top labels assigned, confidence distribution
+13. **Dead Letter Queue**: Failed jobs by queue (analyst/vision/reporter)
+14. **Source health**: Circuit breaker status (healthy/degraded/down counts)
+15. **GPU utilization**: T4 memory and compute usage (nvidia-smi)
 
 **Note:** `scripts/validate_vision_full.py` (650 lines) is available for standalone vision validation
 with 6 test categories (real/fake face, real/fake no-face, real/fake video) + CLIP classification.
@@ -200,18 +319,23 @@ with 6 test categories (real/fake face, real/fake no-face, real/fake video) + CL
 
 Create `scripts/setup_production_topics.py`:
 
-1. Delete old test topics (E2E Validation, existing seed topics that overlap)
-2. Create 4 new topics via API
-3. Create all sources via API (with health probing)
-4. Link sources to topics via API
-5. Verify everything is wired: `GET /topics/{id}/sources` for each topic
-6. Print summary
+1. **Authenticate** via `POST /api/v1/auth/login` → JWT token (admin role required)
+2. Delete old test topics (E2E Validation, existing seed topics that overlap)
+3. Create 4 new topics via API
+4. Create all sources via API (with health probing)
+5. Link sources to topics via API
+6. Verify everything is wired: `GET /topics/{id}/sources` for each topic
+7. Print summary
 
 **Why a Python script using the API (not raw SQL)?**
 - Health probing runs on source creation (validates RSS feeds work)
 - `backfill_topic_job` auto-enqueues on topic creation
 - Labels auto-assigned
+- RBAC enforced — all mutations logged in `audit_trail` table
 - Exercises the same codepath as production
+
+**Note:** Topics and sources can also be managed via the frontend UI
+(TopicsDashboard + SourceManager pages) at `http://<VM_IP>:3000`.
 
 ---
 
@@ -222,8 +346,15 @@ Create `scripts/setup_production_topics.py`:
 | Time (IST) | Action |
 |-------------|--------|
 | 08:30 AM | Scheduled reports auto-generate (cron: `0 3 * * *` UTC = 8:30 AM IST) |
-| 09:00 AM | Run `python scripts/pipeline_health.py` for diagnostics |
+| 09:00 AM | SSH to VM → `python scripts/pipeline_health.py` for diagnostics |
+| 09:00 AM | Browse `http://<VM_IP>:3000` — check Analytics Dashboard, Signals Inbox |
 | Evening  | Review: read reports, check diagnostics, discuss issues |
+
+**Remote access:**
+- Frontend: `http://<VM_IP>:3000` (analyst workbench — reports, signals, analytics charts)
+- Grafana: `http://<VM_IP>:3001` (7 pre-built dashboards + Loki log aggregation)
+- SSH: for `pipeline_health.py`, logs, debugging
+- Scheduled reports manageable via ScheduleManager UI component (no SSH needed)
 
 **What to track daily:**
 - Total content items scraped (per topic)
@@ -234,6 +365,8 @@ Create `scripts/setup_production_topics.py`:
 - Report quality: are LLM-generated reports coherent and sourced?
 - Vision analysis: deepfake detections, suspicious media flagged (score > 0.5)
 - Media pipeline: download success rate, vision job backlog, YOLO/CLIP detections
+- DLQ accumulation: failed jobs that need investigation
+- Source health: any sources circuit-broken (degraded/down)
 
 **Ground truth tracking:**
 Maintain a simple log (markdown file or spreadsheet) of real-world events we know happened, then check if Anveshak detected them.
@@ -248,6 +381,7 @@ After 7-10 days:
 3. Calculate real-world recall/precision/F1
 4. Identify systematic failure patterns
 5. Create actionable improvement plan
+6. Terminate VM (or snapshot EBS for future reference)
 
 ---
 
@@ -255,9 +389,10 @@ After 7-10 days:
 
 | # | Deliverable | Type |
 |---|-------------|------|
+| 0 | VM running on g4dn.2xlarge | AWS deployment |
 | 1 | `scripts/setup_production_topics.py` | New file — creates topics, sources, links |
 | 2 | `scripts/pipeline_health.py` | New file — daily diagnostics |
-| 3 | Topic/source data in DB | Via API calls |
+| 3 | Topic/source data in DB | Via API calls (setup script) |
 | 4 | Daily reports (auto-generated) | Via scheduled_report_cron |
 | 5 | Ground truth log template | `docs/production_validation_log.md` |
 
@@ -269,12 +404,15 @@ After 7-10 days:
 |------|-------|------------|
 | RSS feeds return 403/rate-limit | MEDIUM | Health probing on creation; monitor source_health |
 | Not enough content for clustering | HIGH | Use 10+ sources per topic, focus on high-volume RSS |
-| Analyst OOM with translation enabled | MEDIUM | Monitor memory; NLLB only for non-English content |
-| Ollama cold start fails report gen | LOW | Model already loaded (qwen2:7b), 18h uptime |
+| Analyst OOM with translation enabled | MEDIUM | 32GB VM; NLLB only for non-English content |
+| Ollama fails report gen | VERY LOW | GPU + OLLAMA_KEEP_ALIVE=-1, model stays resident |
 | Web scraping blocked (CloudFlare) | MEDIUM | Prefer RSS over web; web sources as supplement |
 | Telegram channels may not exist | MEDIUM | Verify channels before adding; use known public channels |
 | X API spend — pay-per-read | MEDIUM | X_MONTHLY_READ_CAP enforced; monitor Redis key |
 | Clustering hangs on large corpus | LOW | 5-min cycle; monitor via diagnostics script |
+| VM disk fills up (media downloads) | MEDIUM | 200GB EBS; monitor with `df -h` / Grafana node exporter |
+| DLQ accumulation | LOW | Monitor via pipeline_health.py; investigate daily |
+| Setup script RBAC auth | LOW | Admin credentials set in .env; script authenticates first |
 
 ---
 
@@ -282,7 +420,10 @@ After 7-10 days:
 
 1. **Replace** existing 3 topics entirely with 4 new production topics
 2. **Reddit:** Not available — skip. **Telegram:** Session available. **X/Twitter:** Credentials available.
-3. **Signal threshold:** Set to 2. Clustering uses Leiden community detection with `clustering_similarity_threshold=0.75`. Can raise to 3 later if too noisy.
+3. **Signal threshold:** Set to 2. Clustering uses Leiden community detection with `clustering_similarity_threshold=0.70`. Can raise to 3 later if too noisy.
 4. **Report time:** 8:30 AM IST daily (`0 3 * * *` UTC)
 5. **Compose config fixed** — see Pre-requisite section above
-6. **Benchmark must be re-run** with Leiden clustering + real vision models before starting validation
+6. **Deployment:** Docker Compose on AWS g4dn.2xlarge (K3s manifests exist but not used for this validation)
+7. **Content retention:** Disabled during validation (`CONTENT_RETENTION_DAYS=0`) — keep all data for analysis
+8. **RBAC roles:** Admin creates topics/sources via setup script; analyst role for daily review
+9. **Code freeze:** No changes during 10-12 day validation — issues logged, fixed after trial
