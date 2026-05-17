@@ -120,6 +120,46 @@ async def analyse_image(
 
 
 # ---------------------------------------------------------------------------
+# GET /api/v1/vision/jobs/recent
+# ---------------------------------------------------------------------------
+
+@router.get("/jobs/recent")
+async def list_recent_vision_jobs(
+    limit: int = Query(10, ge=1, le=50),
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+):
+    """Return the last N completed vision analysis jobs for history display."""
+    rows = await db.fetch(
+        """SELECT id, status, result, created_at
+           FROM analysis_jobs
+           WHERE job_type = 'vision_analysis' AND status = 'completed'
+           ORDER BY created_at DESC
+           LIMIT $1""",
+        limit,
+    )
+    jobs = []
+    for r in rows:
+        result = r["result"] or {}
+        if isinstance(result, str):
+            import json as _json
+            try:
+                result = _json.loads(result)
+            except Exception:
+                result = {}
+        yolo = result.get("yolo_detections") or []
+        jobs.append({
+            "job_id": r["id"],
+            "deepfake_score": result.get("deepfake_score"),
+            "yolo_count": len(yolo) if isinstance(yolo, list) else 0,
+            "clip_top": max(result.get("clip_labels", {}).items(), key=lambda x: x[1], default=("", 0))[0] if result.get("clip_labels") else None,
+            "status": r["status"],
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+        })
+    return jobs
+
+
+# ---------------------------------------------------------------------------
 # GET /api/v1/vision/jobs/{job_id}
 # ---------------------------------------------------------------------------
 

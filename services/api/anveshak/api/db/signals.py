@@ -97,6 +97,7 @@ SQL_SIGNAL_CONNECTIONS = """
         s.id AS signal_id,
         s.signal_type,
         s.cluster_id,
+        s.topic_id,
         nc.label AS cluster_label,
         nc.executive_summary,
         nc.independent_source_count,
@@ -112,6 +113,33 @@ SQL_SIGNAL_CONNECTIONS = """
     FROM signals s
     LEFT JOIN narrative_clusters nc ON nc.id = s.cluster_id
     LEFT JOIN content_items ci ON ci.narrative_cluster_id = s.cluster_id
+        AND COALESCE(ci.content_quality, 'good') != 'low_quality'
+    LEFT JOIN sources src ON src.id = ci.source_id
+    WHERE s.id = $1
+    ORDER BY ci.captured_at DESC
+    LIMIT 30
+"""
+
+# Fallback: when signal has no cluster_id, find content items by topic_id
+SQL_SIGNAL_CONNECTIONS_BY_TOPIC = """
+    SELECT
+        s.id AS signal_id,
+        s.signal_type,
+        s.cluster_id,
+        s.topic_id,
+        t.name AS topic_name,
+        ci.id AS content_item_id,
+        ci.title AS content_title,
+        LEFT(ci.clean_text, 150) AS content_excerpt,
+        ci.url AS content_url,
+        ci.captured_at AS content_captured_at,
+        src.id AS source_id,
+        src.url_or_handle AS source_name,
+        src.platform AS source_platform,
+        src.credibility_score AS source_credibility
+    FROM signals s
+    JOIN topics t ON t.id = s.topic_id
+    LEFT JOIN content_items ci ON ci.topic_id = s.topic_id
         AND COALESCE(ci.content_quality, 'good') != 'low_quality'
     LEFT JOIN sources src ON src.id = ci.source_id
     WHERE s.id = $1
@@ -223,11 +251,27 @@ async def get_signal_connections(
     if not rows:
         return {"nodes": [], "edges": []}
 
+    first = rows[0]
+    has_cluster = bool(first["cluster_id"])
+
+    # If no cluster_id, fall back to topic-based content lookup
+    if not has_cluster:
+        rows = await conn.fetch(SQL_SIGNAL_CONNECTIONS_BY_TOPIC, signal_id)
+        if not rows:
+            return {"nodes": [], "edges": []}
+        first = rows[0]
+        return _build_topic_graph(rows, first)
+
+    return _build_cluster_graph(rows, first, conn, signal_id)
+
+
+async def _build_cluster_graph(
+    rows: list, first: dict, conn: asyncpg.Connection, signal_id: str
+) -> dict[str, Any]:
+    """Build graph from cluster-linked signal (original path)."""
     nodes: dict[str, dict] = {}
     edges: list[dict] = []
 
-    # Signal node
-    first = rows[0]
     signal_node_id = f"signal:{first['signal_id']}"
     nodes[signal_node_id] = {
         "id": signal_node_id,
@@ -236,53 +280,49 @@ async def get_signal_connections(
         "data": {"signal_type": first["signal_type"]},
     }
 
-    # Cluster node
-    if first["cluster_id"]:
-        cluster_node_id = f"cluster:{first['cluster_id']}"
-        nodes[cluster_node_id] = {
-            "id": cluster_node_id,
-            "type": "cluster",
-            "label": first["cluster_label"] or "Cluster",
-            "data": {
-                "summary": first["executive_summary"],
-                "isc": first["independent_source_count"],
-            },
-        }
-        edges.append({"source": signal_node_id, "target": cluster_node_id, "type": "triggers"})
+    cluster_node_id = f"cluster:{first['cluster_id']}"
+    nodes[cluster_node_id] = {
+        "id": cluster_node_id,
+        "type": "cluster",
+        "label": first["cluster_label"] or "Cluster",
+        "data": {
+            "summary": first["executive_summary"],
+            "isc": first["independent_source_count"],
+        },
+    }
+    edges.append({"source": signal_node_id, "target": cluster_node_id, "type": "triggers"})
 
-        # Content item + source nodes
-        for r in rows:
-            if not r["content_item_id"]:
-                continue
+    for r in rows:
+        if not r["content_item_id"]:
+            continue
 
-            ci_id = f"content:{r['content_item_id']}"
-            if ci_id not in nodes:
-                nodes[ci_id] = {
-                    "id": ci_id,
-                    "type": "content",
-                    "label": r["content_title"] or r["content_excerpt"] or "Content",
+        ci_id = f"content:{r['content_item_id']}"
+        if ci_id not in nodes:
+            nodes[ci_id] = {
+                "id": ci_id,
+                "type": "content",
+                "label": r["content_title"] or r["content_excerpt"] or "Content",
+                "data": {
+                    "url": r["content_url"],
+                    "captured_at": r["content_captured_at"].isoformat() if r["content_captured_at"] else None,
+                },
+            }
+            edges.append({"source": cluster_node_id, "target": ci_id, "type": "contains"})
+
+        if r["source_id"]:
+            src_id = f"source:{r['source_id']}"
+            if src_id not in nodes:
+                nodes[src_id] = {
+                    "id": src_id,
+                    "type": "source",
+                    "label": r["source_name"] or "Source",
                     "data": {
-                        "url": r["content_url"],
-                        "captured_at": r["content_captured_at"].isoformat() if r["content_captured_at"] else None,
+                        "platform": r["source_platform"],
+                        "credibility": float(r["source_credibility"]) if r["source_credibility"] else None,
                     },
                 }
-                edges.append({"source": cluster_node_id, "target": ci_id, "type": "contains"})
-
-            if r["source_id"]:
-                src_id = f"source:{r['source_id']}"
-                if src_id not in nodes:
-                    nodes[src_id] = {
-                        "id": src_id,
-                        "type": "source",
-                        "label": r["source_name"] or "Source",
-                        "data": {
-                            "platform": r["source_platform"],
-                            "credibility": float(r["source_credibility"]) if r["source_credibility"] else None,
-                        },
-                    }
-                edge_key = f"{ci_id}->{src_id}"
-                if not any(e["source"] == ci_id and e["target"] == src_id for e in edges):
-                    edges.append({"source": ci_id, "target": src_id, "type": "from_source"})
+            if not any(e["source"] == ci_id and e["target"] == src_id for e in edges):
+                edges.append({"source": ci_id, "target": src_id, "type": "from_source"})
 
     # Cross-topic convergence links
     cross_rows = await conn.fetch(SQL_SIGNAL_CROSS_TOPIC, signal_id)
@@ -293,11 +333,67 @@ async def get_signal_connections(
                 "id": cross_id,
                 "type": "cross_signal",
                 "label": cr["related_cluster_label"] or cr["related_topic_name"],
-                "data": {
-                    "topic_name": cr["related_topic_name"],
-                },
+                "data": {"topic_name": cr["related_topic_name"]},
             }
         edges.append({"source": signal_node_id, "target": cross_id, "type": "converges_with"})
+
+    return {"nodes": list(nodes.values()), "edges": edges}
+
+
+def _build_topic_graph(rows: list, first: dict) -> dict[str, Any]:
+    """Build graph from topic-linked signal (fallback for NULL cluster_id)."""
+    nodes: dict[str, dict] = {}
+    edges: list[dict] = []
+
+    signal_node_id = f"signal:{first['signal_id']}"
+    nodes[signal_node_id] = {
+        "id": signal_node_id,
+        "type": "signal",
+        "label": "Signal",
+        "data": {"signal_type": first["signal_type"]},
+    }
+
+    # Topic node (replaces cluster node visually)
+    topic_node_id = f"cluster:{first['topic_id']}"
+    nodes[topic_node_id] = {
+        "id": topic_node_id,
+        "type": "cluster",
+        "label": first.get("topic_name") or "Topic",
+        "data": {"summary": None, "isc": None},
+    }
+    edges.append({"source": signal_node_id, "target": topic_node_id, "type": "triggers"})
+
+    for r in rows:
+        if not r["content_item_id"]:
+            continue
+
+        ci_id = f"content:{r['content_item_id']}"
+        if ci_id not in nodes:
+            nodes[ci_id] = {
+                "id": ci_id,
+                "type": "content",
+                "label": r["content_title"] or r["content_excerpt"] or "Content",
+                "data": {
+                    "url": r["content_url"],
+                    "captured_at": r["content_captured_at"].isoformat() if r["content_captured_at"] else None,
+                },
+            }
+            edges.append({"source": topic_node_id, "target": ci_id, "type": "contains"})
+
+        if r["source_id"]:
+            src_id = f"source:{r['source_id']}"
+            if src_id not in nodes:
+                nodes[src_id] = {
+                    "id": src_id,
+                    "type": "source",
+                    "label": r["source_name"] or "Source",
+                    "data": {
+                        "platform": r["source_platform"],
+                        "credibility": float(r["source_credibility"]) if r["source_credibility"] else None,
+                    },
+                }
+            if not any(e["source"] == ci_id and e["target"] == src_id for e in edges):
+                edges.append({"source": ci_id, "target": src_id, "type": "from_source"})
 
     return {"nodes": list(nodes.values()), "edges": edges}
 

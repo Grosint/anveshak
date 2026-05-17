@@ -1,0 +1,52 @@
+[
+  {
+    "id": "ap-octo-content-001",
+    "source_key": "telegram_coast_te",
+    "raw_text": "\u0c2e\u0c1a\u0c4d\u0c1a\u0c3f\u0c32\u0c40\u0c2a\u0c1f\u0c4d\u0c28\u0c02 \u0c2a\u0c4b\u0c30\u0c4d\u0c1f\u0c4d \u0c26\u0c17\u0c4d\u0c17\u0c30 \u0c1a\u0c47\u0c2a\u0c32 \u0c15\u0c3e\u0c30\u0c4d\u0c17\u0c4b \u0c35\u0c1a\u0c4d\u0c1a\u0c3f\u0c02\u0c26\u0c3f. \u0c30\u0c47\u0c2a\u0c41 \u0c30\u0c3e\u0c24\u0c4d\u0c30\u0c3f 2 \u0c17\u0c02\u0c1f\u0c32\u0c15\u0c41 \u0c24\u0c40\u0c38\u0c41\u0c15\u0c41\u0c28\u0c3f. Crypto: 0xAB12CD34EF56. \u0c15\u0c3e\u0c15\u0c3f\u0c28\u0c3e\u0c21 \u0c2e\u0c30\u0c3f\u0c2f\u0c41 \u0c28\u0c3f\u0c1c\u0c3e\u0c2e\u0c2a\u0c1f\u0c4d\u0c28\u0c02 \u0c30\u0c42\u0c1f\u0c4d. @fishcargo_ap \u0c32\u0c4b \u0c38\u0c02\u0c2a\u0c4d\u0c30\u0c26\u0c3f\u0c02\u0c1a\u0c02\u0c21\u0c3f.",
+    "clean_text": "\u0c2e\u0c1a\u0c4d\u0c1a\u0c3f\u0c32\u0c40\u0c2a\u0c1f\u0c4d\u0c28\u0c02 \u0c2a\u0c4b\u0c30\u0c4d\u0c1f\u0c4d \u0c26\u0c17\u0c4d\u0c17\u0c30 \u0c1a\u0c47\u0c2a\u0c32 \u0c15\u0c3e\u0c30\u0c4d\u0c17\u0c4b. \u0c30\u0c47\u0c2a\u0c41 \u0c30\u0c3e\u0c24\u0c4d\u0c30\u0c3f 2 \u0c17\u0c02\u0c1f\u0c32\u0c15\u0c41 \u0c24\u0c40\u0c38\u0c41\u0c15\u0c41\u0c28\u0c3f. Crypto: 0xAB12CD34EF56. \u0c15\u0c3e\u0c15\u0c3f\u0c28\u0c3e\u0c21 \u0c2e\u0c30\u0c3f\u0c2f\u0c41 \u0c28\u0c3f\u0c1c\u0c3e\u0c2e\u0c2a\u0c1f\u0c4d\u0c28\u0c02 \u0c30\u0c42\u0c1f\u0c4d. @fishcargo_ap \u0c38\u0c02\u0c2a\u0c4d\u0c30\u0c26\u0c3f\u0c02\u0c1a\u0c02\u0c21\u0c3f.",
+    "language": "te",
+    "url": "https://t.me/fishcargo_ap/101",
+    "platform": "telegram",
+    "labels": {"classification": "SECRET", "domain": "osint", "owner_org": "anveshak", "synthetic": true, "source_origin": "demo_fixture"}
+  },
+  {
+    "id": "ap-octo-content-002",
+    "source_key": "telegram_coast_ta",
+    "raw_text": "Machilipatnam harbour la fish cargo varuthu. Nizampatnam route safe. Crypto payment: 0xAB12CD34EF56. Night 2am pickup. Kakinada alternate route if coast guard active. Contact @fishcargo_ap. Visakhapatnam harbour too risky now — navy exercises ongoing.",
+    "clean_text": "Machilipatnam harbour fish cargo coming. Nizampatnam route safe. Crypto payment: 0xAB12CD34EF56. Night 2am pickup. Kakinada alternate route if coast guard active. Contact @fishcargo_ap. Visakhapatnam harbour too risky — navy exercises ongoing.",
+    "language": "en",
+    "url": "https://t.me/fishcargo_tamil/202",
+    "platform": "telegram",
+    "labels": {"classification": "SECRET", "domain": "osint", "owner_org": "anveshak", "synthetic": true, "source_origin": "demo_fixture"}
+  },
+  {
+    "id": "ap-octo-content-003",
+    "source_key": "news_coast_1",
+    "raw_text": "Visakhapatnam: Indian Coast Guard intercepted a suspicious fishing vessel off the AP coast near Kakinada. The vessel, registered in a neighbouring state, was found with communication equipment not typical of fishing boats. Coast Guard officials said the vessel was operating outside designated fishing zones. Investigation is ongoing. The 974 km AP coastline remains a security concern with harbours at Visakhapatnam, Kakinada, Machilipatnam, and Nizampatnam.",
+    "clean_text": "Indian Coast Guard intercepted suspicious fishing vessel off AP coast near Kakinada. Vessel registered in neighbouring state found with communication equipment not typical of fishing boats. Operating outside designated fishing zones. Investigation ongoing. 974 km AP coastline remains security concern with harbours at Visakhapatnam, Kakinada, Machilipatnam, and Nizampatnam.",
+    "language": "en",
+    "url": "https://www.thehindu.com/news/national/andhra-pradesh/coast-guard-intercept-2026",
+    "platform": "web",
+    "labels": {"classification": "SECRET", "domain": "osint", "owner_org": "anveshak", "synthetic": true, "source_origin": "demo_fixture"}
+  },
+  {
+    "id": "ap-octo-content-004",
+    "source_key": "news_coast_2",
+    "raw_text": "New Delhi: The National Maritime Domain Awareness Centre has flagged increased unauthorized vessel movements along the Andhra Pradesh coastline. Intelligence agencies are monitoring communications intercepts suggesting use of fishing boats for smuggling operations. Specific concern has been raised about the Machilipatnam-Nizampatnam stretch, which has limited Coast Guard patrol coverage. The handle @fishcargo_ap has appeared in multiple intercepts.",
+    "clean_text": "National Maritime Domain Awareness Centre flagged increased unauthorized vessel movements along AP coastline. Intelligence agencies monitoring communications intercepts suggesting fishing boats used for smuggling. Specific concern about Machilipatnam-Nizampatnam stretch with limited Coast Guard patrol coverage. Handle @fishcargo_ap appeared in multiple intercepts.",
+    "language": "en",
+    "url": "https://www.ndtv.com/india-news/maritime-ap-coast-alert-2026",
+    "platform": "web",
+    "labels": {"classification": "SECRET", "domain": "osint", "owner_org": "anveshak", "synthetic": true, "source_origin": "demo_fixture"}
+  },
+  {
+    "id": "ap-octo-content-005",
+    "source_key": "news_coast_3",
+    "raw_text": "Machilipatnam: Fishermen's union has raised alarm about unregistered boats operating near the port at night. Union president said these boats do not carry AIS transponders and avoid the harbour master's office. Locals report seeing cargo transfers at sea approximately 10 nautical miles offshore. AP Police OCTOPUS unit has been alerted. Crypto wallet analysis by financial intelligence shows 0xAB12CD34EF56 receiving payments from known smuggling networks.",
+    "clean_text": "Fishermen's union alarm about unregistered boats operating near Machilipatnam port at night. Boats do not carry AIS transponders and avoid harbour master's office. Locals report cargo transfers at sea approximately 10 nautical miles offshore. AP Police OCTOPUS unit alerted. Crypto wallet 0xAB12CD34EF56 receiving payments from known smuggling networks.",
+    "language": "en",
+    "url": "https://www.deccanchronicle.com/nation/current-affairs/machilipatnam-smuggling-2026",
+    "platform": "web",
+    "labels": {"classification": "SECRET", "domain": "osint", "owner_org": "anveshak", "synthetic": true, "source_origin": "demo_fixture"}
+  }
+]

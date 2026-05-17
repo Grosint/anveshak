@@ -22,10 +22,30 @@ export interface VectorHealth {
   labeled_cluster_count: number
 }
 
+export interface AuditTrailEntry {
+  id: string
+  user_id: string
+  action: string
+  resource_type: string
+  resource_id: string
+  details: Record<string, unknown>
+  ip_address: string
+  created_at: string
+}
+
+export interface AuditTrailParams {
+  resource_type?: string
+  resource_id?: string
+  limit?: number
+}
+
 export const systemApi = {
   pipelineHealth: () =>
     api.get<PipelineHealth>('/api/v1/system/pipeline-health').then((r) => r.data),
 
   vectorHealth: () =>
     api.get<VectorHealth>('/api/v1/system/vector-health').then((r) => r.data),
+
+  getAuditTrail: (params?: AuditTrailParams) =>
+    api.get<AuditTrailEntry[]>('/api/v1/system/audit-trail', { params }).then((r) => r.data),
 }

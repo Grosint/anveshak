@@ -1,18 +1,21 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import SourceManager from './SourceManager'
 import UserManagement from './UserManagement'
+import AuditTrailPage from '../components/audit/AuditTrailPage'
 
-type SettingsTab = 'sources' | 'users'
+type SettingsTab = 'sources' | 'users' | 'audit'
 
 const TABS: { key: SettingsTab; label: string }[] = [
   { key: 'sources', label: 'Sources' },
   { key: 'users',   label: 'Users' },
+  { key: 'audit',   label: 'Audit Trail' },
 ]
 
 export default function Settings() {
   const { tab } = useParams<{ tab: string }>()
   const navigate = useNavigate()
-  const activeTab: SettingsTab = tab === 'users' ? 'users' : 'sources'
+  const activeTab: SettingsTab =
+    tab === 'users' ? 'users' : tab === 'audit' ? 'audit' : 'sources'
 
   return (
     <div className="h-full flex flex-col">
@@ -45,6 +48,7 @@ export default function Settings() {
       <div className="flex-1 overflow-hidden">
         {activeTab === 'sources' && <SourceManager embedded />}
         {activeTab === 'users' && <UserManagement embedded />}
+        {activeTab === 'audit' && <AuditTrailPage embedded />}
       </div>
     </div>
   )

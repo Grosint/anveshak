@@ -57,18 +57,26 @@ const CY_STYLE: any[] = [
       color: '#93c5fd',
     },
   },
-  // ── Content node (circle, slate) ──
+  // ── Content node (circle, slate) — label hidden by default, shown on hover/select ──
   {
     selector: 'node[nodeType="content"]',
     style: {
       'background-color': '#334155',
       'border-color': '#475569',
       shape: 'ellipse',
-      width: 28,
-      height: 28,
-      'font-size': 9,
+      width: 24,
+      height: 24,
+      'font-size': 8,
       color: '#94a3b8',
-      'text-max-width': '90',
+      'text-max-width': '100',
+      'text-opacity': 0,
+    },
+  },
+  // Show content labels on highlight
+  {
+    selector: 'node[nodeType="content"].highlighted-node, node[nodeType="content"]:active',
+    style: {
+      'text-opacity': 1,
     },
   },
   // ── Source node (rounded square, green) ──
@@ -80,8 +88,9 @@ const CY_STYLE: any[] = [
       shape: 'round-rectangle',
       width: 36,
       height: 36,
-      'font-size': 10,
+      'font-size': 9,
       color: '#6ee7b7',
+      'text-max-width': '100',
     },
   },
   // ── Cross-topic signal (diamond, amber) ──
@@ -152,7 +161,7 @@ const CY_STYLE: any[] = [
   },
   {
     selector: '.highlighted-node',
-    style: { 'border-width': 4, 'border-color': '#e2e8f0' },
+    style: { 'border-width': 4, 'border-color': '#e2e8f0', 'text-opacity': 1 },
   },
   {
     selector: '.dimmed',
@@ -264,10 +273,28 @@ export function SignalGraph({ signalId, onClose }: SignalGraphProps) {
     const elements: cytoscape.ElementDefinition[] = []
 
     for (const node of data.nodes) {
+      let label = node.label
+      // Clean up source labels: strip URL protocol, show domain + path
+      if (node.type === 'source') {
+        label = label.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')
+        // Shorten Reddit/Telegram URLs to just the handle
+        const rMatch = label.match(/reddit\.com\/r\/(\w+)/)
+        if (rMatch) label = `r/${rMatch[1]}`
+        const tMatch = label.match(/t\.me\/(.+)/)
+        if (tMatch) label = `@${tMatch[1]}`
+      }
+      // Truncate content labels at word boundary
+      if (node.type === 'content' && label.length > 40) {
+        label = label.slice(0, 38).replace(/\s\S*$/, '') + '…'
+      }
+      // Truncate cluster labels
+      if ((node.type === 'cluster' || node.type === 'signal') && label.length > 30) {
+        label = label.slice(0, 28).replace(/\s\S*$/, '') + '…'
+      }
       elements.push({
         data: {
           id: node.id,
-          label: node.label.length > 35 ? node.label.slice(0, 33) + '…' : node.label,
+          label,
           fullLabel: node.label,
           nodeType: node.type,
           ...node.data,
@@ -290,12 +317,13 @@ export function SignalGraph({ signalId, onClose }: SignalGraphProps) {
         animate: true,
         animationDuration: 600,
         animationEasing: 'ease-out-cubic',
-        nodeRepulsion: () => 8000,
-        idealEdgeLength: () => 120,
-        gravity: 0.4,
-        numIter: 300,
-        padding: 60,
+        nodeRepulsion: () => 14000,
+        idealEdgeLength: () => 160,
+        gravity: 0.25,
+        numIter: 400,
+        padding: 80,
         randomize: false,
+        nodeDimensionsIncludeLabels: true,
       } as cytoscape.CoseLayoutOptions,
       userZoomingEnabled: true,
       userPanningEnabled: true,
@@ -325,16 +353,21 @@ export function SignalGraph({ signalId, onClose }: SignalGraphProps) {
       }
     })
 
-    // Hover glow
+    // Hover glow + show label on content nodes
     cy.on('mouseover', 'node', (e) => {
       e.target.style('border-width', 4)
       e.target.style('border-color', '#e2e8f0')
+      e.target.style('text-opacity', 1)
       containerRef.current!.style.cursor = 'pointer'
     })
     cy.on('mouseout', 'node', (e) => {
       if (!e.target.hasClass('highlighted-node')) {
         e.target.style('border-width', 2)
         e.target.style('border-color', '')
+        // Hide content labels again unless highlighted
+        if (e.target.data('nodeType') === 'content' && !e.target.hasClass('highlighted-node')) {
+          e.target.style('text-opacity', 0)
+        }
       }
       containerRef.current!.style.cursor = 'default'
     })

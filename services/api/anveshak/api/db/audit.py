@@ -33,6 +33,14 @@ SQL_GET_AUDIT_TRAIL = """
     LIMIT $2
 """
 
+SQL_GET_AUDIT_TRAIL_ALL = """
+    SELECT id, user_id, action, resource_type, resource_id,
+           details, ip_address, created_at
+    FROM audit_trail
+    ORDER BY created_at DESC
+    LIMIT $1
+"""
+
 SQL_GET_AUDIT_TRAIL_BY_RESOURCE = """
     SELECT id, user_id, action, resource_type, resource_id,
            details, ip_address, created_at
@@ -75,15 +83,17 @@ async def log_action(
 
 async def get_audit_trail(
     conn: asyncpg.Connection,
-    resource_type: str,
+    resource_type: Optional[str] = None,
     resource_id: Optional[str] = None,
     limit: int = 100,
 ) -> list[dict[str, Any]]:
-    """Retrieve audit trail entries, optionally filtered by resource_id."""
-    if resource_id:
+    """Retrieve audit trail entries, optionally filtered by resource_type and resource_id."""
+    if resource_type and resource_id:
         rows = await conn.fetch(
             SQL_GET_AUDIT_TRAIL_BY_RESOURCE, resource_type, resource_id, limit
         )
-    else:
+    elif resource_type:
         rows = await conn.fetch(SQL_GET_AUDIT_TRAIL, resource_type, limit)
+    else:
+        rows = await conn.fetch(SQL_GET_AUDIT_TRAIL_ALL, limit)
     return [dict(r) for r in rows]

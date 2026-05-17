@@ -1,0 +1,112 @@
+[
+  {
+    "id": "ap-cyber-content-001",
+    "source_key": "telegram_scam_1",
+    "raw_text": "URGENT: Daily 5% return guaranteed! Join our VIP investment group. UPI: scammer9876@ybl. Telegram: @quickprofit_vja. Already 200+ members earning daily. Vijayawada branch office near Benz Circle. Contact: +91-9876543210. Crypto wallet for international investors: 0x7a3B9c2D4e5F6a1b8C9d0E1f2A3b4C5d6E7f8a9B",
+    "clean_text": "Daily 5% return guaranteed. Join VIP investment group. UPI: scammer9876@ybl. Telegram: @quickprofit_vja. 200+ members earning daily. Vijayawada branch office near Benz Circle. Contact: +91-9876543210. Crypto wallet for international investors: 0x7a3B9c2D4e5F6a1b8C9d0E1f2A3b4C5d6E7f8a9B",
+    "language": "en",
+    "url": "https://t.me/quickprofit_vja/1234",
+    "platform": "telegram",
+    "labels": {"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "synthetic": true, "source_origin": "demo_fixture"}
+  },
+  {
+    "id": "ap-cyber-content-002",
+    "source_key": "telegram_scam_2",
+    "raw_text": "\u0c2e\u0c3e \u0c07\u0c28\u0c4d\u0c35\u0c46\u0c38\u0c4d\u0c1f\u0c4d\u200c\u0c2e\u0c46\u0c02\u0c1f\u0c4d \u0c17\u0c4d\u0c30\u0c42\u0c2a\u0c4d\u200c\u0c32\u0c4b \u0c1a\u0c47\u0c30\u0c02\u0c21\u0c3f. \u0c30\u0c4b\u0c1c\u0c42 5% \u0c32\u0c3e\u0c2d\u0c02 \u0c16\u0c1a\u0c4d\u0c1a\u0c3f\u0c24\u0c02. UPI: scammer9876@ybl \u0c15\u0c3f \u0c2a\u0c02\u0c2a\u0c02\u0c21\u0c3f. \u0c17\u0c41\u0c02\u0c1f\u0c42\u0c30\u0c41 \u0c2e\u0c30\u0c3f\u0c2f\u0c41 \u0c35\u0c3f\u0c36\u0c3e\u0c16\u0c2a\u0c1f\u0c4d\u0c28\u0c02 \u0c28\u0c41\u0c02\u0c21\u0c3f \u0c2e\u0c46\u0c02\u0c2c\u0c30\u0c4d\u0c32\u0c41 \u0c09\u0c28\u0c4d\u0c28\u0c3e\u0c30\u0c41. Telegram: @quickprofit_vja. Crypto: 0x7a3B9c2D4e5F6a1b8C9d0E1f2A3b4C5d6E7f8a9B",
+    "clean_text": "\u0c2e\u0c3e \u0c07\u0c28\u0c4d\u0c35\u0c46\u0c38\u0c4d\u0c1f\u0c4d\u200c\u0c2e\u0c46\u0c02\u0c1f\u0c4d \u0c17\u0c4d\u0c30\u0c42\u0c2a\u0c4d\u200c\u0c32\u0c4b \u0c1a\u0c47\u0c30\u0c02\u0c21\u0c3f. \u0c30\u0c4b\u0c1c\u0c42 5% \u0c32\u0c3e\u0c2d\u0c02 \u0c16\u0c1a\u0c4d\u0c1a\u0c3f\u0c24\u0c02. UPI: scammer9876@ybl \u0c15\u0c3f \u0c2a\u0c02\u0c2a\u0c02\u0c21\u0c3f. \u0c17\u0c41\u0c02\u0c1f\u0c42\u0c30\u0c41 \u0c2e\u0c30\u0c3f\u0c2f\u0c41 \u0c35\u0c3f\u0c36\u0c3e\u0c16\u0c2a\u0c1f\u0c4d\u0c28\u0c02 \u0c28\u0c41\u0c02\u0c21\u0c3f \u0c2e\u0c46\u0c02\u0c2c\u0c30\u0c4d\u0c32\u0c41 \u0c09\u0c28\u0c4d\u0c28\u0c3e\u0c30\u0c41. Telegram: @quickprofit_vja. Crypto: 0x7a3B9c2D4e5F6a1b8C9d0E1f2A3b4C5d6E7f8a9B",
+    "language": "te",
+    "url": "https://t.me/quickprofit_guntur/567",
+    "platform": "telegram",
+    "labels": {"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "synthetic": true, "source_origin": "demo_fixture"}
+  },
+  {
+    "id": "ap-cyber-content-003",
+    "source_key": "telegram_scam_3",
+    "raw_text": "Payment proof! See screenshot. Today alone Rs 15,000 credited to my account from QuickProfit scheme. UPI: scammer9876@ybl never fails. My friend in Kakinada also got paid. This is 100% genuine. Crypto option also available: 0x7a3B9c2D4e5F6a1b8C9d0E1f2A3b4C5d6E7f8a9B. Join @quickprofit_vja before slots fill up!",
+    "clean_text": "Payment proof. Today alone Rs 15,000 credited to account from QuickProfit scheme. UPI: scammer9876@ybl never fails. Friend in Kakinada also got paid. 100% genuine. Crypto option also available: 0x7a3B9c2D4e5F6a1b8C9d0E1f2A3b4C5d6E7f8a9B. Join @quickprofit_vja before slots fill up.",
+    "language": "en",
+    "url": "https://t.me/quickprofit_vizag/890",
+    "platform": "telegram",
+    "labels": {"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "synthetic": true, "source_origin": "demo_fixture"}
+  },
+  {
+    "id": "ap-cyber-content-004",
+    "source_key": "reddit_scam_report",
+    "raw_text": "Has anyone heard of QuickProfit investment scheme operating in Andhra Pradesh? My cousin in Vijayawada invested Rs 50,000 through UPI (scammer9876@ybl) and got returns for 2 weeks. Then the Telegram channel went silent. Now they're running a new channel targeting Guntur and Visakhapatnam. Total loss across family: Rs 2.3 lakhs. Filed complaint with CID AP but no response yet.",
+    "clean_text": "QuickProfit investment scheme operating in Andhra Pradesh. Cousin in Vijayawada invested Rs 50,000 through UPI (scammer9876@ybl) and got returns for 2 weeks. Telegram channel went silent. Running new channel targeting Guntur and Visakhapatnam. Total loss across family: Rs 2.3 lakhs. Filed complaint with CID AP.",
+    "language": "en",
+    "url": "https://reddit.com/r/IndiaInvestments/comments/abc123",
+    "platform": "reddit",
+    "labels": {"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "synthetic": true, "source_origin": "demo_fixture"}
+  },
+  {
+    "id": "ap-cyber-content-005",
+    "source_key": "reddit_warning",
+    "raw_text": "WARNING: QuickProfit / @quickprofit_vja is a SCAM. Same operators ran GoldenReturn scheme last year. They use UPI mules to collect money (scammer9876@ybl is one of many). The crypto wallet 0x7a3B9c2D4e5F6a1b8C9d0E1f2A3b4C5d6E7f8a9B has been linked to at least 3 different Ponzi schemes. Blockchain analysis shows Rs 2.3 Crore moved through this wallet in the last 90 days. Mostly victims from AP — Vijayawada, Guntur, Visakhapatnam.",
+    "clean_text": "QuickProfit / @quickprofit_vja is a scam. Same operators ran GoldenReturn scheme last year. UPI mules to collect money (scammer9876@ybl is one of many). Crypto wallet 0x7a3B9c2D4e5F6a1b8C9d0E1f2A3b4C5d6E7f8a9B linked to at least 3 different Ponzi schemes. Blockchain analysis shows Rs 2.3 Crore moved through this wallet in last 90 days. Victims from AP — Vijayawada, Guntur, Visakhapatnam.",
+    "language": "en",
+    "url": "https://reddit.com/r/Scams/comments/def456",
+    "platform": "reddit",
+    "labels": {"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "synthetic": true, "source_origin": "demo_fixture"}
+  },
+  {
+    "id": "ap-cyber-content-006",
+    "source_key": "reddit_victim",
+    "raw_text": "I lost Rs 1.5 lakh to QuickProfit. I am from Guntur. The operator used WhatsApp first, then moved everyone to Telegram @quickprofit_vja. They showed fake trading screenshots. UPI collection was through scammer9876@ybl. When I asked for withdrawal, they demanded more investment. Classic Ponzi. CID Cyber Wing AP should investigate this.",
+    "clean_text": "Lost Rs 1.5 lakh to QuickProfit. From Guntur. Operator used WhatsApp then moved to Telegram @quickprofit_vja. Showed fake trading screenshots. UPI collection through scammer9876@ybl. Asked for withdrawal, demanded more investment. Classic Ponzi. CID Cyber Wing AP should investigate.",
+    "language": "en",
+    "url": "https://reddit.com/r/LegalAdviceIndia/comments/ghi789",
+    "platform": "reddit",
+    "labels": {"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "synthetic": true, "source_origin": "demo_fixture"}
+  },
+  {
+    "id": "ap-cyber-content-007",
+    "source_key": "reddit_crypto",
+    "raw_text": "Thread on crypto scams targeting Indian investors. The wallet 0x7a3B9c2D4e5F6a1b8C9d0E1f2A3b4C5d6E7f8a9B has been flagged on Chainalysis for receiving funds from 40+ UPI-linked Indian bank accounts. Most transactions trace back to Andhra Pradesh and Telangana. The operators use Telegram channels with Telugu-language promotions to target victims. Estimated aggregate loss: over Rs 2 Crore.",
+    "clean_text": "Crypto scams targeting Indian investors. Wallet 0x7a3B9c2D4e5F6a1b8C9d0E1f2A3b4C5d6E7f8a9B flagged on Chainalysis for receiving funds from 40+ UPI-linked Indian bank accounts. Transactions trace back to Andhra Pradesh and Telangana. Operators use Telegram channels with Telugu-language promotions. Estimated aggregate loss: over Rs 2 Crore.",
+    "language": "en",
+    "url": "https://reddit.com/r/CryptoCurrency/comments/jkl012",
+    "platform": "reddit",
+    "labels": {"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "synthetic": true, "source_origin": "demo_fixture"}
+  },
+  {
+    "id": "ap-cyber-content-008",
+    "source_key": "news_deccan",
+    "raw_text": "Vijayawada: Andhra Pradesh CID Cyber Wing has received over 40 complaints against an online investment fraud ring operating through Telegram channels. The accused lured victims with promises of 5% daily returns on investments made through UPI transfers. Sources said the collected amount, estimated at Rs 2.3 crore, was routed through cryptocurrency wallets to avoid detection. The scheme primarily targeted residents of Vijayawada, Guntur, and Visakhapatnam districts.",
+    "clean_text": "Andhra Pradesh CID Cyber Wing has received over 40 complaints against online investment fraud ring operating through Telegram channels. Accused lured victims with promises of 5% daily returns on investments made through UPI transfers. Collected amount estimated at Rs 2.3 crore routed through cryptocurrency wallets to avoid detection. Scheme primarily targeted residents of Vijayawada, Guntur, and Visakhapatnam districts.",
+    "language": "en",
+    "url": "https://www.deccanchronicle.com/nation/current-affairs/ap-cyber-fraud-ring-2026",
+    "platform": "web",
+    "labels": {"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "synthetic": true, "source_origin": "demo_fixture"}
+  },
+  {
+    "id": "ap-cyber-content-009",
+    "source_key": "news_hindu",
+    "raw_text": "Hyderabad: The Reserve Bank of India has issued a warning against unlicensed digital lending applications that promise guaranteed returns. The advisory specifically mentions investment schemes using UPI and cryptocurrency as collection mechanisms. AP Police DGP office confirmed that a coordinated crackdown on such schemes is being planned in consultation with CID and the local Cyber Wing. Financial investigators have traced Rs 2.3 crore in illicit transactions linked to a single cryptocurrency wallet address.",
+    "clean_text": "Reserve Bank of India warning against unlicensed digital lending applications promising guaranteed returns. Advisory mentions investment schemes using UPI and cryptocurrency as collection mechanisms. AP Police DGP office confirmed coordinated crackdown planned in consultation with CID and local Cyber Wing. Financial investigators traced Rs 2.3 crore in illicit transactions linked to single cryptocurrency wallet address.",
+    "language": "en",
+    "url": "https://www.thehindu.com/news/national/andhra-pradesh/rbi-warning-digital-lending-2026",
+    "platform": "web",
+    "labels": {"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "synthetic": true, "source_origin": "demo_fixture"}
+  },
+  {
+    "id": "ap-cyber-content-010",
+    "source_key": "news_toi",
+    "raw_text": "Visakhapatnam: Police arrested two persons in connection with the QuickProfit investment scam that defrauded over 40 people across Andhra Pradesh. The arrested individuals were identified as UPI mule account operators who facilitated fund transfers from victims to the main operators. Investigation revealed the scam ring used multiple Telegram channels with names like @quickprofit_vja, @quickprofit_guntur, and @quickprofit_vizag to target victims in different cities. The main operators remain at large.",
+    "clean_text": "Police arrested two persons in connection with QuickProfit investment scam that defrauded over 40 people across Andhra Pradesh. Arrested individuals were UPI mule account operators who facilitated fund transfers. Investigation revealed scam ring used multiple Telegram channels @quickprofit_vja, @quickprofit_guntur, @quickprofit_vizag to target victims in different cities. Main operators remain at large.",
+    "language": "en",
+    "url": "https://timesofindia.indiatimes.com/city/visakhapatnam/quickprofit-scam-arrests-2026",
+    "platform": "web",
+    "labels": {"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "synthetic": true, "source_origin": "demo_fixture"}
+  },
+  {
+    "id": "ap-cyber-content-011",
+    "source_key": "news_eenadu",
+    "raw_text": "Guntur: A 28-year-old software engineer lost Rs 8 lakh to the QuickProfit scheme. He invested through the UPI handle scammer9876@ybl after seeing testimonials on the Telegram channel. When returns stopped after three weeks, he discovered the crypto wallet 0x7a3B9c2D4e5F6a1b8C9d0E1f2A3b4C5d6E7f8a9B had been emptied. Cyber crime cell registered case under IT Act.",
+    "clean_text": "28-year-old software engineer lost Rs 8 lakh to QuickProfit scheme. Invested through UPI handle scammer9876@ybl after seeing testimonials on Telegram channel. Returns stopped after three weeks. Crypto wallet 0x7a3B9c2D4e5F6a1b8C9d0E1f2A3b4C5d6E7f8a9B had been emptied. Cyber crime cell registered case under IT Act.",
+    "language": "en",
+    "url": "https://www.eenadu.net/telugu-news/guntur/quickprofit-fraud-victim-2026",
+    "platform": "web",
+    "labels": {"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "synthetic": true, "source_origin": "demo_fixture"}
+  }
+]

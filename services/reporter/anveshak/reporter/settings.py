@@ -37,6 +37,11 @@ class ReporterSettings(BaseSettings):
     source_warning_check_interval_s: int = 21600
     source_warning_lookback_days: int = 30
 
+    # Legal mapping & three-lens evaluation (demo/production toggle)
+    # Set to True when running on GPU — extends the prompt significantly
+    include_legal_mapping: bool = False
+    include_three_lens: bool = False
+
     # Geocoder
     geocoder_fuzzy_threshold: int = 2
 

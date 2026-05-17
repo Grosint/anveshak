@@ -195,7 +195,7 @@ async def get_report_pdf(report_id: str) -> FileResponse:
         "generated_at": str(report.get("generated_at", "")),
         "confidence_score": report.get("confidence_score", 0.0),
         "content_item_count": report.get("content_item_count", 0),
-        "labels": report.get("labels") or {},
+        "labels": _parse_labels(report.get("labels")),
     }
 
     # Parse content_md for key fields if available
@@ -216,6 +216,22 @@ async def get_report_pdf(report_id: str) -> FileResponse:
         media_type="application/pdf",
         filename=f"report_{report_id}.pdf",
     )
+
+
+def _parse_labels(labels: Any) -> dict:
+    """Ensure labels is a dict — handles double-encoded JSONB strings."""
+    if labels is None:
+        return {}
+    if isinstance(labels, dict):
+        return labels
+    if isinstance(labels, str):
+        import json
+        try:
+            parsed = json.loads(labels)
+            return parsed if isinstance(parsed, dict) else {}
+        except (json.JSONDecodeError, TypeError):
+            return {}
+    return {}
 
 
 def _enrich_report_data_from_md(report_data: dict, content_md: Optional[str]) -> None:

@@ -49,7 +49,7 @@ async def vector_health(
 
 @router.get("/audit-trail")
 async def get_audit_trail(
-    resource_type: str = Query("topic", description="Filter by resource type"),
+    resource_type: Optional[str] = Query(None, description="Filter by resource type (omit for all)"),
     resource_id: Optional[str] = Query(None, description="Filter by resource ID"),
     limit: int = Query(100, ge=1, le=1000),
     db: asyncpg.Connection = Depends(get_db),

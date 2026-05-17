@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { visionApi, VisionJob } from '../api/vision'
+import { visionApi, VisionJob, VisionJobSummary } from '../api/vision'
 import { DropZone } from '../components/vision/DropZone'
 import { DeepfakeMeter } from '../components/vision/DeepfakeMeter'
 import { YoloCanvas } from '../components/vision/YoloCanvas'
@@ -12,8 +12,17 @@ import { Button } from '../components/ui/Button'
 
 type Tab = 'deepfake' | 'yolo' | 'exif' | 'reverse'
 
+function getInitialJobId(): string | null {
+  try {
+    const url = new URL(window.location.href)
+    return url.searchParams.get('job')
+  } catch {
+    return null
+  }
+}
+
 export default function ImageAnalysis() {
-  const [jobId, setJobId]             = useState<string | null>(null)
+  const [jobId, setJobId]             = useState<string | null>(getInitialJobId)
   const [previewUrl, setPreviewUrl]   = useState<string | null>(null)
   const [uploading, setUploading]     = useState(false)
   const [errorDialog, setErrorDialog] = useState<{ title: string; message: string } | null>(null)
@@ -33,6 +42,13 @@ export default function ImageAnalysis() {
       if (!status || status === 'queued' || status === 'in_progress') return 2000
       return false
     },
+  })
+
+  // Recent jobs history
+  const { data: recentJobs = [] } = useQuery<VisionJobSummary[]>({
+    queryKey: ['vision-jobs-recent'],
+    queryFn: () => visionApi.listRecentJobs(10),
+    staleTime: 30_000,
   })
 
   // Reverse search
@@ -115,6 +131,53 @@ export default function ImageAnalysis() {
           {/* Drop zone */}
           <DropZone onFile={handleFile} disabled={uploading} />
 
+          {/* Recent analyses history */}
+          {!jobId && recentJobs.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium text-text-secondary mb-3">Recent Analyses</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {recentJobs.map((j) => {
+                  const score = j.deepfake_score
+                  const level = score == null ? 'unknown' : score > 0.7 ? 'high' : score > 0.4 ? 'medium' : 'low'
+                  const colors = {
+                    high: 'border-red-500/40 bg-red-500/10 hover:bg-red-500/20',
+                    medium: 'border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20',
+                    low: 'border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20',
+                    unknown: 'border-white/20 bg-white/5 hover:bg-white/10',
+                  }
+                  const scoreColors = { high: 'text-red-400', medium: 'text-amber-400', low: 'text-emerald-400', unknown: 'text-text-muted' }
+                  return (
+                    <button
+                      key={j.job_id}
+                      onClick={() => setJobId(j.job_id)}
+                      className={`text-left rounded-lg border p-3 transition-colors cursor-pointer ${colors[level]}`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-lg font-bold ${scoreColors[level]}`}>
+                          {score != null ? `${(score * 100).toFixed(0)}%` : '—'}
+                        </span>
+                        <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                          level === 'high' ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                            : level === 'medium' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                            : level === 'low' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                            : 'bg-white/10 text-text-muted border-white/20'
+                        }`}>
+                          {level === 'high' ? 'HIGH RISK' : level === 'medium' ? 'MEDIUM' : level === 'low' ? 'AUTHENTIC' : 'N/A'}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-text-muted space-y-0.5">
+                        <div className="font-mono truncate">{j.job_id}</div>
+                        {j.yolo_count > 0 && <div>{j.yolo_count} object{j.yolo_count > 1 ? 's' : ''} detected</div>}
+                        {j.clip_top && <div className="truncate">CLIP: {j.clip_top}</div>}
+                        {j.created_at && <div>{new Date(j.created_at).toLocaleString()}</div>}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Upload / processing status */}
           {uploading && (
             <div className="flex items-center gap-3 text-sm text-text-secondary">
@@ -134,7 +197,7 @@ export default function ImageAnalysis() {
           )}
 
           {/* Image preview + results */}
-          {previewUrl && (
+          {(previewUrl || jobId) && (
             <div className="space-y-4">
               {/* Tabs */}
               <div className="flex border-b border-anveshak-border" role="tablist">
@@ -168,15 +231,17 @@ export default function ImageAnalysis() {
                       </p>
                     )}
                     {/* Image preview */}
-                    <div className="flex justify-center">
-                      <img
-                        src={previewUrl}
-                        alt="Uploaded image preview"
-                        className="max-w-full max-h-64 rounded border border-anveshak-border object-contain"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    </div>
+                    {previewUrl && (
+                      <div className="flex justify-center">
+                        <img
+                          src={previewUrl}
+                          alt="Uploaded image preview"
+                          className="max-w-full max-h-64 rounded border border-anveshak-border object-contain"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -186,12 +251,14 @@ export default function ImageAnalysis() {
                       <div className="flex justify-center py-8"><Spinner label="Detecting objects…" /></div>
                     ) : result?.yolo_detections ? (
                       <>
-                        <YoloCanvas
-                          imgSrc={previewUrl}
-                          detections={result.yolo_detections}
-                          modelWidth={640}
-                          modelHeight={640}
-                        />
+                        {previewUrl && (
+                          <YoloCanvas
+                            imgSrc={previewUrl}
+                            detections={result.yolo_detections}
+                            modelWidth={640}
+                            modelHeight={640}
+                          />
+                        )}
                         <div className="space-y-1">
                           {result.yolo_detections.map((det, i) => (
                             <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-anveshak-border/50">

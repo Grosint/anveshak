@@ -42,6 +42,15 @@ export interface ReverseSearchResult {
   hamming_distance: number
 }
 
+export interface VisionJobSummary {
+  job_id: string
+  deepfake_score: number | null
+  yolo_count: number
+  clip_top: string | null
+  status: string
+  created_at: string | null
+}
+
 export const visionApi = {
   analyse: (file: File, contentItemId?: string) => {
     const form = new FormData()
@@ -67,4 +76,7 @@ export const visionApi = {
         params: { phash, ...(threshold !== undefined ? { threshold } : {}) },
       })
       .then((r) => r.data),
+
+  listRecentJobs: (limit = 10) =>
+    api.get<VisionJobSummary[]>('/api/v1/vision/jobs/recent', { params: { limit } }).then((r) => r.data),
 }

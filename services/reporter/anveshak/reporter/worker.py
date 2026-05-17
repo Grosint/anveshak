@@ -121,9 +121,14 @@ async def generate_report(ctx: dict, report_id: str) -> None:
 
     # --- 4. Assemble context and render prompt ---
     context, source_count, date_range = assemble_context(chunks, max_tokens=s.rag_max_context_tokens)
+    # Legal mapping and three-lens evaluation controlled by settings
+    include_legal = getattr(s, "include_legal_mapping", True)
+    include_three_lens = getattr(s, "include_three_lens", False)
     prompt = render_prompt(
         report_type, topic_name, keywords, context,
         source_count=source_count, date_range=date_range,
+        include_legal_mapping=include_legal,
+        include_three_lens=include_three_lens,
     )
 
     # --- 5. Call LLM ---
@@ -210,6 +215,38 @@ def _build_content_md(rc: Any) -> str:
     lines.append("\n## Source Citations\n")
     for citation in rc.source_citations:
         lines.append(f"- {citation}")
+
+    # Legal sections (when include_legal_mapping was True in prompt)
+    if rc.legal_sections:
+        lines.append("\n## Applicable Legal Provisions\n")
+        lines.append("*AI-generated mappings — require verification by a qualified legal officer.*\n")
+        for mapping in rc.legal_sections:
+            finding = mapping.get("finding", "")
+            lines.append(f"**Finding:** {finding}\n")
+            for sec in mapping.get("sections", []):
+                act = sec.get("act", "")
+                section = sec.get("section", "")
+                desc = sec.get("description", "")
+                evidence = sec.get("evidence_ref", "")
+                lines.append(f"- {act} Section {section}: {desc} — Evidence: {evidence}")
+            lines.append("")
+
+    # Three-lens evaluation (when include_three_lens was True in prompt)
+    if rc.three_lens:
+        lines.append("\n## Annexure: Three-Lens Evaluation\n")
+        evaluations = rc.three_lens.get("evaluations", [])
+        for ev in evaluations:
+            perspective = ev.get("perspective", "")
+            risk = ev.get("risk_level", "")
+            assessment = ev.get("threat_assessment", "")
+            actions = ev.get("priority_actions", [])
+            lines.append(f"### {perspective} (Risk: {risk})\n")
+            lines.append(f"{assessment}\n")
+            lines.append("**Priority Actions:**")
+            for action in actions:
+                lines.append(f"- {action}")
+            lines.append("")
+
     return "\n".join(lines)
 
 

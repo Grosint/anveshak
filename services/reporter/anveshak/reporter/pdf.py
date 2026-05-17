@@ -99,6 +99,52 @@ PDF_TEMPLATE = """\
 {% endfor %}
 </ul>
 
+{% if report_data.get('legal_sections') %}
+<h2>Applicable Legal Provisions</h2>
+<p style="font-size: 9pt; color: #666; font-style: italic;">
+  AI-generated mappings — require verification by a qualified legal officer before use in any proceedings.
+</p>
+<table style="width: 100%; border-collapse: collapse; font-size: 10pt; margin-top: 8px;">
+  <tr style="background: #0f3460; color: white;">
+    <th style="padding: 6px; text-align: left;">Finding</th>
+    <th style="padding: 6px; text-align: left;">Act</th>
+    <th style="padding: 6px; text-align: left;">Section</th>
+    <th style="padding: 6px; text-align: left;">Provision</th>
+    <th style="padding: 6px; text-align: left;">Evidence</th>
+  </tr>
+  {% for mapping in report_data.get('legal_sections', []) %}
+    {% for sec in mapping.get('sections', []) %}
+  <tr style="border-bottom: 1px solid #ddd;">
+    <td style="padding: 5px;">{{ mapping.get('finding', '') }}</td>
+    <td style="padding: 5px;">{{ sec.get('act', '') }}</td>
+    <td style="padding: 5px;">{{ sec.get('section', '') }}</td>
+    <td style="padding: 5px;">{{ sec.get('description', '') }}</td>
+    <td style="padding: 5px; font-size: 9pt;">{{ sec.get('evidence_ref', '') }}</td>
+  </tr>
+    {% endfor %}
+  {% endfor %}
+</table>
+{% endif %}
+
+{% if report_data.get('three_lens') %}
+<h2 style="page-break-before: always;">Annexure: Three-Lens Evaluation</h2>
+{% for ev in report_data.get('three_lens', {}).get('evaluations', []) %}
+<div style="border: 1px solid #0f3460; border-radius: 6px; padding: 12px; margin-bottom: 12px;">
+  <div style="font-size: 12pt; font-weight: bold; color: #0f3460;">
+    {{ ev.get('perspective', '') }}
+    <span class="badge" style="float: right;">Risk: {{ ev.get('risk_level', '') }}</span>
+  </div>
+  <p style="margin: 8px 0;">{{ ev.get('threat_assessment', '') }}</p>
+  <strong>Priority Actions:</strong>
+  <ul>
+  {% for action in ev.get('priority_actions', []) %}
+    <li>{{ action }}</li>
+  {% endfor %}
+  </ul>
+</div>
+{% endfor %}
+{% endif %}
+
 <div class="footer">
   Produced by Anveshak AI-OSINT Platform — {{ report_data.get('generated_at', '') }}.
   This report is a point-in-time snapshot and is immutable after generation.

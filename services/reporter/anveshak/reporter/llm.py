@@ -25,6 +25,45 @@ log = structlog.get_logger(__name__)
 # Output schema — what we expect the LLM to return
 # ---------------------------------------------------------------------------
 
+class LegalSectionRef(BaseModel):
+    """One applicable legal provision mapped to a finding."""
+    model_config = ConfigDict(strict=True)
+
+    act: str          # BNS | IT Act | UAPA | PMLA | NDPS
+    section: str      # e.g. "318", "66C"
+    description: str  # Short title of the provision
+    evidence_ref: str  # Which source/finding supports this mapping
+    labels: Labels
+
+
+class LegalMapping(BaseModel):
+    """Maps a key finding to applicable legal provisions."""
+    model_config = ConfigDict(strict=True)
+
+    finding: str
+    sections: list[LegalSectionRef]
+    labels: Labels
+
+
+class LensEvaluation(BaseModel):
+    """One perspective in the three-lens evaluation framework."""
+    model_config = ConfigDict(strict=True)
+
+    perspective: str       # "Brigadier" | "NIA Chief" | "R&AW Chief"
+    threat_assessment: str
+    priority_actions: list[str]
+    risk_level: str        # LOW | MEDIUM | HIGH | CRITICAL
+    labels: Labels
+
+
+class ThreeLensAnnexure(BaseModel):
+    """Three-lens evaluation: Brigadier, NIA Chief, R&AW Chief perspectives."""
+    model_config = ConfigDict(strict=True)
+
+    evaluations: list[LensEvaluation]
+    labels: Labels
+
+
 class ReportContent(BaseModel):
     """Pydantic model for validated LLM output.
 
@@ -39,6 +78,10 @@ class ReportContent(BaseModel):
     confidence_level: float
     source_citations: list[str]
     labels: Labels  # MANDATORY — CLAUDE.md rule 2
+    # Legal mapping — populated when include_legal_mapping=True in prompt
+    legal_sections: list[dict[str, Any]] = []
+    # Three-lens evaluation — populated when include_three_lens=True in prompt
+    three_lens: dict[str, Any] | None = None
 
 
 # ---------------------------------------------------------------------------

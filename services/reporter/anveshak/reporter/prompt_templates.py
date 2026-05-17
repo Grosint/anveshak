@@ -32,8 +32,98 @@ You MUST respond with ONLY a JSON object matching this exact schema (no other te
     "classification": "OPEN",
     "domain": "report",
     "owner_org": "anveshak"
-  }
+  }{{ legal_schema_fragment }}{{ three_lens_schema_fragment }}
 }"""
+
+_LEGAL_SCHEMA_FRAGMENT = """,
+  "legal_sections": [
+    {
+      "finding": "<reference to a key_finding above>",
+      "sections": [
+        {
+          "act": "<BNS|IT Act|UAPA|PMLA|NDPS>",
+          "section": "<section number>",
+          "description": "<short title of provision>",
+          "evidence_ref": "<which source supports this mapping>",
+          "labels": {"classification": "OPEN", "domain": "legal", "owner_org": "anveshak"}
+        }
+      ],
+      "labels": {"classification": "OPEN", "domain": "legal", "owner_org": "anveshak"}
+    }
+  ]"""
+
+_THREE_LENS_SCHEMA_FRAGMENT = """,
+  "three_lens": {
+    "evaluations": [
+      {
+        "perspective": "<Brigadier|NIA Chief|R&AW Chief>",
+        "threat_assessment": "<1-2 sentence assessment from this perspective>",
+        "priority_actions": ["<action 1>", "<action 2>"],
+        "risk_level": "<LOW|MEDIUM|HIGH|CRITICAL>",
+        "labels": {"classification": "OPEN", "domain": "evaluation", "owner_org": "anveshak"}
+      }
+    ],
+    "labels": {"classification": "OPEN", "domain": "evaluation", "owner_org": "anveshak"}
+  }"""
+
+
+# ---------------------------------------------------------------------------
+# Legal mapping instruction (injected when include_legal_mapping=True)
+# ---------------------------------------------------------------------------
+# REVIEW: All section numbers below must be verified by a qualified legal officer.
+_LEGAL_MAPPING_INSTRUCTION = """\
+LEGAL MAPPING INSTRUCTIONS:
+For each key finding, identify applicable Indian legal provisions from the reference table below.
+Map ONLY when evidence in CONTEXT explicitly supports the mapping. Do NOT fabricate mappings.
+
+REFERENCE TABLE (use these exact act names and section numbers):
+- BNS 318: Cheating (dishonestly inducing delivery of property)
+- BNS 319: Cheating by personation
+- BNS 111: Criminal conspiracy
+- BNS 196: Promoting enmity between groups
+- BNS 197: Imputations prejudicial to national integration
+- BNS 353: Statements conducing to public mischief
+- IT Act 66C: Identity theft (using electronic signature/password of another)
+- IT Act 66D: Cheating by personation using computer resource
+- IT Act 67: Publishing obscene material electronically
+- UAPA 13: Punishment for unlawful activities
+- UAPA 15: Punishment for terrorist act
+- UAPA 17: Punishment for raising funds for terrorist act
+- UAPA 18: Punishment for conspiracy to commit terrorist act
+- UAPA 38: Offence relating to membership of a terrorist organisation
+- UAPA 39: Offence relating to support given to a terrorist organisation
+- PMLA 3: Offence of money laundering (proceeds of crime > Rs 1 Cr threshold)
+- PMLA 4: Punishment for money laundering
+- NDPS 21: Punishment for contravention in relation to manufactured drugs
+- NDPS 22: Punishment for contravention in relation to psychotropic substances
+
+IMPORTANT: These mappings are AI-generated and require verification by a qualified legal officer before use in any proceedings.
+"""
+
+
+# ---------------------------------------------------------------------------
+# Three-lens evaluation instruction (injected when include_three_lens=True)
+# ---------------------------------------------------------------------------
+_THREE_LENS_INSTRUCTION = """\
+THREE-LENS EVALUATION:
+After producing the main report, add a "three_lens" evaluation annexure.
+Evaluate the same findings from THREE distinct perspectives:
+
+1. BRIGADIER (Operational Commander):
+   - Focus: field actionability, operational timeline, force disposition
+   - Risk level: based on immediate threat to personnel/assets
+
+2. NIA CHIEF (Internal Security / Prosecution):
+   - Focus: UAPA/BNS evidence chain, prosecution-ready elements, inter-state coordination
+   - Risk level: based on strength of prosecution-ready evidence
+
+3. R&AW CHIEF (External Intelligence):
+   - Focus: foreign linkages, cross-border networks, strategic implications
+   - Risk level: based on external threat assessment
+   - If NO foreign linkage is found in the evidence, state "No foreign linkage detected in available sources" — do NOT fabricate
+
+Each perspective must include 2-3 priority_actions specific to their domain.
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +186,14 @@ You are {{ role }}. {{ report_type_instruction }}
 {{ json_schema }}
 
 {{ few_shot }}
+{% if legal_mapping_instruction %}
+
+{{ legal_mapping_instruction }}
+{% endif %}
+{% if three_lens_instruction %}
+
+{{ three_lens_instruction }}
+{% endif %}
 
 <topic>{{ topic_name }}</topic>
 <keywords>{{ keywords }}</keywords>
@@ -158,6 +256,8 @@ def render_prompt(
     context: str,
     source_count: int = 0,
     date_range: str = "",
+    include_legal_mapping: bool = False,
+    include_three_lens: bool = False,
 ) -> str:
     """Render the appropriate Jinja2 template for the given report_type.
 
@@ -171,6 +271,8 @@ def render_prompt(
         context: Assembled RAG context string.
         source_count: Number of RAG sources included in context.
         date_range: Human-readable date range of context items.
+        include_legal_mapping: If True, inject BNS/IT Act/UAPA/PMLA mapping instructions.
+        include_three_lens: If True, inject three-lens evaluation framework instructions.
 
     Returns:
         Rendered prompt string ready for Ollama.
@@ -180,13 +282,24 @@ def render_prompt(
     role = _ROLE_MAP[report_type]
     keywords_str = ", ".join(keywords) if keywords else "(none)"
 
+    # Build the JSON schema with optional fragments
+    legal_frag = _LEGAL_SCHEMA_FRAGMENT if include_legal_mapping else ""
+    three_lens_frag = _THREE_LENS_SCHEMA_FRAGMENT if include_three_lens else ""
+    json_schema = _JSON_SCHEMA_INSTRUCTION.replace(
+        "{{ legal_schema_fragment }}", legal_frag
+    ).replace(
+        "{{ three_lens_schema_fragment }}", three_lens_frag
+    )
+
     tmpl = _env.from_string(template_str)
     return tmpl.render(
         role=role,
         report_type_instruction=type_instruction,
         grounding_rules=_GROUNDING_RULES,
-        json_schema=_JSON_SCHEMA_INSTRUCTION,
+        json_schema=json_schema,
         few_shot=_FEW_SHOT_EXAMPLE,
+        legal_mapping_instruction=_LEGAL_MAPPING_INSTRUCTION if include_legal_mapping else "",
+        three_lens_instruction=_THREE_LENS_INSTRUCTION if include_three_lens else "",
         topic_name=topic_name,
         keywords=keywords_str,
         context=context,

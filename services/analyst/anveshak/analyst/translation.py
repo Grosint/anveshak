@@ -13,6 +13,10 @@ Supported source languages (currently active):
   ur  → Urdu                  — urd_Arab
   ru  → Russian               — rus_Cyrl
   bn  → Bengali               — ben_Beng
+  te  → Telugu                — tel_Telu
+  ta  → Tamil                 — tam_Taml
+  or  → Odia                  — ory_Orya
+  ml  → Malayalam             — mal_Mlym
 
 Model: facebook/nllb-200-distilled-600M (~2.4GB, CPU-capable)
 GPU upgrade: facebook/nllb-200-1.3B or facebook/nllb-200-3.3B — see hardware.md
@@ -36,6 +40,10 @@ _NLLB_SRC_CODES: dict[str, str] = {
     "ur": "urd_Arab",   # Urdu
     "ru": "rus_Cyrl",   # Russian
     "bn": "ben_Beng",   # Bengali
+    "te": "tel_Telu",   # Telugu
+    "ta": "tam_Taml",   # Tamil
+    "or": "ory_Orya",   # Odia
+    "ml": "mal_Mlym",   # Malayalam
 }
 
 _NLLB_TGT_CODE = "eng_Latn"   # English (Latin script) — always the target
