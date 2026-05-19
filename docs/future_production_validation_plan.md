@@ -9,6 +9,7 @@ UX overhaul complete (ScheduleManager, Analytics Dashboard, Settings page).
 
 We've never tested with **live, continuous, real-world data**. This 7-10 day production
 validation will:
+
 1. Deploy the frozen codebase on an AWS VM
 2. Monitor real defence/security topics with real sources
 3. Measure actual recall/precision against ground-truth events
@@ -21,19 +22,30 @@ issues are logged and fixed after the trial.
 
 ---
 
-## VM Deployment (AWS g4dn.2xlarge)
+## GPU Deployment — RunPod (Primary) / AWS (Fallback)
 
-### Instance Spec
+### Platform Comparison
+
+| Factor | RunPod (recommended) | AWS g4dn.xlarge |
+|--------|---------------------|-----------------|
+| GPU quota | No approval needed | Requires support ticket (2-5 days) |
+| T4 16GB cost | ~$0.20/hr (Community) | ~$0.53/hr (on-demand) |
+| 10-day cost | ~$48 | ~$127 |
+| Docker + NVIDIA | Pre-installed | Deep Learning AMI has it |
+| Port access | HTTPS proxy (auto-TLS) | Security groups (manual) |
+| Setup time | ~20 min | 2-5 days (quota) + 20 min |
+
+### RunPod Instance Spec
 
 | Spec | Value |
 |------|-------|
-| Instance | g4dn.2xlarge |
-| GPU | NVIDIA T4 16GB VRAM |
-| CPU | 8 vCPU |
-| RAM | 32 GB |
-| Storage | 200 GB EBS gp3 |
-| OS | Ubuntu 22.04 LTS (Deep Learning AMI — Docker + NVIDIA pre-installed) |
-| Cost | ~$0.75/hr × 240h = ~$180 (on-demand) |
+| GPU | 1x RTX A4000 16GB or 1x T4 16GB (cheapest options) |
+| vCPU | 8+ |
+| RAM | 32 GB+ |
+| Container Disk | 200 GB |
+| Volume Storage | 50 GB (persists across restarts) |
+| Template | RunPod Pytorch (Docker + NVIDIA runtime pre-installed) |
+| Cost | ~$0.20/hr × 240h = ~$48 (Community Cloud) |
 
 ### Why GPU
 
@@ -42,46 +54,55 @@ issues are logged and fixed after the trial.
 - NLLB translation: ~15s/article (vs ~4 min on CPU)
 - 4 daily scheduled reports + ad-hoc + 100-200 articles/day with non-English content
 
-### Setup Steps (one-time, ~20 min)
+### RunPod Setup Steps (one-time, ~20 min)
 
 ```bash
-# 1. Launch g4dn.2xlarge with 200GB gp3 EBS
-#    Security group: 22 (your IP), 3000 (analyst network), 8000 (API)
-#    Use Deep Learning AMI (Docker + NVIDIA Container Toolkit pre-installed)
+# 1. Create RunPod account at runpod.io (credit card, instant access)
+# 2. Deploy GPU Pod:
+#    - Template: RunPod Pytorch
+#    - GPU: 1x RTX A4000 or 1x T4 (cheapest)
+#    - vCPU: 8+, RAM: 32GB+, Disk: 200GB container + 50GB volume
+#    - Expose TCP ports: 3000, 3001, 8000, 9090
+# 3. SSH in (RunPod gives you the SSH command)
 
-# 2. SSH in, verify GPU and Docker
-ssh -i key.pem ubuntu@<VM_IP>
-nvidia-smi                    # T4 visible
-docker compose version        # v2+ required
-
-# 3. Clone and configure
+# 4. Clone and run the automated setup script
 git clone <repo-url> anveshak && cd anveshak
-cp .env.example .env
 
-# 4. Edit .env — set these mandatory values:
-#    POSTGRES_PASSWORD=<openssl rand -hex 16>
-#    API_SECRET_KEY=<openssl rand -hex 32>
-#    GRAFANA_ADMIN_PASSWORD=<secure-password>
-#    VISION_DEVICE=cuda
-#    OLLAMA_KEEP_ALIVE=-1              (GPU keeps model resident)
-#    TELEGRAM_API_ID=<your-id>
-#    TELEGRAM_API_HASH=<your-hash>
-#    TELEGRAM_SESSION_STRING=<your-session>
-#    TELEGRAM_ADAPTER_ENABLED=true
-#    X_BEARER_TOKEN=<your-token>
-#    X_ADAPTER_ENABLED=true
-#    X_MONTHLY_READ_CAP=10000
+# Without social adapters:
+bash scripts/setup_runpod.sh
 
-# 5. Full automated setup (~15 min)
-make setup    # builds images, starts containers, runs migrations, pulls qwen2:7b
+# With social adapters (pass credentials as env vars):
+TELEGRAM_API_ID=12345 TELEGRAM_API_HASH=abc123 \
+TELEGRAM_SESSION_STRING=... X_BEARER_TOKEN=... \
+bash scripts/setup_runpod.sh
 
-# 6. Verify
-make health                   # all 23 containers healthy
-make ps                       # status table
-nvidia-smi                    # GPU utilisation visible
+# The script automatically:
+#   - Verifies GPU + NVIDIA runtime
+#   - Installs docker compose + uv if missing
+#   - Generates .env with GPU-optimised settings + secure secrets
+#   - Runs make setup (build → migrate → pull models → validate)
+#   - Restarts with GPU vision overlay
+#   - Creates production topics (4 topics, 21 sources)
+#   - Prints RunPod proxy access URLs
+```
 
-# 7. Run setup script to create topics and sources
-python scripts/setup_production_topics.py
+### Access URLs (RunPod)
+
+RunPod exposes ports via HTTPS proxy — no security group config needed:
+- Frontend: `https://<POD_ID>-3000.proxy.runpod.net`
+- API: `https://<POD_ID>-8000.proxy.runpod.net`
+- Grafana: `https://<POD_ID>-3001.proxy.runpod.net`
+- Prometheus: `https://<POD_ID>-9090.proxy.runpod.net`
+
+### AWS Fallback Setup (if RunPod unavailable)
+
+```bash
+# 1. Request GPU quota increase: Service Quotas → EC2 → "Running On-Demand G and VT instances" → 8 vCPUs
+# 2. Launch g4dn.xlarge with 200GB gp3, Deep Learning AMI, security group: 22/3000/8000
+# 3. SSH in → clone repo → same setup_runpod.sh works on any Linux GPU VM
+ssh -i key.pem ubuntu@<VM_IP>
+git clone <repo-url> anveshak && cd anveshak
+bash scripts/setup_runpod.sh
 ```
 
 ### Security
