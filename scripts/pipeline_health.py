@@ -472,7 +472,8 @@ def main() -> int:
     all_criticals = []
 
     for topic in topics:
-        rel_threshold = float(topic["topic_relevance_threshold"]) if topic.get("topic_relevance_threshold") is not None else 0.35
+        raw_threshold = topic.get("topic_relevance_threshold")
+        rel_threshold = float(raw_threshold) if raw_threshold else 0.35
         stats = report_topic(
             topic["id"], topic["name"],
             int(topic["signal_threshold"]),
