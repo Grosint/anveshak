@@ -147,6 +147,91 @@ _RE_NAV_SEPARATOR = re.compile(
 )
 
 
+# ---------------------------------------------------------------------------
+# Nav-icon garbage detection — UI element names scraped as content
+# ---------------------------------------------------------------------------
+
+# Common icon/nav element names found in scraped RSS/web pages
+_NAV_ICON_WORDS = frozenset({
+    # Directional icons
+    "arrow-down", "arrow-up", "arrow-left", "arrow-right",
+    "chevron-down", "chevron-up", "chevron-left", "chevron-right",
+    "left-arrow", "right-arrow", "top-nav", "caret-down", "caret-up",
+    # Action icons
+    "search", "menu", "close", "hamburger", "printer", "print",
+    "share", "bookmark", "copy-link", "download", "upload",
+    # Social icons
+    "facebook", "twitter", "whatsapp", "telegram", "instagram",
+    "linkedin", "youtube", "email",
+    # UI elements
+    "comments", "bell", "user", "account", "cart", "settings",
+    "notifications",
+})
+
+# Minimum word count and hit ratio to flag as nav-icon garbage
+_NAV_ICON_MIN_WORDS = 5
+_NAV_ICON_HIT_RATIO = 0.40
+
+
+def is_nav_icon_garbage(text: str) -> bool:
+    """Detect text dominated by UI icon names / nav element labels.
+
+    Returns True if 40%+ of words match known icon/nav vocabulary AND
+    there are at least 5 words. This catches scraped icon alt-text and
+    aria-labels from news sites (e.g., NDTV RSS).
+    """
+    if not text:
+        return False
+
+    # Tokenise: split on whitespace and common separators
+    words = re.split(r"[\s,;:()]+", text.lower().strip())
+    words = [w for w in words if w]  # remove empties
+
+    if len(words) < _NAV_ICON_MIN_WORDS:
+        return False
+
+    hits = sum(1 for w in words if w in _NAV_ICON_WORDS)
+    return hits / len(words) >= _NAV_ICON_HIT_RATIO
+
+
+def _strip_nav_icon_prefix(text: str) -> str:
+    """Strip nav-icon word sequences from the beginning of lines.
+
+    Handles cases like: "arrow-down comments printer search bell top-nav
+    right-arrow left-arrow arrow-down , Why Reservation For Their Children?"
+    → ", Why Reservation For Their Children?"
+    """
+    lines = text.split("\n")
+    cleaned: list[str] = []
+    for line in lines:
+        words = line.strip().split()
+        if len(words) < 3:
+            cleaned.append(line)
+            continue
+
+        # Find the first word that isn't a nav-icon word
+        first_real = 0
+        for i, w in enumerate(words):
+            # Strip leading punctuation/commas to check the core word
+            core = w.lower().strip(",:;!?()[]")
+            if core and core not in _NAV_ICON_WORDS:
+                first_real = i
+                break
+        else:
+            # All words are nav icons — keep line for per-line filter to remove
+            cleaned.append(line)
+            continue
+
+        # Only strip if we found 3+ consecutive nav-icon words at the start
+        if first_real >= 3:
+            remainder = " ".join(words[first_real:]).lstrip(",;: ")
+            cleaned.append(remainder)
+        else:
+            cleaned.append(line)
+
+    return "\n".join(cleaned)
+
+
 def _is_nav_line(line: str) -> bool:
     """Detect navigation-style lines: short capitalised word lists.
 
@@ -275,6 +360,9 @@ def clean_extracted_text(raw: str) -> str:
     # 9. Remove nav separator lines
     text = _RE_NAV_SEPARATOR.sub("", text)
 
+    # 9b. Strip nav-icon prefixes from lines (icon labels followed by real content)
+    text = _strip_nav_icon_prefix(text)
+
     # 10. Per-line filtering
     lines = text.split("\n")
     repeated = _detect_repeated_blocks(lines)
@@ -288,6 +376,9 @@ def clean_extracted_text(raw: str) -> str:
             continue
 
         if _is_nav_line(stripped):
+            continue
+
+        if is_nav_icon_garbage(stripped):
             continue
 
         if stripped.lower() in repeated:
@@ -385,6 +476,10 @@ def score_content_quality(raw_text: str, clean_text: str) -> str:
     if is_paywall_page(raw_text) or is_paywall_page(clean_text):
         return "low_quality"
 
+    # Check if clean text is dominated by nav-icon garbage
+    if is_nav_icon_garbage(clean_text):
+        return "low_quality"
+
     if not raw_text:
         return "good"
 
@@ -407,12 +502,32 @@ def extract_title(clean_text: str) -> str | None:
     heading_match = re.match(r"^#{1,3}\s+(.+?)$", clean_text, re.MULTILINE)
     if heading_match:
         title = heading_match.group(1).strip()
-        if 10 <= len(title) <= 200:
+        if 10 <= len(title) <= 200 and not is_nav_icon_garbage(title):
             return title
 
     # Otherwise use first sentence (up to first period, question mark, or newline)
     first_line = clean_text.split("\n")[0].strip()
     if not first_line:
+        return None
+
+    # Reject nav-icon garbage as titles
+    if is_nav_icon_garbage(first_line):
+        # Try the second line instead
+        lines = [l.strip() for l in clean_text.split("\n") if l.strip()]
+        for line in lines[1:]:
+            if not is_nav_icon_garbage(line) and 10 <= len(line) <= 200:
+                sentence_match = re.match(r"^(.+?[.?!])\s", line)
+                if sentence_match:
+                    return sentence_match.group(1).strip()
+                return line
+        return None
+
+    # Skip "Skip links" concatenated navigation text
+    if first_line.lower().startswith("skip links") or first_line.lower().startswith("skip to"):
+        lines = [l.strip() for l in clean_text.split("\n") if l.strip()]
+        for line in lines[1:]:
+            if not line.lower().startswith("skip") and 10 <= len(line) <= 200:
+                return line
         return None
 
     # Split on sentence-ending punctuation

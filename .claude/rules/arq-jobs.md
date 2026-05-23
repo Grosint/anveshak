@@ -21,11 +21,20 @@ Consolidated from 10 learned instincts. These apply to all ARQ job design and as
   Register child jobs in `functions`, not `cron_jobs`
   See: `learned/causal-arq-job-chaining.md`
 
+## Delivery
+
+- Every service that inserts content_items MUST enqueue `analyse_content` directly
+  Never rely on the orphan sweep as the primary delivery mechanism — it's a safety net
+  The scraper missing this caused 243 permanently orphaned items over 8 days
+  Wrap enqueue in try/except so Redis failures don't crash the insert path
+  See: `learned/scraper-must-enqueue-not-rely-on-sweep.md`
+
 ## Reliability
 
 - Periodic orphan sweep: query rows with null completion columns from the last 1 hour,
   every 5 minutes, in batches of 100. Runs in scheduler, not workers.
   Insert + enqueue is not atomic (Redis isn't transactional) — sweep catches missed jobs
+  Sweep is SECONDARY to direct enqueue — not the primary mechanism
   See: `learned/orphan-sweep-safety-net.md`
 
 - Circuit breaker: skip unhealthy sources at the SQL level using `health_status` column

@@ -49,6 +49,7 @@ SQL_TOPIC_EMBEDDINGS = """
     WHERE (ci.topic_id = $1
        OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND ci.embedding IS NOT NULL
+      AND COALESCE(ci.content_quality, 'good') != 'low_quality'
       AND (ci.topic_relevance_score IS NULL OR ci.topic_relevance_score >= $2)
     ORDER BY ci.captured_at ASC
 """
@@ -63,6 +64,7 @@ SQL_TOPIC_EMBEDDINGS_WINDOWED = """
     WHERE (ci.topic_id = $1
        OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND ci.embedding IS NOT NULL
+      AND COALESCE(ci.content_quality, 'good') != 'low_quality'
       AND (ci.topic_relevance_score IS NULL OR ci.topic_relevance_score >= $2)
       AND ci.captured_at >= NOW() - MAKE_INTERVAL(days => $3)
     ORDER BY ci.captured_at ASC
@@ -80,6 +82,7 @@ SQL_UNCLUSTERED_EMBEDDINGS_WINDOWED = """
        OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND ci.embedding IS NOT NULL
       AND ci.narrative_cluster_id IS NULL
+      AND COALESCE(ci.content_quality, 'good') != 'low_quality'
       AND (ci.topic_relevance_score IS NULL OR ci.topic_relevance_score >= $2)
       AND ci.captured_at >= NOW() - MAKE_INTERVAL(days => $3)
     ORDER BY ci.captured_at ASC
@@ -96,6 +99,7 @@ SQL_UNCLUSTERED_EMBEDDINGS = """
        OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND ci.embedding IS NOT NULL
       AND ci.narrative_cluster_id IS NULL
+      AND COALESCE(ci.content_quality, 'good') != 'low_quality'
       AND (ci.topic_relevance_score IS NULL OR ci.topic_relevance_score >= $2)
     ORDER BY ci.captured_at ASC
 """

@@ -23,6 +23,8 @@
 > See also: `learned/volume-mounted-models-silent-failure.md` — empty volume = silent 0.0 scores; need make download-models + health check
 > See also: `learned/post-embedding-relevance-gate.md` — filter off-topic scraped content via topic query embedding similarity before clustering
 > See also: `learned/orphan-sweep-safety-net.md` — safety net for content_items where enqueue_job("analyse_content") failed after DB insert
+> See also: `learned/scraper-must-enqueue-not-rely-on-sweep.md` — scraper must enqueue analyse_content directly; orphan sweep is safety net, not primary delivery
+> See also: `learned/per-topic-relevance-auto-calibration.md` — auto-calibrate relevance threshold per topic from score distribution percentile
 > See also: `learned/scheduler-worker-split.md` — analyst split into scheduler (clustering/signals) + ARQ worker (NLP/embedding); import chain safety
 > See also: `learned/rss-fetch-paywall-validation.md` — validate fetched content before replacing RSS summary; paywall indicator counting
 > See also: `learned/quality-gate-all-consumers.md` — apply quality/relevance filters at every consumption point, not just clustering

@@ -87,8 +87,19 @@ export function FilterBar({ filters, onChange, clusterView, onToggleCluster }: F
         />
       </div>
 
+      {/* Sort */}
+      <select
+        value={filters.sort_by ?? 'captured_at'}
+        onChange={(e) => onChange({ ...filters, sort_by: e.target.value as ContentFilters['sort_by'] })}
+        className="bg-anveshak-card border border-anveshak-border rounded px-2 py-1.5 text-xs text-text-primary focus:outline-none focus:border-anveshak-accent"
+        aria-label="Sort content by"
+      >
+        <option value="captured_at">Most Recent</option>
+        <option value="relevance">Most Relevant</option>
+      </select>
+
       {/* Clear */}
-      {(filters.language || filters.sentiment || filters.credibility_min || filters.date_from || filters.date_to) && (
+      {(filters.language || filters.sentiment || filters.credibility_min || filters.date_from || filters.date_to || filters.sort_by) && (
         <button
           onClick={() => onChange({})}
           className="text-xs text-signal-high hover:underline"

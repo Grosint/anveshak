@@ -21,6 +21,8 @@
 > See also: `learned/scheduler-worker-split.md` — split monolithic service into lightweight scheduler (124 MiB) + ARQ ML worker (6 GiB); import safety rules
 > See also: `learned/orphan-sweep-safety-net.md` — periodic sweep for content_items missed by scraper enqueue; runs in scheduler every 5 min
 > See also: `learned/quality-gate-all-consumers.md` — relevance score must filter at display AND clustering; NULL-safe SQL pattern
+> See also: `learned/per-topic-relevance-auto-calibration.md` — auto-calibrate relevance threshold per topic; global threshold fails for mixed-breadth topics
+> See also: `learned/psql-null-empty-string-pitfall.md` — psql returns '' for NULL, not Python None; use truthiness check in scripts
 > See also: `learned/incremental-clustering-centroid-assign.md` — O(new×clusters) instead of O(N²); preserves cluster_id stability
 > See also: `learned/entity-minhash-clustering-boost.md` — blend entity Jaccard into HDBSCAN distance; BIGINT[] not INTEGER[]; NULL-safe mask
 > See also: `learned/hdbscan-cosine-precomputed.md` — HDBSCAN 0.8.x needs precomputed float64 matrix; metric="cosine" not supported

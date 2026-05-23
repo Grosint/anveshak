@@ -434,3 +434,165 @@ class TestComputeCleanHash:
         h1 = compute_clean_hash("India   deploys   troops")
         h2 = compute_clean_hash("India deploys troops")
         assert h1 == h2
+
+
+# ---------------------------------------------------------------------------
+# Nav-icon garbage detection — RSS/web pages with scraped UI element names
+# ---------------------------------------------------------------------------
+
+from anveshak.scraper.clean import is_nav_icon_garbage
+
+
+class TestNavIconGarbageDetection:
+    """Detect text dominated by UI element names (icon labels, nav items).
+
+    From real NDTV RSS scrapes: "arrow-down comments printer search bell
+    top-nav right-arrow left-arrow arrow-down" — these are icon alt-text
+    and aria-labels scraped as content.
+    """
+
+    @pytest.mark.unit
+    def test_ndtv_arrow_nav_detected(self):
+        """Real NDTV garbage from screenshot — icon alt-text."""
+        text = "arrow-down comments printer search bell top-nav right-arrow left-arrow arrow-down"
+        assert is_nav_icon_garbage(text) is True
+
+    @pytest.mark.unit
+    def test_ndtv_mixed_garbage(self):
+        """Nav icons mixed with partial real content."""
+        text = (
+            "arrow-down comments printer search bell top-nav right-arrow "
+            "left-arrow arrow-down , Why Reservation For Their Children?: "
+            "Supreme Court"
+        )
+        assert is_nav_icon_garbage(text) is True
+
+    @pytest.mark.unit
+    def test_ndtv_full_garbage_line(self):
+        """Full garbage line from NDTV RSS page scrape."""
+        text = (
+            "arrow-down comments printer search bell top-nav right-arrow "
+            "left-arrow arrow-down \u092b\u093f\u0930\u094d :Board Exam Results "
+            "2026 Get it on Google Play Download on the App Store facebook :) "
+            "twitter :) WhatsApp :) Settings * Change Fo..."
+        )
+        assert is_nav_icon_garbage(text) is True
+
+    @pytest.mark.unit
+    def test_real_article_not_flagged(self):
+        """Normal article text should NOT be detected as nav garbage."""
+        text = (
+            "India's Supreme Court ruled on reservation policies affecting "
+            "children of government employees. The landmark judgment sets "
+            "new precedent for affirmative action in education."
+        )
+        assert is_nav_icon_garbage(text) is False
+
+    @pytest.mark.unit
+    def test_military_article_not_flagged(self):
+        """Military article with directional words should not be flagged."""
+        text = (
+            "The fighter jet turned left and executed a right banking maneuver "
+            "before descending to search for the target below."
+        )
+        assert is_nav_icon_garbage(text) is False
+
+    @pytest.mark.unit
+    def test_short_text_not_flagged(self):
+        """Short text shouldn't be flagged as nav garbage."""
+        assert is_nav_icon_garbage("hello") is False
+        assert is_nav_icon_garbage("") is False
+
+    @pytest.mark.unit
+    def test_menu_hamburger_icons(self):
+        """Menu/hamburger icon labels."""
+        text = "menu close hamburger search user account cart chevron-down chevron-up"
+        assert is_nav_icon_garbage(text) is True
+
+    @pytest.mark.unit
+    def test_social_share_icons(self):
+        """Social sharing icon labels."""
+        text = "share facebook twitter whatsapp telegram copy-link email print bookmark"
+        assert is_nav_icon_garbage(text) is True
+
+
+class TestCleanExtractedTextNavIcons:
+    """clean_extracted_text should strip nav-icon garbage lines."""
+
+    @pytest.mark.unit
+    def test_ndtv_garbage_stripped(self):
+        """NDTV nav icons should be stripped, real content preserved."""
+        text = (
+            "arrow-down comments printer search bell top-nav right-arrow "
+            "left-arrow arrow-down\n"
+            "India's Oil Reserves: How Long Can They Last As Iran War..."
+        )
+        result = clean_extracted_text(text)
+        assert "arrow-down" not in result
+        assert "Oil Reserves" in result
+
+    @pytest.mark.unit
+    def test_multiple_garbage_lines_stripped(self):
+        """Multiple nav-icon lines in sequence should all be stripped."""
+        text = (
+            "arrow-down comments printer search bell\n"
+            "menu close hamburger search user\n"
+            "Real article content about defence policy changes in India."
+        )
+        result = clean_extracted_text(text)
+        assert "arrow-down" not in result
+        assert "hamburger" not in result
+        assert "defence policy" in result
+
+
+class TestExtractTitleNavGarbage:
+    """extract_title should reject nav-icon garbage as titles."""
+
+    @pytest.mark.unit
+    def test_nav_garbage_title_rejected(self):
+        """Nav-icon text should not become a title."""
+        text = (
+            "arrow-down comments printer search bell top-nav right-arrow "
+            "left-arrow arrow-down\n"
+            "India's Oil Reserves: How Long Can They Last As Iran War Looms."
+        )
+        title = extract_title(text)
+        assert title is None or "arrow-down" not in title
+
+    @pytest.mark.unit
+    def test_skip_links_title_rejected(self):
+        """'Skip linksSkip to Content' should not be a title."""
+        text = (
+            "Skip linksSkip to Content play Live Close navigation menu Navigation "
+            "menu here to search\n"
+            "British climber sets record with 20th Everest summit."
+        )
+        title = extract_title(text)
+        assert title is None or "Skip links" not in title
+
+
+class TestScoreContentQualityNavGarbage:
+    """score_content_quality should flag nav-icon-dominated content."""
+
+    @pytest.mark.unit
+    def test_nav_only_garbage_is_low_quality(self):
+        """Content that is purely nav icons → low_quality."""
+        raw = (
+            "arrow-down comments printer search bell top-nav right-arrow "
+            "left-arrow arrow-down\n"
+            "menu close hamburger search user account cart\n"
+            "share facebook twitter whatsapp telegram\n"
+        )
+        cleaned = clean_extracted_text(raw)
+        assert score_content_quality(raw, cleaned) == "low_quality"
+
+    @pytest.mark.unit
+    def test_nav_prefix_stripped_from_content(self):
+        """Nav icon prefix on a line should be stripped, leaving real content."""
+        raw = (
+            "arrow-down comments printer search bell top-nav right-arrow "
+            "left-arrow arrow-down , Why Reservation For Their Children?: "
+            "Supreme Court"
+        )
+        cleaned = clean_extracted_text(raw)
+        assert "arrow-down" not in cleaned

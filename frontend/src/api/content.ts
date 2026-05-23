@@ -21,6 +21,7 @@ export interface ContentItem {
   duplicate_count?: number
   sentiment?: SentimentScore | null
   keywords?: string[] | null
+  topic_relevance_score?: number | null
   // Detail-only fields (GET /api/v1/content/{id})
   source_name?: string
   platform?: string
@@ -50,13 +51,14 @@ export interface ContentFilters {
   date_to?: string
   has_embedding?: boolean
   sentiment?: 'positive' | 'negative' | 'neutral'
+  sort_by?: 'captured_at' | 'relevance'
 }
 
 export const contentApi = {
-  list: (topicId: string, offset = 0, limit = 50, sentiment?: string) =>
+  list: (topicId: string, offset = 0, limit = 50, sentiment?: string, sort_by?: string) =>
     api
       .get<ContentItem[]>(`/api/v1/topics/${topicId}/content`, {
-        params: { offset, limit, ...(sentiment ? { sentiment } : {}) },
+        params: { offset, limit, ...(sentiment ? { sentiment } : {}), ...(sort_by ? { sort_by } : {}) },
       })
       .then((r) => r.data),
 

@@ -153,16 +153,20 @@ async def get_topic_content(
     platform: Optional[str] = None,
     include_low_quality: bool = False,
     sentiment: Optional[str] = None,
+    sort_by: Optional[str] = None,
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     if sentiment and sentiment not in ("positive", "negative", "neutral"):
         raise HTTPException(status_code=422, detail="sentiment must be positive|negative|neutral")
+    if sort_by and sort_by not in ("captured_at", "relevance"):
+        raise HTTPException(status_code=422, detail="sort_by must be captured_at|relevance")
     topic = await topics_db.get_topic(db, topic_id)
     relevance_threshold = topic.get("topic_relevance_threshold") if topic else None
     return await topics_db.get_topic_content(
         db, topic_id, limit, offset, has_embedding, platform, include_low_quality, sentiment,
         relevance_threshold=relevance_threshold,
+        sort_by=sort_by or "captured_at",
     )
 
 

@@ -43,6 +43,15 @@ Consolidated from 7 learned instincts. Silent failures are the #1 source of prod
   Empty volume = silent 0.0 scores with no error
   See: `learned/volume-mounted-models-silent-failure.md`
 
+## Scripts (psql subprocess)
+
+- Scripts that shell out to `psql -A -F "\t"` get empty string `''` for NULL columns,
+  not Python `None`. Code like `float(row["col"]) if row.get("col") is not None` crashes
+  with `ValueError: could not convert string to float: ''`
+  Use truthiness check: `float(raw) if raw else default`
+  Only affects subprocess-based scripts — asyncpg returns proper Python None
+  See: `learned/psql-null-empty-string-pitfall.md`
+
 ## Git & Build
 
 - Blanket `.gitignore` patterns (`models/`, `media/`) silently exclude Python packages

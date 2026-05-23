@@ -55,6 +55,15 @@ Consolidated from 9 learned instincts. These apply to all content processing pip
 - If a source is later downgraded, `report_source_warnings` is inserted —
   the report itself is immutable (CLAUDE.md rule 4)
 
+## Per-Topic Relevance Auto-Calibration
+
+- A global relevance threshold fails for mixed-breadth topics (IOR median 0.14 vs LAC 0.26)
+  Use PERCENTILE_CONT of each topic's score distribution to auto-set per-topic thresholds
+  Clamp to [floor=0.08, ceiling=0.50], skip topics with < 20 scored items
+  Runs on startup + every 6h in analyst-scheduler; `topics.topic_relevance_threshold` column
+  Global default (0.35) is fallback only for topics without enough data
+  See: `learned/per-topic-relevance-auto-calibration.md`
+
 ## Content Enrichment at Ingest Time
 
 - Detect language at scrape time (`detect_language(clean_text)`) — not hardcoded "en"

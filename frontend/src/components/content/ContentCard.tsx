@@ -50,6 +50,11 @@ export function ContentCard({ item, onClick }: ContentCardProps) {
             +{dupCount} duplicate{dupCount > 1 ? 's' : ''}
           </Badge>
         )}
+        {item.topic_relevance_score != null && (
+          <span className="text-[10px] font-mono font-medium text-anveshak-accent/80 bg-anveshak-accent/10 border border-anveshak-accent/20 rounded px-1.5 py-0.5">
+            {Math.round(item.topic_relevance_score * 100)}% match
+          </span>
+        )}
       </div>
 
       {/* Title — primary display */}
@@ -62,6 +67,20 @@ export function ContentCard({ item, onClick }: ContentCardProps) {
         <p className="text-xs text-text-muted mt-1 line-clamp-2">
           {displayBody}
         </p>
+      )}
+
+      {/* Keywords */}
+      {item.keywords && item.keywords.length > 0 && (
+        <div className="flex items-center gap-1 flex-wrap mt-1.5">
+          {item.keywords.slice(0, 5).map((kw) => (
+            <span
+              key={kw}
+              className="text-[9px] text-text-muted bg-white/[0.04] border border-white/[0.06] rounded px-1.5 py-0.5"
+            >
+              {kw}
+            </span>
+          ))}
+        </div>
       )}
 
       {/* Footer */}

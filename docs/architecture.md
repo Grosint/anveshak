@@ -18,14 +18,15 @@ Anveshak (Sanskrit: investigator, seeker) is a standalone, sovereign AI-OSINT an
 8. [Inter-Service Communication](#inter-service-communication)
 9. [Data Flow — End to End](#data-flow--end-to-end)
 10. [Database Schema](#database-schema)
-11. [Vector Similarity Pipeline](#vector-similarity-pipeline)
-12. [Signal Engine](#signal-engine)
-13. [Report Generation Pipeline](#report-generation-pipeline)
-14. [Security Model](#security-model)
-15. [Hardware Independence](#hardware-independence)
-16. [Validation Suite](#validation-suite)
-17. [Deployment](#deployment)
-18. [Key Invariants](#key-invariants)
+11. [Content Quality Gates](#content-quality-gates)
+12. [Vector Similarity Pipeline](#vector-similarity-pipeline)
+13. [Signal Engine](#signal-engine)
+14. [Report Generation Pipeline](#report-generation-pipeline)
+15. [Security Model](#security-model)
+16. [Hardware Independence](#hardware-independence)
+17. [Validation Suite](#validation-suite)
+18. [Deployment](#deployment)
+19. [Key Invariants](#key-invariants)
 
 ---
 
@@ -865,6 +866,132 @@ topics ─────────────┬──────────�
 
 ---
 
+## Content Quality Gates
+
+Content passes through three independent quality gates before it can influence analyst-facing outputs (signals, clusters, reports, feed). Each gate catches a different class of noise. All three are mandatory — no single gate is sufficient alone.
+
+```
+Internet ──► Scraper ──► Analyst Worker ──► API / Frontend
+                │              │                  │
+                ▼              ▼                  ▼
+          ┌──────────┐  ┌──────────────┐  ┌──────────────────┐
+          │  GATE 1   │  │   GATE 2     │  │    GATE 3        │
+          │  Content  │  │   Topic      │  │    Display       │
+          │  Quality  │  │   Relevance  │  │    Filters       │
+          ├──────────┤  ├──────────────┤  ├──────────────────┤
+          │ SET AT:   │  │ SET AT:      │  │ SET AT:          │
+          │ Scrape    │  │ analyse_     │  │ Query time       │
+          │ time      │  │ content job  │  │ (not persisted)  │
+          ├──────────┤  ├──────────────┤  ├──────────────────┤
+          │ HOW:      │  │ HOW:         │  │ HOW:             │
+          │ Boiler-   │  │ Cosine sim   │  │ Language,        │
+          │ plate     │  │ of content   │  │ sentiment,       │
+          │ ratio,    │  │ embedding vs │  │ credibility,     │
+          │ paywall   │  │ topic query  │  │ date range,      │
+          │ detection,│  │ embedding    │  │ sort order       │
+          │ nav-icon  │  │              │  │                  │
+          │ garbage   │  │ Per-topic    │  │                  │
+          │           │  │ auto-calib   │  │                  │
+          ├──────────┤  ├──────────────┤  ├──────────────────┤
+          │ CATCHES:  │  │ CATCHES:     │  │ CATCHES:         │
+          │ Garbage   │  │ Off-topic    │  │ Analyst's        │
+          │ pages,    │  │ content that │  │ current focus    │
+          │ paywalls, │  │ doesn't      │  │ (temporal,       │
+          │ scraped   │  │ match the    │  │ linguistic,      │
+          │ nav/UI    │  │ monitored    │  │ sentiment        │
+          │ elements  │  │ topic        │  │ preferences)     │
+          ├──────────┤  ├──────────────┤  ├──────────────────┤
+          │ STORED:   │  │ STORED:      │  │ NOT STORED:      │
+          │ content_  │  │ topic_       │  │ Query params     │
+          │ quality   │  │ relevance_   │  │ only             │
+          │ column    │  │ score +      │  │                  │
+          │ ('good' | │  │ topic_       │  │                  │
+          │ 'low_     │  │ relevance_   │  │                  │
+          │  quality')│  │ threshold    │  │                  │
+          └──────────┘  └──────────────┘  └──────────────────┘
+```
+
+### Why three gates
+
+**Gate 1 alone is insufficient:** It catches structurally broken pages (nav text, paywalls) but cannot judge topical relevance. A well-formed article about cricket still passes Gate 1.
+
+**Gate 2 alone is insufficient:** It catches off-topic content via embedding similarity, but garbage pages full of Indian keywords (e.g., NDTV homepage scrapes) embed close enough to India-related topics to pass the relevance threshold.
+
+**Gate 3 alone is insufficient:** Display filters only hide content from the analyst's view — they don't prevent garbage from entering clusters, inflating ISC, and triggering false signals.
+
+### Where each gate is enforced
+
+| Consumer | Gate 1 (Quality) | Gate 2 (Relevance) | Gate 3 (Display) |
+|----------|:---:|:---:|:---:|
+| Clustering (Leiden) | YES | YES | — |
+| Signal engine | YES (via clustering) | YES (via clustering) | — |
+| Cluster labelling (Ollama) | YES | — | — |
+| API content list | YES | YES | YES |
+| RAG context (reports) | — | YES (`credibility_min`) | — |
+| Semantic search | — | — | — (similarity-ranked) |
+
+### Gate 1: Content Quality
+
+**Set by:** `score_content_quality()` in `services/scraper/anveshak/scraper/clean.py` at scrape time.
+
+**Column:** `content_items.content_quality` — `'good'` or `'low_quality'`
+
+**Checks (any match → `low_quality`):**
+
+| Check | Threshold | Purpose |
+|-------|-----------|---------|
+| `len(clean_text) < 100` | chars | Minimum content length |
+| `is_paywall_page()` | 3+ indicators | Login/subscription wall |
+| `len(clean_text) / len(raw_text) < 0.15` | ratio | 85%+ stripped = boilerplate page |
+| `is_nav_icon_garbage()` | 40%+ nav-icon words | Scraped UI element names (icon alt-text, aria-labels) |
+
+**SQL pattern:** `AND COALESCE(ci.content_quality, 'good') != 'low_quality'`
+
+The `COALESCE` ensures backward compatibility — items ingested before the `content_quality` column was added (NULL values) are treated as `'good'`.
+
+### Gate 2: Topic Relevance
+
+**Set by:** `analyse_content` ARQ job in `services/analyst/anveshak/analyst/jobs.py` after embedding.
+
+**Columns:** `content_items.topic_relevance_score` (float 0.0–1.0), `topics.topic_relevance_threshold`
+
+**How it works:**
+
+1. Content is embedded via sentence-transformers (384-dim)
+2. Topic keywords are embedded as a query vector
+3. Cosine similarity between content and topic query = `topic_relevance_score`
+4. Items below the topic's threshold are excluded from clustering and API display
+
+**Per-topic auto-calibration:** A global threshold (0.35) fails for mixed-breadth topics — "Indian Ocean Maritime" (median score 0.14) vs "India-China LAC" (median 0.26). The analyst-scheduler runs `PERCENTILE_CONT` on each topic's score distribution every 6 hours, setting `topic_relevance_threshold` so ~60% of content survives. Clamped to [0.08, 0.50], skips topics with <20 scored items.
+
+**SQL pattern:** `AND (ci.topic_relevance_score IS NULL OR ci.topic_relevance_score >= $threshold)`
+
+The `IS NULL` clause ensures backward compatibility — items not yet scored by the analyst worker are included (the orphan sweep will process them).
+
+### Gate 3: Display Filters
+
+**Set by:** Analyst interaction in the frontend filter bar. Not persisted — applied at query time.
+
+**Filters:**
+
+| Filter | Type | Applied |
+|--------|------|---------|
+| Language | Client-side post-fetch | `item.language === filter` |
+| Sentiment | Server-side SQL | `labels->'sentiment'->>'compound'` threshold |
+| Min credibility | Client-side post-fetch | `credibility_score_at_capture >= min` |
+| Date range | Client-side post-fetch | `captured_at` between from/to |
+| Sort order | Server-side SQL | `ORDER BY captured_at DESC` or `topic_relevance_score DESC` |
+
+**Key files:**
+
+- Gate 1: `services/scraper/anveshak/scraper/clean.py`
+- Gate 2: `services/analyst/anveshak/analyst/jobs.py`, `services/analyst/anveshak/analyst/relevance.py`
+- Gate 3: `frontend/src/components/content/FilterBar.tsx`, `services/api/anveshak/api/db/topics.py`
+- Clustering enforcement: `services/analyst/anveshak/analyst/clustering.py` (4 SQL queries)
+- Labeller enforcement: `services/analyst/anveshak/analyst/labeller.py`
+
+---
+
 ## Vector Similarity Pipeline
 
 The vector similarity pipeline is the intelligence backbone of Anveshak. It transforms raw text into embeddings, groups them into narrative clusters, detects duplicates, fires signals, and discovers cross-topic connections. Six interconnected subsystems work together.
@@ -1495,6 +1622,8 @@ These rules are enforced by code, tests, and CI. They are non-negotiable.
 | Labels are never Optional | `verify_labels.py` script, unit tests on every Pydantic model |
 | Reports are immutable | `generated_at` set once, `WHERE generated_at IS NULL` guard in worker |
 | Content is deduplicated | `UNIQUE(content_hash)`, `ON CONFLICT DO NOTHING` on every insert |
+| Three content quality gates enforced | Gate 1 (quality) + Gate 2 (relevance) applied at clustering, API, labeller; Gate 3 (display) at API |
+| Low-quality content excluded from clustering | `COALESCE(content_quality, 'good') != 'low_quality'` in all 4 clustering SQL queries |
 | Near-duplicates excluded from ISC | `dedup.py` filters before `count_independent_sources()` in clustering |
 | Deepfake scores are float 0.0-1.0 | Type system, never `bool` — analyst decides threshold |
 | All LLM calls are async | ARQ jobs only — API routes never call Ollama directly |

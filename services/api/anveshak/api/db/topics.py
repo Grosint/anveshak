@@ -175,6 +175,7 @@ async def get_topic_content(
     include_low_quality: bool = False,
     sentiment: Optional[str] = None,
     relevance_threshold: Optional[float] = None,
+    sort_by: str = "captured_at",
 ) -> list[dict[str, Any]]:
     if has_embedding is True:
         emb_clause = "AND ci.embedding IS NOT NULL"
@@ -213,6 +214,12 @@ async def get_topic_content(
     else:
         sentiment_clause = ""
 
+    # Determine ORDER BY clause — only two allowed values (not user input)
+    if sort_by == "relevance":
+        order_clause = "ORDER BY COALESCE(topic_relevance_score, 0) DESC, captured_at DESC"
+    else:
+        order_clause = "ORDER BY captured_at DESC"
+
     # Use a CTE to dedup on clean_hash — show newest item per unique clean_hash,
     # with a count of how many duplicates were collapsed.
     sql = f"""
@@ -227,6 +234,7 @@ async def get_topic_content(
                    ci.captured_at,
                    ci.clean_hash,
                    ci.labels,
+                   ci.topic_relevance_score,
                    s.name AS source_name,
                    s.platform,
                    FALSE AS backfilled
@@ -251,6 +259,7 @@ async def get_topic_content(
                    ci.captured_at,
                    ci.clean_hash,
                    ci.labels,
+                   ci.topic_relevance_score,
                    s.name AS source_name,
                    s.platform,
                    TRUE AS backfilled
@@ -268,7 +277,8 @@ async def get_topic_content(
             SELECT DISTINCT ON (COALESCE(clean_hash, id))
                    id, url, title, clean_text, translated_text,
                    language, credibility_score_at_capture, captured_at,
-                   clean_hash, labels, source_name, platform, backfilled
+                   clean_hash, labels, topic_relevance_score,
+                   source_name, platform, backfilled
             FROM all_items
             ORDER BY COALESCE(clean_hash, id), captured_at DESC
         ),
@@ -284,9 +294,10 @@ async def get_topic_content(
         )
         SELECT id, url, title, clean_text, translated_text,
                language, credibility_score_at_capture, captured_at,
-               source_name, platform, backfilled, duplicate_count, labels
+               source_name, platform, backfilled, duplicate_count, labels,
+               topic_relevance_score
         FROM with_counts
-        ORDER BY captured_at DESC
+        {order_clause}
         LIMIT $2 OFFSET $3
     """  # nosec B608 — clauses are internal strings, not user input; platform is parameterized as $4
     rows = await conn.fetch(sql, *params)
@@ -298,6 +309,9 @@ async def get_topic_content(
             labels = json.loads(labels)
         d["sentiment"] = labels.get("sentiment")
         d["keywords"] = labels.get("keywords", [])
+        # Round relevance score to 2 decimals for display
+        raw_rel = d.get("topic_relevance_score")
+        d["topic_relevance_score"] = round(raw_rel, 2) if raw_rel is not None else None
         results.append(d)
     return results
 
