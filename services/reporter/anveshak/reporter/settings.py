@@ -16,6 +16,7 @@ class ReporterSettings(BaseSettings):
     analyst_service_url: str = "http://analyst-scheduler:8007"
 
     # RAG
+    topic_relevance_threshold: float = 0.35  # fallback when per-topic override not set
     rag_top_k: int = 10
     rag_similarity_threshold: float = 0.3
     rag_max_context_tokens: int = 4000

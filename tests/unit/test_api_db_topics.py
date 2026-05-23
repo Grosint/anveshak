@@ -187,7 +187,7 @@ async def test_get_topic_content_labels_null(mock_conn: AsyncMock) -> None:
 
 @pytest.mark.unit
 async def test_get_topic_content_custom_relevance_threshold(mock_conn: AsyncMock) -> None:
-    """Override default threshold (0.42) with 0.75 — verify it's passed as param."""
+    """Override default threshold (0.35) with 0.75 — verify it's passed as param."""
     mock_conn.fetch = AsyncMock(return_value=[])
 
     await get_topic_content(
@@ -199,6 +199,6 @@ async def test_get_topic_content_custom_relevance_threshold(mock_conn: AsyncMock
     call_args = mock_conn.fetch.call_args
     params = call_args[0][1:]
 
-    # $4 should be 0.75, not the default 0.42
+    # $4 should be 0.75, not the default 0.35
     assert params[3] == 0.75
     assert params[3] != _DEFAULT_RELEVANCE_THRESHOLD

@@ -102,12 +102,15 @@ async def generate_report(ctx: dict, report_id: str) -> None:
     query_embedding = await generate_query_embedding(topic_name, keywords)
 
     # --- 3. Fetch RAG chunks ---
+    # Per-topic relevance threshold (auto-calibrated); fallback to global default
+    relevance_threshold = float(topic["topic_relevance_threshold"]) if topic.get("topic_relevance_threshold") is not None else s.topic_relevance_threshold
     chunks = await db.fetch_rag_chunks(
         pool,
         topic_id,
         query_embedding,
         credibility_min,
         s.rag_top_k,
+        relevance_threshold=relevance_threshold,
     )
 
     if not chunks:

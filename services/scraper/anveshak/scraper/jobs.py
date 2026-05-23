@@ -200,11 +200,23 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
                 title,
             )
         if result is not None:
+            content_item_id = result["id"]
             counter["inserted"] += 1
             scraper_items_fetched_total.labels(
                 topic_id=topic_id, source_platform="web"
             ).inc()
-            return result["id"]
+            try:
+                await redis.enqueue_job(
+                    "analyse_content", content_item_id,
+                    _queue_name="arq:analyst",
+                )
+            except Exception as exc:
+                log.warning(
+                    "scraper.enqueue_analyse_failed",
+                    content_item_id=content_item_id,
+                    error=str(exc),
+                )
+            return content_item_id
         return None
 
     async def _process(source: asyncpg.Record, crawler, run_cfg) -> None:
@@ -313,6 +325,7 @@ async def poll_rss_sources(ctx: dict, topic_id: str) -> int:
     Returns the number of new content_items inserted.
     """
     db_pool: asyncpg.Pool = ctx["db_pool"]
+    redis = ctx["redis"]   # ARQ Redis pool — enqueue analyse_content
 
     async with db_pool.acquire() as conn:
         topic = await conn.fetchrow(SQL_GET_TOPIC, topic_id)
@@ -366,10 +379,22 @@ async def poll_rss_sources(ctx: dict, topic_id: str) -> int:
                             )
 
                         if result is not None:
+                            rss_item_id = result["id"]
                             counter["inserted"] += 1
                             scraper_items_fetched_total.labels(
                                 topic_id=topic_id, source_platform="rss"
                             ).inc()
+                            try:
+                                await redis.enqueue_job(
+                                    "analyse_content", rss_item_id,
+                                    _queue_name="arq:analyst",
+                                )
+                            except Exception as enq_exc:
+                                log.warning(
+                                    "rss.enqueue_analyse_failed",
+                                    content_item_id=rss_item_id,
+                                    error=str(enq_exc),
+                                )
                             log.debug(
                                 "rss.item_inserted",
                                 topic_id=topic_id,
@@ -402,6 +427,7 @@ async def scrape_darkweb_topic(ctx: dict, topic_id: str) -> int:
     Returns the number of new content_items inserted.
     """
     db_pool: asyncpg.Pool = ctx["db_pool"]
+    redis = ctx["redis"]   # ARQ Redis pool — enqueue analyse_content
 
     async with db_pool.acquire() as conn:
         topic = await conn.fetchrow(SQL_GET_TOPIC, topic_id)
@@ -450,11 +476,23 @@ async def scrape_darkweb_topic(ctx: dict, topic_id: str) -> int:
                 title,
             )
         if result is not None:
+            content_item_id = result["id"]
             counter["inserted"] += 1
             scraper_items_fetched_total.labels(
                 topic_id=topic_id, source_platform="darkweb"
             ).inc()
-            return result["id"]
+            try:
+                await redis.enqueue_job(
+                    "analyse_content", content_item_id,
+                    _queue_name="arq:analyst",
+                )
+            except Exception as exc:
+                log.warning(
+                    "darkweb.enqueue_analyse_failed",
+                    content_item_id=content_item_id,
+                    error=str(exc),
+                )
+            return content_item_id
         return None
 
     async def _process_onion(source: asyncpg.Record, crawler, run_cfg) -> None:

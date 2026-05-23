@@ -112,6 +112,7 @@ class TestRAGCredibilityFiltering:
             rag_top_k=10, rag_max_context_tokens=4000,
             ollama_model="test", ollama_host="http://ollama:11434",
             ollama_report_timeout_s=30, ollama_retry_max=2,
+            topic_relevance_threshold=0.35,
         )}
 
         with patch("anveshak.reporter.worker.db") as mock_db, \
@@ -163,6 +164,7 @@ class TestRAGCredibilityFiltering:
             rag_top_k=10, rag_max_context_tokens=4000,
             ollama_model="test", ollama_host="http://o:11434",
             ollama_report_timeout_s=30, ollama_retry_max=2,
+            topic_relevance_threshold=0.35,
         )}
 
         with patch("anveshak.reporter.worker.db") as mock_db, \

@@ -33,6 +33,7 @@ def _make_settings():
     s.ollama_report_timeout_s = 30
     s.ollama_retry_max = 2
     s.source_warning_lookback_days = 30
+    s.topic_relevance_threshold = 0.35
     return s
 
 

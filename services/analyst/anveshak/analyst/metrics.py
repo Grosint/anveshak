@@ -56,6 +56,16 @@ analyst_relevance_score = Histogram(
     registry=REGISTRY,
 )
 
+# Per-topic auto-calibrated relevance threshold
+from prometheus_client import Gauge
+
+analyst_topic_threshold = Gauge(
+    "analyst_topic_relevance_threshold",
+    "Auto-calibrated relevance threshold per topic",
+    ["topic_id", "topic_name"],
+    registry=REGISTRY,
+)
+
 # 8A.19 — ARQ job failures
 arq_jobs_failed_total = Counter(
     "arq_jobs_failed_total",

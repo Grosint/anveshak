@@ -419,6 +419,38 @@ async def orphan_sweep(pool: asyncpg.Pool, redis: object) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Relevance threshold auto-calibration
+# ---------------------------------------------------------------------------
+
+async def relevance_calibration_loop(pool: asyncpg.Pool) -> None:
+    """Periodically calibrate per-topic relevance thresholds from score distributions."""
+    from .relevance import calibrate_topic_thresholds
+
+    log.info(
+        "scheduler.relevance_calibration.started",
+        interval_s=settings.relevance_calibration_interval_s,
+    )
+    # Run immediately on startup for fast initial convergence
+    try:
+        updated = await calibrate_topic_thresholds(pool)
+        log.info("scheduler.relevance_calibration.initial_run", topics_updated=updated)
+    except Exception as exc:
+        log.error("scheduler.relevance_calibration.initial_error", error=str(exc))
+
+    while True:
+        await asyncio.sleep(settings.relevance_calibration_interval_s)
+        try:
+            updated = await calibrate_topic_thresholds(pool)
+            if updated:
+                log.info(
+                    "scheduler.relevance_calibration.cycle_done",
+                    topics_updated=updated,
+                )
+        except Exception as exc:
+            log.error("scheduler.relevance_calibration.error", error=str(exc))
+
+
+# ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
 
@@ -436,6 +468,7 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(convergence_loop(pool)),
         asyncio.create_task(orphan_sweep(pool, redis)),
         asyncio.create_task(content_retention_loop(pool)),
+        asyncio.create_task(relevance_calibration_loop(pool)),
     ]
 
     yield

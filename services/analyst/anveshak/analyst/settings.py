@@ -62,9 +62,18 @@ class AnalystSettings(BaseSettings):
 
     # Topic relevance gate — filter irrelevant content before clustering
     # Cosine similarity floor between content embedding and topic query embedding.
-    # Calibrated from real data: relevant clusters avg 0.45+, junk scores 0.30–0.40.
-    # Per-topic override via topics.topic_relevance_threshold.
+    # Per-topic override via topics.topic_relevance_threshold (auto-calibrated).
+    # Global default is fallback for topics with < min_items scored content.
     topic_relevance_threshold: float = 0.35
+
+    # Auto-calibration of per-topic relevance thresholds
+    # Runs periodically, computes percentile of score distribution per topic,
+    # and sets topics.topic_relevance_threshold so ~60% of content survives.
+    relevance_calibration_interval_s: int = 21600       # 6 hours
+    relevance_calibration_target_pct: float = 0.40      # percentile cutoff (keep top 60%)
+    relevance_calibration_floor: float = 0.08           # never accept pure noise
+    relevance_calibration_ceiling: float = 0.50         # never filter everything
+    relevance_calibration_min_items: int = 20           # skip topics with too few scored items
 
     # Near-duplicate detection (semantic dedup)
     near_duplicate_similarity_threshold: float = 0.95  # cosine similarity floor

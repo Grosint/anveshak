@@ -48,6 +48,7 @@ SQL_FETCH_RAG_CHUNKS = """
        OR id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND embedding IS NOT NULL
       AND credibility_score_at_capture >= $2
+      AND (topic_relevance_score IS NULL OR topic_relevance_score >= $5)
     ORDER BY embedding <-> $3
     LIMIT $4
 """
@@ -167,11 +168,13 @@ async def fetch_rag_chunks(
     query_embedding: list[float],
     credibility_min: float,
     top_k: int,
+    relevance_threshold: float = 0.0,
 ) -> list[dict[str, Any]]:
     """Return top-k content chunks ordered by vector similarity.
 
     SQL: SELECT ... WHERE topic_id=$1 AND embedding IS NOT NULL
          AND credibility_score_at_capture >= $2
+         AND topic_relevance_score >= $5
          ORDER BY embedding <-> $3 LIMIT $4
     """
     # asyncpg does not natively encode Python lists as pgvector — must stringify.
@@ -183,6 +186,7 @@ async def fetch_rag_chunks(
             credibility_min,
             vec_str,
             top_k,
+            relevance_threshold,
         )
     return [dict(r) for r in rows]
 

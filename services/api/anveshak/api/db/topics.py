@@ -162,7 +162,7 @@ async def update_topic_schedule(
     )
 
 
-_DEFAULT_RELEVANCE_THRESHOLD = 0.42
+_DEFAULT_RELEVANCE_THRESHOLD = 0.35  # must match analyst settings.topic_relevance_threshold
 
 
 async def get_topic_content(

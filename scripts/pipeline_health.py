@@ -103,14 +103,14 @@ def _query_val(sql: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 def get_topics(name_filter: str | None = None) -> list[dict]:
-    sql = "SELECT id, name, signal_threshold, credibility_min FROM topics WHERE status = 'active' ORDER BY name"
+    sql = "SELECT id, name, signal_threshold, credibility_min, topic_relevance_threshold FROM topics WHERE status = 'active' ORDER BY name"
     topics = _query(sql)
     if name_filter:
         topics = [t for t in topics if name_filter.lower() in t["name"].lower()]
     return topics
 
 
-def report_topic(topic_id: str, topic_name: str, signal_threshold: int, hours: int | None) -> dict:
+def report_topic(topic_id: str, topic_name: str, signal_threshold: int, hours: int | None, relevance_threshold: float = 0.35) -> dict:
     """Generate diagnostics for one topic. Returns stats dict."""
     time_clause = f"AND captured_at >= NOW() - INTERVAL '{hours} hours'" if hours else ""
     time_clause_created = f"AND created_at >= NOW() - INTERVAL '{hours} hours'" if hours else ""
@@ -153,11 +153,12 @@ def report_topic(topic_id: str, topic_name: str, signal_threshold: int, hours: i
         stats["warnings"].append(f"{stats['embeddings_null']} items with NULL embedding")
 
     # 4. Relevance-filtered
+    stats["relevance_threshold"] = relevance_threshold
     low_rel = _query_val(f"""
         SELECT COUNT(*) FROM content_items
         WHERE topic_id = '{topic_id}' {time_clause}
         AND topic_relevance_score IS NOT NULL
-        AND topic_relevance_score < 0.35
+        AND topic_relevance_score < {relevance_threshold}
     """)
     stats["relevance_filtered"] = int(low_rel or 0)
 
@@ -320,7 +321,7 @@ def format_topic_report(name: str, signal_threshold: int, stats: dict, hours: in
         + (f" (+{stats['content_backfilled']} backfilled)" if stats['content_backfilled'] > 0 else ""),
         f"  Quality-filtered out:       {stats['quality_filtered']} items",
         f"  Embeddings NULL:            {stats['embeddings_null']} items (orphans)",
-        f"  Relevance-filtered:         {stats['relevance_filtered']} items (score < 0.35)",
+        f"  Relevance-filtered:         {stats['relevance_filtered']} items (score < {stats['relevance_threshold']})",
     ]
 
     # Platform breakdown
@@ -471,10 +472,12 @@ def main() -> int:
     all_criticals = []
 
     for topic in topics:
+        rel_threshold = float(topic["topic_relevance_threshold"]) if topic.get("topic_relevance_threshold") is not None else 0.35
         stats = report_topic(
             topic["id"], topic["name"],
             int(topic["signal_threshold"]),
             hours,
+            relevance_threshold=rel_threshold,
         )
         print(format_topic_report(
             topic["name"], int(topic["signal_threshold"]),
