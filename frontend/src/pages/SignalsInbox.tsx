@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { signalsApi, Signal, SignalStatus } from '../api/signals'
+import { topicsApi } from '../api/topics'
 import { useWS } from '../contexts/WSContext'
 import { SignalCard } from '../components/signals/SignalCard'
 import { SignalTimeline } from '../components/signals/SignalTimeline'
@@ -34,14 +35,27 @@ function toISODate(d: Date): string {
 export default function SignalsInbox() {
   const [activeTab, setActiveTab]     = useState<SignalStatus>('new')
   const [newCount, setNewCount]       = useState(0)
-  const [preset, setPreset]           = useState<TimePreset>('7d')
+  const [preset, setPreset]           = useState<TimePreset>('30d')
   const [customFrom, setCustomFrom]   = useState('')
   const [customTo, setCustomTo]       = useState(() => toISODate(new Date()))
   const [viewMode, setViewMode]       = useState<ViewMode>('timeline')
   const [graphSignalId, setGraphSignalId] = useState<string | null>(null)
+  const [activeTopicsOnly, setActiveTopicsOnly] = useState(true)
 
   const qc = useQueryClient()
   const { subscribe } = useWS()
+
+  // Fetch topics to build status map for filtering signals by topic status
+  const { data: topics = [] } = useQuery({
+    queryKey: ['topics'],
+    queryFn: topicsApi.list,
+    staleTime: 60_000,
+  })
+
+  const topicStatusMap = useMemo(
+    () => Object.fromEntries(topics.map((t) => [t.id, t.status])),
+    [topics],
+  )
 
   const { since, until } = useMemo(
     () => resolveTimeRange(preset, customFrom, customTo),
@@ -104,6 +118,15 @@ export default function SignalsInbox() {
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ['signals'] }),
   })
+
+  const filteredSignals = useMemo(
+    () => activeTopicsOnly
+      ? signals.filter((s) => topicStatusMap[s.topic_id] === 'active')
+      : signals,
+    [signals, activeTopicsOnly, topicStatusMap],
+  )
+
+  const hiddenCount = signals.length - filteredSignals.length
 
   const isActioning = acknowledge.isPending || dismiss.isPending
 
@@ -179,6 +202,23 @@ export default function SignalsInbox() {
               {p.label}
             </button>
           ))}
+
+          <span className="mx-1 text-anveshak-border">|</span>
+
+          <button
+            onClick={() => setActiveTopicsOnly((v) => !v)}
+            aria-pressed={activeTopicsOnly}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              activeTopicsOnly
+                ? 'bg-cred-high/20 text-cred-high border border-cred-high/30'
+                : 'bg-anveshak-muted text-text-secondary hover:bg-anveshak-card hover:text-text-primary'
+            }`}
+          >
+            Active topics only
+            {hiddenCount > 0 && !activeTopicsOnly && (
+              <span className="ml-1 text-text-muted">({hiddenCount} from paused)</span>
+            )}
+          </button>
         </div>
 
         {preset === 'custom' && (
@@ -217,19 +257,21 @@ export default function SignalsInbox() {
           <div className="flex justify-center py-20">
             <Spinner label="Loading signals…" />
           </div>
-        ) : signals.length === 0 ? (
+        ) : filteredSignals.length === 0 ? (
           <EmptyState
             icon="⚡"
             title={activeTab === 'new' ? 'No new signals' : `No ${activeTab} signals`}
             description={
-              activeTab === 'new'
-                ? 'Signals fire when a cluster reaches your source threshold.'
-                : undefined
+              activeTopicsOnly && signals.length > 0
+                ? `${signals.length} signal${signals.length > 1 ? 's' : ''} from paused topics hidden. Toggle "Active topics only" to see all.`
+                : activeTab === 'new'
+                  ? 'Signals fire when a cluster reaches your source threshold.'
+                  : undefined
             }
           />
         ) : viewMode === 'timeline' ? (
           <SignalTimeline
-            signals={signals}
+            signals={filteredSignals}
             onAcknowledge={(id) => acknowledge.mutate(id)}
             onDismiss={(id) => dismiss.mutate(id)}
             isActioning={isActioning}
@@ -237,7 +279,7 @@ export default function SignalsInbox() {
           />
         ) : (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-            {signals.map((signal) => (
+            {filteredSignals.map((signal) => (
               <SignalCard
                 key={signal.id}
                 signal={signal}

@@ -87,7 +87,7 @@ type SortBy = 'newest' | 'oldest' | 'most_content' | 'most_signals'
 export default function TopicsDashboard() {
   const [showModal, setShowModal] = useState(false)
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
   const [sortBy, setSortBy] = useState<SortBy>('newest')
   const qc = useQueryClient()
   const navigate = useNavigate()
@@ -129,7 +129,7 @@ export default function TopicsDashboard() {
     return list
   }, [topics, search, statusFilter, sortBy])
 
-  const isFiltered = search || statusFilter !== 'all'
+  const isFiltered = search || statusFilter !== 'active'
 
   const createTopic = useMutation({
     mutationFn: (payload: CreateTopicPayload) => topicsApi.create(payload),
