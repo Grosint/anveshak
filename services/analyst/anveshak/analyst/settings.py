@@ -29,11 +29,11 @@ class AnalystSettings(BaseSettings):
     llm_max_tokens: int = 512
 
     # Clustering — Leiden community detection on blended similarity graph
-    clustering_similarity_threshold: float = 0.70  # min blended similarity to form an edge in the graph
+    clustering_similarity_threshold: float = 0.55  # min blended similarity to form an edge in the graph
     clustering_min_cluster_size: int = 2            # communities smaller than this are discarded
     clustering_window_days: int = 30      # only cluster content from last N days (0 = no filter)
     cluster_archive_after_days: int = 90  # archive clusters older than N days
-    cluster_assign_threshold: float = 0.70  # cosine sim to assign new item to existing cluster
+    cluster_assign_threshold: float = 0.60  # cosine sim to assign new item to existing cluster
     entity_blend_weight: float = 0.3        # weight of entity similarity in distance matrix (0=embedding only, 1=entity only)
     minhash_num_perm: int = 128             # MinHash permutations (higher=more accurate, slower)
 

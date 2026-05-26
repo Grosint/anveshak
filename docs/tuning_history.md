@@ -179,12 +179,52 @@ Deleted URLs include: all homepage/category pages for Deccan Chronicle, The Hind
 
 ---
 
+## Clustering — Leiden Edge Threshold
+
+**Parameter:** `clustering_similarity_threshold` in `services/analyst/anveshak/analyst/settings.py`
+**Change:** 0.70 → **0.55**
+**Date:** 2026-05-26
+
+**Evidence:**
+- Pipeline health showed 49–95% of items unassigned across topics after all quality fixes
+- LAC topic: 21 items scraped, only 1 assigned to a cluster (95% unassigned)
+- IOR topic: 61 items scraped, 47 unassigned (77%)
+- Pakistan LoC: 36 items, 24 unassigned (67%)
+- Broad topics accept articles with relevance scores as low as 0.117 — these articles cover diverse sub-narratives (shipping, pirates, Chinese navy, Indian deployments) with pairwise cosine similarities of 0.30–0.55, well below the 0.70 edge threshold
+
+**Rationale:**
+- 0.55 allows articles with moderate similarity to form edges in the Leiden graph — creates more clusters (each covering a broader narrative)
+- For OSINT, not missing signals (recall) matters more than cluster purity (precision)
+- The near-duplicate threshold (0.95) is unchanged — it still prevents paraphrased articles from inflating ISC
+- Entity MinHash blending (30% weight) helps compensate — articles sharing entities cluster together even at lower cosine similarity
+
+**Revert risk:** Setting back to 0.70 would return to 49–95% unassigned items. Most articles would never enter clusters, never contribute to ISC, and never trigger signals. The signal engine becomes blind to narratives reported by diverse but moderately-similar sources.
+
+---
+
+## Clustering — Incremental Assign Threshold
+
+**Parameter:** `cluster_assign_threshold` in `services/analyst/anveshak/analyst/settings.py`
+**Change:** 0.70 → **0.60**
+**Date:** 2026-05-26
+
+**Evidence:**
+- Same root cause as the Leiden edge threshold — new articles couldn't reach the 0.70 threshold to join existing clusters
+- Incremental assignment (new items → nearest existing centroid) uses this threshold independently from Leiden
+- Per configuration-hygiene rule: separate thresholds for separate mechanisms
+
+**Rationale:**
+- 0.60 is slightly higher than the Leiden threshold (0.55) because assignment to an existing centroid should be stricter than forming a new edge — the centroid represents the cluster's average meaning, so matching it at 0.60 is roughly equivalent to matching individual cluster members at 0.55
+- Set independently per the "one setting, one purpose" rule
+
+**Revert risk:** Setting back to 0.70 would cause new items to fail incremental assignment and fall through to full Leiden re-clustering. This wastes compute and can create redundant small clusters instead of growing existing ones.
+
+---
+
 ## Parameters NOT YET Changed (candidates for future tuning)
 
 | Parameter | Current | Candidate | Reason to consider |
 |-----------|---------|-----------|-------------------|
-| `CLUSTERING_SIMILARITY_THRESHOLD` | 0.70 | 0.55 | 49–77% of items unassigned in broad topics (IOR, Disinformation) |
-| `CLUSTER_ASSIGN_THRESHOLD` | 0.70 | 0.60 | Same issue for incremental assignment to existing clusters |
 | `BACKFILL_SIMILARITY_THRESHOLD` | 0.85 | 0.75 | Zero cross-topic matches found for 5 topics at 0.85 |
 | `NEAR_DUPLICATE_SIMILARITY_THRESHOLD` | 0.95 | — | Working well, no change needed |
 | `_NAV_ICON_HIT_RATIO` | 0.40 | — | Working well, occasional false positives on Al Jazeera |
