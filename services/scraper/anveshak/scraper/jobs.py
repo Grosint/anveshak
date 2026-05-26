@@ -20,6 +20,8 @@ from arq.connections import RedisSettings
 
 from anveshak.media.downloader import download_media_asset
 
+import hashlib
+
 from .clean import clean_extracted_text, compute_clean_hash, score_content_quality, extract_title
 from .fetch import (
     fetch_url, fetch_url_with_crawler, create_shared_crawler,
@@ -29,6 +31,7 @@ from .fetch import (
 )
 from .health import run_all_health_checks
 from .lang import detect_language
+from .rate_limiter import DomainRateLimiter
 from .rss import fetch_rss_items
 from .metrics import (
     scraper_items_fetched_total, scraper_fetch_errors_total,
@@ -99,6 +102,36 @@ SQL_GET_MEDIA_ASSET_BY_HASH = "SELECT id FROM media_assets WHERE content_hash = 
 
 _LABELS_JSON = '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'
 _DARKWEB_LABELS_JSON = '{"classification":"RESTRICTED","domain":"darkweb","owner_org":"anveshak"}'
+
+_URL_SEEN_PREFIX = "scraper:seen:"
+
+
+def _url_seen_key(url: str) -> str:
+    """Redis key for URL-seen tracking."""
+    digest = hashlib.sha256(url.encode("utf-8")).hexdigest()
+    return f"{_URL_SEEN_PREFIX}{digest}"
+
+
+async def _is_url_seen(redis, url: str) -> bool:
+    """Return True if URL was fetched within the TTL window."""
+    if not settings.scraper_url_seen_enabled:
+        return False
+    try:
+        result = await redis.get(_url_seen_key(url))
+        return result is not None
+    except Exception as exc:
+        log.warning("scraper.url_seen_check_failed", url=url, error=str(exc))
+        return False  # fail open
+
+
+async def _mark_url_seen(redis, url: str) -> None:
+    """Record URL as seen with TTL. Errors are logged and ignored."""
+    if not settings.scraper_url_seen_enabled:
+        return
+    try:
+        await redis.set(_url_seen_key(url), "1", ex=settings.scraper_url_seen_ttl_s)
+    except Exception as exc:
+        log.warning("scraper.url_seen_mark_failed", url=url, error=str(exc))
 
 
 # ---------------------------------------------------------------------------
@@ -219,6 +252,8 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
             return content_item_id
         return None
 
+    domain_limiter = DomainRateLimiter()
+
     async def _process(source: asyncpg.Record, crawler, run_cfg) -> None:
         async with semaphore:
             url: str = source["url_or_handle"]
@@ -229,50 +264,76 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
                 if not await check_robots_allowed(url):
                     return
 
-                import time as _time
-                _t0 = _time.monotonic()
-                # Per-URL timeout so one slow URL doesn't block others
-                fetched_text = await asyncio.wait_for(
-                    fetch_url_with_crawler(url, crawler, run_cfg),
-                    timeout=settings.scraper_request_timeout_s,
-                )
-                scraper_fetch_duration_seconds.observe(_time.monotonic() - _t0)
-                if not fetched_text:
-                    return
-
-                content_item_id = await _insert_content(fetched_text, url, source_id, cred_score)
-
-                # Politeness delay between fetches (criteria 1.11)
-                if settings.scraper_default_delay_s > 0:
-                    await asyncio.sleep(settings.scraper_default_delay_s)
-
-                if content_item_id and settings.media_download_enabled:
-                    await _download_page_media(
-                        page_url=url,
-                        topic_id=topic_id,
-                        content_item_id=content_item_id,
-                        db_pool=db_pool,
-                        redis=redis,
-                        seen_media_urls=seen_media_urls,
-                    )
-
-                # Recursive scraping: follow article links (depth-1)
                 if settings.scraper_follow_links:
+                    # --- Link-following mode: source page is for discovery only ---
+                    # Fetch source page HTML once for link extraction (NOT stored as content)
                     html = await fetch_html(url)
-                    if html:
-                        article_links = extract_article_links(html, url)
-                        for link_url in article_links:
-                            try:
-                                link_fetched = await asyncio.wait_for(
-                                    fetch_url_with_crawler(link_url, crawler, run_cfg),
-                                    timeout=settings.scraper_request_timeout_s,
+                    if not html:
+                        log.info("scraper.source_page_empty", url=url)
+                        return
+                    article_links = extract_article_links(html, url)
+                    log.debug(
+                        "scraper.links_discovered",
+                        url=url,
+                        count=len(article_links),
+                    )
+                    for link_url in article_links:
+                        try:
+                            # URL-seen check — skip if already fetched within TTL
+                            if await _is_url_seen(redis, link_url):
+                                log.debug("scraper.url_seen_skip", url=link_url)
+                                continue
+                            # Per-domain rate limiting
+                            await domain_limiter.wait(link_url)
+                            link_fetched = await asyncio.wait_for(
+                                fetch_url_with_crawler(link_url, crawler, run_cfg),
+                                timeout=settings.scraper_request_timeout_s,
+                            )
+                            if link_fetched:
+                                content_item_id = await _insert_content(
+                                    link_fetched, link_url, source_id, cred_score,
                                 )
-                                if link_fetched:
-                                    await _insert_content(link_fetched, link_url, source_id, cred_score)
-                            except asyncio.TimeoutError:
-                                log.debug("scraper.link_timeout", url=link_url)
-                            except Exception as exc:
-                                log.debug("scraper.link_failed", url=link_url, error=str(exc))
+                                await _mark_url_seen(redis, link_url)
+                                if content_item_id and settings.media_download_enabled:
+                                    await _download_page_media(
+                                        page_url=link_url,
+                                        topic_id=topic_id,
+                                        content_item_id=content_item_id,
+                                        db_pool=db_pool,
+                                        redis=redis,
+                                        seen_media_urls=seen_media_urls,
+                                    )
+                        except asyncio.TimeoutError:
+                            log.debug("scraper.link_timeout", url=link_url)
+                        except Exception as exc:
+                            log.debug("scraper.link_failed", url=link_url, error=str(exc))
+                else:
+                    # --- Direct article mode: source URL IS the content ---
+                    import time as _time
+                    _t0 = _time.monotonic()
+                    fetched_text = await asyncio.wait_for(
+                        fetch_url_with_crawler(url, crawler, run_cfg),
+                        timeout=settings.scraper_request_timeout_s,
+                    )
+                    scraper_fetch_duration_seconds.observe(_time.monotonic() - _t0)
+                    if not fetched_text:
+                        return
+
+                    content_item_id = await _insert_content(fetched_text, url, source_id, cred_score)
+
+                    # Politeness delay between fetches (criteria 1.11)
+                    if settings.scraper_default_delay_s > 0:
+                        await asyncio.sleep(settings.scraper_default_delay_s)
+
+                    if content_item_id and settings.media_download_enabled:
+                        await _download_page_media(
+                            page_url=url,
+                            topic_id=topic_id,
+                            content_item_id=content_item_id,
+                            db_pool=db_pool,
+                            redis=redis,
+                            seen_media_urls=seen_media_urls,
+                        )
 
             except asyncio.TimeoutError:
                 scraper_fetch_errors_total.labels(error_type="TimeoutError").inc()

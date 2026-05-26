@@ -39,8 +39,16 @@ class ScraperSettings(BaseSettings):
 
     # Recursive scraping — follow article links from fetched pages
     scraper_follow_links: bool = True       # enable depth-1 link following
-    scraper_max_links_per_page: int = 5     # cap followed links per source page
+    scraper_max_links_per_page: int = 100   # cap followed links per source page
     scraper_follow_same_domain: bool = True # only follow same-domain links
+
+    # Per-domain politeness delay — prevents WAF/rate-limit blocks
+    scraper_per_domain_delay_s: float = 1.5   # min gap between requests to same domain
+    scraper_per_domain_jitter_s: float = 0.5  # ± random jitter added to delay
+
+    # URL-level visited tracking via Redis — avoids re-fetching same articles
+    scraper_url_seen_ttl_s: int = 86400       # 24 hours
+    scraper_url_seen_enabled: bool = True     # set False to disable URL dedup
 
     log_level: str = "INFO"
     model_config = {"env_prefix": "", "case_sensitive": False}

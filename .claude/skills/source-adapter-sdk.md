@@ -24,6 +24,9 @@
 > See also: `learned/post-embedding-relevance-gate.md` — filter off-topic scraped content via topic query embedding similarity before clustering
 > See also: `learned/orphan-sweep-safety-net.md` — safety net for content_items where enqueue_job("analyse_content") failed after DB insert
 > See also: `learned/scraper-must-enqueue-not-rely-on-sweep.md` — scraper must enqueue analyse_content directly; orphan sweep is safety net, not primary delivery
+> See also: `learned/scraper-source-page-not-content.md` — when follow_links=True, source URL is for link discovery only, never stored as content
+> See also: `learned/redis-url-dedup-sha256-ttl.md` — Redis URL dedup with sha256 key, 24h TTL, fail-open; mark after insert not before fetch
+> See also: `learned/quality-ratio-bypass-on-length.md` — bypass clean/raw ratio check if clean_text >= 500 chars; must fire AFTER paywall/nav-icon gates
 > See also: `learned/per-topic-relevance-auto-calibration.md` — auto-calibrate relevance threshold per topic from score distribution percentile
 > See also: `learned/scheduler-worker-split.md` — analyst split into scheduler (clustering/signals) + ARQ worker (NLP/embedding); import chain safety
 > See also: `learned/rss-fetch-paywall-validation.md` — validate fetched content before replacing RSS summary; paywall indicator counting

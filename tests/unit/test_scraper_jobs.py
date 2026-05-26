@@ -273,6 +273,255 @@ class TestLanguageDetection:
             assert lang_arg == "fr", f"Expected 'fr', got '{lang_arg}'"
 
 
+class TestSourcePageNotStored:
+    """Change 1: source page should NOT be stored as content when follow_links=True."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("anveshak.scraper.jobs.check_robots_allowed", new_callable=AsyncMock, return_value=True)
+    @patch("anveshak.scraper.jobs.fetch_html", new_callable=AsyncMock)
+    @patch("anveshak.scraper.jobs.extract_article_links")
+    @patch("anveshak.scraper.jobs.fetch_url_with_crawler", new_callable=AsyncMock)
+    @patch("anveshak.scraper.jobs.create_shared_crawler")
+    async def test_source_page_not_inserted_when_follow_links(
+        self, mock_crawler, mock_fetch_crawler, mock_extract, mock_fetch_html, mock_robots,
+    ):
+        """When follow_links=True, _insert_content is only called for article links."""
+        # Setup crawler to work normally
+        crawler_obj = AsyncMock()
+        run_cfg_obj = MagicMock()
+        cm = MagicMock()
+        cm.__aenter__ = AsyncMock(return_value=(crawler_obj, run_cfg_obj))
+        cm.__aexit__ = AsyncMock(return_value=False)
+        mock_crawler.return_value = cm
+
+        # Source page HTML returns one article link
+        mock_fetch_html.return_value = "<html><a href='/article1'>Art</a></html>"
+        mock_extract.return_value = ["https://example.com/article1"]
+
+        # Article link fetch returns content
+        mock_fetch_crawler.return_value = "Real article content about defence operations in the region."
+
+        source = _make_fake_record({
+            "id": "src-1",
+            "url_or_handle": "https://example.com",
+            "credibility_score": 0.8,
+        })
+
+        mock_conn = AsyncMock()
+        call_count = {"n": 0}
+
+        async def _fetchrow_side_effect(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return {"id": "topic-1"}  # topic lookup
+            return {"id": "content-item-1"}  # article insert
+
+        mock_conn.fetchrow = AsyncMock(side_effect=_fetchrow_side_effect)
+        mock_conn.fetch = AsyncMock(return_value=[source])
+
+        mock_pool = _make_pool_mock(mock_conn)
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=None)  # URL not seen
+        mock_redis.set = AsyncMock()
+        ctx = {"db_pool": mock_pool, "redis": mock_redis}
+
+        with patch("anveshak.scraper.jobs.settings") as mock_settings:
+            mock_settings.scraper_concurrency = 5
+            mock_settings.scraper_request_timeout_s = 30
+            mock_settings.scraper_default_delay_s = 0
+            mock_settings.media_download_enabled = False
+            mock_settings.scraper_follow_links = True
+            mock_settings.respect_robots_txt = True
+            mock_settings.scraper_url_seen_enabled = True
+            mock_settings.scraper_url_seen_ttl_s = 86400
+            mock_settings.scraper_per_domain_delay_s = 0
+            mock_settings.scraper_per_domain_jitter_s = 0
+
+            result = await scrape_topic(ctx, "topic-1")
+
+        # _insert_content called once (for the article link), not for the homepage
+        assert result == 1
+        # fetch_url_with_crawler called only for the article link, NOT for homepage
+        mock_fetch_crawler.assert_called_once()
+        call_url = mock_fetch_crawler.call_args[0][0]
+        assert call_url == "https://example.com/article1"
+        # fetch_html called for the source page (link discovery)
+        mock_fetch_html.assert_called_once_with("https://example.com")
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("anveshak.scraper.jobs.check_robots_allowed", new_callable=AsyncMock, return_value=True)
+    @patch("anveshak.scraper.jobs.fetch_url", new_callable=AsyncMock)
+    @patch("anveshak.scraper.jobs.create_shared_crawler")
+    async def test_source_page_stored_when_follow_links_false(
+        self, mock_crawler, mock_fetch_url, mock_robots,
+    ):
+        """When follow_links=False, source URL IS the content (existing behavior)."""
+        mock_crawler.return_value.__aenter__ = AsyncMock(
+            side_effect=RuntimeError("force fallback")
+        )
+        mock_crawler.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_fetch_url.return_value = "Direct article content for testing."
+
+        source = _make_fake_record({
+            "id": "src-1",
+            "url_or_handle": "https://example.com/specific-article",
+            "credibility_score": 0.8,
+        })
+
+        mock_conn = AsyncMock()
+        call_count = {"n": 0}
+
+        async def _fetchrow_side_effect(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return {"id": "topic-1"}
+            return {"id": "content-item-1"}
+
+        mock_conn.fetchrow = AsyncMock(side_effect=_fetchrow_side_effect)
+        mock_conn.fetch = AsyncMock(return_value=[source])
+
+        mock_pool = _make_pool_mock(mock_conn)
+        ctx = {"db_pool": mock_pool, "redis": AsyncMock()}
+
+        with patch("anveshak.scraper.jobs.asyncio.sleep", new_callable=AsyncMock), \
+             patch("anveshak.scraper.jobs.settings") as mock_settings:
+            mock_settings.scraper_default_delay_s = 0
+            mock_settings.scraper_concurrency = 5
+            mock_settings.scraper_request_timeout_s = 30
+            mock_settings.media_download_enabled = False
+            mock_settings.scraper_follow_links = False
+            mock_settings.respect_robots_txt = True
+
+            result = await scrape_topic(ctx, "topic-1")
+            assert result == 1
+
+
+class TestUrlSeenTracking:
+    """Change 4: Redis URL dedup should skip seen URLs."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("anveshak.scraper.jobs.check_robots_allowed", new_callable=AsyncMock, return_value=True)
+    @patch("anveshak.scraper.jobs.fetch_html", new_callable=AsyncMock)
+    @patch("anveshak.scraper.jobs.extract_article_links")
+    @patch("anveshak.scraper.jobs.fetch_url_with_crawler", new_callable=AsyncMock)
+    @patch("anveshak.scraper.jobs.create_shared_crawler")
+    async def test_seen_url_skipped(
+        self, mock_crawler, mock_fetch_crawler, mock_extract, mock_fetch_html, mock_robots,
+    ):
+        """URL already in Redis → not fetched again."""
+        crawler_obj = AsyncMock()
+        run_cfg_obj = MagicMock()
+        cm = MagicMock()
+        cm.__aenter__ = AsyncMock(return_value=(crawler_obj, run_cfg_obj))
+        cm.__aexit__ = AsyncMock(return_value=False)
+        mock_crawler.return_value = cm
+
+        mock_fetch_html.return_value = "<html><a href='/art1'>A</a></html>"
+        mock_extract.return_value = ["https://example.com/art1"]
+
+        source = _make_fake_record({
+            "id": "src-1",
+            "url_or_handle": "https://example.com",
+            "credibility_score": 0.8,
+        })
+
+        mock_conn = AsyncMock()
+        mock_conn.fetchrow = AsyncMock(side_effect=[{"id": "topic-1"}])
+        mock_conn.fetch = AsyncMock(return_value=[source])
+
+        mock_pool = _make_pool_mock(mock_conn)
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=b"1")  # URL already seen!
+        ctx = {"db_pool": mock_pool, "redis": mock_redis}
+
+        with patch("anveshak.scraper.jobs.settings") as mock_settings:
+            mock_settings.scraper_concurrency = 5
+            mock_settings.scraper_request_timeout_s = 30
+            mock_settings.scraper_default_delay_s = 0
+            mock_settings.media_download_enabled = False
+            mock_settings.scraper_follow_links = True
+            mock_settings.respect_robots_txt = True
+            mock_settings.scraper_url_seen_enabled = True
+            mock_settings.scraper_url_seen_ttl_s = 86400
+            mock_settings.scraper_per_domain_delay_s = 0
+            mock_settings.scraper_per_domain_jitter_s = 0
+
+            result = await scrape_topic(ctx, "topic-1")
+
+        # URL was seen → fetch_url_with_crawler never called
+        mock_fetch_crawler.assert_not_called()
+        assert result == 0
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("anveshak.scraper.jobs.check_robots_allowed", new_callable=AsyncMock, return_value=True)
+    @patch("anveshak.scraper.jobs.fetch_html", new_callable=AsyncMock)
+    @patch("anveshak.scraper.jobs.extract_article_links")
+    @patch("anveshak.scraper.jobs.fetch_url_with_crawler", new_callable=AsyncMock)
+    @patch("anveshak.scraper.jobs.create_shared_crawler")
+    async def test_new_url_marked_seen_after_fetch(
+        self, mock_crawler, mock_fetch_crawler, mock_extract, mock_fetch_html, mock_robots,
+    ):
+        """New URL → fetched, then marked in Redis with TTL."""
+        crawler_obj = AsyncMock()
+        run_cfg_obj = MagicMock()
+        cm = MagicMock()
+        cm.__aenter__ = AsyncMock(return_value=(crawler_obj, run_cfg_obj))
+        cm.__aexit__ = AsyncMock(return_value=False)
+        mock_crawler.return_value = cm
+
+        mock_fetch_html.return_value = "<html><a href='/new'>A</a></html>"
+        mock_extract.return_value = ["https://example.com/new"]
+        mock_fetch_crawler.return_value = "Fresh article about military exercises in the region."
+
+        source = _make_fake_record({
+            "id": "src-1",
+            "url_or_handle": "https://example.com",
+            "credibility_score": 0.8,
+        })
+
+        mock_conn = AsyncMock()
+        call_count = {"n": 0}
+
+        async def _fetchrow_side_effect(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return {"id": "topic-1"}
+            return {"id": "content-item-1"}
+
+        mock_conn.fetchrow = AsyncMock(side_effect=_fetchrow_side_effect)
+        mock_conn.fetch = AsyncMock(return_value=[source])
+
+        mock_pool = _make_pool_mock(mock_conn)
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=None)  # URL not seen
+        mock_redis.set = AsyncMock()
+        ctx = {"db_pool": mock_pool, "redis": mock_redis}
+
+        with patch("anveshak.scraper.jobs.settings") as mock_settings:
+            mock_settings.scraper_concurrency = 5
+            mock_settings.scraper_request_timeout_s = 30
+            mock_settings.scraper_default_delay_s = 0
+            mock_settings.media_download_enabled = False
+            mock_settings.scraper_follow_links = True
+            mock_settings.respect_robots_txt = True
+            mock_settings.scraper_url_seen_enabled = True
+            mock_settings.scraper_url_seen_ttl_s = 86400
+            mock_settings.scraper_per_domain_delay_s = 0
+            mock_settings.scraper_per_domain_jitter_s = 0
+
+            result = await scrape_topic(ctx, "topic-1")
+
+        assert result == 1
+        # redis.set was called to mark URL as seen
+        mock_redis.set.assert_called_once()
+        set_call = mock_redis.set.call_args
+        assert set_call[1].get("ex") == 86400 or set_call[0][2] if len(set_call[0]) > 2 else set_call[1].get("ex") == 86400
+
+
 class TestRateDelay:
     """Tests for per-source rate delay enforcement."""
 

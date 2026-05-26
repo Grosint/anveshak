@@ -377,6 +377,76 @@ class TestScoreContentQualityExtended:
         assert score_content_quality("short", "short") == "low_quality"
 
 
+class TestScoreContentQualityThresholds:
+    """Boundary tests for ratio gate and length bypass."""
+
+    @pytest.mark.unit
+    def test_ratio_bypass_long_clean_text(self):
+        """clean_text >= 500 chars bypasses ratio check even if ratio < 0.08."""
+        raw = "x" * 10_000
+        clean = (
+            "India conducted a major joint military exercise involving all three "
+            "services in the Rajasthan desert. The exercise tested integrated "
+            "operations doctrine adopted after the 2020 Galwan standoff. "
+            "All branches operated under a unified theatre command structure "
+            "for the first time. The Navy contributed maritime patrol assets "
+            "coordinating with ground forces via encrypted satellite links. "
+            "Exercise duration was 14 days with over 30,000 troops participating. "
+            "The exercise validated new communication protocols and joint logistics "
+            "chains across service boundaries under simulated combat conditions."
+        )
+        assert len(clean) >= 500
+        assert len(clean) / len(raw) < 0.08
+        assert score_content_quality(raw, clean) == "good"
+
+    @pytest.mark.unit
+    def test_low_ratio_short_text_still_rejected(self):
+        """clean_text < 500 chars with ratio < 0.08 is still low_quality."""
+        raw = "a" * 5_000
+        clean = "India deploys new radar systems along the northern border region. " * 3
+        assert len(clean) < 500
+        assert len(clean) / len(raw) < 0.08
+        assert score_content_quality(raw, clean) == "low_quality"
+
+    @pytest.mark.unit
+    def test_ratio_band_0_08_to_0_15_now_accepted(self):
+        """Items with ratio in [0.08, 0.15) are now good (previously rejected)."""
+        raw = "n" * 2_000
+        clean = (
+            "The defence ministry approved acquisition of six additional P-8I "
+            "maritime patrol aircraft to bolster anti-submarine warfare capabilities "
+            "in the Indian Ocean Region. The contract is worth approximately twelve "
+            "thousand crore rupees and includes weapons systems integration."
+        )
+        assert len(clean) < 500
+        ratio = len(clean) / len(raw)
+        assert 0.08 <= ratio < 0.15
+        assert score_content_quality(raw, clean) == "good"
+
+    @pytest.mark.unit
+    def test_pure_boilerplate_ratio_still_rejected(self):
+        """Items with ratio < 0.08 and clean_text < 500 chars remain low_quality."""
+        raw = "b" * 5_000
+        clean = "Home About Contact Privacy Terms Subscribe " * 3  # ~130 chars, ratio ~0.026
+        assert 100 <= len(clean) < 500
+        assert len(clean) / len(raw) < 0.08
+        assert score_content_quality(raw, clean) == "low_quality"
+
+    @pytest.mark.unit
+    def test_paywall_with_long_text_still_rejected(self):
+        """A paywall page with 500+ clean chars is still rejected."""
+        paywall_text = (
+            "You don't have any active subscription. "
+            "Subscribed with another email? Logout and login with that one. "
+            "Your active subscription benefits include full access to all "
+            "articles, premium content, and subscriber only features. "
+            "Account subscription benefits are managed from your profile. "
+            "Please sign in to continue reading this article. " * 3
+        )
+        assert len(paywall_text) >= 500
+        assert score_content_quality(paywall_text, paywall_text) == "low_quality"
+
+
 class TestExtractTitle:
     """Tests for extract_title logic."""
 

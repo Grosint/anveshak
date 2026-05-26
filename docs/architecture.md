@@ -807,6 +807,81 @@ Step 10: Analyst reads report
 
 ---
 
+## How Topic Keywords Work — 3 Roles in the Pipeline
+
+Topic keywords (e.g. `["BrahMos", "LAC", "India-China border"]`) are used at three distinct points, each doing something different:
+
+### Role 1: Source Selection (Manual, at topic creation)
+
+Keywords are **not** used to automatically select sources. The analyst manually links sources to a topic via the API (`POST /api/v1/topics/{id}/sources/{source_id}`). The scraper only scrapes sources linked via the `topic_sources` join table — if no sources are linked, the topic gets zero content regardless of keywords.
+
+### Role 2: Relevance Scoring (Automatic, per article)
+
+This is the primary keyword-matching mechanism. When the analyst worker processes a new article via the `analyse_content` ARQ job:
+
+```
+Topic keywords: ["BrahMos", "LAC", "India-China border"]
+         │
+         ▼
+  Embedded as a single query vector (384-dim)
+  using sentence-transformers (build_topic_query_embedding)
+         │
+         ▼
+  For each new article in this topic:
+    article_embedding = embed(article.clean_text)
+    topic_relevance_score = cosine_similarity(article_embedding, topic_query_embedding)
+         │
+         ▼
+  Stored in content_items.topic_relevance_score (float 0.0–1.0)
+         │
+         ▼
+  Gate 11 filters articles below the per-topic auto-calibrated threshold
+```
+
+An article about "India deploys BrahMos along LAC" scores high (~0.7+). An article about "Cricket World Cup" scraped from the same NDTV RSS feed scores low (~0.1) and is filtered out by Gate 11.
+
+**Key files:** `services/analyst/anveshak/analyst/relevance.py` — `compute_topic_relevance()`, `build_topic_query_embedding()`
+
+### Role 3: Cross-Topic Backfill (Automatic, every 6 hours)
+
+The backfill process discovers articles from **other topics** that also match your topic's keywords:
+
+```
+Topic A: "India deploys BrahMos missiles along LAC"
+  keywords embedded as query vector
+         │
+         ▼
+  pgvector cosine search across ALL content_items
+  (not just Topic A's items — searches the entire corpus)
+         │
+         ▼
+  Found: Article in Topic B ("Pakistan LoC") about
+  "India test-fires BrahMos from Andaman base"
+  Similarity to Topic A query: 0.88 (>= backfill threshold 0.85)
+         │
+         ▼
+  INSERT INTO topic_content_items (topic_id=A, content_item_id=...)
+  ON CONFLICT DO NOTHING
+         │
+         ▼
+  Article now appears in BOTH topics
+  Counts toward clustering + signals in Topic A
+```
+
+This is why the clustering SQL always includes both paths:
+```sql
+WHERE (ci.topic_id = $1
+   OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
+```
+
+The first condition gets items scraped directly for this topic. The second gets items discovered by backfill from other topics.
+
+**Key files:** `services/analyst/anveshak/analyst/backfill.py`
+
+**Configuration:** `BACKFILL_SIMILARITY_THRESHOLD=0.85` (strict — only near-exact topic matches), `BACKFILL_INTERVAL_S=600` (10 minutes, 0 = disabled)
+
+---
+
 ## Database Schema
 
 18 tables, all following conventions: `snake_case` names, `created_at`/`updated_at` timestamps, `labels JSONB` field (never Optional).
@@ -868,111 +943,181 @@ topics ─────────────┬──────────�
 
 ## Content Quality Gates
 
-Content passes through three independent quality gates before it can influence analyst-facing outputs (signals, clusters, reports, feed). Each gate catches a different class of noise. All three are mandatory — no single gate is sufficient alone.
+Content passes through **11 gates** across 4 pipeline stages before it can influence analyst-facing outputs (signals, clusters, reports). Each gate catches a different class of noise. The gates are organized into 4 stages, each running in a different container.
+
+### Full Pipeline — Every Filter, In Order
 
 ```
-Internet ──► Scraper ──► Analyst Worker ──► API / Frontend
-                │              │                  │
-                ▼              ▼                  ▼
-          ┌──────────┐  ┌──────────────┐  ┌──────────────────┐
-          │  GATE 1   │  │   GATE 2     │  │    GATE 3        │
-          │  Content  │  │   Topic      │  │    Display       │
-          │  Quality  │  │   Relevance  │  │    Filters       │
-          ├──────────┤  ├──────────────┤  ├──────────────────┤
-          │ SET AT:   │  │ SET AT:      │  │ SET AT:          │
-          │ Scrape    │  │ analyse_     │  │ Query time       │
-          │ time      │  │ content job  │  │ (not persisted)  │
-          ├──────────┤  ├──────────────┤  ├──────────────────┤
-          │ HOW:      │  │ HOW:         │  │ HOW:             │
-          │ Boiler-   │  │ Cosine sim   │  │ Language,        │
-          │ plate     │  │ of content   │  │ sentiment,       │
-          │ ratio,    │  │ embedding vs │  │ credibility,     │
-          │ paywall   │  │ topic query  │  │ date range,      │
-          │ detection,│  │ embedding    │  │ sort order       │
-          │ nav-icon  │  │              │  │                  │
-          │ garbage   │  │ Per-topic    │  │                  │
-          │           │  │ auto-calib   │  │                  │
-          ├──────────┤  ├──────────────┤  ├──────────────────┤
-          │ CATCHES:  │  │ CATCHES:     │  │ CATCHES:         │
-          │ Garbage   │  │ Off-topic    │  │ Analyst's        │
-          │ pages,    │  │ content that │  │ current focus    │
-          │ paywalls, │  │ doesn't      │  │ (temporal,       │
-          │ scraped   │  │ match the    │  │ linguistic,      │
-          │ nav/UI    │  │ monitored    │  │ sentiment        │
-          │ elements  │  │ topic        │  │ preferences)     │
-          ├──────────┤  ├──────────────┤  ├──────────────────┤
-          │ STORED:   │  │ STORED:      │  │ NOT STORED:      │
-          │ content_  │  │ topic_       │  │ Query params     │
-          │ quality   │  │ relevance_   │  │ only             │
-          │ column    │  │ score +      │  │                  │
-          │ ('good' | │  │ topic_       │  │                  │
-          │ 'low_     │  │ relevance_   │  │                  │
-          │  quality')│  │ threshold    │  │                  │
-          └──────────┘  └──────────────┘  └──────────────────┘
+SCRAPER CONTAINER                 ANALYST CONTAINER              ANALYST CONTAINER
+(at scrape time)                  (analyse_content ARQ job)      (clustering cron, ~15 min)
+─────────────────                 ─────────────────────────      ──────────────────────────
+
+  Crawl4AI fetches page
+         │
+         ▼
+  clean_extracted_text()
+  (strip HTML/scripts/nav)
+         │
+         ▼
+┌─ score_content_quality() ─┐
+│                           │
+│ Gate 1: < 100 chars       │
+│ Gate 2: paywall (3+ hits) │
+│ Gate 3: nav-icon (40%+)   │
+│ Gate 4: len >= 500 bypass │
+│         else ratio < 0.08 │
+│                           │
+│ Sets DB column:           │
+│ content_quality = 'good'  │
+│           or 'low_quality'│
+└───────────────────────────┘
+         │
+         ▼
+  INSERT into content_items
+  enqueue_job("analyse_content")
+         │
+         └──────────────────────▶  analyse_content() picks up
+                                           │
+                                           ▼
+                                  ┌─ is_quality_content() ──┐
+                                  │                         │
+                                  │ Gate 5: < 100 chars     │
+                                  │ Gate 6: < 5 words       │
+                                  │ Gate 7: unique word     │
+                                  │         ratio < 0.4     │
+                                  │ Gate 8: punctuation     │
+                                  │         ratio > 0.3     │
+                                  │                         │
+                                  │ If FAIL: return early   │
+                                  │ (no embedding, no NER)  │
+                                  │ Does NOT update DB col  │
+                                  └─────────────────────────┘
+                                           │
+                                           ▼ (if passed)
+                                  detect_language()
+                                  translate (if non-English)
+                                  spaCy NER
+                                  sentence-transformer embedding
+                                  compute_topic_relevance()
+                                           │
+                                           ▼
+                                  UPDATE content_items SET
+                                    embedding = ...,
+                                    topic_relevance_score = ...,
+                                    entities = ...,
+                                    language = ...
+                                           │
+                                           └─────────────────▶  clustering SQL query
+                                                                       │
+                                                                       ▼
+                                                              ┌─ SQL WHERE clauses ────┐
+                                                              │                        │
+                                                              │ Gate 9:  embedding     │
+                                                              │          IS NOT NULL    │
+                                                              │                        │
+                                                              │ Gate 10: content_      │
+                                                              │          quality !=    │
+                                                              │          'low_quality'  │
+                                                              │                        │
+                                                              │ Gate 11: relevance_    │
+                                                              │          score >=      │
+                                                              │          threshold     │
+                                                              │                        │
+                                                              └────────────────────────┘
+                                                                       │
+                                                                       ▼
+                                                              Leiden clustering
+                                                              (similarity >= 0.70)
+                                                                       │
+                                                                       ▼
+                                                              Signal check
+                                                              (ISC >= threshold)
 ```
 
-### Why three gates
+### All 11 Gates — Summary Table
 
-**Gate 1 alone is insufficient:** It catches structurally broken pages (nav text, paywalls) but cannot judge topical relevance. A well-formed article about cricket still passes Gate 1.
+| # | Gate | Container | What it does | Persisted? |
+|---|------|-----------|-------------|------------|
+| 1 | Min length < 100 chars | Scraper | Rejects tiny fragments | Yes: `content_quality = 'low_quality'` |
+| 2 | Paywall (3+ indicator phrases) | Scraper | Rejects subscription walls | Yes: `content_quality = 'low_quality'` |
+| 3 | Nav-icon (40%+ icon words) | Scraper | Rejects scraped UI labels | Yes: `content_quality = 'low_quality'` |
+| 4 | Ratio < 0.08 (bypassed if >= 500 chars) | Scraper | Rejects extreme boilerplate | Yes: `content_quality = 'low_quality'` |
+| 5 | Min length < 100 chars | Analyst worker | Redundant with Gate 1, catches edge cases | No — returns early, no embedding |
+| 6 | < 5 words | Analyst worker | Rejects non-text content | No — returns early, no embedding |
+| 7 | Unique word ratio < 0.4 | Analyst worker | Rejects repeated nav menus | No — returns early, no embedding |
+| 8 | Punctuation ratio > 0.3 | Analyst worker | Rejects link/separator soup | No — returns early, no embedding |
+| 9 | `embedding IS NOT NULL` | Clustering SQL | Only cluster embedded items | N/A (read filter) |
+| 10 | `content_quality != 'low_quality'` | Clustering SQL | Skip scraper-flagged junk | N/A (read filter) |
+| 11 | `relevance_score >= threshold` | Clustering SQL | Skip off-topic content | N/A (read filter) |
 
-**Gate 2 alone is insufficient:** It catches off-topic content via embedding similarity, but garbage pages full of Indian keywords (e.g., NDTV homepage scrapes) embed close enough to India-related topics to pass the relevance threshold.
+### How items flow through the gates
 
-**Gate 3 alone is insufficient:** Display filters only hide content from the analyst's view — they don't prevent garbage from entering clusters, inflating ISC, and triggering false signals.
+**Event-driven path (primary):** When the scraper inserts a content item, it immediately enqueues an `analyse_content` ARQ job to the analyst worker's Redis queue. The analyst worker picks it up within seconds. This is the normal path — items get embedded within seconds of being scraped.
 
-### Where each gate is enforced
+**Orphan sweep (safety net, every 5 min):** The analyst-scheduler runs `SELECT id FROM content_items WHERE embedding IS NULL AND created_at > NOW() - INTERVAL '1 hour'`. This catches items where the scraper's INSERT succeeded but the `enqueue_job()` call failed (Redis down, network blip). The sweep only looks back **1 hour** and processes **100 items per batch**. Items older than 1 hour that still lack embeddings are not re-processed.
 
-| Consumer | Gate 1 (Quality) | Gate 2 (Relevance) | Gate 3 (Display) |
-|----------|:---:|:---:|:---:|
-| Clustering (Leiden) | YES | YES | — |
-| Signal engine | YES (via clustering) | YES (via clustering) | — |
-| Cluster labelling (Ollama) | YES | — | — |
-| API content list | YES | YES | YES |
-| RAG context (reports) | — | YES (`credibility_min`) | — |
-| Semantic search | — | — | — (similarity-ranked) |
+**Key implication:** If an item passes gates 1-4 (scraper) but fails gates 5-8 (analyst worker), the `analyse_content` job completes successfully (no error), but no embedding is written. The orphan sweep will re-enqueue it a few times within the 1-hour window, but after that the item is effectively stuck — it has `content_quality = 'good'` but `embedding IS NULL`, so gate 9 blocks it from clustering permanently.
 
-### Gate 1: Content Quality
+### Stage A: Scraper-Side Quality (Gates 1-4)
 
 **Set by:** `score_content_quality()` in `services/scraper/anveshak/scraper/clean.py` at scrape time.
 
 **Column:** `content_items.content_quality` — `'good'` or `'low_quality'`
 
-**Checks (any match → `low_quality`):**
+**Checks (evaluated in order, first match returns `low_quality`):**
 
-| Check | Threshold | Purpose |
-|-------|-----------|---------|
-| `len(clean_text) < 100` | chars | Minimum content length |
-| `is_paywall_page()` | 3+ indicators | Login/subscription wall |
-| `len(clean_text) / len(raw_text) < 0.15` | ratio | 85%+ stripped = boilerplate page |
-| `is_nav_icon_garbage()` | 40%+ nav-icon words | Scraped UI element names (icon alt-text, aria-labels) |
+| Gate | Check | Threshold | Purpose |
+|------|-------|-----------|---------|
+| 1 | `len(clean_text) < 100` | 100 chars | Minimum content length |
+| 2 | `is_paywall_page()` | 3+ indicator phrases | Login/subscription wall detection |
+| 3 | `is_nav_icon_garbage()` | 40%+ nav-icon vocabulary | Scraped UI element names (icon alt-text, aria-labels) |
+| 4 | `len(clean_text) >= 500` → bypass ratio; else `ratio < 0.08` | 500 chars / 0.08 ratio | Boilerplate detection with length bypass for real articles from HTML-heavy sites |
+
+Gate 4 detail: Modern news sites serve 20-90KB of HTML for a 3-5KB article. The ratio check (`clean_text / raw_text`) catches pages that are mostly boilerplate, but real articles from HTML-heavy sites (idrw.org, NDTV) can have ratios of 0.06-0.12. The 500-char bypass ensures substantial articles pass regardless of how bloated the raw HTML is. The bypass fires AFTER gates 2-3, so a 500-char paywall page is still rejected.
 
 **SQL pattern:** `AND COALESCE(ci.content_quality, 'good') != 'low_quality'`
 
 The `COALESCE` ensures backward compatibility — items ingested before the `content_quality` column was added (NULL values) are treated as `'good'`.
 
-### Gate 2: Topic Relevance
+### Stage B: Analyst-Side Quality (Gates 5-8)
 
-**Set by:** `analyse_content` ARQ job in `services/analyst/anveshak/analyst/jobs.py` after embedding.
+**Set by:** `is_quality_content()` in `services/analyst/anveshak/analyst/content_quality.py`, called inside the `analyse_content` ARQ job before embedding.
 
-**Columns:** `content_items.topic_relevance_score` (float 0.0–1.0), `topics.topic_relevance_threshold`
+**Does NOT write to DB** — if the item fails, the job returns early. No embedding, no NER, no relevance score. The `content_quality` column is unchanged.
 
-**How it works:**
+**Checks:**
 
-1. Content is embedded via sentence-transformers (384-dim)
-2. Topic keywords are embedded as a query vector
-3. Cosine similarity between content and topic query = `topic_relevance_score`
-4. Items below the topic's threshold are excluded from clustering and API display
+| Gate | Check | Threshold | Configurable via |
+|------|-------|-----------|-----------------|
+| 5 | `len(text) < content_min_length` | 100 chars | `CONTENT_MIN_LENGTH` env var |
+| 6 | Word count < 5 | 5 words | Hardcoded |
+| 7 | Unique word ratio < threshold | 0.4 | `CONTENT_MIN_UNIQUE_WORD_RATIO` env var |
+| 8 | Punctuation ratio > threshold | 0.3 | `CONTENT_MAX_PUNCTUATION_RATIO` env var |
 
-**Per-topic auto-calibration:** A global threshold (0.35) fails for mixed-breadth topics — "Indian Ocean Maritime" (median score 0.14) vs "India-China LAC" (median 0.26). The analyst-scheduler runs `PERCENTILE_CONT` on each topic's score distribution every 6 hours, setting `topic_relevance_threshold` so ~60% of content survives. Clamped to [0.08, 0.50], skips topics with <20 scored items.
+**Why both Stage A and Stage B exist:** Stage A runs in the scraper container and uses raw_text vs clean_text ratio — a structural signal. Stage B runs in the analyst container and uses linguistic signals (word diversity, punctuation density). An item can pass Stage A (long enough, not a paywall, acceptable ratio) but fail Stage B (e.g., a 10KB navigation page with repeated menu items has low unique word ratio). Defense in depth — two independent quality checks in different containers.
 
-**SQL pattern:** `AND (ci.topic_relevance_score IS NULL OR ci.topic_relevance_score >= $threshold)`
+### Stage C: Clustering SQL Filters (Gates 9-11)
 
-The `IS NULL` clause ensures backward compatibility — items not yet scored by the analyst worker are included (the orphan sweep will process them).
+**Applied at:** query time in the clustering SQL (`services/analyst/anveshak/analyst/clustering.py`), all 4 SQL queries.
 
-### Gate 3: Display Filters
+| Gate | SQL clause | Purpose |
+|------|-----------|---------|
+| 9 | `AND ci.embedding IS NOT NULL` | Only cluster items that were successfully embedded |
+| 10 | `AND COALESCE(ci.content_quality, 'good') != 'low_quality'` | Exclude scraper-flagged junk |
+| 11 | `AND (ci.topic_relevance_score IS NULL OR ci.topic_relevance_score >= $threshold)` | Exclude off-topic content |
+
+Gate 11 uses a **per-topic auto-calibrated threshold** (not a single global number):
+- The analyst-scheduler runs `relevance_calibration_loop` every 6 hours
+- For each topic, computes **PERCENTILE_CONT(0.25)** of the `topic_relevance_score` distribution
+- Clamps to [floor=0.08, ceiling=0.50], skips topics with < 20 scored items
+- Writes to `topics.topic_relevance_threshold` column
+- Topics without enough data fall back to the global default: `TOPIC_RELEVANCE_THRESHOLD=0.35`
+
+The `IS NULL` clause ensures backward compatibility — items not yet scored are included rather than silently dropped.
+
+### Stage D: Display Filters (Frontend)
 
 **Set by:** Analyst interaction in the frontend filter bar. Not persisted — applied at query time.
-
-**Filters:**
 
 | Filter | Type | Applied |
 |--------|------|---------|
@@ -982,13 +1127,35 @@ The `IS NULL` clause ensures backward compatibility — items not yet scored by 
 | Date range | Client-side post-fetch | `captured_at` between from/to |
 | Sort order | Server-side SQL | `ORDER BY captured_at DESC` or `topic_relevance_score DESC` |
 
-**Key files:**
+### Where each stage is enforced
 
-- Gate 1: `services/scraper/anveshak/scraper/clean.py`
-- Gate 2: `services/analyst/anveshak/analyst/jobs.py`, `services/analyst/anveshak/analyst/relevance.py`
-- Gate 3: `frontend/src/components/content/FilterBar.tsx`, `services/api/anveshak/api/db/topics.py`
-- Clustering enforcement: `services/analyst/anveshak/analyst/clustering.py` (4 SQL queries)
-- Labeller enforcement: `services/analyst/anveshak/analyst/labeller.py`
+| Consumer | Stage A (Scraper Quality) | Stage B (Analyst Quality) | Stage C (Clustering SQL) | Stage D (Display) |
+|----------|:---:|:---:|:---:|:---:|
+| Clustering (Leiden) | Gate 10 | Gate 9 (indirect) | Gates 9-11 | — |
+| Signal engine | via clustering | via clustering | via clustering | — |
+| Cluster labelling (Ollama) | Gate 10 | Gate 9 (indirect) | — | — |
+| API content list | Gate 10 | Gate 9 (indirect) | Gate 11 | Yes |
+| RAG context (reports) | — | — | Gate 11 (`credibility_min`) | — |
+| Semantic search | — | — | — | — (similarity-ranked) |
+
+### Why every stage is necessary
+
+**Stage A alone is insufficient:** It catches structurally broken pages (nav text, paywalls) but cannot judge topical relevance. A well-formed article about cricket passes Stage A. It also can't detect repeated navigation menus that pass the ratio check.
+
+**Stage B alone is insufficient:** It runs after the DB insert, so garbage items are already stored. It also can't see the raw HTML (only clean_text), so it misses the ratio signal.
+
+**Stage C alone is insufficient:** SQL filters can only use what's in the DB. Without Stage A writing `content_quality`, and Stage B producing embeddings, Stage C has nothing to filter on.
+
+**Stage D alone is insufficient:** Display filters only hide content from the analyst's view — they don't prevent garbage from entering clusters, inflating ISC, and triggering false signals.
+
+### Key files
+
+- Stage A: `services/scraper/anveshak/scraper/clean.py` (`score_content_quality()`, `is_paywall_page()`, `is_nav_icon_garbage()`)
+- Stage B: `services/analyst/anveshak/analyst/content_quality.py` (`is_quality_content()`)
+- Stage C: `services/analyst/anveshak/analyst/clustering.py` (4 SQL queries), `services/analyst/anveshak/analyst/labeller.py`
+- Stage D: `frontend/src/components/content/FilterBar.tsx`, `services/api/anveshak/api/db/topics.py`
+- Relevance calibration: `services/analyst/anveshak/analyst/scheduler.py` (`relevance_calibration_loop`)
+- Orphan sweep: `services/analyst/anveshak/analyst/scheduler.py` (`orphan_sweep`)
 
 ---
 
@@ -1622,7 +1789,7 @@ These rules are enforced by code, tests, and CI. They are non-negotiable.
 | Labels are never Optional | `verify_labels.py` script, unit tests on every Pydantic model |
 | Reports are immutable | `generated_at` set once, `WHERE generated_at IS NULL` guard in worker |
 | Content is deduplicated | `UNIQUE(content_hash)`, `ON CONFLICT DO NOTHING` on every insert |
-| Three content quality gates enforced | Gate 1 (quality) + Gate 2 (relevance) applied at clustering, API, labeller; Gate 3 (display) at API |
+| 11 content quality gates across 4 stages | Stage A (scraper quality, 4 gates) + Stage B (analyst quality, 4 gates) + Stage C (clustering SQL, 3 gates) + Stage D (display filters) |
 | Low-quality content excluded from clustering | `COALESCE(content_quality, 'good') != 'low_quality'` in all 4 clustering SQL queries |
 | Near-duplicates excluded from ISC | `dedup.py` filters before `count_independent_sources()` in clustering |
 | Deepfake scores are float 0.0-1.0 | Type system, never `bool` — analyst decides threshold |

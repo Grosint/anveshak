@@ -450,7 +450,8 @@ def is_paywall_page(text: str) -> bool:
 # ---------------------------------------------------------------------------
 
 _MIN_CLEAN_CHARS = 100
-_MIN_QUALITY_RATIO = 0.15
+_MIN_QUALITY_RATIO = 0.08   # lowered from 0.15 — rescues real articles from HTML-heavy sites
+_RATIO_BYPASS_MIN_CHARS = 500  # bypass ratio check if clean_text is substantial
 
 
 def compute_clean_hash(clean_text: str) -> str:
@@ -466,9 +467,11 @@ def compute_clean_hash(clean_text: str) -> str:
 def score_content_quality(raw_text: str, clean_text: str) -> str:
     """Return 'good' or 'low_quality' based on cleaning ratio.
 
-    A page where 85%+ of content is stripped as boilerplate is not useful.
+    A page where 92%+ of content is stripped as boilerplate is not useful.
     A page with <100 chars of clean text has no real article content.
     A page that is a paywall/login wall is not useful.
+    A page with >=500 chars of clean text is accepted regardless of ratio —
+    real articles from HTML-heavy sites can have very low clean/raw ratios.
     """
     if not clean_text or len(clean_text) < _MIN_CLEAN_CHARS:
         return "low_quality"
@@ -481,6 +484,11 @@ def score_content_quality(raw_text: str, clean_text: str) -> str:
         return "low_quality"
 
     if not raw_text:
+        return "good"
+
+    # Substantial clean text is accepted regardless of ratio — HTML-heavy sites
+    # produce legitimately low ratios even for real articles
+    if len(clean_text) >= _RATIO_BYPASS_MIN_CHARS:
         return "good"
 
     ratio = len(clean_text) / len(raw_text)
