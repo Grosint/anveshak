@@ -73,7 +73,7 @@ def _make_rows(
         rows.append(EmbeddingRow(
             content_item_id=f"{platform}-{rng.randint(0, 2**31)}",
             vector=vec,
-            platform=platform,
+            source_id=platform,
             entity_minhash=minhash,
         ))
     return rows
@@ -112,8 +112,8 @@ class TestSingleNarrativeSmallBatch:
 
         groups, _edge_count = find_narrative_clusters(rows)
         cluster_indices = list(groups.values())[0]
-        platforms = {rows[i].platform for i in cluster_indices}
-        assert platforms == {"telegram", "reddit", "web"}
+        sources = {rows[i].source_id for i in cluster_indices}
+        assert sources == {"telegram", "reddit", "web"}
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +152,7 @@ class TestBridgeArticleEntityOverlap:
         rows.append(EmbeddingRow(
             content_item_id="bridge-article",
             vector=bridge_vec,
-            platform="web",
+            source_id="web",
             entity_minhash=bridge_hash,
         ))
 
@@ -161,7 +161,7 @@ class TestBridgeArticleEntityOverlap:
         rows.append(EmbeddingRow(
             content_item_id="unrelated",
             vector=unrelated_vec,
-            platform="web",
+            source_id="web",
             entity_minhash=None,
         ))
 
@@ -294,7 +294,7 @@ class TestAllDifferentNoClusters:
             rows.append(EmbeddingRow(
                 content_item_id=f"unrelated-{i}",
                 vector=base.astype(np.float32),
-                platform="web",
+                source_id="web",
                 entity_minhash=None,
             ))
 

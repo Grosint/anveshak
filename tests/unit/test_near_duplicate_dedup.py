@@ -170,7 +170,7 @@ async def test_detect_single_item_returns_empty():
     vec /= np.linalg.norm(vec)
     mock_pool = AsyncMock()
 
-    rows = [EmbeddingRow(content_item_id="only-item", vector=vec, platform="web", entity_minhash=None)]
+    rows = [EmbeddingRow(content_item_id="only-item", vector=vec, source_id="web", entity_minhash=None)]
     with patch("anveshak.analyst.dedup.load_embeddings", return_value=rows):
         from anveshak.analyst.dedup import detect_near_duplicates
         pairs = await detect_near_duplicates("topic-single", mock_pool)
@@ -187,8 +187,8 @@ async def test_detect_finds_near_duplicate_pair():
     mock_pool = AsyncMock()
 
     rows = [
-        EmbeddingRow(content_item_id="aaa-item", vector=vec.copy(), platform="telegram", entity_minhash=None),
-        EmbeddingRow(content_item_id="bbb-item", vector=vec.copy(), platform="reddit", entity_minhash=None),
+        EmbeddingRow(content_item_id="aaa-item", vector=vec.copy(), source_id="telegram", entity_minhash=None),
+        EmbeddingRow(content_item_id="bbb-item", vector=vec.copy(), source_id="reddit", entity_minhash=None),
     ]
     with patch("anveshak.analyst.dedup.load_embeddings", return_value=rows):
         from anveshak.analyst.dedup import detect_near_duplicates

@@ -221,6 +221,27 @@ Deleted URLs include: all homepage/category pages for Deccan Chronicle, The Hind
 
 ---
 
+## ISC — Count Distinct Sources, Not Platforms
+
+**Parameter:** `count_independent_sources()` in `services/analyst/anveshak/analyst/clustering.py`
+**Change:** `len(set(platforms))` → `len(set(source_ids))`
+**Date:** 2026-05-27
+
+**Evidence:**
+- After consolidating NDTV, Hindu, ToI from web to RSS sources, all topics had max 2 platforms (rss + web)
+- ISC=2 was the ceiling — impossible to reach ISC=3 even with 10 different news organisations all confirming the same narrative
+- Example: NDTV RSS + Defense News RSS + The Hindu RSS all in same cluster = ISC 1 (all "rss") — should be ISC 3
+
+**Rationale:**
+- ISC measures source independence for corroboration. Three different news organisations reporting the same narrative IS corroboration, regardless of whether they deliver via RSS, web, or Telegram
+- The SQL query changed from `SELECT DISTINCT s.platform` to `SELECT DISTINCT ci.source_id`
+- `EmbeddingRow` field renamed from `platform` to `source_id`
+- `ClusterData` field renamed from `platforms` to `source_ids`
+
+**Revert risk:** Reverting to platform-based ISC would collapse all RSS sources into ISC=1, making it impossible for RSS-heavy topics to fire signals at threshold ≥ 2. This is especially critical after the source consolidation that moved most news sites to RSS.
+
+---
+
 ## Parameters NOT YET Changed (candidates for future tuning)
 
 | Parameter | Current | Candidate | Reason to consider |

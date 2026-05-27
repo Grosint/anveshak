@@ -43,7 +43,7 @@ log = structlog.get_logger(__name__)
 SQL_TOPIC_EMBEDDINGS = """
     SELECT ci.id AS content_item_id,
            ci.embedding::text AS embedding_text,
-           s.platform,
+           ci.source_id,
            ci.entity_minhash
     FROM content_items ci
     JOIN sources s ON ci.source_id = s.id
@@ -58,7 +58,7 @@ SQL_TOPIC_EMBEDDINGS = """
 SQL_TOPIC_EMBEDDINGS_WINDOWED = """
     SELECT ci.id AS content_item_id,
            ci.embedding::text AS embedding_text,
-           s.platform,
+           ci.source_id,
            ci.entity_minhash
     FROM content_items ci
     JOIN sources s ON ci.source_id = s.id
@@ -75,7 +75,7 @@ SQL_TOPIC_EMBEDDINGS_WINDOWED = """
 SQL_UNCLUSTERED_EMBEDDINGS_WINDOWED = """
     SELECT ci.id AS content_item_id,
            ci.embedding::text AS embedding_text,
-           s.platform,
+           ci.source_id,
            ci.entity_minhash
     FROM content_items ci
     JOIN sources s ON ci.source_id = s.id
@@ -92,7 +92,7 @@ SQL_UNCLUSTERED_EMBEDDINGS_WINDOWED = """
 SQL_UNCLUSTERED_EMBEDDINGS = """
     SELECT ci.id AS content_item_id,
            ci.embedding::text AS embedding_text,
-           s.platform,
+           ci.source_id,
            ci.entity_minhash
     FROM content_items ci
     JOIN sources s ON ci.source_id = s.id
@@ -115,11 +115,10 @@ SQL_CLUSTER_CENTROIDS = """
     WHERE topic_id = $1 AND archived_at IS NULL
 """
 
-# Get platforms already in a cluster (for ISC update after assignment)
-SQL_CLUSTER_PLATFORMS = """
-    SELECT DISTINCT s.platform
+# Get distinct sources in a cluster (for ISC — counts independent sources, not platforms)
+SQL_CLUSTER_SOURCES = """
+    SELECT DISTINCT ci.source_id
     FROM content_items ci
-    JOIN sources s ON ci.source_id = s.id
     WHERE ci.narrative_cluster_id = $1
 """
 
@@ -164,7 +163,7 @@ SQL_TOPIC_CLUSTER_COUNT = """
 class EmbeddingRow(NamedTuple):
     content_item_id: str
     vector: np.ndarray
-    platform: str
+    source_id: str
     entity_minhash: list[int] | None
 
 
@@ -177,7 +176,7 @@ class ClusterCentroid(NamedTuple):
 
 class ClusterData(NamedTuple):
     content_item_ids: list[str]
-    platforms: list[str]
+    source_ids: list[str]
     centroid: np.ndarray
 
 
@@ -299,7 +298,7 @@ def _parse_embedding_rows(rows: list) -> list[EmbeddingRow]:
             result.append(EmbeddingRow(
                 content_item_id=row["content_item_id"],
                 vector=vec,
-                platform=row["platform"],
+                source_id=row["source_id"],
                 entity_minhash=minhash,
             ))
         except Exception as exc:
@@ -415,12 +414,15 @@ def compute_centroid(vectors: list[np.ndarray]) -> np.ndarray:
     return centroid.astype(np.float32)
 
 
-def count_independent_sources(platforms: list[str]) -> int:
-    """Count distinct platform values in a cluster (criteria 2.5).
+def count_independent_sources(source_ids: list[str]) -> int:
+    """Count distinct sources in a cluster (criteria 2.5).
+
+    Counts distinct source_id values, not platforms. Three RSS sources
+    reporting the same narrative = ISC 3, not ISC 1.
 
     Pure function — unit-testable without DB.
     """
-    return len(set(platforms))
+    return len(set(source_ids))
 
 
 def build_cluster_data(
@@ -429,12 +431,12 @@ def build_cluster_data(
 ) -> ClusterData:
     """Assemble ClusterData from community row indices."""
     content_item_ids = [rows[i].content_item_id for i in indices]
-    platforms = [rows[i].platform for i in indices]
+    source_ids = [rows[i].source_id for i in indices]
     vectors = [rows[i].vector for i in indices]
     centroid = compute_centroid(vectors)
     return ClusterData(
         content_item_ids=content_item_ids,
-        platforms=platforms,
+        source_ids=source_ids,
         centroid=centroid,
     )
 
@@ -461,13 +463,13 @@ async def upsert_cluster(
     centroid_str = _vec_to_pgvector(cluster_data.centroid)
 
     if duplicate_ids:
-        filtered_platforms = [
-            p for cid, p in zip(cluster_data.content_item_ids, cluster_data.platforms)
+        filtered_source_ids = [
+            sid for cid, sid in zip(cluster_data.content_item_ids, cluster_data.source_ids)
             if cid not in duplicate_ids
         ]
-        isc = count_independent_sources(filtered_platforms) if filtered_platforms else count_independent_sources(cluster_data.platforms)
+        isc = count_independent_sources(filtered_source_ids) if filtered_source_ids else count_independent_sources(cluster_data.source_ids)
     else:
-        isc = count_independent_sources(cluster_data.platforms)
+        isc = count_independent_sources(cluster_data.source_ids)
 
     await conn.execute(
         SQL_UPSERT_CLUSTER,
@@ -522,10 +524,10 @@ async def update_cluster_with_assignments(
         norm = np.linalg.norm(raw)
         updated_centroid = (raw / norm if norm > 0 else raw).astype(np.float32)
 
-        # Get all distinct platforms now in this cluster
-        platform_rows = await conn.fetch(SQL_CLUSTER_PLATFORMS, cluster_id)
-        all_platforms = [r["platform"] for r in platform_rows]
-        updated_isc = count_independent_sources(all_platforms)
+        # Get all distinct sources now in this cluster
+        source_rows = await conn.fetch(SQL_CLUSTER_SOURCES, cluster_id)
+        all_source_ids = [r["source_id"] for r in source_rows]
+        updated_isc = count_independent_sources(all_source_ids)
 
         updated_count = existing_item_count + len(new_items)
         centroid_str = _vec_to_pgvector(updated_centroid)

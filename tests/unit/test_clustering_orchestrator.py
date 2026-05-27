@@ -50,7 +50,7 @@ def _make_row(
     return EmbeddingRow(
         content_item_id=cid,
         vector=vector,
-        platform=platform,
+        source_id=platform,
         entity_minhash=minhash,
     )
 
