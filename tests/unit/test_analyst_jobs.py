@@ -104,7 +104,7 @@ class TestAnalyseContentHappyPath:
         fake_embedding = [0.1] * 384
 
         with (
-            patch(f"{_MOD}.is_quality_content", return_value=True),
+            patch(f"{_MOD}.is_quality_content", return_value=(True, "passed")),
             patch(f"{_MOD}.detect_language", return_value="en"),
             patch(f"{_MOD}.needs_translation", return_value=False),
             patch(f"{_MOD}.is_model_loaded", return_value=True),
@@ -188,7 +188,7 @@ class TestAnalyseContentQualityGate:
         ctx = _build_ctx(pool)
 
         with (
-            patch(f"{_MOD}.is_quality_content", return_value=False),
+            patch(f"{_MOD}.is_quality_content", return_value=(False, "too_short")),
             patch(f"{_MOD}.detect_language") as mock_lang,
             patch(f"{_MOD}.encode_text") as mock_embed,
             patch(f"{_MOD}.analyst_nlp_jobs_total") as mock_counter,
@@ -215,7 +215,7 @@ class TestAnalyseContentTranslationFallback:
         ctx = _build_ctx(pool)
 
         with (
-            patch(f"{_MOD}.is_quality_content", return_value=True),
+            patch(f"{_MOD}.is_quality_content", return_value=(True, "passed")),
             patch(f"{_MOD}.detect_language", return_value="hi"),
             patch(f"{_MOD}.needs_translation", return_value=True),
             patch(f"{_MOD}.translate_to_english", return_value=None),  # translation fails
@@ -259,7 +259,7 @@ class TestAnalyseContentTranslationSuccess:
         ctx = _build_ctx(pool)
 
         with (
-            patch(f"{_MOD}.is_quality_content", return_value=True),
+            patch(f"{_MOD}.is_quality_content", return_value=(True, "passed")),
             patch(f"{_MOD}.detect_language", return_value="fr"),
             patch(f"{_MOD}.needs_translation", return_value=True),
             patch(f"{_MOD}.translate_to_english", return_value=translated),
@@ -310,7 +310,7 @@ class TestAnalyseContentNERUnavailable:
         ctx = _build_ctx(pool)
 
         with (
-            patch(f"{_MOD}.is_quality_content", return_value=True),
+            patch(f"{_MOD}.is_quality_content", return_value=(True, "passed")),
             patch(f"{_MOD}.detect_language", return_value="en"),
             patch(f"{_MOD}.needs_translation", return_value=False),
             patch(f"{_MOD}.is_model_loaded", return_value=False),  # NER unavailable
@@ -355,7 +355,7 @@ class TestAnalyseContentSQLParamOrder:
         sentinel_minhash = [999, 888, 777]
 
         with (
-            patch(f"{_MOD}.is_quality_content", return_value=True),
+            patch(f"{_MOD}.is_quality_content", return_value=(True, "passed")),
             patch(f"{_MOD}.detect_language", return_value="en"),
             patch(f"{_MOD}.needs_translation", return_value=False),
             patch(f"{_MOD}.is_model_loaded", return_value=True),

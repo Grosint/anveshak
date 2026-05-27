@@ -3,7 +3,7 @@
 Uses an isolated CollectorRegistry so this module can be imported alongside
 other service metrics modules in the same test process without name conflicts.
 """
-from prometheus_client import CollectorRegistry, Counter, Histogram
+from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
 
 # 8A.18 — isolated registry prevents cross-service duplicate registration
 REGISTRY = CollectorRegistry()
@@ -61,5 +61,28 @@ scraper_sources_skipped_total = Counter(
     "scraper_sources_skipped_total",
     "Sources skipped by circuit breaker (health_status=down)",
     ["platform"],
+    registry=REGISTRY,
+)
+
+# Pipeline funnel — content quality gate outcomes
+scraper_content_quality_total = Counter(
+    "scraper_content_quality_total",
+    "Content items by quality gate outcome",
+    ["quality", "gate"],
+    registry=REGISTRY,
+)
+
+# Pipeline funnel — URLs skipped due to Redis seen-tracking
+scraper_url_seen_skip_total = Counter(
+    "scraper_url_seen_skip_total",
+    "URLs skipped due to Redis seen-tracking",
+    registry=REGISTRY,
+)
+
+# Pipeline funnel — article links discovered per source page
+scraper_links_discovered = Histogram(
+    "scraper_links_discovered",
+    "Article links discovered per source page",
+    buckets=[0, 1, 5, 10, 25, 50, 100],
     registry=REGISTRY,
 )

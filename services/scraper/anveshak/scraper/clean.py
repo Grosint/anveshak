@@ -464,8 +464,12 @@ def compute_clean_hash(clean_text: str) -> str:
     return hashlib.sha256(normalised.encode("utf-8")).hexdigest()
 
 
-def score_content_quality(raw_text: str, clean_text: str) -> str:
-    """Return 'good' or 'low_quality' based on cleaning ratio.
+def score_content_quality(raw_text: str, clean_text: str) -> tuple[str, str]:
+    """Return (quality, gate) based on cleaning ratio.
+
+    quality: 'good' or 'low_quality'
+    gate: which gate determined the outcome — 'too_short', 'paywall',
+          'nav_icon', 'ratio', 'bypass', or 'passed'
 
     A page where 92%+ of content is stripped as boilerplate is not useful.
     A page with <100 chars of clean text has no real article content.
@@ -474,28 +478,28 @@ def score_content_quality(raw_text: str, clean_text: str) -> str:
     real articles from HTML-heavy sites can have very low clean/raw ratios.
     """
     if not clean_text or len(clean_text) < _MIN_CLEAN_CHARS:
-        return "low_quality"
+        return ("low_quality", "too_short")
 
     if is_paywall_page(raw_text) or is_paywall_page(clean_text):
-        return "low_quality"
+        return ("low_quality", "paywall")
 
     # Check if clean text is dominated by nav-icon garbage
     if is_nav_icon_garbage(clean_text):
-        return "low_quality"
+        return ("low_quality", "nav_icon")
 
     if not raw_text:
-        return "good"
+        return ("good", "passed")
 
     # Substantial clean text is accepted regardless of ratio — HTML-heavy sites
     # produce legitimately low ratios even for real articles
     if len(clean_text) >= _RATIO_BYPASS_MIN_CHARS:
-        return "good"
+        return ("good", "bypass")
 
     ratio = len(clean_text) / len(raw_text)
     if ratio < _MIN_QUALITY_RATIO:
-        return "low_quality"
+        return ("low_quality", "ratio")
 
-    return "good"
+    return ("good", "passed")
 
 
 def extract_title(clean_text: str) -> str | None:

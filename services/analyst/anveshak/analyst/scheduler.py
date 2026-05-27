@@ -37,7 +37,7 @@ from prometheus_client import generate_latest
 from .clustering import run_clustering
 from .dedup import detect_near_duplicates, upsert_near_duplicates
 from .labeller import check_label_staleness
-from .metrics import REGISTRY as ANALYST_REGISTRY
+from .metrics import REGISTRY as ANALYST_REGISTRY, analyst_orphan_sweep_total
 from .settings import settings
 from .discovery import discover_snowball_sources, discover_telegram_channels, discover_entity_sources  # noqa: E501
 from .effectiveness import compute_source_effectiveness
@@ -403,6 +403,7 @@ async def orphan_sweep(pool: asyncpg.Pool, redis: object) -> None:
 
             if rows:
                 log.info("scheduler.orphan_sweep.found", pending=len(rows))
+                analyst_orphan_sweep_total.inc(len(rows))
                 for row in rows:
                     try:
                         await redis.enqueue_job(

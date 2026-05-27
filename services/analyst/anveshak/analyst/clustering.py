@@ -31,6 +31,7 @@ import numpy as np
 import structlog
 
 from .entity_minhash import minhash_similarity_matrix
+from .metrics import analyst_clustering_items, analyst_clustering_edges
 from .settings import settings
 
 log = structlog.get_logger(__name__)
@@ -314,14 +315,16 @@ def _parse_embedding_rows(rows: list) -> list[EmbeddingRow]:
 # Core functions
 # ---------------------------------------------------------------------------
 
-def find_narrative_clusters(rows: list[EmbeddingRow]) -> dict[int, list[int]]:
+def find_narrative_clusters(
+    rows: list[EmbeddingRow],
+) -> tuple[dict[int, list[int]], int]:
     """Find narrative clusters using Leiden community detection.
 
     Builds a similarity graph where edges connect article pairs with
     blended similarity >= threshold, then runs Leiden to find communities.
     Communities smaller than clustering_min_cluster_size are discarded.
 
-    Returns mapping of community_label → row indices.
+    Returns (groups: community_label → row indices, edge_count).
     """
     min_size = settings.clustering_min_cluster_size
     if len(rows) < min_size:
@@ -330,7 +333,7 @@ def find_narrative_clusters(rows: list[EmbeddingRow]) -> dict[int, list[int]]:
             count=len(rows),
             min_required=min_size,
         )
-        return {}
+        return {}, 0
 
     sim_matrix = _compute_blended_similarity(rows)
     threshold = settings.clustering_similarity_threshold
@@ -351,7 +354,7 @@ def find_narrative_clusters(rows: list[EmbeddingRow]) -> dict[int, list[int]]:
             item_count=n,
             threshold=threshold,
         )
-        return {}
+        return {}, 0
 
     graph = ig.Graph(n=n, edges=edges, directed=False)
     graph.es["weight"] = weights
@@ -368,7 +371,7 @@ def find_narrative_clusters(rows: list[EmbeddingRow]) -> dict[int, list[int]]:
         if len(members) >= min_size:
             groups[label] = list(members)
 
-    return groups
+    return groups, len(edges)
 
 
 def assign_to_nearest_cluster(
@@ -585,6 +588,7 @@ async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
     # Step 2: Load existing cluster centroids
     centroids = await load_cluster_centroids(topic_id, pool)
     cluster_ids: list[str] = []
+    assigned_count = 0
 
     if centroids:
         # --- Incremental path: assign to existing clusters first ---
@@ -601,11 +605,12 @@ async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
             )
             cluster_ids.append(cluster_id)
 
+        assigned_count = sum(len(v) for v in assigned.values())
         if assigned:
             log.info(
                 "clustering.incremental_complete",
                 topic_id=topic_id,
-                assigned_items=sum(len(v) for v in assigned.values()),
+                assigned_items=assigned_count,
                 clusters_updated=len(assigned),
                 unassigned_items=len(unassigned),
             )
@@ -632,6 +637,11 @@ async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
         )
         cluster_ids.extend(new_cluster_ids)
 
+    # Update pipeline funnel gauges
+    unassigned_count = len(new_rows) - assigned_count
+    analyst_clustering_items.labels(topic_id=topic_id, status="assigned").set(assigned_count)
+    analyst_clustering_items.labels(topic_id=topic_id, status="unassigned").set(unassigned_count)
+
     if cluster_ids:
         log.info(
             "clustering.topic_done",
@@ -648,7 +658,8 @@ async def _leiden_and_persist(
     rows: list[EmbeddingRow],
 ) -> list[str]:
     """Run Leiden community detection on items and persist resulting clusters."""
-    groups = find_narrative_clusters(rows)
+    groups, edge_count = find_narrative_clusters(rows)
+    analyst_clustering_edges.labels(topic_id=topic_id).set(edge_count)
     if not groups:
         log.info("clustering.no_clusters_formed", topic_id=topic_id, item_count=len(rows))
         return []

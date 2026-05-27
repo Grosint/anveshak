@@ -1,0 +1,127 @@
+{
+  "annotations": {"list": []},
+  "description": "Pipeline Clustering — Clustering health, assignment rates, and cluster creation metrics.",
+  "editable": false,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [{"title": "\u2190 Pipeline Funnel", "url": "/d/pipeline-funnel", "type": "dashboards", "icon": "external link"}],
+  "templating": {
+    "list": [
+      {
+        "name": "timerange",
+        "type": "interval",
+        "current": {"text": "24h", "value": "24h"},
+        "options": [
+          {"text": "1h", "value": "1h"},
+          {"text": "6h", "value": "6h"},
+          {"text": "24h", "value": "24h"},
+          {"text": "7d", "value": "7d"},
+          {"text": "30d", "value": "30d"}
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 100,
+      "title": "Clustering Health",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 10}, {"color": "red", "value": 50}]}}},
+      "gridPos": {"h": 7, "w": 8, "x": 0, "y": 1},
+      "id": 1,
+      "description": "Assigned vs unassigned items per topic after clustering.",
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "orientation": "horizontal", "displayMode": "gradient"},
+      "title": "Assignment Rate",
+      "type": "bargauge",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "analyst_clustering_items{status=\"assigned\"}", "legendFormat": "{{topic_id}} assigned", "refId": "A"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "analyst_clustering_items{status=\"unassigned\"}", "legendFormat": "{{topic_id}} unassigned", "refId": "B"}
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "short", "custom": {"lineWidth": 2, "fillOpacity": 10, "spanNulls": false}}},
+      "gridPos": {"h": 7, "w": 8, "x": 8, "y": 1},
+      "id": 2,
+      "description": "Rate of new clusters created over time (5m increase).",
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "title": "Clusters Created",
+      "type": "timeseries",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_clusters_created_total[5m])", "legendFormat": "{{topic_id}}", "refId": "A"}
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A4C8E8", "value": null}]}}},
+      "gridPos": {"h": 7, "w": 8, "x": 16, "y": 1},
+      "id": 3,
+      "description": "Number of similarity edges in the clustering graph per topic.",
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "orientation": "horizontal", "displayMode": "gradient"},
+      "title": "Edge Count",
+      "type": "bargauge",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "analyst_clustering_edges", "legendFormat": "{{topic_id}}", "refId": "A"}
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 8},
+      "id": 101,
+      "title": "Clustering Details",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A4C8E8", "value": null}]}}},
+      "gridPos": {"h": 5, "w": 8, "x": 0, "y": 9},
+      "id": 4,
+      "description": "Total clusters created in the selected time range.",
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "title": "Total Clusters",
+      "type": "stat",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_clusters_created_total[$timerange])", "legendFormat": "", "refId": "A"}
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}}},
+      "gridPos": {"h": 5, "w": 8, "x": 8, "y": 9},
+      "id": 5,
+      "description": "Sum of all content items currently assigned to clusters.",
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background", "graphMode": "none"},
+      "title": "Assigned Items",
+      "type": "stat",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(analyst_clustering_items{status=\"assigned\"})", "legendFormat": "", "refId": "A"}
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "yellow", "value": null}, {"color": "red", "value": 50}]}}},
+      "gridPos": {"h": 5, "w": 8, "x": 16, "y": 9},
+      "id": 6,
+      "description": "Sum of all content items not yet assigned to any cluster.",
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background", "graphMode": "none"},
+      "title": "Unassigned Items",
+      "type": "stat",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(analyst_clustering_items{status=\"unassigned\"})", "legendFormat": "", "refId": "A"}
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["anveshak", "pipeline"],
+  "time": {"from": "now-24h", "to": "now"},
+  "timezone": "browser",
+  "title": "Anveshak \u2014 Pipeline Clustering",
+  "uid": "pipeline-clustering",
+  "version": 1
+}

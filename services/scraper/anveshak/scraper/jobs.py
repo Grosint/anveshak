@@ -36,7 +36,8 @@ from .rss import fetch_rss_items
 from .metrics import (
     scraper_items_fetched_total, scraper_fetch_errors_total,
     scraper_fetch_duration_seconds, scraper_darkweb_fetch_duration_seconds,
-    arq_jobs_failed_total,
+    arq_jobs_failed_total, scraper_content_quality_total,
+    scraper_url_seen_skip_total, scraper_links_discovered,
 )
 from .normalise import compute_content_hash
 from .settings import settings
@@ -207,7 +208,8 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
         content_hash = compute_content_hash(raw_text)
         cleaned = clean_extracted_text(raw_text)
         effective_clean = cleaned or raw_text
-        quality = score_content_quality(raw_text, effective_clean)
+        quality, gate = score_content_quality(raw_text, effective_clean)
+        scraper_content_quality_total.labels(quality=quality, gate=gate).inc()
         c_hash = compute_clean_hash(effective_clean)
         title = extract_title(effective_clean)
         language = detect_language(effective_clean)
@@ -272,6 +274,7 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
                         log.info("scraper.source_page_empty", url=url)
                         return
                     article_links = extract_article_links(html, url)
+                    scraper_links_discovered.observe(len(article_links))
                     log.debug(
                         "scraper.links_discovered",
                         url=url,
@@ -282,6 +285,7 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
                             # URL-seen check — skip if already fetched within TTL
                             if await _is_url_seen(redis, link_url):
                                 log.debug("scraper.url_seen_skip", url=link_url)
+                                scraper_url_seen_skip_total.inc()
                                 continue
                             # Per-domain rate limiting
                             await domain_limiter.wait(link_url)
@@ -412,7 +416,8 @@ async def poll_rss_sources(ctx: dict, topic_id: str) -> int:
                         content_hash = compute_content_hash(item.raw_text)
                         cleaned = clean_extracted_text(item.raw_text)
                         effective_clean = cleaned or item.raw_text
-                        quality = score_content_quality(item.raw_text, effective_clean)
+                        quality, gate = score_content_quality(item.raw_text, effective_clean)
+                        scraper_content_quality_total.labels(quality=quality, gate=gate).inc()
                         c_hash = compute_clean_hash(effective_clean)
                         title = extract_title(effective_clean)
                         rss_language = detect_language(effective_clean)
@@ -511,7 +516,8 @@ async def scrape_darkweb_topic(ctx: dict, topic_id: str) -> int:
         content_hash = compute_content_hash(raw_text)
         cleaned = clean_extracted_text(raw_text)
         effective_clean = cleaned or raw_text
-        quality = score_content_quality(raw_text, effective_clean)
+        quality, gate = score_content_quality(raw_text, effective_clean)
+        scraper_content_quality_total.labels(quality=quality, gate=gate).inc()
         c_hash = compute_clean_hash(effective_clean)
         title = extract_title(effective_clean)
         dw_language = detect_language(effective_clean)

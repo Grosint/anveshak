@@ -1,0 +1,134 @@
+{
+  "annotations": {"list": []},
+  "description": "Pipeline Signals — Signal analysis drill-down with severity breakdown and credibility tracking.",
+  "editable": false,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [{"title": "\u2190 Pipeline Funnel", "url": "/d/pipeline-funnel", "type": "dashboards", "icon": "external link"}],
+  "templating": {
+    "list": [
+      {
+        "name": "timerange",
+        "type": "interval",
+        "current": {"text": "24h", "value": "24h"},
+        "options": [
+          {"text": "1h", "value": "1h"},
+          {"text": "6h", "value": "6h"},
+          {"text": "24h", "value": "24h"},
+          {"text": "7d", "value": "7d"},
+          {"text": "30d", "value": "30d"}
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 100,
+      "title": "Signal Overview",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A4C8E8", "value": null}]}}},
+      "gridPos": {"h": 5, "w": 4, "x": 0, "y": 1},
+      "id": 1,
+      "description": "Total signals fired across all severities in selected time range.",
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "title": "Total Signals",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_signals_fired_total[$timerange])", "legendFormat": "Total", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}]}}},
+      "gridPos": {"h": 5, "w": 4, "x": 4, "y": 1},
+      "id": 2,
+      "description": "HIGH severity signals fired in selected time range.",
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "title": "HIGH",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_signals_fired_total{severity=\"HIGH\"}[$timerange])", "legendFormat": "HIGH", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "orange", "value": null}]}}},
+      "gridPos": {"h": 5, "w": 4, "x": 8, "y": 1},
+      "id": 3,
+      "description": "MEDIUM severity signals fired in selected time range.",
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "title": "MEDIUM",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_signals_fired_total{severity=\"MEDIUM\"}[$timerange])", "legendFormat": "MEDIUM", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "yellow", "value": null}]}}},
+      "gridPos": {"h": 5, "w": 4, "x": 12, "y": 1},
+      "id": 4,
+      "description": "LOW severity signals fired in selected time range.",
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "title": "LOW",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_signals_fired_total{severity=\"LOW\"}[$timerange])", "legendFormat": "LOW", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "short", "custom": {"lineWidth": 2, "fillOpacity": 15, "spanNulls": false}}},
+      "gridPos": {"h": 5, "w": 8, "x": 16, "y": 1},
+      "id": 5,
+      "description": "Signals fired over time, broken down by severity.",
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "title": "Signals Over Time",
+      "type": "timeseries",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_signals_fired_total[5m])", "legendFormat": "{{severity}}", "refId": "A"}]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 6},
+      "id": 101,
+      "title": "Credibility & Operations",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "short", "custom": {"lineWidth": 2, "fillOpacity": 15, "spanNulls": false}}},
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 7},
+      "id": 6,
+      "description": "Credibility score changes over time, broken down by direction (boost/drop).",
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "title": "Credibility Changes",
+      "type": "timeseries",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_credibility_changes_total[5m])", "legendFormat": "{{direction}}", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 10}, {"color": "red", "value": 50}]}}},
+      "gridPos": {"h": 6, "w": 6, "x": 12, "y": 7},
+      "id": 7,
+      "description": "Content items recovered by the orphan sweep safety net in selected time range.",
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "title": "Orphan Sweep",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_orphan_sweep_total[$timerange])", "legendFormat": "Swept", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 5}, {"color": "red", "value": 20}]}}},
+      "gridPos": {"h": 6, "w": 6, "x": 18, "y": 7},
+      "id": 8,
+      "description": "Total fetch errors from the scraper in selected time range.",
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "title": "Fetch Errors",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(scraper_fetch_errors_total[$timerange])", "legendFormat": "Errors", "refId": "A"}]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["anveshak", "pipeline"],
+  "time": {"from": "now-24h", "to": "now"},
+  "title": "Anveshak \u2014 Pipeline Signals",
+  "uid": "pipeline-signals"
+}

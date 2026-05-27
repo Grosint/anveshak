@@ -1,0 +1,163 @@
+{
+  "annotations": {"list": []},
+  "description": "Pipeline Quality Gates — Drill-down into scraper and analyst quality filtering.",
+  "editable": false,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [{"title": "\u2190 Pipeline Funnel", "url": "/d/pipeline-funnel", "type": "dashboards", "icon": "external link"}],
+  "templating": {
+    "list": [
+      {
+        "name": "timerange",
+        "type": "interval",
+        "current": {"text": "24h", "value": "24h"},
+        "options": [
+          {"text": "1h", "value": "1h"},
+          {"text": "6h", "value": "6h"},
+          {"text": "24h", "value": "24h"},
+          {"text": "7d", "value": "7d"},
+          {"text": "30d", "value": "30d"}
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 100,
+      "title": "Scraper Gates (1\u20134)",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "yellow", "value": null}, {"color": "orange", "value": 50}, {"color": "red", "value": 200}]}}},
+      "gridPos": {"h": 5, "w": 5, "x": 0, "y": 1},
+      "id": 1,
+      "description": "Content rejected for being too short (below minimum word count).",
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "title": "Gate 1 \u2014 Too Short",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(scraper_content_quality_total{quality=\"low_quality\",gate=\"too_short\"}[$timerange])", "legendFormat": "Too Short", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "yellow", "value": null}, {"color": "orange", "value": 50}, {"color": "red", "value": 200}]}}},
+      "gridPos": {"h": 5, "w": 5, "x": 5, "y": 1},
+      "id": 2,
+      "description": "Content rejected for paywall or login-wall detection.",
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "title": "Gate 2 \u2014 Paywall",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(scraper_content_quality_total{quality=\"low_quality\",gate=\"paywall\"}[$timerange])", "legendFormat": "Paywall", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "yellow", "value": null}, {"color": "orange", "value": 50}, {"color": "red", "value": 200}]}}},
+      "gridPos": {"h": 5, "w": 5, "x": 10, "y": 1},
+      "id": 3,
+      "description": "Content rejected for navigation/icon boilerplate ratio.",
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "title": "Gate 3 \u2014 Nav Icon",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(scraper_content_quality_total{quality=\"low_quality\",gate=\"nav_icon\"}[$timerange])", "legendFormat": "Nav Icon", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "yellow", "value": null}, {"color": "orange", "value": 50}, {"color": "red", "value": 200}]}}},
+      "gridPos": {"h": 5, "w": 5, "x": 15, "y": 1},
+      "id": 4,
+      "description": "Content rejected for poor clean-to-raw text ratio.",
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "title": "Gate 4 \u2014 Ratio",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(scraper_content_quality_total{quality=\"low_quality\",gate=\"ratio\"}[$timerange])", "legendFormat": "Ratio", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "short"}},
+      "gridPos": {"h": 5, "w": 4, "x": 20, "y": 1},
+      "id": 5,
+      "description": "Proportion of content passing vs failing scraper quality gates.",
+      "options": {"legend": {"displayMode": "list", "placement": "right"}, "pieType": "pie"},
+      "title": "Good vs Low Quality",
+      "type": "piechart",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(scraper_content_quality_total{quality=\"good\"}[$timerange])", "legendFormat": "Good", "refId": "A"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(scraper_content_quality_total{quality=\"low_quality\"}[$timerange])", "legendFormat": "Low Quality", "refId": "B"}
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 6},
+      "id": 200,
+      "title": "Analyst Gates (5\u20138)",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "yellow", "value": null}, {"color": "orange", "value": 50}, {"color": "red", "value": 200}]}}},
+      "gridPos": {"h": 5, "w": 5, "x": 0, "y": 7},
+      "id": 6,
+      "description": "Content skipped by analyst for being too short after cleaning.",
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "title": "Gate 5 \u2014 Too Short",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_content_skipped_quality_total{gate=\"too_short\"}[$timerange])", "legendFormat": "Too Short", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "yellow", "value": null}, {"color": "orange", "value": 50}, {"color": "red", "value": 200}]}}},
+      "gridPos": {"h": 5, "w": 5, "x": 5, "y": 7},
+      "id": 7,
+      "description": "Content skipped by analyst for having too few meaningful words.",
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "title": "Gate 6 \u2014 Few Words",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_content_skipped_quality_total{gate=\"few_words\"}[$timerange])", "legendFormat": "Few Words", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "yellow", "value": null}, {"color": "orange", "value": 50}, {"color": "red", "value": 200}]}}},
+      "gridPos": {"h": 5, "w": 5, "x": 10, "y": 7},
+      "id": 8,
+      "description": "Content skipped by analyst for low unique-word ratio (repetitive text).",
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "title": "Gate 7 \u2014 Unique Ratio",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_content_skipped_quality_total{gate=\"unique_ratio\"}[$timerange])", "legendFormat": "Unique Ratio", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "yellow", "value": null}, {"color": "orange", "value": 50}, {"color": "red", "value": 200}]}}},
+      "gridPos": {"h": 5, "w": 5, "x": 15, "y": 7},
+      "id": 9,
+      "description": "Content skipped by analyst for excessive punctuation ratio.",
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "title": "Gate 8 \u2014 Punctuation",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_content_skipped_quality_total{gate=\"punctuation\"}[$timerange])", "legendFormat": "Punctuation", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "short", "custom": {"lineWidth": 2, "fillOpacity": 10, "showPoints": "auto"}}},
+      "gridPos": {"h": 5, "w": 4, "x": 20, "y": 7},
+      "id": 10,
+      "description": "Timeseries of content passing analyst embedding vs skipped by quality gates.",
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "title": "Passed vs Skipped",
+      "type": "timeseries",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_content_skipped_quality_total[5m])", "legendFormat": "Skipped", "refId": "A"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_embedding_completed_total[5m])", "legendFormat": "Passed", "refId": "B"}
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["anveshak", "pipeline"],
+  "time": {"from": "now-24h", "to": "now"},
+  "title": "Anveshak \u2014 Pipeline Quality Gates",
+  "uid": "pipeline-quality",
+  "version": 1
+}

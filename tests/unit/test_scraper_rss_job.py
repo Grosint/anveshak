@@ -86,7 +86,7 @@ class TestPollRssSources:
     @pytest.mark.asyncio
     @patch("anveshak.scraper.jobs.scraper_items_fetched_total")
     @patch("anveshak.scraper.jobs.extract_title", return_value="Title")
-    @patch("anveshak.scraper.jobs.score_content_quality", return_value=0.8)
+    @patch("anveshak.scraper.jobs.score_content_quality", return_value=("good", "passed"))
     @patch("anveshak.scraper.jobs.compute_clean_hash", return_value="cleanhash1")
     @patch("anveshak.scraper.jobs.clean_extracted_text", return_value="cleaned text")
     @patch("anveshak.scraper.jobs.compute_content_hash")
@@ -142,7 +142,7 @@ class TestPollRssSources:
     @patch("anveshak.scraper.jobs.scraper_items_fetched_total")
     @patch("anveshak.scraper.jobs.scraper_fetch_errors_total")
     @patch("anveshak.scraper.jobs.extract_title", return_value="Title")
-    @patch("anveshak.scraper.jobs.score_content_quality", return_value=0.8)
+    @patch("anveshak.scraper.jobs.score_content_quality", return_value=("good", "passed"))
     @patch("anveshak.scraper.jobs.compute_clean_hash", return_value="cleanhash")
     @patch("anveshak.scraper.jobs.clean_extracted_text")
     @patch("anveshak.scraper.jobs.compute_content_hash", return_value="hash1")

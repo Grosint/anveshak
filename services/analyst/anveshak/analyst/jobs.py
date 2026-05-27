@@ -17,7 +17,11 @@ from .clustering import run_clustering as _run_clustering
 from .credibility import run_credibility_update, run_cross_verification_update, run_contradiction_update
 from .embeddings import encode_text, load_encoder
 from .labeller import generate_label_for_cluster
-from .metrics import analyst_nlp_jobs_total, analyst_nlp_duration_seconds, analyst_clusters_created_total, analyst_relevance_score, arq_jobs_failed_total
+from .metrics import (
+    analyst_nlp_jobs_total, analyst_nlp_duration_seconds,
+    analyst_clusters_created_total, analyst_relevance_score, arq_jobs_failed_total,
+    analyst_embedding_completed_total, analyst_content_skipped_quality_total,
+)
 from .nlp import detect_language, is_model_loaded, load_models, parse_entities
 from .settings import settings
 from .keywords import extract_keywords
@@ -101,13 +105,16 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
     clean_text: str = row["clean_text"]
 
     # --- Quality gate: skip embedding for boilerplate/nav text ---
-    if not is_quality_content(clean_text):
+    quality_passed, quality_gate = is_quality_content(clean_text)
+    if not quality_passed:
         log.info(
             "analyst.content_skipped_quality",
             content_item_id=content_item_id,
             text_len=len(clean_text),
+            gate=quality_gate,
         )
         analyst_nlp_jobs_total.labels(status="skipped").inc()
+        analyst_content_skipped_quality_total.labels(gate=quality_gate).inc()
         return
 
     try:
@@ -213,6 +220,7 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
                     )
 
         analyst_nlp_jobs_total.labels(status="success").inc()
+        analyst_embedding_completed_total.inc()
         analyst_nlp_duration_seconds.observe(_time.monotonic() - _t0)
         log.info(
             "analyst.content_analysed",

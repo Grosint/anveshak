@@ -1,0 +1,112 @@
+{
+  "annotations": {"list": []},
+  "description": "Pipeline Ingestion drill-down — platform breakdown, dedup savings, fetch errors, circuit breakers.",
+  "editable": false,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [{"title": "\u2190 Pipeline Funnel", "url": "/d/pipeline-funnel", "type": "dashboards", "icon": "external link"}],
+  "templating": {
+    "list": [
+      {
+        "name": "timerange",
+        "type": "interval",
+        "current": {"text": "24h", "value": "24h"},
+        "options": [
+          {"text": "1h", "value": "1h"},
+          {"text": "6h", "value": "6h"},
+          {"text": "24h", "value": "24h"},
+          {"text": "7d", "value": "7d"},
+          {"text": "30d", "value": "30d"}
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 100,
+      "title": "Ingestion Details",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "short", "custom": {"lineWidth": 2, "fillOpacity": 15, "showPoints": "auto"}}},
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 1},
+      "id": 1,
+      "description": "Content items fetched per 5-minute window, broken down by source platform.",
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "title": "Items by Platform",
+      "type": "timeseries",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(scraper_items_fetched_total[5m])", "legendFormat": "{{source_platform}}", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 100}, {"color": "orange", "value": 1000}]}}},
+      "gridPos": {"h": 7, "w": 6, "x": 12, "y": 1},
+      "id": 2,
+      "description": "Total URLs skipped by Redis dedup in the selected time range.",
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "title": "URL Dedup Skips",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(scraper_url_seen_skip_total[$timerange])", "legendFormat": "Skipped", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "short", "custom": {"fillOpacity": 30}}},
+      "gridPos": {"h": 7, "w": 6, "x": 18, "y": 1},
+      "id": 3,
+      "description": "Distribution of links discovered per scrape run.",
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "title": "Links Discovered",
+      "type": "histogram",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "scraper_links_discovered_bucket", "legendFormat": "{{le}}", "refId": "A"}]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 8},
+      "id": 200,
+      "title": "Health & Errors",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "short", "custom": {"lineWidth": 2, "fillOpacity": 10, "showPoints": "auto"}}},
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 9},
+      "id": 4,
+      "description": "Fetch errors per 5-minute window, broken down by error type (timeout, DNS, HTTP 4xx/5xx).",
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "title": "Fetch Errors",
+      "type": "timeseries",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(scraper_fetch_errors_total[5m])", "legendFormat": "{{error_type}}", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "short", "custom": {"lineWidth": 2, "fillOpacity": 10, "showPoints": "auto"}}},
+      "gridPos": {"h": 6, "w": 6, "x": 12, "y": 9},
+      "id": 5,
+      "description": "Circuit breaker events (tripped, recovered, half-open) per 5-minute window.",
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "title": "Circuit Breaker Events",
+      "type": "timeseries",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(scraper_circuit_breaker_total[5m])", "legendFormat": "{{event}}", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 5}, {"color": "red", "value": 20}]}}},
+      "gridPos": {"h": 6, "w": 6, "x": 18, "y": 9},
+      "id": 6,
+      "description": "Total sources skipped (circuit breaker, disabled, rate-limited) in the selected time range.",
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "title": "Sources Skipped",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(scraper_sources_skipped_total[$timerange])", "legendFormat": "Skipped", "refId": "A"}]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["anveshak", "pipeline"],
+  "time": {"from": "now-24h", "to": "now"},
+  "title": "Anveshak \u2014 Pipeline Ingestion",
+  "uid": "pipeline-ingestion"
+}

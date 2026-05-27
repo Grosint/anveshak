@@ -3,7 +3,7 @@
 Uses an isolated CollectorRegistry so this module can be imported alongside
 other service metrics modules in the same test process without name conflicts.
 """
-from prometheus_client import CollectorRegistry, Counter, Histogram
+from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
 
 # 8A.18 — isolated registry prevents cross-service duplicate registration
 REGISTRY = CollectorRegistry()
@@ -57,8 +57,6 @@ analyst_relevance_score = Histogram(
 )
 
 # Per-topic auto-calibrated relevance threshold
-from prometheus_client import Gauge
-
 analyst_topic_threshold = Gauge(
     "analyst_topic_relevance_threshold",
     "Auto-calibrated relevance threshold per topic",
@@ -71,5 +69,43 @@ arq_jobs_failed_total = Counter(
     "arq_jobs_failed_total",
     "ARQ jobs that failed after all retries",
     ["job_name"],
+    registry=REGISTRY,
+)
+
+# Pipeline funnel — embedding completions
+analyst_embedding_completed_total = Counter(
+    "analyst_embedding_completed_total",
+    "Content items successfully embedded",
+    registry=REGISTRY,
+)
+
+# Pipeline funnel — content skipped by analyst quality gate
+analyst_content_skipped_quality_total = Counter(
+    "analyst_content_skipped_quality_total",
+    "Content items skipped by analyst quality gate",
+    ["gate"],
+    registry=REGISTRY,
+)
+
+# Pipeline funnel — items by clustering status per topic
+analyst_clustering_items = Gauge(
+    "analyst_clustering_items",
+    "Items by clustering status per topic",
+    ["topic_id", "status"],
+    registry=REGISTRY,
+)
+
+# Pipeline funnel — orphan sweep re-enqueues
+analyst_orphan_sweep_total = Counter(
+    "analyst_orphan_sweep_total",
+    "Items re-enqueued by orphan sweep",
+    registry=REGISTRY,
+)
+
+# Pipeline funnel — edges in Leiden similarity graph per topic
+analyst_clustering_edges = Gauge(
+    "analyst_clustering_edges",
+    "Edges formed in Leiden similarity graph per topic",
+    ["topic_id"],
     registry=REGISTRY,
 )

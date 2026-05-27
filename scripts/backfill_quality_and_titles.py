@@ -67,7 +67,7 @@ async def backfill(postgres_url: str, batch_size: int, dry_run: bool) -> None:
                 cleaned = clean_extracted_text(raw)
                 effective = cleaned or raw
 
-                quality = score_content_quality(raw, effective)
+                quality, _gate = score_content_quality(raw, effective)
                 c_hash = compute_clean_hash(effective)
                 title = extract_title(effective)
 

@@ -96,7 +96,7 @@ class TestSingleNarrativeSmallBatch:
             rows.extend(_make_rows(base, 2, platform, rng))
 
         assert len(rows) == 6
-        groups = find_narrative_clusters(rows)
+        groups, _edge_count = find_narrative_clusters(rows)
 
         assert len(groups) == 1, f"Expected 1 cluster, got {len(groups)}"
         cluster_indices = list(groups.values())[0]
@@ -110,7 +110,7 @@ class TestSingleNarrativeSmallBatch:
         for platform in ["telegram", "reddit", "web"]:
             rows.extend(_make_rows(base, 2, platform, rng))
 
-        groups = find_narrative_clusters(rows)
+        groups, _edge_count = find_narrative_clusters(rows)
         cluster_indices = list(groups.values())[0]
         platforms = {rows[i].platform for i in cluster_indices}
         assert platforms == {"telegram", "reddit", "web"}
@@ -169,7 +169,7 @@ class TestBridgeArticleEntityOverlap:
 
     def test_two_narratives_stay_separate(self):
         rows = self._build_data()
-        groups = find_narrative_clusters(rows)
+        groups, _edge_count = find_narrative_clusters(rows)
 
         # Should have 2 main clusters (narratives A and B)
         # Bridge joins one, unrelated is singleton (discarded)
@@ -177,7 +177,7 @@ class TestBridgeArticleEntityOverlap:
 
     def test_bridge_does_not_merge_narratives(self):
         rows = self._build_data()
-        groups = find_narrative_clusters(rows)
+        groups, _edge_count = find_narrative_clusters(rows)
 
         # No single cluster should contain items from both narratives
         # Narrative A items are indices 0-6, narrative B items are 7-13
@@ -246,7 +246,7 @@ class TestChainingRisk:
         sim_1_5 = float(np.dot(base_1, base_5))
         assert sim_1_5 < 0.3, f"A1~A5 should be low, got {sim_1_5:.3f}"
 
-        groups = find_narrative_clusters(rows)
+        groups, _edge_count = find_narrative_clusters(rows)
 
         # A1 and A5 should NOT be in the same cluster
         if groups:
@@ -274,7 +274,7 @@ class TestSparseTopic:
             + _make_rows(base, 1, "web", rng)
         )
 
-        groups = find_narrative_clusters(rows)
+        groups, _edge_count = find_narrative_clusters(rows)
         assert len(groups) == 1, f"Expected 1 cluster from 3 similar items, got {len(groups)}"
         assert len(list(groups.values())[0]) == 3
 
@@ -304,5 +304,5 @@ class TestAllDifferentNoClusters:
         np.fill_diagonal(sim, 0)
         assert sim.max() < 0.5, f"Max pairwise sim too high: {sim.max():.3f}"
 
-        groups = find_narrative_clusters(rows)
+        groups, _edge_count = find_narrative_clusters(rows)
         assert len(groups) == 0, f"Expected 0 clusters, got {len(groups)}"

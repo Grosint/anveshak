@@ -326,7 +326,9 @@ class TestPaywallDetection:
 
     def test_score_content_quality_paywall(self):
         """Paywall pages should be marked low_quality by score_content_quality."""
-        assert score_content_quality(self.THEHINDU_PAYWALL, self.THEHINDU_PAYWALL) == "low_quality"
+        quality, gate = score_content_quality(self.THEHINDU_PAYWALL, self.THEHINDU_PAYWALL)
+        assert quality == "low_quality"
+        assert gate == "paywall"
 
     def test_score_content_quality_real_article(self):
         article = (
@@ -334,7 +336,8 @@ class TestPaywallDetection:
             "involving Rafale and Sukhoi-30MKI fighter jets. The exercise tested "
             "integrated air defence operations across multiple airbases."
         )
-        assert score_content_quality(article, article) == "good"
+        quality, _gate = score_content_quality(article, article)
+        assert quality == "good"
 
 
 # ---------------------------------------------------------------------------
@@ -345,11 +348,28 @@ from anveshak.scraper.clean import compute_clean_hash, extract_title
 
 
 class TestScoreContentQualityExtended:
-    """Extended tests for score_content_quality business logic."""
+    """Extended tests for score_content_quality business logic.
+
+    score_content_quality returns (quality, gate) tuples where:
+    - quality: 'good' or 'low_quality'
+    - gate: 'too_short', 'paywall', 'nav_icon', 'ratio', 'bypass', 'passed'
+    """
+
+    @pytest.mark.unit
+    def test_returns_tuple(self):
+        """Return type must be a 2-tuple of strings."""
+        article = (
+            "The Indian Navy commissioned its second indigenous aircraft carrier today "
+            "at a ceremony in Kochi. The 45,000-tonne vessel represents a significant "
+            "milestone in India's naval shipbuilding capabilities."
+        )
+        result = score_content_quality(article, article)
+        assert isinstance(result, tuple)
+        assert len(result) == 2
 
     @pytest.mark.unit
     def test_high_quality_article(self):
-        """Normal article text → 'good' quality."""
+        """Normal article text → ('good', 'passed')."""
         article = (
             "The Indian Navy commissioned its second indigenous aircraft carrier today "
             "at a ceremony in Kochi. The 45,000-tonne vessel represents a significant "
@@ -357,7 +377,9 @@ class TestScoreContentQualityExtended:
             "praised the achievement as a step toward self-reliance in defence. "
             "The carrier can operate 30 aircraft including MiG-29K fighters."
         )
-        assert score_content_quality(article, article) == "good"
+        quality, gate = score_content_quality(article, article)
+        assert quality == "good"
+        assert gate == "passed"
 
     @pytest.mark.unit
     def test_boilerplate_only_is_low_quality(self):
@@ -368,13 +390,59 @@ class TestScoreContentQualityExtended:
             "Cookie Settings Accept Cookies Newsletter Download the App"
         )
         cleaned = clean_extracted_text(raw)
-        result = score_content_quality(raw, cleaned)
-        assert result == "low_quality"
+        quality, gate = score_content_quality(raw, cleaned)
+        assert quality == "low_quality"
 
     @pytest.mark.unit
     def test_short_clean_text_is_low_quality(self):
-        """Clean text under 100 chars → low_quality."""
-        assert score_content_quality("short", "short") == "low_quality"
+        """Clean text under 100 chars → ('low_quality', 'too_short')."""
+        quality, gate = score_content_quality("short", "short")
+        assert quality == "low_quality"
+        assert gate == "too_short"
+
+    @pytest.mark.unit
+    def test_gate_too_short_empty(self):
+        """Empty clean text triggers too_short gate."""
+        quality, gate = score_content_quality("raw content", "")
+        assert (quality, gate) == ("low_quality", "too_short")
+
+    @pytest.mark.unit
+    def test_gate_too_short_none(self):
+        """None clean text triggers too_short gate."""
+        quality, gate = score_content_quality("raw", None)
+        assert (quality, gate) == ("low_quality", "too_short")
+
+    @pytest.mark.unit
+    def test_gate_paywall(self):
+        """Paywall content triggers paywall gate."""
+        paywall = (
+            "You don't have any active subscription. "
+            "Subscribed with another email? Logout and login with that one. "
+            "Your active subscription benefits include full access to all "
+            "articles and premium content. Please sign in to continue reading."
+        )
+        quality, gate = score_content_quality(paywall, paywall)
+        assert quality == "low_quality"
+        assert gate == "paywall"
+
+    @pytest.mark.unit
+    def test_gate_nav_icon(self):
+        """Nav icon garbage triggers nav_icon gate."""
+        nav = (
+            "arrow-down comments printer search bell top-nav right-arrow "
+            "left-arrow menu close hamburger share facebook twitter whatsapp "
+        ) * 3  # enough chars to pass length check, 40%+ nav icon words
+        quality, gate = score_content_quality(nav, nav)
+        assert quality == "low_quality"
+        assert gate == "nav_icon"
+
+    @pytest.mark.unit
+    def test_gate_no_raw_text(self):
+        """Empty raw_text with valid clean_text → ('good', 'passed')."""
+        clean = "A substantial article about defence acquisitions and naval exercises. " * 3
+        quality, gate = score_content_quality("", clean)
+        assert quality == "good"
+        assert gate == "passed"
 
 
 class TestScoreContentQualityThresholds:
@@ -382,7 +450,7 @@ class TestScoreContentQualityThresholds:
 
     @pytest.mark.unit
     def test_ratio_bypass_long_clean_text(self):
-        """clean_text >= 500 chars bypasses ratio check even if ratio < 0.08."""
+        """clean_text >= 500 chars bypasses ratio check → ('good', 'bypass')."""
         raw = "x" * 10_000
         clean = (
             "India conducted a major joint military exercise involving all three "
@@ -397,20 +465,24 @@ class TestScoreContentQualityThresholds:
         )
         assert len(clean) >= 500
         assert len(clean) / len(raw) < 0.08
-        assert score_content_quality(raw, clean) == "good"
+        quality, gate = score_content_quality(raw, clean)
+        assert quality == "good"
+        assert gate == "bypass"
 
     @pytest.mark.unit
     def test_low_ratio_short_text_still_rejected(self):
-        """clean_text < 500 chars with ratio < 0.08 is still low_quality."""
+        """clean_text < 500 chars with ratio < 0.08 → ('low_quality', 'ratio')."""
         raw = "a" * 5_000
         clean = "India deploys new radar systems along the northern border region. " * 3
         assert len(clean) < 500
         assert len(clean) / len(raw) < 0.08
-        assert score_content_quality(raw, clean) == "low_quality"
+        quality, gate = score_content_quality(raw, clean)
+        assert quality == "low_quality"
+        assert gate == "ratio"
 
     @pytest.mark.unit
     def test_ratio_band_0_08_to_0_15_now_accepted(self):
-        """Items with ratio in [0.08, 0.15) are now good (previously rejected)."""
+        """Items with ratio in [0.08, 0.15) are now good with 'passed' gate."""
         raw = "n" * 2_000
         clean = (
             "The defence ministry approved acquisition of six additional P-8I "
@@ -421,20 +493,24 @@ class TestScoreContentQualityThresholds:
         assert len(clean) < 500
         ratio = len(clean) / len(raw)
         assert 0.08 <= ratio < 0.15
-        assert score_content_quality(raw, clean) == "good"
+        quality, gate = score_content_quality(raw, clean)
+        assert quality == "good"
+        assert gate == "passed"
 
     @pytest.mark.unit
     def test_pure_boilerplate_ratio_still_rejected(self):
-        """Items with ratio < 0.08 and clean_text < 500 chars remain low_quality."""
+        """Items with ratio < 0.08 and clean_text < 500 chars → ('low_quality', 'ratio')."""
         raw = "b" * 5_000
         clean = "Home About Contact Privacy Terms Subscribe " * 3  # ~130 chars, ratio ~0.026
         assert 100 <= len(clean) < 500
         assert len(clean) / len(raw) < 0.08
-        assert score_content_quality(raw, clean) == "low_quality"
+        quality, gate = score_content_quality(raw, clean)
+        assert quality == "low_quality"
+        assert gate == "ratio"
 
     @pytest.mark.unit
     def test_paywall_with_long_text_still_rejected(self):
-        """A paywall page with 500+ clean chars is still rejected."""
+        """A paywall page with 500+ clean chars is still rejected via paywall gate."""
         paywall_text = (
             "You don't have any active subscription. "
             "Subscribed with another email? Logout and login with that one. "
@@ -444,7 +520,9 @@ class TestScoreContentQualityThresholds:
             "Please sign in to continue reading this article. " * 3
         )
         assert len(paywall_text) >= 500
-        assert score_content_quality(paywall_text, paywall_text) == "low_quality"
+        quality, gate = score_content_quality(paywall_text, paywall_text)
+        assert quality == "low_quality"
+        assert gate == "paywall"
 
 
 class TestExtractTitle:
@@ -654,7 +732,8 @@ class TestScoreContentQualityNavGarbage:
             "share facebook twitter whatsapp telegram\n"
         )
         cleaned = clean_extracted_text(raw)
-        assert score_content_quality(raw, cleaned) == "low_quality"
+        quality, _gate = score_content_quality(raw, cleaned)
+        assert quality == "low_quality"
 
     @pytest.mark.unit
     def test_nav_prefix_stripped_from_content(self):

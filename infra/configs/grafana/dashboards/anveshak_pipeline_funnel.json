@@ -1,0 +1,258 @@
+{
+  "annotations": {"list": []},
+  "description": "Pipeline Funnel — Content journey from scrape to signal with clickable drill-downs.",
+  "editable": false,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [{"title": "← Overview", "url": "/d/anveshak-overview", "type": "dashboards", "icon": "external link"}],
+  "templating": {
+    "list": [
+      {
+        "name": "timerange",
+        "type": "interval",
+        "current": {"text": "24h", "value": "24h"},
+        "options": [
+          {"text": "1h", "value": "1h"},
+          {"text": "6h", "value": "6h"},
+          {"text": "24h", "value": "24h"},
+          {"text": "7d", "value": "7d"},
+          {"text": "30d", "value": "30d"}
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 100,
+      "title": "Row 1: Ingestion",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A4C8E8", "value": null}]}}},
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 1},
+      "id": 1,
+      "description": "Total content items scraped and inserted in selected time range.",
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "title": "Scraped / $timerange",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(scraper_items_fetched_total[$timerange])", "legendFormat": "{{source_platform}}", "refId": "A"}],
+      "links": [{"title": "Drill: Ingestion", "url": "/d/pipeline-ingestion"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "short"}},
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 1},
+      "id": 2,
+      "description": "Breakdown by platform (RSS, web, Telegram, social).",
+      "options": {"legend": {"displayMode": "list", "placement": "right"}},
+      "title": "By Platform",
+      "type": "piechart",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(scraper_items_fetched_total[$timerange])", "legendFormat": "{{source_platform}}", "refId": "A"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}, {"color": "red", "value": 3}]}}},
+      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 1},
+      "id": 3,
+      "description": "Sources by health status. Red = circuit breaker tripped.",
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background", "graphMode": "none"},
+      "title": "Source Health",
+      "type": "stat",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(scraper_circuit_breaker_total{event=\"tripped\"}[$timerange])", "legendFormat": "Tripped", "refId": "A"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(scraper_circuit_breaker_total{event=\"recovered\"}[$timerange])", "legendFormat": "Recovered", "refId": "B"}
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "percentunit", "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 0.5}, {"color": "green", "value": 0.8}]}}},
+      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 1},
+      "id": 4,
+      "description": "Percentage of URLs skipped by Redis dedup tracking.",
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background", "graphMode": "area"},
+      "title": "URL Dedup Savings",
+      "type": "stat",
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(scraper_url_seen_skip_total[$timerange]) / (increase(scraper_url_seen_skip_total[$timerange]) + increase(scraper_items_fetched_total[$timerange]) + 1)", "legendFormat": "Skip %", "refId": "A"}]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 6},
+      "id": 200,
+      "title": "Row 2: Quality Funnel",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "short"}, "overrides": [
+        {"matcher": {"id": "byName", "options": "Scraped"}, "properties": [{"id": "color", "value": {"fixedColor": "#6DB1FF", "mode": "fixed"}}]},
+        {"matcher": {"id": "byName", "options": "Gate 1-4 Pass"}, "properties": [{"id": "color", "value": {"fixedColor": "#73BF69", "mode": "fixed"}}]},
+        {"matcher": {"id": "byName", "options": "Embedded"}, "properties": [{"id": "color", "value": {"fixedColor": "#FADE2A", "mode": "fixed"}}]},
+        {"matcher": {"id": "byName", "options": "In Signals"}, "properties": [{"id": "color", "value": {"fixedColor": "#FF6B6B", "mode": "fixed"}}]}
+      ]},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 7},
+      "id": 5,
+      "description": "Content journey from scrape → quality gates → embedding → clustering → signals. Click a bar for drill-down.",
+      "options": {"orientation": "horizontal", "showValue": "always", "stacking": "none", "barWidth": 0.7},
+      "title": "Content Funnel",
+      "type": "bargauge",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(scraper_items_fetched_total[$timerange])", "legendFormat": "Scraped", "refId": "A"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(scraper_content_quality_total{quality=\"good\"}[$timerange])", "legendFormat": "Gate 1-4 Pass", "refId": "B"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_embedding_completed_total[$timerange])", "legendFormat": "Embedded", "refId": "C"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_clusters_created_total[$timerange])", "legendFormat": "Clustered", "refId": "D"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_signals_fired_total[$timerange])", "legendFormat": "In Signals", "refId": "E"}
+      ],
+      "links": [
+        {"title": "Drill: Quality Gates", "url": "/d/pipeline-quality"},
+        {"title": "Drill: Embedding", "url": "/d/pipeline-embedding"},
+        {"title": "Drill: Clustering", "url": "/d/pipeline-clustering"},
+        {"title": "Drill: Signals", "url": "/d/pipeline-signals"}
+      ]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 15},
+      "id": 300,
+      "title": "Row 3: Quality Gate Breakdown",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "short"}},
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 16},
+      "id": 6,
+      "description": "Scraper quality gate outcomes — which gate rejected content.",
+      "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["sum"]}, "tooltip": {"mode": "multi"}},
+      "title": "Scraper Gates (1-4)",
+      "type": "timeseries",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(scraper_content_quality_total{quality=\"low_quality\"}[5m])", "legendFormat": "{{gate}}", "refId": "A"}
+      ],
+      "links": [{"title": "Drill: Quality Gates", "url": "/d/pipeline-quality"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "short"}},
+      "gridPos": {"h": 6, "w": 12, "x": 12, "y": 16},
+      "id": 7,
+      "description": "Analyst quality gate outcomes (gates 5-8).",
+      "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["sum"]}, "tooltip": {"mode": "multi"}},
+      "title": "Analyst Gates (5-8)",
+      "type": "timeseries",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_content_skipped_quality_total[5m])", "legendFormat": "{{gate}}", "refId": "A"}
+      ],
+      "links": [{"title": "Drill: Quality Gates", "url": "/d/pipeline-quality"}]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 22},
+      "id": 400,
+      "title": "Row 4: Clustering Health",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "short"}},
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 23},
+      "id": 8,
+      "description": "Assigned vs unassigned items per topic. Low assignment % means threshold may be too high.",
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "title": "Clustering Assignment",
+      "type": "bargauge",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "analyst_clustering_items{status=\"assigned\"}", "legendFormat": "{{topic_id}} assigned", "refId": "A"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "analyst_clustering_items{status=\"unassigned\"}", "legendFormat": "{{topic_id}} unassigned", "refId": "B"}
+      ],
+      "links": [{"title": "Drill: Clustering", "url": "/d/pipeline-clustering"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 10}, {"color": "green", "value": 50}]}}},
+      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 23},
+      "id": 9,
+      "description": "Edges formed in Leiden similarity graph. Sparse graph = threshold too tight.",
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+      "title": "Graph Edges per Topic",
+      "type": "bargauge",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "analyst_clustering_edges", "legendFormat": "{{topic_id}}", "refId": "A"}
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "short"}},
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 23},
+      "id": 10,
+      "description": "Topic relevance score distribution.",
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "title": "Relevance Scores",
+      "type": "histogram",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "analyst_topic_relevance_score_bucket", "legendFormat": "{{le}}", "refId": "A"}
+      ],
+      "links": [{"title": "Drill: Relevance", "url": "/d/pipeline-relevance"}]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 29},
+      "id": 500,
+      "title": "Row 5: Signals & Operations",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "short"}},
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 30},
+      "id": 11,
+      "description": "Signals fired by severity.",
+      "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["sum"]}, "tooltip": {"mode": "multi"}},
+      "title": "Signals / $timerange",
+      "type": "timeseries",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_signals_fired_total[$timerange])", "legendFormat": "{{severity}}", "refId": "A"}
+      ],
+      "links": [{"title": "Drill: Signals", "url": "/d/pipeline-signals"}]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 5}, {"color": "red", "value": 20}]}}},
+      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 30},
+      "id": 12,
+      "description": "Content items re-enqueued by orphan sweep (safety net for failed enqueues).",
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "colorMode": "background", "graphMode": "area"},
+      "title": "Orphans Swept / $timerange",
+      "type": "stat",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_orphan_sweep_total[$timerange])", "legendFormat": "Re-enqueued", "refId": "A"}
+      ]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "#A4C8E8", "value": null}]}}},
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 30},
+      "id": 13,
+      "description": "Per-topic auto-calibrated relevance thresholds.",
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+      "title": "Relevance Thresholds",
+      "type": "bargauge",
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "analyst_topic_relevance_threshold", "legendFormat": "{{topic_name}}", "refId": "A"}
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["anveshak", "pipeline"],
+  "time": {"from": "now-24h", "to": "now"},
+  "title": "Anveshak — Pipeline Funnel",
+  "uid": "pipeline-funnel",
+  "version": 1
+}

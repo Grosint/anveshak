@@ -227,9 +227,25 @@ if [ "$DRY_RUN" = true ]; then
 else
     # Docker
     if ! command -v docker &>/dev/null; then
-        die "Docker not installed. Use a RunPod template with Docker pre-installed."
+        warn "Docker not found — installing..."
+        curl -fsSL https://get.docker.com | sh >/dev/null 2>&1
+        command -v docker &>/dev/null || die "Docker installation failed"
+        ok "Docker installed: $(docker --version | head -1)"
+        # Install NVIDIA Container Toolkit for GPU passthrough
+        if command -v nvidia-smi &>/dev/null; then
+            step "" "Installing NVIDIA Container Toolkit..."
+            curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg 2>/dev/null
+            curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+                sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+                tee /etc/apt/sources.list.d/nvidia-container-toolkit.list >/dev/null
+            apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq nvidia-container-toolkit >/dev/null 2>&1
+            nvidia-ctk runtime configure --runtime=docker >/dev/null 2>&1
+            systemctl restart docker 2>/dev/null || service docker restart 2>/dev/null || true
+            ok "NVIDIA Container Toolkit installed"
+        fi
+    else
+        ok "Docker: $(docker --version | head -1)"
     fi
-    ok "Docker: $(docker --version | head -1)"
 
     # Docker Compose plugin
     if docker compose version &>/dev/null; then

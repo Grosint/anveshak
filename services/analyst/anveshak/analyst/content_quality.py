@@ -20,8 +20,12 @@ log = structlog.get_logger(__name__)
 _PUNCTUATION_SET = set(string.punctuation + "·|—–»«►▸›‹•")
 
 
-def is_quality_content(text: str) -> bool:
-    """Return True if text passes quality checks for embedding.
+def is_quality_content(text: str) -> tuple[bool, str]:
+    """Return (passed, gate) indicating whether text passes quality checks.
+
+    passed: True if content is good for embedding, False if rejected.
+    gate: which check determined the outcome — 'too_short', 'few_words',
+          'unique_ratio', 'punctuation', or 'passed'.
 
     Checks:
       1. Minimum length (default 100 chars)
@@ -32,7 +36,7 @@ def is_quality_content(text: str) -> bool:
 
     # Check 1: minimum length
     if len(stripped) < settings.content_min_length:
-        return False
+        return (False, "too_short")
 
     # Check 2: unique word ratio (catches "Business Tech Lifestyle Business Tech Lifestyle...")
     # CJK characters are single-char words; Latin/Cyrillic/Arabic/Devanagari/Bengali require 2+ chars
@@ -41,15 +45,15 @@ def is_quality_content(text: str) -> bool:
         stripped.lower(),
     )
     if len(words) < 5:
-        return False
+        return (False, "few_words")
     unique_ratio = len(set(words)) / len(words)
     if unique_ratio < settings.content_min_unique_word_ratio:
-        return False
+        return (False, "unique_ratio")
 
     # Check 3: punctuation / symbol ratio
     punct_count = sum(1 for c in stripped if c in _PUNCTUATION_SET)
     punct_ratio = punct_count / len(stripped)
     if punct_ratio > settings.content_max_punctuation_ratio:
-        return False
+        return (False, "punctuation")
 
-    return True
+    return (True, "passed")
