@@ -155,6 +155,8 @@ async def make_topic(db_pool):
             await conn.execute("DELETE FROM topic_content_items WHERE topic_id=$1", tid)
             await conn.execute("DELETE FROM content_items WHERE topic_id=$1", tid)
             await conn.execute("DELETE FROM topic_sources WHERE topic_id=$1", tid)
+            await conn.execute("DELETE FROM discovered_sources WHERE topic_id=$1", tid)
+            await conn.execute("DELETE FROM catalog_approvals WHERE topic_id=$1", tid)
             await conn.execute("DELETE FROM analysis_jobs WHERE topic_id=$1", tid)
             await conn.execute("DELETE FROM topics WHERE id=$1", tid)
 

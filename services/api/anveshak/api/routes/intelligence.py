@@ -161,19 +161,21 @@ async def discover_sources(
 ) -> dict[str, Any]:
     """Extract outbound URLs from scraped content and suggest new sources.
 
-    Finds URLs mentioned in content that are not already registered as sources.
+    Returns domains sorted by citation frequency (how many content items
+    reference each domain). Filters out already-registered sources.
     """
+    from urllib.parse import urlparse
+    from collections import Counter
+
     # Fetch outbound links from content
     link_rows = await db.fetch(SQL_OUTBOUND_LINKS, topic_id)
-    outbound_urls = set()
+    domain_counts: Counter[str] = Counter()
     for row in link_rows:
         url = row["outbound_url"]
-        # Extract domain from URL
-        from urllib.parse import urlparse
         try:
             parsed = urlparse(url)
             if parsed.netloc:
-                outbound_urls.add(parsed.netloc)
+                domain_counts[parsed.netloc] += 1
         except Exception:
             pass
 
@@ -181,7 +183,6 @@ async def discover_sources(
     existing_rows = await db.fetch(SQL_EXISTING_SOURCE_URLS)
     existing_domains = set()
     for row in existing_rows:
-        from urllib.parse import urlparse
         try:
             parsed = urlparse(row["url_or_handle"])
             if parsed.netloc:
@@ -189,14 +190,22 @@ async def discover_sources(
         except Exception:
             existing_domains.add(row["url_or_handle"])
 
-    # Suggested = outbound - existing
-    suggestions = sorted(outbound_urls - existing_domains)
+    # Filter and sort by frequency
+    new_domains = {
+        domain: count
+        for domain, count in domain_counts.items()
+        if domain not in existing_domains
+    }
+    suggestions = sorted(new_domains.items(), key=lambda x: x[1], reverse=True)[:50]
 
     return {
         "topic_id": topic_id,
-        "suggested_domains": suggestions[:50],  # cap at 50 suggestions
-        "total_outbound_domains": len(outbound_urls),
-        "already_registered": len(outbound_urls & existing_domains),
+        "suggestions": [
+            {"domain": domain, "citation_count": count}
+            for domain, count in suggestions
+        ],
+        "total_outbound_domains": len(domain_counts),
+        "already_registered": len(set(domain_counts) & existing_domains),
     }
 
 

@@ -26,6 +26,7 @@ from .translation import needs_translation, translate_to_english
 from .content_quality import is_quality_content
 from .relevance import compute_topic_relevance, build_topic_query_embedding
 from .entity_minhash import compute_entity_minhash
+from .llm_discovery import suggest_source_types_job
 
 log = structlog.get_logger(__name__)
 
@@ -442,6 +443,7 @@ class WorkerSettings:
         backfill_all_topics,
         arq.func(run_cross_verification, max_tries=2),
         backfill_relevance_scores,
+        arq.func(suggest_source_types_job, max_tries=2),
     ]
     cron_jobs = [
         arq.cron(run_contradiction_scoring, hour={2}),       # 7.2 — daily at 02:00 UTC

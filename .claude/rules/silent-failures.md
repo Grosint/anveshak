@@ -52,6 +52,12 @@ Consolidated from 7 learned instincts. Silent failures are the #1 source of prod
   Only affects subprocess-based scripts — asyncpg returns proper Python None
   See: `learned/psql-null-empty-string-pitfall.md`
 
+## Array Matching
+
+- PostgreSQL array overlap (`&&`) returns false silently when granularity differs
+  (multi-word keywords vs single-word tags). Always normalize before matching.
+  See: `learned/keyword-tag-granularity-mismatch.md`
+
 ## Git & Build
 
 - Blanket `.gitignore` patterns (`models/`, `media/`) silently exclude Python packages

@@ -1,0 +1,67 @@
+[
+  {
+    "name": "The Print Defence",
+    "url_or_handle": "https://theprint.in/defence/",
+    "platform": "web",
+    "domain_tags": ["india", "military", "defence"],
+    "reliability_tier": "A",
+    "bias_indicator": "moderate-independent",
+    "risk_level": "low",
+    "language": "en",
+    "category": "news",
+    "description": "Indian defence news vertical with strong sourcing from MoD",
+    "activity_frequency": "daily"
+  },
+  {
+    "name": "Indian Defence News",
+    "url_or_handle": "https://www.indiandefensenews.in",
+    "platform": "web",
+    "domain_tags": ["india", "military", "defence"],
+    "reliability_tier": "B",
+    "bias_indicator": "pro-india",
+    "risk_level": "low",
+    "language": "en",
+    "category": "news",
+    "description": "Aggregator of Indian defence procurement and capability news",
+    "activity_frequency": "daily"
+  },
+  {
+    "name": "PIB Defence",
+    "url_or_handle": "https://pib.gov.in/ministry.aspx?MinCode=7",
+    "platform": "web",
+    "domain_tags": ["india", "military", "defence"],
+    "reliability_tier": "S",
+    "bias_indicator": "government",
+    "risk_level": "low",
+    "language": "en",
+    "category": "government",
+    "description": "Press Information Bureau — official Ministry of Defence releases",
+    "activity_frequency": "daily"
+  },
+  {
+    "name": "DRDO Press Releases",
+    "url_or_handle": "https://www.drdo.gov.in/press-release",
+    "platform": "web",
+    "domain_tags": ["india", "military", "defence", "technology"],
+    "reliability_tier": "S",
+    "bias_indicator": "government",
+    "risk_level": "low",
+    "language": "en",
+    "category": "government",
+    "description": "Defence Research & Development Organisation official releases",
+    "activity_frequency": "weekly"
+  },
+  {
+    "name": "LiveFist Defence",
+    "url_or_handle": "https://www.livefistdefence.com",
+    "platform": "web",
+    "domain_tags": ["india", "military", "defence"],
+    "reliability_tier": "A",
+    "bias_indicator": "moderate",
+    "risk_level": "low",
+    "language": "en",
+    "category": "blog",
+    "description": "Indian defence blog with insider sources and OSINT analysis",
+    "activity_frequency": "weekly"
+  }
+]

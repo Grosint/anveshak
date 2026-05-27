@@ -1,0 +1,54 @@
+[
+  {
+    "name": "Maritime Executive",
+    "url_or_handle": "https://www.maritime-executive.com",
+    "platform": "web",
+    "domain_tags": ["maritime", "ior", "shipping"],
+    "reliability_tier": "A",
+    "bias_indicator": "neutral",
+    "risk_level": "low",
+    "language": "en",
+    "category": "news",
+    "description": "Global maritime industry news and analysis",
+    "activity_frequency": "daily"
+  },
+  {
+    "name": "gCaptain",
+    "url_or_handle": "https://gcaptain.com",
+    "platform": "web",
+    "domain_tags": ["maritime", "ior", "shipping", "navy"],
+    "reliability_tier": "A",
+    "bias_indicator": "neutral",
+    "risk_level": "low",
+    "language": "en",
+    "category": "news",
+    "description": "Maritime and offshore news platform",
+    "activity_frequency": "daily"
+  },
+  {
+    "name": "Indian Navy Official",
+    "url_or_handle": "https://www.indiannavy.nic.in",
+    "platform": "web",
+    "domain_tags": ["india", "maritime", "ior", "navy"],
+    "reliability_tier": "S",
+    "bias_indicator": "government",
+    "risk_level": "low",
+    "language": "en",
+    "category": "government",
+    "description": "Indian Navy official website — press releases and operations",
+    "activity_frequency": "weekly"
+  },
+  {
+    "name": "CIMSEC",
+    "url_or_handle": "https://cimsec.org",
+    "platform": "web",
+    "domain_tags": ["maritime", "ior", "navy", "geopolitics"],
+    "reliability_tier": "S",
+    "bias_indicator": "neutral",
+    "risk_level": "low",
+    "language": "en",
+    "category": "research",
+    "description": "Center for International Maritime Security — peer-reviewed maritime analysis",
+    "activity_frequency": "weekly"
+  }
+]

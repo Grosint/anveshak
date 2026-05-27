@@ -1,0 +1,28 @@
+[
+  {
+    "name": "UNODC World Drug Report",
+    "url_or_handle": "https://www.unodc.org/unodc/en/data-and-analysis/world-drug-report.html",
+    "platform": "web",
+    "domain_tags": ["narcotics", "drugs", "trafficking"],
+    "reliability_tier": "S",
+    "bias_indicator": "neutral",
+    "risk_level": "low",
+    "language": "en",
+    "category": "research",
+    "description": "UN Office on Drugs and Crime annual drug report and data",
+    "activity_frequency": "sporadic"
+  },
+  {
+    "name": "Narcotics Control Bureau India",
+    "url_or_handle": "https://narcoticsindia.nic.in",
+    "platform": "web",
+    "domain_tags": ["narcotics", "india", "drugs"],
+    "reliability_tier": "A",
+    "bias_indicator": "government",
+    "risk_level": "low",
+    "language": "en",
+    "category": "government",
+    "description": "NCB official press releases and seizure data",
+    "activity_frequency": "weekly"
+  }
+]

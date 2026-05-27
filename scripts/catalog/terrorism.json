@@ -1,0 +1,54 @@
+[
+  {
+    "name": "SITE Intelligence Group",
+    "url_or_handle": "https://ent.siteintelgroup.com",
+    "platform": "web",
+    "domain_tags": ["terrorism", "extremism", "jihadism"],
+    "reliability_tier": "S",
+    "bias_indicator": "neutral",
+    "risk_level": "medium",
+    "language": "en",
+    "category": "research",
+    "description": "Monitors jihadist and domestic extremist activity online",
+    "activity_frequency": "daily"
+  },
+  {
+    "name": "South Asia Terrorism Portal",
+    "url_or_handle": "https://www.satp.org",
+    "platform": "web",
+    "domain_tags": ["terrorism", "india", "pakistan", "naxalism"],
+    "reliability_tier": "S",
+    "bias_indicator": "neutral",
+    "risk_level": "low",
+    "language": "en",
+    "category": "research",
+    "description": "Comprehensive database of terrorism incidents in South Asia",
+    "activity_frequency": "daily"
+  },
+  {
+    "name": "Long War Journal",
+    "url_or_handle": "https://www.longwarjournal.org",
+    "platform": "web",
+    "domain_tags": ["terrorism", "jihadism", "geopolitics"],
+    "reliability_tier": "A",
+    "bias_indicator": "moderate-western",
+    "risk_level": "low",
+    "language": "en",
+    "category": "research",
+    "description": "FDD project tracking global war on terrorism",
+    "activity_frequency": "weekly"
+  },
+  {
+    "name": "START Global Terrorism Database",
+    "url_or_handle": "https://www.start.umd.edu/gtd/",
+    "platform": "web",
+    "domain_tags": ["terrorism", "extremism"],
+    "reliability_tier": "S",
+    "bias_indicator": "academic",
+    "risk_level": "low",
+    "language": "en",
+    "category": "research",
+    "description": "University of Maryland comprehensive terrorism incident database",
+    "activity_frequency": "sporadic"
+  }
+]

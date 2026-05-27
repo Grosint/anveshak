@@ -153,6 +153,19 @@ class TelegramAdapter(SourceAdapterBase):
                     continue
 
                 msg_url = f"https://t.me/{channel_id.lstrip('@')}/{message.id}"  # criteria 3.9
+
+                # Capture forwarding metadata for Level 2 discovery
+                fwd_channel_id = None
+                fwd_channel_name = None
+                if message.forward and message.forward.chat:
+                    fwd_chat = message.forward.chat
+                    fwd_channel_id = str(fwd_chat.id)
+                    fwd_channel_name = getattr(fwd_chat, "title", None) or getattr(fwd_chat, "username", None)
+                elif message.forward and message.forward.from_id:
+                    # from_id is a TypePeer (PeerChannel/PeerUser/PeerChat), not an int
+                    from telethon import utils as tl_utils
+                    fwd_channel_id = str(tl_utils.get_peer_id(message.forward.from_id))
+
                 yield RawItem(
                     raw_text=text or f"[media] {msg_url}",
                     url=msg_url,
@@ -160,6 +173,8 @@ class TelegramAdapter(SourceAdapterBase):
                     captured_at=message.date.replace(tzinfo=UTC) if message.date.tzinfo is None else message.date,
                     source_handle=handle,
                     media_urls=media_urls,
+                    forwarded_from_channel_id=fwd_channel_id,
+                    forwarded_from_channel_name=fwd_channel_name,
                 )
 
         except ChannelPrivateError:

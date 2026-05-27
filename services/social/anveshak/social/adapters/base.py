@@ -42,6 +42,8 @@ class RawItem:
     source_handle: str                         # channel/subreddit/handle — matches sources.url_or_handle
     media_urls: list[str] = field(default_factory=list)   # images/videos to download later (Phase 4)
     language: str | None = None                # ISO 639-1; None = detect in analyst pipeline
+    forwarded_from_channel_id: str | None = None    # Telegram: origin channel ID for forwarded messages
+    forwarded_from_channel_name: str | None = None  # Telegram: origin channel name
 
     def content_hash(self) -> str:
         """SHA-256 of normalised text — dedup key, same as scraper convention."""

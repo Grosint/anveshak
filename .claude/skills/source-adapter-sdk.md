@@ -3,6 +3,10 @@
 ## When to load: any task involving creating or modifying a source adapter
 
 > See also: `learned/additive-backfill-join-table.md` — pattern for associating existing content with new topics without copying rows
+> See also: `learned/keyword-tag-granularity-mismatch.md` — normalize multi-word keywords to single-word tags before array overlap; silent zero-result failure
+> See also: `learned/unified-discriminator-table.md` — single discovered_sources table with discovery_method discriminator vs per-method tables
+> See also: `learned/migration-not-visible-in-container.md` — docker cp or rebuild before alembic upgrade; file not visible in running container
+> See also: `learned/telethon-peer-id-extraction.md` — str() on Telethon TypePeer produces repr, not numeric ID; use utils.get_peer_id()
 > See also: `learned/adapter-circuit-breaker-redis.md` — Redis-backed circuit breaker for adapter failure isolation
 > See also: `learned/credential-refresh-before-circuit-break.md` — attempt refresh_credentials() before circuit breaking
 > See also: `learned/startup-credential-validation.md` — validate env vars at startup, not at first API call

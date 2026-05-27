@@ -25,6 +25,7 @@ from .routes.vision import router as vision_router, content_vision_router
 from .routes.reports import router as reports_router
 from .routes.system import router as system_router
 from .routes.users import router as users_router
+from .routes.catalog import router as catalog_router
 
 log = structlog.get_logger(__name__)
 
@@ -109,6 +110,7 @@ app.include_router(export_router)           # CSV/JSON export for content, signa
 app.include_router(intelligence_router)     # Entity graph, topic similarity, source discovery
 app.include_router(system_router)           # Pipeline health metrics for make validate
 app.include_router(users_router)            # User management CRUD
+app.include_router(catalog_router)          # Source catalog + discovery
 
 # Prometheus metrics endpoint — uses isolated registry (API_REGISTRY) so custom
 # api_* metrics are exposed alongside default process metrics.

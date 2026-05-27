@@ -1,0 +1,67 @@
+[
+  {
+    "name": "Krebs on Security",
+    "url_or_handle": "https://krebsonsecurity.com",
+    "platform": "web",
+    "domain_tags": ["cyber", "cti", "malware"],
+    "reliability_tier": "S",
+    "bias_indicator": "neutral",
+    "risk_level": "low",
+    "language": "en",
+    "category": "research",
+    "description": "In-depth security news and investigation by Brian Krebs",
+    "activity_frequency": "weekly"
+  },
+  {
+    "name": "The Hacker News",
+    "url_or_handle": "https://thehackernews.com",
+    "platform": "web",
+    "domain_tags": ["cyber", "cti", "malware"],
+    "reliability_tier": "A",
+    "bias_indicator": "neutral",
+    "risk_level": "low",
+    "language": "en",
+    "category": "news",
+    "description": "Cybersecurity news, vulnerabilities, and threat intelligence",
+    "activity_frequency": "daily"
+  },
+  {
+    "name": "BleepingComputer",
+    "url_or_handle": "https://www.bleepingcomputer.com",
+    "platform": "web",
+    "domain_tags": ["cyber", "cti", "ransomware"],
+    "reliability_tier": "A",
+    "bias_indicator": "neutral",
+    "risk_level": "low",
+    "language": "en",
+    "category": "news",
+    "description": "Technology news with focus on cybersecurity, ransomware tracking",
+    "activity_frequency": "daily"
+  },
+  {
+    "name": "CERT-In Advisories",
+    "url_or_handle": "https://www.cert-in.org.in",
+    "platform": "web",
+    "domain_tags": ["cyber", "india", "cti"],
+    "reliability_tier": "S",
+    "bias_indicator": "government",
+    "risk_level": "low",
+    "language": "en",
+    "category": "government",
+    "description": "Indian Computer Emergency Response Team — official advisories",
+    "activity_frequency": "weekly"
+  },
+  {
+    "name": "Recorded Future RSS",
+    "url_or_handle": "https://www.recordedfuture.com/feed",
+    "platform": "rss",
+    "domain_tags": ["cyber", "cti", "apt"],
+    "reliability_tier": "S",
+    "bias_indicator": "neutral",
+    "risk_level": "low",
+    "language": "en",
+    "category": "research",
+    "description": "Threat intelligence research from Recorded Future",
+    "activity_frequency": "weekly"
+  }
+]

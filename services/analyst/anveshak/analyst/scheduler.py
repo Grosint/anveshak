@@ -39,6 +39,8 @@ from .dedup import detect_near_duplicates, upsert_near_duplicates
 from .labeller import check_label_staleness
 from .metrics import REGISTRY as ANALYST_REGISTRY
 from .settings import settings
+from .discovery import discover_snowball_sources, discover_telegram_channels, discover_entity_sources  # noqa: E501
+from .effectiveness import compute_source_effectiveness
 from .signal_engine import signal_engine_loop
 
 log = structlog.get_logger(__name__)
@@ -453,6 +455,56 @@ async def relevance_calibration_loop(pool: asyncpg.Pool) -> None:
 # ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
+# Source Discovery + Effectiveness loops
+# ---------------------------------------------------------------------------
+
+
+async def discovery_loop(pool: asyncpg.Pool, redis: object) -> None:
+    """Daily loop: run all discovery methods for each active topic.
+
+    Runs once immediately on startup, then every 24 hours.
+    Snowball + forwarding run inline (lightweight SQL).
+    LLM suggestions dispatched via ARQ (CLAUDE.md rule 5).
+    """
+    while True:
+        try:
+            async with pool.acquire() as conn:
+                topics = await conn.fetch(SQL_ACTIVE_TOPICS)
+
+            for row in topics:
+                topic_id = row["id"]
+                try:
+                    await discover_snowball_sources(pool, topic_id)
+                    await discover_telegram_channels(pool, topic_id)
+                    await discover_entity_sources(pool, topic_id)
+                    # LLM suggestions dispatched to ARQ worker (rule 5: async LLM)
+                    await redis.enqueue_job(
+                        "suggest_source_types_job", topic_id,
+                        _queue_name="arq:analyst",
+                    )
+                except Exception as exc:
+                    log.warning("scheduler.discovery.topic_error",
+                                topic_id=topic_id, error=str(exc))
+
+        except Exception as exc:
+            log.error("scheduler.discovery.error", error=str(exc))
+        await asyncio.sleep(86400)  # daily
+
+
+async def effectiveness_loop(pool: asyncpg.Pool) -> None:
+    """Weekly loop: compute source effectiveness analytics.
+
+    Runs once immediately on startup, then every 7 days.
+    """
+    while True:
+        try:
+            await compute_source_effectiveness(pool)
+        except Exception as exc:
+            log.error("scheduler.effectiveness.error", error=str(exc))
+        await asyncio.sleep(604800)  # weekly (7 days)
+
+
+# ---------------------------------------------------------------------------
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -469,6 +521,8 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(orphan_sweep(pool, redis)),
         asyncio.create_task(content_retention_loop(pool)),
         asyncio.create_task(relevance_calibration_loop(pool)),
+        asyncio.create_task(discovery_loop(pool, redis)),
+        asyncio.create_task(effectiveness_loop(pool)),
     ]
 
     yield

@@ -1,0 +1,67 @@
+[
+  {
+    "name": "Dawn News",
+    "url_or_handle": "https://www.dawn.com",
+    "platform": "web",
+    "domain_tags": ["pakistan", "geopolitics", "terrorism"],
+    "reliability_tier": "A",
+    "bias_indicator": "moderate-independent",
+    "risk_level": "low",
+    "language": "en",
+    "category": "news",
+    "description": "Pakistan's oldest English-language newspaper, independent editorial",
+    "activity_frequency": "daily"
+  },
+  {
+    "name": "The News International",
+    "url_or_handle": "https://www.thenews.com.pk",
+    "platform": "web",
+    "domain_tags": ["pakistan", "geopolitics"],
+    "reliability_tier": "A",
+    "bias_indicator": "moderate",
+    "risk_level": "low",
+    "language": "en",
+    "category": "news",
+    "description": "Major Pakistani English-language daily newspaper",
+    "activity_frequency": "daily"
+  },
+  {
+    "name": "ISPR Official",
+    "url_or_handle": "https://www.ispr.gov.pk",
+    "platform": "web",
+    "domain_tags": ["pakistan", "military"],
+    "reliability_tier": "B",
+    "bias_indicator": "state-official",
+    "risk_level": "low",
+    "language": "en",
+    "category": "military",
+    "description": "Inter-Services Public Relations — official Pakistan military press releases",
+    "activity_frequency": "weekly"
+  },
+  {
+    "name": "Pakistan Defence Forum",
+    "url_or_handle": "https://defence.pk",
+    "platform": "web",
+    "domain_tags": ["pakistan", "military", "india"],
+    "reliability_tier": "C",
+    "bias_indicator": "pro-pakistan",
+    "risk_level": "medium",
+    "language": "en",
+    "category": "social",
+    "description": "Military discussion forum with strong Pakistan defence perspective",
+    "activity_frequency": "daily"
+  },
+  {
+    "name": "Geo News RSS",
+    "url_or_handle": "https://www.geo.tv/rss/1/1",
+    "platform": "rss",
+    "domain_tags": ["pakistan", "geopolitics", "terrorism"],
+    "reliability_tier": "A",
+    "bias_indicator": "moderate",
+    "risk_level": "low",
+    "language": "en",
+    "category": "news",
+    "description": "RSS feed from Geo TV, Pakistan's largest private TV network",
+    "activity_frequency": "daily"
+  }
+]

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { topicsApi } from '../api/topics'
 import { ManageSourcesModal } from '../components/topics/ManageSourcesModal'
+import { SourceDiscoveryTab } from '../components/discovery/SourceDiscoveryTab'
 import { contentApi, ContentFilters, ContentItem } from '../api/content'
 import { useInfiniteContent } from '../hooks/useInfiniteContent'
 import { ContentCard } from '../components/content/ContentCard'
@@ -25,6 +26,7 @@ export default function ContentFeed() {
   const [searchQ, setSearchQ]           = useState('')
   const [searchActive, setSearchActive] = useState(false)
   const [showSources, setShowSources]   = useState(false)
+  const [showDiscovery, setShowDiscovery] = useState(false)
   const [showAnalytics, setShowAnalytics] = useState(false)
 
   // Topic meta
@@ -112,6 +114,18 @@ export default function ContentFeed() {
               </svg>
               Manage Sources
             </Button>
+            <Button
+              variant={showDiscovery ? 'primary' : 'secondary'}
+              size="sm"
+              onClick={() => setShowDiscovery((v) => !v)}
+              aria-label="Discover new sources"
+              aria-pressed={showDiscovery}
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
+                <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
+              </svg>
+              Discover Sources
+            </Button>
             <ExportButton
               endpoint="/api/v1/export/content"
               params={{ topic_id: topicId }}
@@ -173,6 +187,13 @@ export default function ContentFeed() {
             <SentimentTrend topicId={topicId} />
             <TrendingKeywords topicId={topicId} />
           </div>
+        </div>
+      )}
+
+      {/* Source discovery panel */}
+      {showDiscovery && (
+        <div className="px-6 py-4 border-b border-anveshak-border max-h-[50vh] overflow-y-auto">
+          <SourceDiscoveryTab topicId={topicId} />
         </div>
       )}
 

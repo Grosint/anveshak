@@ -44,9 +44,10 @@ SQL_INSERT_CONTENT = """
     INSERT INTO content_items (
         id, topic_id, source_id, raw_text, clean_text, language,
         content_hash, url, captured_at, credibility_score_at_capture,
-        created_at, updated_at, labels
+        created_at, updated_at, labels,
+        forwarded_from_channel_id, forwarded_from_channel_name
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
     ON CONFLICT(content_hash) DO NOTHING
     RETURNING id
 """
@@ -145,6 +146,8 @@ async def ingest_raw_item(
             now,
             now,
             labels,
+            raw.forwarded_from_channel_id,     # Telegram Level 2 discovery
+            raw.forwarded_from_channel_name,   # Telegram Level 2 discovery
         )
 
     if result is None:
