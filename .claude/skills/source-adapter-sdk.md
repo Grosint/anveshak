@@ -8,6 +8,8 @@
 > See also: `learned/migration-not-visible-in-container.md` — docker cp or rebuild before alembic upgrade; file not visible in running container
 > See also: `learned/telethon-peer-id-extraction.md` — str() on Telethon TypePeer produces repr, not numeric ID; use utils.get_peer_id()
 > See also: `learned/adapter-circuit-breaker-redis.md` — Redis-backed circuit breaker for adapter failure isolation
+> See also: `learned/isc-count-sources-not-platforms.md` — ISC must count distinct source_id, not platform; consolidating to RSS collapses ISC to 1
+> See also: `learned/source-consolidation-cascading-breakage.md` — changing source platforms silently breaks downstream metrics (ISC, signals, credibility)
 > See also: `learned/credential-refresh-before-circuit-break.md` — attempt refresh_credentials() before circuit breaking
 > See also: `learned/startup-credential-validation.md` — validate env vars at startup, not at first API call
 > See also: `learned/cross-topic-join-table-queries.md` — every topic-scoped SQL must include topic_content_items OR subquery; backfilled items are invisible otherwise
