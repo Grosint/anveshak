@@ -59,6 +59,22 @@ VALUES (
 )
 ON CONFLICT (username) DO NOTHING;
 
+-- Super-admin account (platform-wide, no org)
+-- Password: AnveshakSuper2024! (bcrypt hash, rounds=12)
+
+INSERT INTO users (id, username, password_hash, role, org_id, created_at, updated_at, labels)
+VALUES (
+    'a0000000-0000-0000-0000-000000000003',
+    'superadmin@anveshak.local',
+    '$2b$12$GTfea1Nttz2/iwcUGthIyuReJSy.N/FeBdqi9btzEMg6R/zYiBRca',
+    'super-admin',
+    NULL,
+    NOW(),
+    NOW(),
+    '{"classification": "OPEN", "domain": "platform"}'::jsonb
+)
+ON CONFLICT (username) DO NOTHING;
+
 -- -----------------------------------------------------------------------------
 -- Topics — OSINT monitoring areas
 -- -----------------------------------------------------------------------------

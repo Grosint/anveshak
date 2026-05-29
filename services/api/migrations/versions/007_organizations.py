@@ -45,6 +45,15 @@ def upgrade() -> None:
     """)
 
     # ------------------------------------------------------------------
+    # 2b. Update role constraint to allow super-admin
+    # ------------------------------------------------------------------
+    op.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS chk_users_role")
+    op.execute("""
+        ALTER TABLE users ADD CONSTRAINT chk_users_role
+        CHECK (role IN ('super-admin', 'admin', 'analyst', 'viewer'))
+    """)
+
+    # ------------------------------------------------------------------
     # 3. Add org_id columns (nullable first for backfill)
     # ------------------------------------------------------------------
     op.execute("ALTER TABLE users ADD COLUMN org_id TEXT")
