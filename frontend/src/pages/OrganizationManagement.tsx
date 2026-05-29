@@ -9,7 +9,6 @@ interface Props {
 export default function OrganizationManagement({ embedded }: Props) {
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState('')
-  const [newSlug, setNewSlug] = useState('')
   const [error, setError] = useState('')
   const qc = useQueryClient()
 
@@ -24,7 +23,6 @@ export default function OrganizationManagement({ embedded }: Props) {
       qc.invalidateQueries({ queryKey: ['organizations'] })
       setShowCreate(false)
       setNewName('')
-      setNewSlug('')
       setError('')
     },
     onError: (err: any) => setError(err?.response?.data?.detail || 'Failed to create organization'),
@@ -54,23 +52,19 @@ export default function OrganizationManagement({ embedded }: Props) {
         <div className="mb-4 p-4 border border-anveshak-border rounded-lg bg-anveshak-card space-y-3">
           <input
             type="text"
-            placeholder="Organization name"
+            placeholder="Organization name (e.g. National Investigation Agency)"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            className="w-full px-3 py-2 text-sm bg-anveshak-bg border border-anveshak-border rounded text-text-primary"
-          />
-          <input
-            type="text"
-            placeholder="Slug (URL-safe identifier)"
-            value={newSlug}
-            onChange={(e) => setNewSlug(e.target.value)}
             className="w-full px-3 py-2 text-sm bg-anveshak-bg border border-anveshak-border rounded text-text-primary"
           />
           {error && <p className="text-xs text-signal-high">{error}</p>}
           <div className="flex gap-2">
             <button
-              onClick={() => createOrg.mutate({ name: newName, slug: newSlug })}
-              disabled={!newName || !newSlug || createOrg.isPending}
+              onClick={() => {
+                const slug = newName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+                createOrg.mutate({ name: newName, slug })
+              }}
+              disabled={!newName || createOrg.isPending}
               className="px-3 py-1.5 text-sm rounded bg-anveshak-accent text-white disabled:opacity-50"
             >
               {createOrg.isPending ? 'Creating...' : 'Create'}
