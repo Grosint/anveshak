@@ -285,3 +285,218 @@ class TestTopicRouteOrgScoping:
             result = await list_topics(db=mock_conn, user=user)
 
         mock_all.assert_awaited_once()
+
+
+# ===================================================================
+# 8. Route-level: list_sources uses org filter
+# ===================================================================
+
+class TestSourceRouteOrgScoping:
+
+    @pytest.mark.asyncio
+    async def test_list_sources_calls_org_filtered_for_analyst(self):
+        """list_sources route uses list_sources_by_org for non-super-admin."""
+        with patch(
+            "services.api.anveshak.api.routes.sources.sources_db.list_sources_by_org",
+            new=AsyncMock(return_value=[]),
+        ) as mock_by_org:
+            from services.api.anveshak.api.routes.sources import list_sources
+
+            mock_conn = AsyncMock()
+            user = {"sub": "u1", "role": "analyst", "org_id": "org-nia", "jti": "x"}
+            result = await list_sources(credibility_below=None, db=mock_conn, user=user)
+
+        mock_by_org.assert_awaited_once_with(mock_conn, "org-nia")
+
+    @pytest.mark.asyncio
+    async def test_list_sources_calls_unfiltered_for_super_admin(self):
+        """list_sources route uses list_sources (unfiltered) for super-admin."""
+        with patch(
+            "services.api.anveshak.api.routes.sources.sources_db.list_sources",
+            new=AsyncMock(return_value=[]),
+        ) as mock_all:
+            from services.api.anveshak.api.routes.sources import list_sources
+
+            mock_conn = AsyncMock()
+            user = {"sub": "sa-1", "role": "super-admin", "jti": "x"}
+            result = await list_sources(credibility_below=None, db=mock_conn, user=user)
+
+        mock_all.assert_awaited_once()
+
+
+# ===================================================================
+# 9. Route-level: list_signals uses org filter
+# ===================================================================
+
+class TestSignalRouteOrgScoping:
+
+    @pytest.mark.asyncio
+    async def test_list_signals_calls_org_filtered_for_analyst(self):
+        """list_signals route uses list_signals_by_org for non-super-admin."""
+        with patch(
+            "services.api.anveshak.api.routes.signals.signals_db.list_signals_by_org",
+            new=AsyncMock(return_value=[]),
+        ) as mock_by_org:
+            from services.api.anveshak.api.routes.signals import list_signals
+
+            mock_conn = AsyncMock()
+            user = {"sub": "u1", "role": "analyst", "org_id": "org-nia", "jti": "x"}
+            result = await list_signals(
+                status="new", topic_id=None, since=None, until=None,
+                db=mock_conn, user=user,
+            )
+
+        mock_by_org.assert_awaited_once_with(mock_conn, "new", "org-nia")
+
+    @pytest.mark.asyncio
+    async def test_list_signals_calls_unfiltered_for_super_admin(self):
+        """list_signals route uses list_signals (unfiltered) for super-admin."""
+        with patch(
+            "services.api.anveshak.api.routes.signals.signals_db.list_signals",
+            new=AsyncMock(return_value=[]),
+        ) as mock_all:
+            from services.api.anveshak.api.routes.signals import list_signals
+
+            mock_conn = AsyncMock()
+            user = {"sub": "sa-1", "role": "super-admin", "jti": "x"}
+            result = await list_signals(
+                status="new", topic_id=None, since=None, until=None,
+                db=mock_conn, user=user,
+            )
+
+        mock_all.assert_awaited_once()
+
+
+# ===================================================================
+# 10. Route-level: get_topic verifies access
+# ===================================================================
+
+class TestGetTopicOrgVerification:
+
+    @pytest.mark.asyncio
+    async def test_get_topic_calls_verify_access(self):
+        """get_topic route calls verify_topic_access before fetching."""
+        with patch(
+            "services.api.anveshak.api.routes.topics.topics_db.verify_topic_access",
+            new=AsyncMock(),
+        ) as mock_verify, patch(
+            "services.api.anveshak.api.routes.topics.topics_db.get_topic",
+            new=AsyncMock(return_value={"id": "t1", "name": "Test"}),
+        ):
+            from services.api.anveshak.api.routes.topics import get_topic
+
+            mock_conn = AsyncMock()
+            user = {"sub": "u1", "role": "analyst", "org_id": "org-nia", "jti": "x"}
+            await get_topic(topic_id="t1", db=mock_conn, user=user)
+
+        mock_verify.assert_awaited_once_with(mock_conn, "t1", user)
+
+    @pytest.mark.asyncio
+    async def test_get_topic_blocks_cross_org(self):
+        """get_topic returns 404 when topic belongs to different org."""
+        from fastapi import HTTPException
+
+        with patch(
+            "services.api.anveshak.api.routes.topics.topics_db.verify_topic_access",
+            new=AsyncMock(side_effect=HTTPException(status_code=404, detail="Topic not found")),
+        ):
+            from services.api.anveshak.api.routes.topics import get_topic
+
+            mock_conn = AsyncMock()
+            user = {"sub": "u1", "role": "analyst", "org_id": "org-ats", "jti": "x"}
+            with pytest.raises(HTTPException) as exc_info:
+                await get_topic(topic_id="t1", db=mock_conn, user=user)
+            assert exc_info.value.status_code == 404
+
+
+# ===================================================================
+# 11. Route-level: source routes verify access
+# ===================================================================
+
+class TestSourceRouteVerification:
+
+    @pytest.mark.asyncio
+    async def test_check_health_calls_verify_access(self):
+        """check_source_health calls verify_source_access."""
+        with patch(
+            "services.api.anveshak.api.routes.sources.sources_db.verify_source_access",
+            new=AsyncMock(),
+        ) as mock_verify, patch(
+            "services.api.anveshak.api.routes.sources.sources_db.get_source_for_health",
+            new=AsyncMock(return_value={
+                "platform": "web", "url_or_handle": "https://example.com",
+                "consecutive_failures": 0,
+            }),
+        ), patch(
+            "services.api.anveshak.api.routes.sources.sources_db.update_source_health",
+            new=AsyncMock(),
+        ), patch(
+            "services.api.anveshak.api.routes.sources._probe_web",
+            new=AsyncMock(return_value=("healthy", None, False)),
+        ):
+            from services.api.anveshak.api.routes.sources import check_source_health
+
+            mock_conn = AsyncMock()
+            user = {"sub": "u1", "role": "analyst", "org_id": "org-nia", "jti": "x"}
+            await check_source_health(source_id="src-1", db=mock_conn, user=user)
+
+        mock_verify.assert_awaited_once_with(mock_conn, "src-1", user)
+
+
+# ===================================================================
+# 12. Route-level: report routes verify topic access
+# ===================================================================
+
+class TestReportRouteVerification:
+
+    @pytest.mark.asyncio
+    async def test_list_topic_reports_calls_verify(self):
+        """list_topic_reports calls verify_topic_access."""
+        with patch(
+            "services.api.anveshak.api.routes.reports.topics_db.verify_topic_access",
+            new=AsyncMock(),
+        ) as mock_verify, patch(
+            "services.api.anveshak.api.routes.reports.reports_db.list_topic_reports",
+            new=AsyncMock(return_value=[]),
+        ):
+            from services.api.anveshak.api.routes.reports import list_topic_reports
+
+            mock_conn = AsyncMock()
+            user = {"sub": "u1", "role": "analyst", "org_id": "org-nia", "jti": "x"}
+            await list_topic_reports(topic_id="t1", db=mock_conn, user=user)
+
+        mock_verify.assert_awaited_once_with(mock_conn, "t1", user)
+
+
+# ===================================================================
+# 13. Route-level: export routes verify topic access
+# ===================================================================
+
+class TestExportRouteVerification:
+
+    @pytest.mark.asyncio
+    async def test_export_content_calls_verify(self):
+        """export_content calls verify_topic_access."""
+        with patch(
+            "services.api.anveshak.api.routes.export.topics_db.verify_topic_access",
+            new=AsyncMock(),
+        ) as mock_verify, patch(
+            "services.api.anveshak.api.routes.export._fetch_rows",
+            new=AsyncMock(return_value=[{"id": "1", "url": "http://x"}]),
+        ), patch(
+            "services.api.anveshak.api.routes.export.audit_db.log_action",
+            new=AsyncMock(),
+        ):
+            from services.api.anveshak.api.routes.export import export_content
+
+            mock_conn = AsyncMock()
+            mock_request = AsyncMock()
+            mock_request.client = AsyncMock()
+            mock_request.client.host = "127.0.0.1"
+            user = {"sub": "u1", "role": "analyst", "org_id": "org-nia", "jti": "x"}
+            await export_content(
+                request=mock_request, topic_id="t1", format="json",
+                limit=10, db=mock_conn, user=user,
+            )
+
+        mock_verify.assert_awaited_once_with(mock_conn, "t1", user)
