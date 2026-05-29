@@ -11,7 +11,7 @@ from ..db.pool import get_db
 from ..db import topics as topics_db
 from ..db import sources as sources_db
 from ..db import audit as audit_db
-from ..auth.rbac import require_role
+from ..auth.rbac import require_role, is_super_admin, get_user_org
 from ..settings import settings
 from anveshak.models import Labels, Topic, TopicStatus
 
@@ -68,9 +68,11 @@ async def create_topic(
 @router.get("")
 async def list_topics(
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(require_role("viewer", "analyst", "admin")),
+    user: dict = Depends(require_role("viewer", "analyst", "admin", "super-admin")),
 ):
-    return await topics_db.list_topics(db)
+    if is_super_admin(user):
+        return await topics_db.list_topics(db)
+    return await topics_db.list_topics_by_org(db, get_user_org(user))
 
 
 class UpdateTopicStatusRequest(BaseModel):

@@ -60,6 +60,22 @@ SQL_LIST_SIGNALS_SINCE = """
     LIMIT 200
 """
 
+SQL_LIST_SIGNALS_BY_ORG = """
+    SELECT s.id, s.topic_id, s.cluster_id, s.signal_type, s.description, s.evidence,
+           s.status, s.created_at,
+           nc.label AS cluster_label,
+           nc.independent_source_count,
+           nc.item_count AS cluster_item_count,
+           nc.executive_summary,
+           t.name AS topic_name
+    FROM signals s
+    LEFT JOIN narrative_clusters nc ON nc.id = s.cluster_id
+    LEFT JOIN topics t ON t.id = s.topic_id
+    WHERE s.status = $1 AND t.org_id = $2
+    ORDER BY s.created_at DESC
+    LIMIT 50
+"""
+
 # Per-signal enrichment: source breakdown + timeline from cluster items
 SQL_SIGNAL_SOURCES = """
     SELECT DISTINCT ON (src.id)
@@ -217,6 +233,15 @@ async def list_signals(
         rows = await conn.fetch(SQL_LIST_SIGNALS_BY_TOPIC, status, topic_id)
     else:
         rows = await conn.fetch(SQL_LIST_SIGNALS, status)
+    signals = [dict(r) for r in rows]
+    return [await _enrich_signal(conn, s) for s in signals]
+
+
+async def list_signals_by_org(
+    conn: asyncpg.Connection, status: str, org_id: str
+) -> list[dict[str, Any]]:
+    """Return signals filtered by topic's org_id."""
+    rows = await conn.fetch(SQL_LIST_SIGNALS_BY_ORG, status, org_id)
     signals = [dict(r) for r in rows]
     return [await _enrich_signal(conn, s) for s in signals]
 

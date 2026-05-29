@@ -28,6 +28,25 @@ SQL_LIST_SOURCES = """
     ORDER BY s.credibility_score DESC
 """
 
+SQL_LIST_SOURCES_BY_ORG = """
+    SELECT s.id, s.name, s.url_or_handle, s.platform, s.credibility_score, s.is_active,
+           s.health_status, s.consecutive_failures, s.health_error, s.last_checked_at,
+           COALESCE(tc.topic_links_count, 0) AS topic_links_count
+    FROM sources s
+    JOIN org_sources os ON os.source_id = s.id
+    LEFT JOIN (
+        SELECT source_id, COUNT(*) AS topic_links_count
+        FROM topic_sources
+        GROUP BY source_id
+    ) tc ON tc.source_id = s.id
+    WHERE os.org_id = $1
+    ORDER BY s.credibility_score DESC
+"""
+
+SQL_CHECK_SOURCE_VISIBILITY = """
+    SELECT 1 FROM org_sources WHERE org_id = $1 AND source_id = $2
+"""
+
 SQL_GET_SOURCE_SCORE = "SELECT credibility_score FROM sources WHERE id = $1"
 
 SQL_CHECK_SOURCE_EXISTS = "SELECT id FROM sources WHERE id = $1"
@@ -165,6 +184,32 @@ async def insert_source(
 async def list_sources(conn: asyncpg.Connection) -> list[dict[str, Any]]:
     rows = await conn.fetch(SQL_LIST_SOURCES)
     return [dict(r) for r in rows]
+
+
+async def list_sources_by_org(
+    conn: asyncpg.Connection,
+    org_id: str,
+) -> list[dict[str, Any]]:
+    """Return sources visible to an organization via org_sources."""
+    rows = await conn.fetch(SQL_LIST_SOURCES_BY_ORG, org_id)
+    return [dict(r) for r in rows]
+
+
+async def verify_source_access(
+    conn: asyncpg.Connection,
+    source_id: str,
+    user: dict,
+) -> None:
+    """Raise 404 if source is not visible to user's org (unless super-admin)."""
+    from ..auth.rbac import is_super_admin, get_user_org
+
+    if is_super_admin(user):
+        return
+    org_id = get_user_org(user)
+    exists = await conn.fetchval(SQL_CHECK_SOURCE_VISIBILITY, org_id, source_id)
+    if not exists:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Source not found")
 
 
 async def get_source_score(
