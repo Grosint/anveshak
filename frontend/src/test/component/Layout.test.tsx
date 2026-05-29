@@ -8,7 +8,7 @@ vi.mock('../../contexts/AuthContext', () => ({
     isAuthenticated: true,
     login: vi.fn(),
     logout: vi.fn(),
-    user: { sub: 'admin_kaur', exp: Date.now() / 1000 + 3600, iat: Date.now() / 1000 },
+    user: { sub: 'admin_kaur', role: 'analyst', exp: Date.now() / 1000 + 3600, iat: Date.now() / 1000 },
     token: 'fake-token',
     secondsUntilExpiry: 3600,
   }),
@@ -116,5 +116,11 @@ describe('Layout sidebar navigation', () => {
   it('has a sign out button', () => {
     renderWithProviders(<Layout />)
     expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument()
+  })
+
+  it('shows user role in sidebar instead of "Signed in"', () => {
+    renderWithProviders(<Layout />)
+    expect(screen.getByText('Analyst')).toBeInTheDocument()
+    expect(screen.queryByText('Signed in')).not.toBeInTheDocument()
   })
 })

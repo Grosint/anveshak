@@ -52,6 +52,21 @@ VALUES (
 )
 ON CONFLICT (username) DO NOTHING;
 
+-- Admin user account
+-- Password: AnveshakAdmin2024! (bcrypt hash, rounds=12)
+
+INSERT INTO users (id, username, password_hash, role, created_at, updated_at, labels)
+VALUES (
+    'demo0001-0000-0000-0000-000000000002',
+    'admin@anveshak.local',
+    '$2b$12$S12K1p/iLSVP3VohoNnP1uxB493/aJIMt6lf/xmUWjJjvTJZHmSt.',
+    'admin',
+    NOW() - INTERVAL '30 days',
+    NOW(),
+    '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak"}'::jsonb
+)
+ON CONFLICT (username) DO NOTHING;
+
 -- =============================================================================
 -- 2. TOPICS (6)
 -- =============================================================================

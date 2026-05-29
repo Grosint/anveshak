@@ -96,7 +96,9 @@ export default function Layout() {
                 <p className="text-sm text-text-primary font-medium truncate">
                   {user.username || user.sub}
                 </p>
-                <p className="text-[10px] text-text-muted">Signed in</p>
+                <p className="text-[10px] text-text-muted">
+                  {user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Signed in'}
+                </p>
               </div>
               <button
                 onClick={handleLogout}

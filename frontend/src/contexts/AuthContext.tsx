@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useCallback, useEffect, ReactNode 
 interface JWTPayload {
   sub: string
   username?: string
+  role?: string
   exp: number
   iat: number
 }

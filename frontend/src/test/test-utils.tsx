@@ -13,7 +13,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 interface MockAuthState {
   isAuthenticated: boolean
-  user: { sub: string; exp: number; iat: number } | null
+  user: { sub: string; exp: number; iat: number; role?: string } | null
   token: string | null
   secondsUntilExpiry: number | null
   login: (token: string) => void
@@ -22,7 +22,7 @@ interface MockAuthState {
 
 const defaultAuthState: MockAuthState = {
   isAuthenticated: true,
-  user: { sub: 'analyst-1', exp: Math.floor(Date.now() / 1000) + 3600, iat: Math.floor(Date.now() / 1000) },
+  user: { sub: 'analyst-1', exp: Math.floor(Date.now() / 1000) + 3600, iat: Math.floor(Date.now() / 1000), role: 'analyst' },
   token: 'fake-token',
   secondsUntilExpiry: 3600,
   login: () => {},

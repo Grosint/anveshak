@@ -97,7 +97,7 @@ describe('Seam 6: API fetch → client filter → display', () => {
 
     await waitFor(() => {
       // contentApi.list is called with topicId as first arg
-      expect(mockContentList).toHaveBeenCalledWith('topic-1', expect.any(Number), expect.any(Number), undefined)
+      expect(mockContentList).toHaveBeenCalledWith('topic-1', expect.any(Number), expect.any(Number), undefined, undefined)
     })
   })
 })

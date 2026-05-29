@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, act, fireEvent } from '@testing-library/react'
 import { AuthProvider, useAuth } from '../../contexts/AuthContext'
 
-function makeToken(payload: { sub: string; exp: number; iat: number }): string {
+function makeToken(payload: { sub: string; exp: number; iat: number; role?: string; username?: string }): string {
   const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
   const body = btoa(JSON.stringify(payload))
   return `${header}.${body}.fakesig`
@@ -24,9 +24,11 @@ function AuthConsumer() {
     <div>
       <span data-testid="authenticated">{String(ctx.isAuthenticated)}</span>
       <span data-testid="user-sub">{ctx.user?.sub ?? 'none'}</span>
+      <span data-testid="user-role">{ctx.user?.role ?? 'none'}</span>
       <span data-testid="seconds">{ctx.secondsUntilExpiry ?? 'null'}</span>
       <button onClick={() => ctx.login(makeToken({
         sub: 'new-analyst',
+        role: 'analyst',
         exp: now() + 3600,
         iat: now(),
       }))}>
@@ -80,6 +82,14 @@ describe('AuthProvider — login flow', () => {
     fireEvent.click(screen.getByText('Login'))
 
     expect(localStorage.getItem('anveshak_token')).not.toBeNull()
+  })
+
+  it('login decodes role from JWT payload', () => {
+    renderAuth()
+    fireEvent.click(screen.getByText('Login'))
+    act(() => { vi.advanceTimersByTime(1100) })
+
+    expect(screen.getByTestId('user-role')).toHaveTextContent('analyst')
   })
 })
 

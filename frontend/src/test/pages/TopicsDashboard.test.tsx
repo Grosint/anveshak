@@ -75,7 +75,15 @@ describe('TopicsDashboard page', () => {
   })
 
   it('renders all topic cards', async () => {
+    const user = userEvent.setup()
     renderWithProviders(<TopicsDashboard />)
+
+    // Default filter is 'active' — click 'All' to show all topics
+    await waitFor(() => {
+      expect(screen.getByText('Ukraine conflict')).toBeInTheDocument()
+    })
+    await user.click(screen.getByRole('button', { name: /All/i }))
+
     await waitFor(() => {
       expect(screen.getByText('Ukraine conflict')).toBeInTheDocument()
       expect(screen.getByText('South China Sea')).toBeInTheDocument()
@@ -175,6 +183,12 @@ describe('TopicsDashboard page', () => {
       expect(screen.getByText('Ukraine conflict')).toBeInTheDocument()
     })
 
+    // Default filter is 'active' — click 'All' to include paused topics
+    await user.click(screen.getByRole('button', { name: /All/i }))
+    await waitFor(() => {
+      expect(screen.getByText('Cybersecurity threats')).toBeInTheDocument()
+    })
+
     const sortSelect = screen.getByRole('combobox', { name: /sort/i })
     await user.selectOptions(sortSelect, 'most_content')
 
@@ -206,8 +220,9 @@ describe('TopicsDashboard page', () => {
       expect(screen.getByText('Ukraine conflict')).toBeInTheDocument()
     })
 
+    // Search for an active topic so it's visible under the default 'active' filter
     const search = screen.getByPlaceholderText(/search/i)
-    await user.type(search, 'cyber')
+    await user.type(search, 'ukraine')
 
     await waitFor(() => {
       expect(screen.getByText(/1 of 4 topics/i)).toBeInTheDocument()

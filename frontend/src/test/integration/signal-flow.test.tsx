@@ -23,6 +23,14 @@ vi.mock('../../api/signals', () => ({
   },
 }))
 
+vi.mock('../../api/topics', () => ({
+  topicsApi: {
+    list: vi.fn().mockResolvedValue([
+      { id: 'topic-1', name: 'Test Topic', status: 'active', signal_threshold: 3, credibility_min: 30, created_at: '2026-01-01T00:00:00Z' },
+    ]),
+  },
+}))
+
 vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({
     isAuthenticated: true,

@@ -22,17 +22,26 @@ vi.mock('../../pages/UserManagement', () => ({
   ),
 }))
 
+const mockUseAuth = vi.hoisted(() => vi.fn())
+
 vi.mock('../../contexts/AuthContext', () => ({
-  useAuth: () => ({
+  useAuth: mockUseAuth,
+  AuthProvider: ({ children }: any) => children,
+}))
+
+function setMockRole(role: string) {
+  mockUseAuth.mockReturnValue({
     isAuthenticated: true,
     login: vi.fn(),
     logout: vi.fn(),
-    user: { sub: 'admin-1', exp: Date.now() / 1000 + 3600, iat: Date.now() / 1000 },
+    user: { sub: 'test-user', role, exp: Date.now() / 1000 + 3600, iat: Date.now() / 1000 },
     token: 'fake-token',
     secondsUntilExpiry: 3600,
-  }),
-  AuthProvider: ({ children }: any) => children,
-}))
+  })
+}
+
+// Default to admin for existing tests
+beforeEach(() => setMockRole('admin'))
 
 function renderSettings(initialPath = '/settings/sources') {
   return renderWithProviders(
@@ -104,5 +113,27 @@ describe('Settings page', () => {
     renderSettings()
     const sourcesTab = screen.getByRole('tab', { name: /sources/i })
     expect(sourcesTab).toHaveAttribute('aria-selected', 'true')
+  })
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Role-based tab visibility
+  // ─────────────────────────────────────────────────────────────────────
+
+  it('hides Users tab for analyst role', async () => {
+    setMockRole('analyst')
+    renderSettings()
+    expect(screen.queryByRole('tab', { name: /users/i })).not.toBeInTheDocument()
+  })
+
+  it('shows Users tab for admin role', async () => {
+    setMockRole('admin')
+    renderSettings()
+    expect(screen.getByRole('tab', { name: /users/i })).toBeInTheDocument()
+  })
+
+  it('hides Users tab for viewer role', async () => {
+    setMockRole('viewer')
+    renderSettings()
+    expect(screen.queryByRole('tab', { name: /users/i })).not.toBeInTheDocument()
   })
 })

@@ -27,6 +27,21 @@ VALUES (
 )
 ON CONFLICT (username) DO NOTHING;
 
+-- Admin user account
+-- Password: AnveshakAdmin2024! (bcrypt hash, rounds=12)
+
+INSERT INTO users (id, username, password_hash, role, created_at, updated_at, labels)
+VALUES (
+    'a0000000-0000-0000-0000-000000000002',
+    'admin@anveshak.local',
+    '$2b$12$S12K1p/iLSVP3VohoNnP1uxB493/aJIMt6lf/xmUWjJjvTJZHmSt.',
+    'admin',
+    NOW(),
+    NOW(),
+    '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak"}'::jsonb
+)
+ON CONFLICT (username) DO NOTHING;
+
 -- -----------------------------------------------------------------------------
 -- Topics — OSINT monitoring areas
 -- -----------------------------------------------------------------------------
@@ -334,7 +349,7 @@ COMMIT;
 DO $$
 BEGIN
     RAISE NOTICE 'Demo seed complete:';
-    RAISE NOTICE '  Users:     1 (demo@anveshak.local / AnveshakDemo2024!)';
+    RAISE NOTICE '  Users:     2 (demo@anveshak.local / AnveshakDemo2024!, admin@anveshak.local / AnveshakAdmin2024!)';
     RAISE NOTICE '  Topics:    3';
     RAISE NOTICE '  Sources:   5 (credibility-scored)';
     RAISE NOTICE '  Content:   3 items';

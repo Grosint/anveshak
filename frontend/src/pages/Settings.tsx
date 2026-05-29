@@ -1,21 +1,25 @@
 import { useParams, useNavigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 import SourceManager from './SourceManager'
 import UserManagement from './UserManagement'
 import AuditTrailPage from '../components/audit/AuditTrailPage'
 
 type SettingsTab = 'sources' | 'users' | 'audit'
 
-const TABS: { key: SettingsTab; label: string }[] = [
+const ALL_TABS: { key: SettingsTab; label: string; adminOnly?: boolean }[] = [
   { key: 'sources', label: 'Sources' },
-  { key: 'users',   label: 'Users' },
+  { key: 'users',   label: 'Users', adminOnly: true },
   { key: 'audit',   label: 'Audit Trail' },
 ]
 
 export default function Settings() {
   const { tab } = useParams<{ tab: string }>()
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
+  const tabs = ALL_TABS.filter((t) => !t.adminOnly || isAdmin)
   const activeTab: SettingsTab =
-    tab === 'users' ? 'users' : tab === 'audit' ? 'audit' : 'sources'
+    tab === 'users' && isAdmin ? 'users' : tab === 'audit' ? 'audit' : 'sources'
 
   return (
     <div className="h-full flex flex-col">
@@ -26,7 +30,7 @@ export default function Settings() {
 
         {/* Tabs */}
         <div className="flex" role="tablist">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <button
               key={t.key}
               role="tab"
