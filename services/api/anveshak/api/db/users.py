@@ -14,15 +14,22 @@ from ..auth.jwt import pwd_context
 # ---------------------------------------------------------------------------
 
 SQL_LIST_USERS = """
-    SELECT id, username, role, created_at, updated_at
+    SELECT id, username, role, org_id, created_at, updated_at
     FROM users
     ORDER BY created_at
 """
 
+SQL_LIST_USERS_BY_ORG = """
+    SELECT id, username, role, org_id, created_at, updated_at
+    FROM users
+    WHERE org_id = $1
+    ORDER BY created_at
+"""
+
 SQL_CREATE_USER = """
-    INSERT INTO users (id, username, password_hash, role, created_at, updated_at, labels)
-    VALUES ($1, $2, $3, $4, $5, $6,
-            '{"classification":"OPEN","domain":"admin","owner_org":"anveshak"}'::jsonb)
+    INSERT INTO users (id, username, password_hash, role, org_id, created_at, updated_at, labels)
+    VALUES ($1, $2, $3, $4, $5, $6, $7,
+            '{"classification":"OPEN","domain":"admin"}'::jsonb)
     RETURNING id
 """
 
@@ -46,6 +53,7 @@ async def create_user(
     username: str,
     password: str,
     role: str = "analyst",
+    org_id: str | None = None,
 ) -> str:
     """Create a new user with hashed password. Returns user ID."""
     user_id = str(uuid.uuid4())
@@ -53,8 +61,17 @@ async def create_user(
     hashed = pwd_context.hash(password)
     return await conn.fetchval(
         SQL_CREATE_USER,
-        user_id, username, hashed, role, now, now,
+        user_id, username, hashed, role, org_id, now, now,
     )
+
+
+async def list_users_by_org(
+    conn: asyncpg.Connection,
+    org_id: str,
+) -> list[dict[str, Any]]:
+    """Return users filtered by org_id."""
+    rows = await conn.fetch(SQL_LIST_USERS_BY_ORG, org_id)
+    return [dict(r) for r in rows]
 
 
 async def delete_user(conn: asyncpg.Connection, user_id: str) -> bool:

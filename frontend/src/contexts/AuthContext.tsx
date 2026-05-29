@@ -4,6 +4,7 @@ interface JWTPayload {
   sub: string
   username?: string
   role?: string
+  org_id?: string
   exp: number
   iat: number
 }

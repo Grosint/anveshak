@@ -38,9 +38,10 @@ def create_access_token(
     subject: str,
     username: str = "",
     role: str = "analyst",
+    org_id: Optional[str] = None,
     expires_delta: Optional[timedelta] = None,
 ) -> str:
-    """Create a JWT with sub, username, role, jti, exp, iat."""
+    """Create a JWT with sub, username, role, org_id, jti, exp, iat."""
     expire = datetime.now(UTC) + (
         expires_delta or timedelta(minutes=settings.jwt_expire_minutes)
     )
@@ -48,6 +49,7 @@ def create_access_token(
         "sub": subject,
         "username": username,
         "role": role,
+        "org_id": org_id,
         "jti": str(uuid.uuid4()),
         "exp": expire,
         "iat": datetime.now(UTC),
