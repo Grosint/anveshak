@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from ..auth.rbac import require_role
 from ..db.pool import get_db
 from ..db import content as content_db
+from ..db import topics as topics_db
 from ..settings import settings
 
 log = structlog.get_logger(__name__)
@@ -50,6 +51,7 @@ async def get_content_item(
     row = await content_db.get_content_item(db, content_id)
     if not row:
         raise HTTPException(status_code=404, detail="Content item not found")
+    await topics_db.verify_topic_access(db, row["topic_id"], user)
     row["extracted_entities"] = await content_db.get_entities(db, content_id)
     return row
 
@@ -62,6 +64,7 @@ async def search_content(
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """pgvector cosine similarity search within a topic (criteria 1.23, 1.24)."""
+    await topics_db.verify_topic_access(db, topic_id, user)
     try:
         query_vec_str = await _embed_query(q)
     except Exception as exc:

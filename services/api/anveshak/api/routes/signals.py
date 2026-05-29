@@ -9,7 +9,7 @@ import asyncpg
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 
-from ..auth.rbac import require_role
+from ..auth.rbac import require_role, is_super_admin, get_user_org
 from ..db.pool import get_db, get_pool
 from ..db import signals as signals_db
 from ..db import audit as audit_db
@@ -125,11 +125,15 @@ async def list_signals(
 ):
     """List signals by status with optional time range and topic filter (criteria 2.14 status flow)."""
     if since is not None or until is not None:
-        # Default until to now if only since is provided, and vice versa
         _since = since or datetime.min.replace(tzinfo=UTC)
         _until = until or datetime.now(UTC)
+        if is_super_admin(user):
+            return await signals_db.list_signals_filtered(db, status, _since, _until)
         return await signals_db.list_signals_filtered(db, status, _since, _until)
-    return await signals_db.list_signals(db, status, topic_id=topic_id)
+    if is_super_admin(user):
+        return await signals_db.list_signals(db, status, topic_id=topic_id)
+    org_id = get_user_org(user)
+    return await signals_db.list_signals_by_org(db, status, org_id)
 
 
 @router.get("/{signal_id}/connections")

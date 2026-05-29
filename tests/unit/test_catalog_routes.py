@@ -72,9 +72,10 @@ async def test_catalog_suggestions_returns_list():
     from anveshak.api.routes.catalog import get_catalog_suggestions
 
     mock_conn = AsyncMock()
-    mock_user = {"user_id": "test-user", "role": "analyst"}
+    mock_user = {"user_id": "test-user", "role": "analyst", "org_id": "org-test"}
 
-    with patch("anveshak.api.routes.catalog.catalog_db") as mock_db:
+    with patch("anveshak.api.routes.catalog.topics_db.verify_topic_access", new=AsyncMock()), \
+         patch("anveshak.api.routes.catalog.catalog_db") as mock_db:
         # Mock: topic exists with keywords
         mock_conn.fetchrow = AsyncMock(return_value={"keywords": ["china", "military"]})
         mock_db.list_catalog_suggestions = AsyncMock(return_value=[_fake_catalog_row()])
@@ -109,9 +110,10 @@ async def test_catalog_approve_creates_source_and_links():
     from anveshak.api.routes.catalog import approve_catalog_entry
 
     mock_conn = AsyncMock()
-    mock_user = {"user_id": "test-user", "role": "analyst"}
+    mock_user = {"user_id": "test-user", "role": "analyst", "org_id": "org-test"}
 
-    with patch("anveshak.api.routes.catalog.catalog_db") as mock_catalog_db, \
+    with patch("anveshak.api.routes.catalog.topics_db.verify_topic_access", new=AsyncMock()), \
+         patch("anveshak.api.routes.catalog.catalog_db") as mock_catalog_db, \
          patch("anveshak.api.routes.catalog.sources_db") as mock_sources_db:
 
         mock_catalog_db.get_catalog_entry = AsyncMock(return_value=_fake_catalog_row())
@@ -184,9 +186,10 @@ async def test_list_discovered_returns_sources():
     from anveshak.api.routes.catalog import list_discovered_sources
 
     mock_conn = AsyncMock()
-    mock_user = {"user_id": "test-user", "role": "analyst"}
+    mock_user = {"user_id": "test-user", "role": "analyst", "org_id": "org-test"}
 
-    with patch("anveshak.api.routes.catalog.catalog_db") as mock_db:
+    with patch("anveshak.api.routes.catalog.topics_db.verify_topic_access", new=AsyncMock()), \
+         patch("anveshak.api.routes.catalog.catalog_db") as mock_db:
         mock_db.list_discovered = AsyncMock(return_value=[_fake_discovered_row()])
 
         result = await list_discovered_sources(
@@ -206,9 +209,10 @@ async def test_approve_discovered_creates_source():
     from anveshak.api.routes.catalog import approve_discovered_source
 
     mock_conn = AsyncMock()
-    mock_user = {"user_id": "test-user", "role": "analyst"}
+    mock_user = {"user_id": "test-user", "role": "analyst", "org_id": "org-test"}
 
-    with patch("anveshak.api.routes.catalog.catalog_db") as mock_catalog_db, \
+    with patch("anveshak.api.routes.catalog.topics_db.verify_topic_access", new=AsyncMock()), \
+         patch("anveshak.api.routes.catalog.catalog_db") as mock_catalog_db, \
          patch("anveshak.api.routes.catalog.sources_db") as mock_sources_db:
 
         mock_conn.fetchrow = AsyncMock(return_value=_fake_discovered_row())
@@ -239,9 +243,10 @@ async def test_dismiss_discovered_updates_status():
     from anveshak.api.routes.catalog import dismiss_discovered_source
 
     mock_conn = AsyncMock()
-    mock_user = {"user_id": "test-user", "role": "analyst"}
+    mock_user = {"user_id": "test-user", "role": "analyst", "org_id": "org-test"}
 
-    with patch("anveshak.api.routes.catalog.catalog_db") as mock_catalog_db:
+    with patch("anveshak.api.routes.catalog.topics_db.verify_topic_access", new=AsyncMock()), \
+         patch("anveshak.api.routes.catalog.catalog_db") as mock_catalog_db:
         mock_conn.fetchrow = AsyncMock(return_value=_fake_discovered_row())
         mock_catalog_db.dismiss_discovered = AsyncMock()
 

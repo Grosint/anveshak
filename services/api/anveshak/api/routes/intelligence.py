@@ -13,6 +13,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from ..auth.rbac import require_role
 from ..db.pool import get_db
 from ..db import audit as audit_db
+from ..db import topics as topics_db
 
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["intelligence"])
@@ -120,6 +121,7 @@ async def get_entity_cooccurrence(
     Returns edges (entity pairs) with co-occurrence frequency.
     Useful for identifying relationships between actors, organizations, and locations.
     """
+    await topics_db.verify_topic_access(db, topic_id, user)
     rows = await db.fetch(SQL_ENTITY_COOCCURRENCE, topic_id, min_count, limit)
     edges = [dict(r) for r in rows]
 
@@ -149,6 +151,7 @@ async def get_similar_topics(
 
     Uses pgvector cosine similarity on cluster embedding centroids.
     """
+    await topics_db.verify_topic_access(db, topic_id, user)
     rows = await db.fetch(SQL_TOPIC_SIMILARITY, topic_id, limit)
     return [dict(r) for r in rows]
 
@@ -164,6 +167,7 @@ async def discover_sources(
     Returns domains sorted by citation frequency (how many content items
     reference each domain). Filters out already-registered sources.
     """
+    await topics_db.verify_topic_access(db, topic_id, user)
     from urllib.parse import urlparse
     from collections import Counter
 
@@ -221,6 +225,7 @@ async def get_cluster_duplicates(
 
     Returns pairs of clusters that may be duplicates, sorted by similarity.
     """
+    await topics_db.verify_topic_access(db, topic_id, user)
     rows = await db.fetch(SQL_CLUSTER_DUPLICATES, topic_id, min_similarity, limit)
     return [dict(r) for r in rows]
 

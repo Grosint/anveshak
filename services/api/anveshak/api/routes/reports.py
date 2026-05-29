@@ -26,6 +26,7 @@ from pydantic import BaseModel, ConfigDict
 from ..auth.rbac import require_role
 from ..db.pool import get_db
 from ..db import reports as reports_db
+from ..db import topics as topics_db
 from ..db import audit as audit_db
 from ..settings import settings
 
@@ -65,6 +66,7 @@ async def create_report(
     Returns {report_id, status, arq_job_id} in <100 ms.
     Poll GET /api/v1/reports/{report_id} until generation_status='complete'.
     """
+    await topics_db.verify_topic_access(db, req.topic_id, user)
     report_id = str(uuid.uuid4())
     now = datetime.now(UTC)
     time_end = req.time_window_end or now
@@ -119,6 +121,7 @@ async def get_report(
     row = await reports_db.fetch_report(db, report_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Report not found")
+    await topics_db.verify_topic_access(db, row["topic_id"], user)
     if row.get("generated_at"):
         row["generation_status"] = "complete"
     elif row.get("generation_error"):
@@ -139,6 +142,7 @@ async def list_topic_reports(
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> list[dict]:
     """Return all reports for a topic, newest first."""
+    await topics_db.verify_topic_access(db, topic_id, user)
     return await reports_db.list_topic_reports(db, topic_id)
 
 
@@ -156,6 +160,7 @@ async def get_report_geojson(
     row = await reports_db.get_report_geojson(db, report_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Report not found")
+    await topics_db.verify_topic_access(db, row["topic_id"], user)
     if row["generated_at"] is None:
         raise HTTPException(status_code=202, detail="Report not yet generated")
     geojson = row["geojson"] or {"type": "FeatureCollection", "features": []}

@@ -13,7 +13,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
 
-from ..auth.rbac import require_role
+from ..auth.rbac import require_role, is_super_admin, get_user_org
 from ..db import sources as sources_db
 from ..db import audit as audit_db
 from ..db.pool import get_db
@@ -177,11 +177,13 @@ async def create_source(
 async def list_sources(
     credibility_below: float | None = None,
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(require_role("analyst", "admin")),
+    user: dict = Depends(require_role("analyst", "admin", "super-admin")),
 ):
     if credibility_below is not None:
         return await sources_db.list_sources_below(db, credibility_below)
-    return await sources_db.list_sources(db)
+    if is_super_admin(user):
+        return await sources_db.list_sources(db)
+    return await sources_db.list_sources_by_org(db, get_user_org(user))
 
 
 @router.post("/{source_id}/check-health", status_code=status.HTTP_200_OK)
@@ -191,6 +193,7 @@ async def check_source_health(
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Trigger an immediate health probe for one source. Updates health_status in DB."""
+    await sources_db.verify_source_access(db, source_id, user)
     source = await sources_db.get_source_for_health(db, source_id)
     if source is None:
         raise HTTPException(status_code=404, detail="Source not found")
@@ -252,6 +255,7 @@ async def update_credibility(
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Update source credibility — always audit-logged."""
+    await sources_db.verify_source_access(db, source_id, user)
     old_score = await sources_db.get_source_score(db, source_id)
     if old_score is None:
         raise HTTPException(status_code=404, detail="Source not found")
@@ -278,6 +282,7 @@ async def toggle_source_active(
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
+    await sources_db.verify_source_access(db, source_id, user)
     if not await sources_db.source_exists(db, source_id):
         raise HTTPException(status_code=404, detail="Source not found")
     await sources_db.toggle_source_active(db, source_id, is_active, datetime.now(UTC))
@@ -290,6 +295,7 @@ async def get_report_warnings_count(
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
+    await sources_db.verify_source_access(db, source_id, user)
     if not await sources_db.source_exists(db, source_id):
         raise HTTPException(status_code=404, detail="Source not found")
     count = await sources_db.count_report_warnings(db, source_id)
@@ -310,6 +316,7 @@ async def update_source(
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Update source name and/or URL. Both fields are optional (patch semantics)."""
+    await sources_db.verify_source_access(db, source_id, user)
     if not await sources_db.source_exists(db, source_id):
         raise HTTPException(status_code=404, detail="Source not found")
     if req.name is None and req.url_or_handle is None:
@@ -329,6 +336,7 @@ async def delete_source(
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Delete a source. Returns 409 if content items exist unless force=true."""
+    await sources_db.verify_source_access(db, source_id, user)
     if not await sources_db.source_exists(db, source_id):
         raise HTTPException(status_code=404, detail="Source not found")
     content_count = await sources_db.count_content_items_for_source(db, source_id)
@@ -352,6 +360,7 @@ async def get_audit_log(
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
+    await sources_db.verify_source_access(db, source_id, user)
     if not await sources_db.source_exists(db, source_id):
         raise HTTPException(status_code=404, detail="Source not found")
     return await sources_db.get_audit_log(db, source_id)

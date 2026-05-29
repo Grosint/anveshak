@@ -88,6 +88,7 @@ async def update_topic_status(
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
+    await topics_db.verify_topic_access(db, topic_id, user)
     if req.status not in ("active", "paused", "archived"):
         raise HTTPException(status_code=422, detail="status must be active|paused|archived")
     if not await topics_db.topic_exists(db, topic_id):
@@ -115,6 +116,7 @@ async def update_topic_schedule(
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Update or clear scheduled report configuration for a topic."""
+    await topics_db.verify_topic_access(db, topic_id, user)
     if not await topics_db.topic_exists(db, topic_id):
         raise HTTPException(status_code=404, detail="Topic not found")
     # Validate cron expression if provided
@@ -140,6 +142,7 @@ async def get_topic(
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
+    await topics_db.verify_topic_access(db, topic_id, user)
     row = await topics_db.get_topic(db, topic_id)
     if not row:
         raise HTTPException(status_code=404, detail="Topic not found")
@@ -159,6 +162,7 @@ async def get_topic_content(
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
+    await topics_db.verify_topic_access(db, topic_id, user)
     if sentiment and sentiment not in ("positive", "negative", "neutral"):
         raise HTTPException(status_code=422, detail="sentiment must be positive|negative|neutral")
     if sort_by and sort_by not in ("captured_at", "relevance"):
@@ -179,6 +183,7 @@ async def get_sentiment_trend(
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
+    await topics_db.verify_topic_access(db, topic_id, user)
     if days < 1 or days > 365:
         raise HTTPException(status_code=422, detail="days must be 1-365")
     return await topics_db.get_sentiment_trend(db, topic_id, days)
@@ -192,6 +197,7 @@ async def get_trending_keywords(
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
+    await topics_db.verify_topic_access(db, topic_id, user)
     if days < 1 or days > 365:
         raise HTTPException(status_code=422, detail="days must be 1-365")
     if limit < 1 or limit > 50:
@@ -206,6 +212,7 @@ async def get_topic_entities(
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
+    await topics_db.verify_topic_access(db, topic_id, user)
     if days < 1 or days > 365:
         raise HTTPException(status_code=422, detail="days must be 1-365")
     return await topics_db.get_topic_entities(db, topic_id, days)
@@ -217,6 +224,7 @@ async def get_topic_clusters(
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
+    await topics_db.verify_topic_access(db, topic_id, user)
     return await topics_db.get_topic_clusters(db, topic_id)
 
 
@@ -231,6 +239,7 @@ async def get_topic_sources(
     Each source includes item_count — number of content items from that source
     in this topic, descending (most active source first). Criterion 7.10.
     """
+    await topics_db.verify_topic_access(db, topic_id, user)
     if not await topics_db.topic_exists(db, topic_id):
         raise HTTPException(status_code=404, detail="Topic not found")
     return await sources_db.list_topic_sources(db, topic_id)
@@ -245,6 +254,7 @@ async def add_topic_source(
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Associate a source with a topic so the scraper monitors it."""
+    await topics_db.verify_topic_access(db, topic_id, user)
     if not await topics_db.topic_exists(db, topic_id):
         raise HTTPException(status_code=404, detail="Topic not found")
     if not await sources_db.source_exists(db, source_id):
@@ -267,6 +277,7 @@ async def remove_topic_source(
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Remove a source from a topic's monitoring list."""
+    await topics_db.verify_topic_access(db, topic_id, user)
     if not await topics_db.topic_exists(db, topic_id):
         raise HTTPException(status_code=404, detail="Topic not found")
     await sources_db.remove_topic_source(db, topic_id, source_id)
