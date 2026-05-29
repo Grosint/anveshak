@@ -308,8 +308,17 @@ Anveshak (thin consumer):
 
 ## Multi-Tenant Model
 
+Sangrah's multi-tenancy isolates downstream **products** (Anveshak, Drishti, future apps).
+This is different from Anveshak's org-based multi-tenancy which isolates **LEA agencies**.
+
+**Parallel with Anveshak's architecture:**
+- Sangrah `projects` ≈ Anveshak `organizations` (tenant root entity)
+- Sangrah `project_connectors` ≈ Anveshak `org_sources` (visibility/access join table)
+- Both use `project_id`/`org_id` on root tables only, children inherit via FK
+- Both should use dual-layer isolation (application + RLS) per `rules/multi-tenancy.md`
+
 ```sql
--- Projects (tenants)
+-- Projects (tenants — downstream products, not end-user orgs)
 CREATE TABLE projects (
     project_id      TEXT PRIMARY KEY,
     name            TEXT NOT NULL UNIQUE,
@@ -597,17 +606,37 @@ Shared Grafana scrapes all Prometheus instances. Traces via content_hash. No pro
 
 ## Anveshak Changes (when Sangrah is built)
 
+**Key context:** Anveshak now has organization-based multi-tenancy (migration 007+008).
+Each org has isolated topics, sources, content, and signals. The Sangrah integration
+must respect org boundaries.
+
 ```
 anveshak/
 ├── CLAUDE.md                                    # UPDATE: Sangrah integration rules
 ├── .env.example                                 # UPDATE: add SANGRAH_* vars
 ├── infra/compose.yml                            # UPDATE: add SANGRAH vars to api service env
 ├── services/api/anveshak/api/
-│   ├── sangrah_sync.py                          # NEW: push + reconciliation sync
+│   ├── sangrah_sync.py                          # NEW: push + reconciliation sync (org-aware)
 │   ├── sangrah_consumer.py                      # NEW: thin consumer (poll/webhook)
 │   ├── sangrah_settings.py                      # NEW: SANGRAH_API_URL, API_KEY, ENABLED, FALLBACK
 │   └── routes/sources.py                        # UPDATE: on source CRUD, call sangrah_sync
 ```
+
+### Org-Aware Sangrah Sync
+
+Anveshak's Sangrah project maps to the entire Anveshak deployment (one Sangrah project
+for all Anveshak orgs). Org isolation is Anveshak's responsibility, not Sangrah's.
+
+```
+Sangrah sees:  1 project ("anveshak") with N targets
+Anveshak sees: M organizations, each with their own topics/sources
+
+When org-A adds a source → Anveshak pushes target to Sangrah
+When Sangrah delivers a record → Anveshak routes it to the correct org via topic_id
+```
+
+The consumer must set `org_id` on content_items from the topic's org_id (same pattern
+as the scraper — lookup topic.org_id at ingest time).
 
 ### Graceful Degradation
 ```python
@@ -651,6 +680,22 @@ Drishti SangrahBridge consumer (polls Tier 1 REST, writes to own MinIO + Redpand
 Prediction markets, webhook receiver, additional platforms.
 Analytics tuning based on real data (thresholds, false positive rates).
 
+## Patterns to Apply from Anveshak Multi-Tenancy
+
+When building Sangrah's multi-tenancy, apply these patterns proven in Anveshak:
+
+| Pattern | Anveshak Implementation | Sangrah Equivalent |
+|---------|------------------------|-------------------|
+| **Tenant column on root tables only** | `org_id` on 5 tables, children inherit via `topic_id` FK | `project_id` on `collected_records`, `derived_events`, `collection_targets`; children inherit via `record_id` FK |
+| **Visibility join table** | `org_sources` — sources are global, orgs see via join | `project_connectors` — connectors are global, projects subscribe via join |
+| **Dual-layer isolation** | Application `verify_*_access()` + PostgreSQL RLS | Same pattern: app-level filtering + RLS with `SET LOCAL app.current_project` |
+| **RLS bypass for workers** | `anveshak_worker` role with `BYPASSRLS` | `sangrah_runner` role with `BYPASSRLS` for connector runner |
+| **Seed scripts match schema** | All INSERTs include `org_id` after migration adds NOT NULL | All INSERTs include `project_id` |
+| **Role constraint order** | Update CHECK before INSERT with new role | Same — add project roles to constraint before inserting |
+| **SQL param count audit** | Grep all callers after adding `$N` to SQL constant | Same discipline |
+
+**Key difference:** Sangrah's tenants are products (Anveshak, Drishti), not end-user orgs. Anveshak handles LEA-level isolation internally. Sangrah never knows about NIA vs ATS — it only knows "anveshak project" vs "drishti project".
+
 ## Architectural Decisions Log
 
 | # | Decision | Rationale |
@@ -670,6 +715,9 @@ Analytics tuning based on real data (thresholds, false positive rates).
 | 13 | Analytics in Sangrah, not consumers | Source-domain knowledge (AIS gap = no position for N hours) belongs with the data, not with Anveshak or Drishti. Consumer-agnostic. |
 | 14 | Redis state for analytics, not PostgreSQL | Last-seen hashes, sliding windows, position tracks — ephemeral state, not audit trail. Fast writes, auto-expire via TTL. |
 | 15 | Static GeoJSON for infrastructure reference | Known refineries, ports, military bases. Loaded at startup, refreshed daily. Not in PostgreSQL — small, read-only, in-memory. |
+| 16 | Dual-layer isolation (app + RLS) | Proven in Anveshak multi-tenancy — application filtering + PostgreSQL RLS safety net. One missed WHERE clause can't leak defence data. |
+| 17 | project_id on root tables only | Proven in Anveshak (org_id on 5 tables, not 20). Children inherit via FK. Reduces query changes from ~90 to ~20. |
+| 18 | Org-aware Sangrah consumer | Anveshak has org isolation — Sangrah consumer must set org_id on content_items from topic.org_id at ingest time. |
 
 ## Key Files — Sangrah Repo Structure
 
