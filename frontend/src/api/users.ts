@@ -4,6 +4,7 @@ export interface User {
   id: string
   username: string
   role: 'viewer' | 'analyst' | 'admin'
+  org_id?: string
   created_at: string
   updated_at: string
 }
@@ -12,6 +13,7 @@ export interface CreateUserPayload {
   username: string
   password: string
   role: 'viewer' | 'analyst' | 'admin'
+  org_id?: string
 }
 
 export const usersApi = {
