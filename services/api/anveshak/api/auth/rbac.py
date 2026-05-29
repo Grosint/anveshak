@@ -21,6 +21,27 @@ from fastapi import Depends, HTTPException, status
 from .jwt import get_current_user
 
 
+def get_user_org(user: dict) -> str | None:
+    """Extract org_id from the user dict (JWT payload). None for super-admin."""
+    return user.get("org_id")
+
+
+def is_super_admin(user: dict) -> bool:
+    """Check if the user has the super-admin role."""
+    return user.get("role") == "super-admin"
+
+
+def require_org_context(user: dict) -> str:
+    """Return org_id or raise 400 if missing. Super-admin must provide X-Org-Id."""
+    org_id = user.get("org_id")
+    if not org_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Organization context required",
+        )
+    return org_id
+
+
 def require_role(*allowed_roles: str) -> Callable:
     """Return a FastAPI dependency that enforces role membership.
 

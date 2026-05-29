@@ -63,6 +63,25 @@ async def get_db() -> AsyncGenerator[asyncpg.Connection, None]:
         yield conn
 
 
+async def set_org_context(conn: asyncpg.Connection, org_id: str | None) -> None:
+    """Set the RLS org context for this transaction.
+
+    Called at the start of each API request after acquiring a connection.
+    SET LOCAL is transaction-scoped — auto-resets when connection returns to pool.
+
+    Args:
+        conn: Active asyncpg connection.
+        org_id: Organization ID from JWT. None for super-admin (sets empty = bypass).
+    """
+    import re
+
+    value = org_id or ""
+    # Sanitize: org_id from JWT should be a UUID-like string. Reject anything suspicious.
+    if value and not re.match(r"^[a-zA-Z0-9_-]+$", value):
+        raise ValueError(f"Invalid org_id for RLS context: {value!r}")
+    await conn.execute(f"SET LOCAL app.current_org = '{value}'")
+
+
 def get_pool() -> asyncpg.Pool | None:
     """Return the raw pool (used by WebSocket handlers that can't use Depends)."""
     return _pool

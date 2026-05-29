@@ -64,10 +64,10 @@ SQL_UPDATE_SOURCE_SCORE = """
 
 SQL_INSERT_AUDIT_LOG = """
     INSERT INTO credibility_audit_log (
-        id, source_id, old_score, new_score, reason, changed_by, created_at, labels
+        id, source_id, old_score, new_score, reason, changed_by, created_at, labels, org_id
     )
     VALUES ($1, $2, $3, $4, $5, $6, $7,
-            '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb)
+            '{"classification":"OPEN","domain":"osint"}'::jsonb, $8)
 """
 
 # Cross-verification (7.1): sources contributing to multi-platform clusters
@@ -140,6 +140,7 @@ async def apply_credibility_drop(
     new_score: float,
     reason: str,
     now: datetime,
+    org_id: str | None = None,
 ) -> None:
     """Atomically update score and write audit log in the caller's transaction.
 
@@ -155,6 +156,7 @@ async def apply_credibility_drop(
         reason,
         _CHANGED_BY,
         now,
+        org_id,
     )
     analyst_credibility_changes_total.labels(direction="down").inc()
 
@@ -166,6 +168,7 @@ async def apply_credibility_boost(
     new_score: float,
     reason: str,
     now: datetime,
+    org_id: str | None = None,
 ) -> None:
     """Atomically boost score and write audit log in the caller's transaction.
 
@@ -181,6 +184,7 @@ async def apply_credibility_boost(
         reason,
         _CHANGED_BY,
         now,
+        org_id,
     )
     analyst_credibility_changes_total.labels(direction="up").inc()
 

@@ -30,40 +30,58 @@ TRUNCATE TABLE
     narrative_clusters,
     credibility_audit_log,
     topic_sources,
+    org_sources,
     sources,
     topics,
-    users
+    users,
+    organizations
 CASCADE;
+
+-- =============================================================================
+-- 0. ORGANIZATION
+-- =============================================================================
+
+INSERT INTO organizations (id, name, slug, created_at, updated_at, labels)
+VALUES (
+    'org-anshul',
+    'Anshul',
+    'anshul',
+    NOW(),
+    NOW(),
+    '{"classification": "OPEN", "domain": "platform"}'::jsonb
+);
 
 -- =============================================================================
 -- 1. USERS
 -- =============================================================================
 -- Password: AnveshakDemo2024! (bcrypt hash, rounds=12)
 
-INSERT INTO users (id, username, password_hash, role, created_at, updated_at, labels)
+INSERT INTO users (id, username, password_hash, role, org_id, created_at, updated_at, labels)
 VALUES (
     'demo0001-0000-0000-0000-000000000001',
     'demo@anveshak.local',
     '$2b$12$exK0vBQZHOMCPjg37GTJZ.AtYqz1NI5SXwMLrWjnPvP2IqZMZKaei',
     'analyst',
+    'org-anshul',
     NOW() - INTERVAL '30 days',
     NOW(),
-    '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak"}'::jsonb
+    '{"classification": "OPEN", "domain": "osint", "owner_org": "anshul"}'::jsonb
 )
 ON CONFLICT (username) DO NOTHING;
 
 -- Admin user account
 -- Password: AnveshakAdmin2024! (bcrypt hash, rounds=12)
 
-INSERT INTO users (id, username, password_hash, role, created_at, updated_at, labels)
+INSERT INTO users (id, username, password_hash, role, org_id, created_at, updated_at, labels)
 VALUES (
     'demo0001-0000-0000-0000-000000000002',
     'admin@anveshak.local',
     '$2b$12$S12K1p/iLSVP3VohoNnP1uxB493/aJIMt6lf/xmUWjJjvTJZHmSt.',
     'admin',
+    'org-anshul',
     NOW() - INTERVAL '30 days',
     NOW(),
-    '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak"}'::jsonb
+    '{"classification": "OPEN", "domain": "osint", "owner_org": "anshul"}'::jsonb
 )
 ON CONFLICT (username) DO NOTHING;
 

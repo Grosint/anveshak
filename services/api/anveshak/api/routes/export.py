@@ -17,6 +17,7 @@ from fastapi.responses import StreamingResponse
 
 from ..auth.rbac import require_role
 from ..db import audit as audit_db
+from ..db import topics as topics_db
 from ..db.pool import get_db
 
 log = structlog.get_logger(__name__)
@@ -137,6 +138,7 @@ async def export_content(
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Export content items for a topic as CSV or JSON."""
+    await topics_db.verify_topic_access(db, topic_id, user)
     rows = await _fetch_rows(db, SQL_EXPORT_CONTENT, topic_id, limit)
     if not rows:
         raise HTTPException(status_code=404, detail="No content found for this topic")
@@ -161,6 +163,7 @@ async def export_signals(
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Export signals for a topic as CSV or JSON."""
+    await topics_db.verify_topic_access(db, topic_id, user)
     rows = await _fetch_rows(db, SQL_EXPORT_SIGNALS, topic_id, limit)
     if not rows:
         raise HTTPException(status_code=404, detail="No signals found for this topic")
@@ -185,6 +188,7 @@ async def export_entities(
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Export extracted entities for a topic as CSV or JSON."""
+    await topics_db.verify_topic_access(db, topic_id, user)
     rows = await _fetch_rows(db, SQL_EXPORT_ENTITIES, topic_id, limit)
     if not rows:
         raise HTTPException(status_code=404, detail="No entities found for this topic")

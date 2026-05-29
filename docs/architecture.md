@@ -884,7 +884,7 @@ The first condition gets items scraped directly for this topic. The second gets 
 
 ## Database Schema
 
-18 tables, all following conventions: `snake_case` names, `created_at`/`updated_at` timestamps, `labels JSONB` field (never Optional).
+20 tables, all following conventions: `snake_case` names, `created_at`/`updated_at` timestamps, `labels JSONB` field (never Optional). Multi-tenancy via `org_id` on root entities (users, topics, sources, content_items, credibility_audit_log).
 
 ### Entity Relationship Overview
 
@@ -909,8 +909,10 @@ topics ─────────────┬──────────�
   reports ── (references topic, immutable once generated)
   report_source_warnings ── (links report ↔ source degradation)
   analysis_jobs ── (ARQ job tracking)
-  users ── (JWT authentication, RBAC roles: admin/analyst/viewer)
-    └── CHECK (role IN ('admin', 'analyst', 'viewer'))
+  organizations ── (multi-tenancy root entity)
+    └── org_sources ── (visibility: which org can see which source)
+  users ── (JWT authentication, org_id FK to organizations)
+    └── CHECK (role IN ('super-admin', 'admin', 'analyst', 'viewer'))
   token_blocklist ── (revoked JWT IDs, Redis-backed with DB fallback)
   audit_trail ── (who did what when — 14 audited actions)
   failed_jobs ── (dead-letter queue for failed ARQ jobs)
@@ -920,7 +922,9 @@ topics ─────────────┬──────────�
 
 | Table | Rows (typical) | Purpose |
 |-------|----------------|---------|
-| `users` | ~10 | Analyst accounts (username + bcrypt hash) |
+| `organizations` | ~10 | Multi-tenant org entities (name, slug, active status) |
+| `org_sources` | ~200 | Source visibility per org (which org can see which source) |
+| `users` | ~50 | User accounts with org_id + role (bcrypt hash, JWT auth) |
 | `topics` | ~20 | Monitored subjects (keywords, thresholds, languages) |
 | `sources` | ~100 | OSINT sources (URLs, platforms, credibility scores, health) |
 | `content_items` | ~100K+ | Scraped/collected text with embeddings (SHA-256 deduplicated) |
@@ -1622,20 +1626,108 @@ Reports are Anveshak's court-admissible output. They are **immutable** — once 
 
 ## Security Model
 
+### Multi-Tenancy & Organization Isolation
+
+Anveshak supports multi-tenant deployments where different organizations (LEA agencies) share a single instance with complete data isolation.
+
+**Organization hierarchy:**
+```
+super-admin (platform-wide)
+  └── Organization (e.g. "NIA", "Maharashtra ATS")
+        ├── admin     — manages users within their org
+        ├── analyst   — full read/write within org
+        └── viewer    — read-only within org
+```
+
+**Isolation enforcement (dual-layer):**
+
+| Layer | Mechanism | Purpose |
+|-------|-----------|---------|
+| **Application** | `verify_topic_access()` / `verify_source_access()` on every route | Primary enforcement — 27 routes protected |
+| **Database (RLS)** | PostgreSQL Row-Level Security policies on 4 tables | Safety net — blocks leaks even if app code has bugs |
+
+**org_id column placement (5 tables):**
+- `users` — nullable (super-admin has NULL)
+- `topics` — NOT NULL, FK to organizations
+- `sources` — NOT NULL (creator's org; visibility via `org_sources`)
+- `content_items` — NOT NULL, defense-in-depth
+- `credibility_audit_log` — NOT NULL, no topic_id path
+
+Child entities (signals, clusters, reports, extracted_entities, media_assets, vision_results) inherit org scope through `topic_id` FK — no org_id column needed.
+
+**Source visibility:** Sources are global entities (an RSS feed is the same feed regardless of who monitors it). Visibility is controlled via `org_sources` join table — each org sees only sources linked to them.
+
+**RLS policies:**
+```sql
+-- Applied to topics, content_items, users, credibility_audit_log
+CREATE POLICY org_isolation ON topics
+    USING (
+        current_setting('app.current_org', true) = ''   -- super-admin bypass
+        OR org_id = current_setting('app.current_org', true)
+    );
+```
+
+The API sets `SET LOCAL app.current_org = '<org_id>'` per request (transaction-scoped, auto-resets). Background services use the `anveshak_worker` role with `BYPASSRLS`.
+
+**Cross-org convergence prevention:** `SQL_CONVERGENT_CLUSTERS` joins topics to ensure `t1.org_id = t2.org_id` — cross-topic narrative convergence only detects patterns within the same org.
+
+### RBAC (4 Roles)
+
+| Role | Scope | Permissions |
+|------|-------|-------------|
+| `super-admin` | Platform | Create/manage organizations, assign users to any org, see all data, manage platform settings |
+| `admin` | Own org | Create/manage users in own org, full read/write on org data |
+| `analyst` | Own org | Create topics/sources, generate reports, acknowledge signals |
+| `viewer` | Own org | Read-only access to topics, content, signals, reports |
+
+Every route handler enforced via `require_role()` FastAPI dependency. Role and `org_id` stored in JWT payload and checked on every request.
+
+**RBAC helpers (`auth/rbac.py`):**
+- `require_role(*roles)` — FastAPI dependency, returns 403 if user role not in allowed list
+- `get_user_org(user)` — extracts `org_id` from JWT payload (None for super-admin)
+- `is_super_admin(user)` — checks for `super-admin` role
+- `require_org_context(user)` — returns `org_id` or 400 if missing (for write operations by super-admin)
+
+### JWT Authentication
+
+- **Payload:** `sub` (user ID), `username`, `role`, `org_id`, `jti` (unique token ID), `exp`, `iat`
+- **Revocation:** `POST /auth/logout` stores `jti` in Redis blocklist with TTL matching token expiry
+- **Startup guard:** API refuses to start if `JWT_SECRET_KEY` is the insecure default `change-me-in-production`
+- **Token lifetime:** 8 hours (configurable via `JWT_EXPIRE_MINUTES`)
+
+### Audit Trail
+
+Every mutating API operation (14 actions) is logged to `audit_trail` table with user_id, action, resource_type, resource_id, details JSONB, and IP address. Defence/LEA requirement — "who saw what when" is not optional.
+
+### Data Protection
+
 - **No cloud LLM:** All inference runs on Ollama (localhost/container). Intelligence data never leaves the deployment boundary.
-- **RBAC (3 roles):** `admin` (full access + user management + system endpoints), `analyst` (read + write on topics/sources/signals/reports), `viewer` (read-only). Every route handler enforced via `require_role()` dependency. Role stored in JWT payload and checked on every request.
-- **JWT authentication + revocation:** Tokens include `jti` (unique ID) and `role`. `POST /auth/logout` revokes token by storing `jti` in Redis blocklist with TTL matching token expiry. API refuses to start if `JWT_SECRET_KEY` is the insecure default.
-- **Audit trail:** Every mutating API operation (14 actions) is logged to `audit_trail` table with user_id, action, resource_type, resource_id, details JSONB, and IP address. Defence/LEA requirement — "who saw what when" is not optional.
 - **No hardcoded secrets:** All credentials come from environment variables (`.env` file, never committed).
 - **Content hash logging only:** Raw scraped content is never logged — only `content_hash` and URL appear in logs.
 - **LLM output validation:** Every LLM response is parsed through a Pydantic model before storage. Raw LLM strings are never trusted.
 - **Prompt injection protection:** User input is sanitized and wrapped in boundary markers before inclusion in LLM prompts.
+
+### Network & API Hardening
+
 - **X/Twitter spend guard:** Monthly read count checked against `X_MONTHLY_READ_CAP` before every API call.
 - **Rate limiting:** 4-tier sliding window — login 10/min, vision 30/min, authenticated 120/min, anonymous 60/min.
 - **Security headers:** X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, Content-Security-Policy (`default-src 'self'`), Strict-Transport-Security (when `HSTS_ENABLED=true`).
 - **CORS hardening:** Explicit method list (no wildcard), configurable origins via `ALLOWED_ORIGINS` env var.
 - **Circuit breakers:** Ollama (reporter) and social adapters both have Redis-backed 3-state circuit breakers preventing cascading failures during outages.
 - **DB connection resilience:** `create_pool_with_retry()` with exponential backoff prevents permanent failure when Postgres is slow to start.
+
+### Data Leak Prevention Checklist
+
+| Vector | Mitigation |
+|--------|------------|
+| Direct content_item UUID access | `org_id` column on content_items |
+| Cross-topic convergence | `AND t1.org_id = t2.org_id` in SQL |
+| WebSocket signal broadcast | org_id per session, filtered delivery |
+| Topic similarity across orgs | org_id filter in SQL_TOPIC_SIMILARITY |
+| Source list shows all sources | `org_sources` visibility table |
+| Export endpoints | `verify_topic_access()` before export |
+| User list shows all users | org_id filter for org-admin |
+| Application bug misses WHERE | RLS safety net at DB level |
 
 ---
 

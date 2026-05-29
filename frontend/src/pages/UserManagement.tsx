@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { usersApi, User } from '../api/users'
+import { organizationsApi } from '../api/organizations'
+import { useAuth } from '../contexts/AuthContext'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Spinner } from '../components/ui/Spinner'
@@ -27,28 +29,54 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<Role>('analyst')
+  const [orgId, setOrgId] = useState('')
   const [error, setError] = useState('')
   const qc = useQueryClient()
+  const { user: currentUser } = useAuth()
+  const isSuperAdmin = currentUser?.role === 'super-admin'
+
+  // Fetch orgs for super-admin org selector
+  const { data: orgs = [] } = useQuery({
+    queryKey: ['organizations'],
+    queryFn: organizationsApi.list,
+    enabled: isSuperAdmin,
+  })
 
   const create = useMutation({
     mutationFn: usersApi.create,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] })
-      setUsername(''); setPassword(''); setRole('analyst'); setError('')
+      setUsername(''); setPassword(''); setRole('analyst'); setOrgId(''); setError('')
       onClose()
     },
     onError: (err: any) => setError(err?.response?.data?.detail || 'Failed to create user'),
   })
 
+  const handleCreate = () => {
+    const payload: any = { username, password, role }
+    if (isSuperAdmin && orgId) payload.org_id = orgId
+    create.mutate(payload)
+  }
+
   return (
     <Modal open={open} onClose={onClose} title="Create User" footer={
       <>
         <Button variant="secondary" onClick={onClose}>Cancel</Button>
-        <Button loading={create.isPending} disabled={!username || !password} onClick={() => create.mutate({ username, password, role })}>Create</Button>
+        <Button loading={create.isPending} disabled={!username || !password || (isSuperAdmin && !orgId)} onClick={handleCreate}>Create</Button>
       </>
     }>
       <div className="space-y-4">
         {error && <p className="text-sm text-signal-high bg-signal-high/10 rounded px-3 py-2">{error}</p>}
+        {isSuperAdmin && (
+          <div>
+            <label className="block text-sm text-text-secondary mb-1">Organization</label>
+            <select value={orgId} onChange={(e) => setOrgId(e.target.value)}
+              className="w-full bg-anveshak-bg border border-anveshak-border rounded px-3 py-2 text-sm text-text-primary focus:border-anveshak-accent outline-none">
+              <option value="">Select organization...</option>
+              {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+          </div>
+        )}
         <div>
           <label className="block text-sm text-text-secondary mb-1">Username</label>
           <input type="text" value={username} onChange={(e) => setUsername(e.target.value)}

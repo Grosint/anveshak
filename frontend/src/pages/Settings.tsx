@@ -2,24 +2,34 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import SourceManager from './SourceManager'
 import UserManagement from './UserManagement'
+import OrganizationManagement from './OrganizationManagement'
 import AuditTrailPage from '../components/audit/AuditTrailPage'
 
-type SettingsTab = 'sources' | 'users' | 'audit'
+type SettingsTab = 'sources' | 'users' | 'organizations' | 'audit'
 
-const ALL_TABS: { key: SettingsTab; label: string; adminOnly?: boolean }[] = [
-  { key: 'sources', label: 'Sources' },
-  { key: 'users',   label: 'Users', adminOnly: true },
-  { key: 'audit',   label: 'Audit Trail' },
+const ALL_TABS: { key: SettingsTab; label: string; adminOnly?: boolean; superAdminOnly?: boolean }[] = [
+  { key: 'sources',       label: 'Sources' },
+  { key: 'users',         label: 'Users', adminOnly: true },
+  { key: 'organizations', label: 'Organizations', superAdminOnly: true },
+  { key: 'audit',         label: 'Audit Trail' },
 ]
 
 export default function Settings() {
   const { tab } = useParams<{ tab: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const isAdmin = user?.role === 'admin'
-  const tabs = ALL_TABS.filter((t) => !t.adminOnly || isAdmin)
+  const isAdmin = user?.role === 'admin' || user?.role === 'super-admin'
+  const isSuperAdmin = user?.role === 'super-admin'
+  const tabs = ALL_TABS.filter((t) => {
+    if (t.superAdminOnly) return isSuperAdmin
+    if (t.adminOnly) return isAdmin
+    return true
+  })
   const activeTab: SettingsTab =
-    tab === 'users' && isAdmin ? 'users' : tab === 'audit' ? 'audit' : 'sources'
+    tab === 'users' && isAdmin ? 'users'
+    : tab === 'organizations' && isSuperAdmin ? 'organizations'
+    : tab === 'audit' ? 'audit'
+    : 'sources'
 
   return (
     <div className="h-full flex flex-col">
@@ -52,6 +62,7 @@ export default function Settings() {
       <div className="flex-1 overflow-hidden">
         {activeTab === 'sources' && <SourceManager embedded />}
         {activeTab === 'users' && <UserManagement embedded />}
+        {activeTab === 'organizations' && <OrganizationManagement embedded />}
         {activeTab === 'audit' && <AuditTrailPage embedded />}
       </div>
     </div>

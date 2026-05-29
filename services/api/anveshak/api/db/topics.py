@@ -14,8 +14,8 @@ SQL_INSERT_TOPIC = """
     INSERT INTO topics (
         id, name, keywords, languages, credibility_min, signal_threshold,
         status, clip_categories, scheduled_report_cron, scheduled_report_type,
-        created_at, updated_at, labels
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        created_at, updated_at, labels, org_id
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
 """
 
 SQL_LIST_TOPICS = """
@@ -32,7 +32,24 @@ SQL_LIST_TOPICS = """
     ORDER BY t.created_at DESC
 """
 
+SQL_LIST_TOPICS_BY_ORG = """
+    SELECT t.id, t.name, t.status, t.signal_threshold, t.credibility_min, t.created_at,
+           (SELECT COUNT(DISTINCT x.id) FROM (
+               SELECT ci.id FROM content_items ci WHERE ci.topic_id = t.id
+               UNION
+               SELECT tci.content_item_id FROM topic_content_items tci WHERE tci.topic_id = t.id
+           ) x) AS content_count,
+           COUNT(DISTINCT sig.id) FILTER (WHERE sig.status = 'new') AS signal_count
+    FROM topics t
+    LEFT JOIN signals sig ON sig.topic_id = t.id
+    WHERE t.org_id = $1
+    GROUP BY t.id
+    ORDER BY t.created_at DESC
+"""
+
 SQL_GET_TOPIC = "SELECT * FROM topics WHERE id = $1"
+
+SQL_GET_TOPIC_ORG = "SELECT org_id FROM topics WHERE id = $1"
 
 SQL_CHECK_TOPIC_EXISTS = "SELECT id FROM topics WHERE id = $1"
 
@@ -119,6 +136,31 @@ async def insert_topic(
 async def list_topics(conn: asyncpg.Connection) -> list[dict[str, Any]]:
     rows = await conn.fetch(SQL_LIST_TOPICS)
     return [dict(r) for r in rows]
+
+
+async def list_topics_by_org(
+    conn: asyncpg.Connection,
+    org_id: str,
+) -> list[dict[str, Any]]:
+    """Return topics filtered by organization."""
+    rows = await conn.fetch(SQL_LIST_TOPICS_BY_ORG, org_id)
+    return [dict(r) for r in rows]
+
+
+async def verify_topic_access(
+    conn: asyncpg.Connection,
+    topic_id: str,
+    user: dict,
+) -> None:
+    """Raise 404 if topic doesn't belong to user's org (unless super-admin)."""
+    from ..auth.rbac import is_super_admin, get_user_org
+
+    if is_super_admin(user):
+        return
+    row = await conn.fetchrow(SQL_GET_TOPIC_ORG, topic_id)
+    if not row or row["org_id"] != get_user_org(user):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Topic not found")
 
 
 async def get_topic(conn: asyncpg.Connection, topic_id: str) -> dict[str, Any] | None:

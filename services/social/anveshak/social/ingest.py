@@ -45,9 +45,9 @@ SQL_INSERT_CONTENT = """
         id, topic_id, source_id, raw_text, clean_text, language,
         content_hash, url, captured_at, credibility_score_at_capture,
         created_at, updated_at, labels,
-        forwarded_from_channel_id, forwarded_from_channel_name
+        forwarded_from_channel_id, forwarded_from_channel_name, org_id
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
     ON CONFLICT(content_hash) DO NOTHING
     RETURNING id
 """

@@ -40,6 +40,7 @@ async def login(
         subject=str(row["id"]),
         username=req.username,
         role=row["role"],
+        org_id=row.get("org_id"),
     )
     return {"access_token": token, "token_type": "bearer"}
 
@@ -73,4 +74,5 @@ async def me(
         "user_id": user.get("sub"),
         "username": user.get("username"),
         "role": user.get("role"),
+        "org_id": user.get("org_id"),
     }

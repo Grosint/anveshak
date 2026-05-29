@@ -10,35 +10,68 @@
 BEGIN;
 
 -- -----------------------------------------------------------------------------
+-- Organization
+-- -----------------------------------------------------------------------------
+
+INSERT INTO organizations (id, name, slug, created_at, updated_at, labels)
+VALUES (
+    'org-anshul',
+    'Anshul',
+    'anshul',
+    NOW(),
+    NOW(),
+    '{"classification": "OPEN", "domain": "platform"}'::jsonb
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- -----------------------------------------------------------------------------
 -- Demo user account
 -- Password: AnveshakDemo2024! (bcrypt hash, rounds=12)
 -- Regenerate: uv run python scripts/gen_demo_password.py
 -- -----------------------------------------------------------------------------
 
-INSERT INTO users (id, username, password_hash, role, created_at, updated_at, labels)
+INSERT INTO users (id, username, password_hash, role, org_id, created_at, updated_at, labels)
 VALUES (
     'a0000000-0000-0000-0000-000000000001',
     'demo@anveshak.local',
     '$2b$12$exK0vBQZHOMCPjg37GTJZ.AtYqz1NI5SXwMLrWjnPvP2IqZMZKaei',
     'analyst',
+    'org-anshul',
     NOW(),
     NOW(),
-    '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak"}'::jsonb
+    '{"classification": "OPEN", "domain": "osint", "owner_org": "anshul"}'::jsonb
 )
 ON CONFLICT (username) DO NOTHING;
 
 -- Admin user account
 -- Password: AnveshakAdmin2024! (bcrypt hash, rounds=12)
 
-INSERT INTO users (id, username, password_hash, role, created_at, updated_at, labels)
+INSERT INTO users (id, username, password_hash, role, org_id, created_at, updated_at, labels)
 VALUES (
     'a0000000-0000-0000-0000-000000000002',
     'admin@anveshak.local',
     '$2b$12$S12K1p/iLSVP3VohoNnP1uxB493/aJIMt6lf/xmUWjJjvTJZHmSt.',
     'admin',
+    'org-anshul',
     NOW(),
     NOW(),
     '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak"}'::jsonb
+)
+ON CONFLICT (username) DO NOTHING;
+
+-- Super-admin account (platform-wide, no org)
+-- Password: AnveshakSuper2024! (bcrypt hash, rounds=12)
+
+INSERT INTO users (id, username, password_hash, role, org_id, created_at, updated_at, labels)
+VALUES (
+    'a0000000-0000-0000-0000-000000000003',
+    'superadmin@anveshak.local',
+    '$2b$12$GTfea1Nttz2/iwcUGthIyuReJSy.N/FeBdqi9btzEMg6R/zYiBRca',
+    'super-admin',
+    NULL,
+    NOW(),
+    NOW(),
+    '{"classification": "OPEN", "domain": "platform"}'::jsonb
 )
 ON CONFLICT (username) DO NOTHING;
 
@@ -46,7 +79,7 @@ ON CONFLICT (username) DO NOTHING;
 -- Topics — OSINT monitoring areas
 -- -----------------------------------------------------------------------------
 
-INSERT INTO topics (id, name, keywords, signal_threshold, status, labels, created_at, updated_at)
+INSERT INTO topics (id, name, keywords, signal_threshold, status, labels, created_at, updated_at, org_id)
 VALUES
 (
     'b0000000-0000-0000-0000-000000000001',
@@ -54,9 +87,10 @@ VALUES
     ARRAY['CPEC', 'PLA', 'PAF', 'Karakoram Highway', 'JF-17', 'Gwadar', 'LAC'],
     3,
     'active',
-    '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak"}'::jsonb,
+    '{"classification": "OPEN", "domain": "osint", "owner_org": "anshul"}'::jsonb,
     NOW() - INTERVAL '7 days',
-    NOW()
+    NOW(),
+    'org-anshul'
 ),
 (
     'b0000000-0000-0000-0000-000000000002',
@@ -64,9 +98,10 @@ VALUES
     ARRAY['UAV', 'drone', 'UCAV', 'Wing Loong', 'CH-4', 'Bayraktar', 'unmanned aerial'],
     2,
     'active',
-    '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak"}'::jsonb,
+    '{"classification": "OPEN", "domain": "osint", "owner_org": "anshul"}'::jsonb,
     NOW() - INTERVAL '5 days',
-    NOW()
+    NOW(),
+    'org-anshul'
 ),
 (
     'b0000000-0000-0000-0000-000000000003',
@@ -74,9 +109,10 @@ VALUES
     ARRAY['IAF', 'Indian Air Force', 'Rafale', 'deepfake', 'propaganda', 'disinformation'],
     2,
     'active',
-    '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak"}'::jsonb,
+    '{"classification": "OPEN", "domain": "osint", "owner_org": "anshul"}'::jsonb,
     NOW() - INTERVAL '3 days',
-    NOW()
+    NOW(),
+    'org-anshul'
 )
 ON CONFLICT (id) DO NOTHING;
 
@@ -84,7 +120,7 @@ ON CONFLICT (id) DO NOTHING;
 -- Sources — credibility-scored OSINT sources
 -- -----------------------------------------------------------------------------
 
-INSERT INTO sources (id, name, url_or_handle, platform, credibility_score, is_active, labels, created_at, updated_at)
+INSERT INTO sources (id, name, url_or_handle, platform, credibility_score, is_active, labels, created_at, updated_at, org_id)
 VALUES
 (
     'c0000000-0000-0000-0000-000000000001',
@@ -93,9 +129,10 @@ VALUES
     'web',
     82.0,
     true,
-    '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "source_id": "globalsecurity"}'::jsonb,
+    '{"classification": "OPEN", "domain": "osint", "source_id": "globalsecurity"}'::jsonb,
     NOW() - INTERVAL '7 days',
-    NOW()
+    NOW(),
+    'org-anshul'
 ),
 (
     'c0000000-0000-0000-0000-000000000002',
@@ -104,9 +141,10 @@ VALUES
     'web',
     74.0,
     true,
-    '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "source_id": "scmp"}'::jsonb,
+    '{"classification": "OPEN", "domain": "osint", "source_id": "scmp"}'::jsonb,
     NOW() - INTERVAL '7 days',
-    NOW()
+    NOW(),
+    'org-anshul'
 ),
 (
     'c0000000-0000-0000-0000-000000000003',
@@ -115,9 +153,10 @@ VALUES
     'web',
     45.0,
     true,
-    '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "source_id": "defence-pk"}'::jsonb,
+    '{"classification": "OPEN", "domain": "osint", "source_id": "defence-pk"}'::jsonb,
     NOW() - INTERVAL '7 days',
-    NOW()
+    NOW(),
+    'org-anshul'
 ),
 (
     'c0000000-0000-0000-0000-000000000004',
@@ -126,9 +165,10 @@ VALUES
     'web',
     91.0,
     true,
-    '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "source_id": "janes"}'::jsonb,
+    '{"classification": "OPEN", "domain": "osint", "source_id": "janes"}'::jsonb,
     NOW() - INTERVAL '7 days',
-    NOW()
+    NOW(),
+    'org-anshul'
 ),
 (
     'c0000000-0000-0000-0000-000000000005',
@@ -137,17 +177,27 @@ VALUES
     'telegram',
     38.0,
     true,
-    '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "source_id": "telegram-defence-updates"}'::jsonb,
+    '{"classification": "OPEN", "domain": "osint", "source_id": "telegram-defence-updates"}'::jsonb,
     NOW() - INTERVAL '4 days',
-    NOW()
+    NOW(),
+    'org-anshul'
 )
 ON CONFLICT (id) DO NOTHING;
+
+-- Link sources to org for visibility
+INSERT INTO org_sources (org_id, source_id) VALUES
+    ('org-anshul', 'c0000000-0000-0000-0000-000000000001'),
+    ('org-anshul', 'c0000000-0000-0000-0000-000000000002'),
+    ('org-anshul', 'c0000000-0000-0000-0000-000000000003'),
+    ('org-anshul', 'c0000000-0000-0000-0000-000000000004'),
+    ('org-anshul', 'c0000000-0000-0000-0000-000000000005')
+ON CONFLICT DO NOTHING;
 
 -- -----------------------------------------------------------------------------
 -- Credibility audit log — initial entries
 -- -----------------------------------------------------------------------------
 
-INSERT INTO credibility_audit_log (id, source_id, old_score, new_score, reason, changed_by, created_at)
+INSERT INTO credibility_audit_log (id, source_id, old_score, new_score, reason, changed_by, created_at, org_id)
 VALUES
 (
     'd0000000-0000-0000-0000-000000000001',
@@ -156,7 +206,8 @@ VALUES
     38.0,
     'Source shared unverified deepfake content 3 times in 30 days — auto-downgrade',
     'system:credibility-auto-update',
-    NOW() - INTERVAL '2 days'
+    NOW() - INTERVAL '2 days',
+    'org-anshul'
 )
 ON CONFLICT (id) DO NOTHING;
 
@@ -201,7 +252,7 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO content_items (
     id, topic_id, source_id, url, raw_text, clean_text, content_hash,
     language, captured_at, credibility_score_at_capture, labels, created_at, updated_at,
-    narrative_cluster_id
+    narrative_cluster_id, org_id
 )
 VALUES
 (
@@ -218,7 +269,8 @@ VALUES
     '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "topic_id": "b0000000-0000-0000-0000-000000000001"}'::jsonb,
     NOW() - INTERVAL '6 days',
     NOW() - INTERVAL '6 days',
-    NULL
+    NULL,
+    'org-anshul'
 ),
 (
     'e0000000-0000-0000-0000-000000000002',
@@ -234,7 +286,8 @@ VALUES
     '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "topic_id": "b0000000-0000-0000-0000-000000000002"}'::jsonb,
     NOW() - INTERVAL '4 days',
     NOW() - INTERVAL '4 days',
-    '00000001-0000-0000-0000-000000000001'
+    '00000001-0000-0000-0000-000000000001',
+    'org-anshul'
 ),
 (
     'e0000000-0000-0000-0000-000000000003',
@@ -250,7 +303,8 @@ VALUES
     '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "topic_id": "b0000000-0000-0000-0000-000000000003"}'::jsonb,
     NOW() - INTERVAL '2 days',
     NOW() - INTERVAL '2 days',
-    '00000001-0000-0000-0000-000000000002'
+    '00000001-0000-0000-0000-000000000002',
+    'org-anshul'
 )
 ON CONFLICT (content_hash) DO NOTHING;
 

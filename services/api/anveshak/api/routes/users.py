@@ -1,7 +1,7 @@
 """User management endpoints — CRUD for analysts and admins."""
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Optional
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -20,6 +20,7 @@ class CreateUserRequest(BaseModel):
     username: str
     password: str
     role: Literal["viewer", "analyst", "admin"] = "analyst"
+    org_id: Optional[str] = None  # super-admin sets this; org-admin inherits own org
 
 
 class UpdateRoleRequest(BaseModel):
@@ -30,9 +31,9 @@ class UpdateRoleRequest(BaseModel):
 @router.get("")
 async def list_users(
     db: asyncpg.Connection = Depends(get_db),
-    _user: dict = Depends(require_role("admin")),
+    _user: dict = Depends(require_role("admin", "super-admin")),
 ):
-    """List all users (admin only). Returns users without password hashes."""
+    """List all users (admin/super-admin). Returns users without password hashes."""
     return await users_db.list_users(db)
 
 
@@ -41,11 +42,13 @@ async def create_user(
     req: CreateUserRequest,
     request: Request,
     db: asyncpg.Connection = Depends(get_db),
-    _user: dict = Depends(require_role("admin")),
+    _user: dict = Depends(require_role("admin", "super-admin")),
 ):
-    """Create a new user (admin only)."""
+    """Create a new user (admin/super-admin)."""
+    # Determine org_id: super-admin can specify any, org-admin uses own org
+    org_id = req.org_id if req.org_id else _user.get("org_id")
     try:
-        user_id = await users_db.create_user(db, req.username, req.password, req.role)
+        user_id = await users_db.create_user(db, req.username, req.password, req.role, org_id=org_id)
     except asyncpg.UniqueViolationError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -64,9 +67,9 @@ async def delete_user(
     user_id: str,
     request: Request,
     db: asyncpg.Connection = Depends(get_db),
-    _user: dict = Depends(require_role("admin")),
+    _user: dict = Depends(require_role("admin", "super-admin")),
 ):
-    """Delete a user (admin only)."""
+    """Delete a user (admin/super-admin)."""
     deleted = await users_db.delete_user(db, user_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="User not found")
@@ -83,9 +86,9 @@ async def update_role(
     req: UpdateRoleRequest,
     request: Request,
     db: asyncpg.Connection = Depends(get_db),
-    _user: dict = Depends(require_role("admin")),
+    _user: dict = Depends(require_role("admin", "super-admin")),
 ):
-    """Update a user's role (admin only)."""
+    """Update a user's role (admin/super-admin)."""
     await users_db.update_user_role(db, user_id, req.role)
     await audit_db.log_action(
         db, _user["sub"], "user.role_change", "user", user_id,

@@ -26,6 +26,7 @@ from .routes.reports import router as reports_router
 from .routes.system import router as system_router
 from .routes.users import router as users_router
 from .routes.catalog import router as catalog_router
+from .routes.organizations import router as organizations_router
 
 log = structlog.get_logger(__name__)
 
@@ -111,6 +112,7 @@ app.include_router(intelligence_router)     # Entity graph, topic similarity, so
 app.include_router(system_router)           # Pipeline health metrics for make validate
 app.include_router(users_router)            # User management CRUD
 app.include_router(catalog_router)          # Source catalog + discovery
+app.include_router(organizations_router)   # Organization management (super-admin)
 
 # Prometheus metrics endpoint — uses isolated registry (API_REGISTRY) so custom
 # api_* metrics are exposed alongside default process metrics.

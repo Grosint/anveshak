@@ -48,7 +48,7 @@ log = structlog.get_logger(__name__)
 # SQL — module-level constants (testable, consistent with patterns.md)
 # ---------------------------------------------------------------------------
 
-SQL_GET_TOPIC = "SELECT id FROM topics WHERE id = $1"
+SQL_GET_TOPIC = "SELECT id, org_id FROM topics WHERE id = $1"
 
 SQL_GET_WEB_SOURCES = """
     SELECT s.id, s.url_or_handle, s.credibility_score
@@ -73,10 +73,10 @@ SQL_INSERT_CONTENT = """
         id, topic_id, source_id, raw_text, clean_text, language,
         content_hash, url, captured_at, credibility_score_at_capture,
         created_at, updated_at, labels,
-        content_quality, clean_hash, title
+        content_quality, clean_hash, title, org_id
     )
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-            $14, $15, $16)
+            $14, $15, $16, $17)
     ON CONFLICT(content_hash) DO NOTHING
     RETURNING id
 """

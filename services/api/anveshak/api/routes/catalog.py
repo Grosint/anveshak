@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from ..auth.rbac import require_role
 from ..db import catalog as catalog_db
 from ..db import sources as sources_db
+from ..db import topics as topics_db
 from ..db.pool import get_db
 
 log = structlog.get_logger(__name__)
@@ -39,6 +40,7 @@ async def get_catalog_suggestions(
     Matches catalog entries whose domain_tags overlap with the topic keywords.
     Sorted by recommendation_rank (most_recommended first), then reliability_tier.
     """
+    await topics_db.verify_topic_access(db, topic_id, user)
     topic = await db.fetchrow(SQL_GET_TOPIC_KEYWORDS, topic_id)
     if not topic:
         raise HTTPException(status_code=404, detail=f"Topic {topic_id} not found")
@@ -77,6 +79,7 @@ async def approve_catalog_entry(
 
     One-click flow: catalog entry → source → topic_sources → catalog_approval.
     """
+    await topics_db.verify_topic_access(db, topic_id, user)
     entry = await catalog_db.get_catalog_entry(db, catalog_entry_id)
     if not entry:
         raise HTTPException(status_code=404, detail=f"Catalog entry {catalog_entry_id} not found")
@@ -147,6 +150,7 @@ async def list_discovered_sources(
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     """List discovered sources for a topic, optionally filtered by status."""
+    await topics_db.verify_topic_access(db, topic_id, user)
     discovered = await catalog_db.list_discovered(db, topic_id, status=status)
     return {
         "topic_id": topic_id,
@@ -163,6 +167,7 @@ async def approve_discovered_source(
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     """Approve a discovered source — create source, link to topic, update status."""
+    await topics_db.verify_topic_access(db, topic_id, user)
     row = await db.fetchrow(SQL_GET_DISCOVERED, discovered_id, topic_id)
     if not row:
         raise HTTPException(status_code=404, detail=f"Discovered source {discovered_id} not found")
@@ -212,6 +217,7 @@ async def dismiss_discovered_source(
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     """Dismiss a discovered source suggestion."""
+    await topics_db.verify_topic_access(db, topic_id, user)
     row = await db.fetchrow(SQL_GET_DISCOVERED, discovered_id, topic_id)
     if not row:
         raise HTTPException(status_code=404, detail=f"Discovered source {discovered_id} not found")
