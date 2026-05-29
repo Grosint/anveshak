@@ -13,6 +13,9 @@
 > See also: `learned/credential-refresh-before-circuit-break.md` — attempt refresh_credentials() before circuit breaking
 > See also: `learned/startup-credential-validation.md` — validate env vars at startup, not at first API call
 > See also: `learned/cross-topic-join-table-queries.md` — every topic-scoped SQL must include topic_content_items OR subquery; backfilled items are invisible otherwise
+> See also: `learned/global-sources-org-visibility.md` — sources are global; use org_sources join table for org-scoped visibility, not org_id on sources
+> See also: `learned/org-id-root-tables-only.md` — add org_id to root tables only; children inherit via topic_id FK
+> See also: `learned/seed-sql-must-match-migration.md` — after adding NOT NULL columns, update ALL seed SQL INSERTs
 > See also: `learned/archive-then-delete-retention.md` — archive to JSONL.gz before deleting from PostgreSQL; record in tracking table; disabled by default
 > See also: `learned/scheduler-prioritized-topic-selection.md` — HAVING + ORDER BY pending DESC + LIMIT for scheduler loops; skip idle topics
 > See also: `learned/url-level-media-dedup.md` — in-memory URL set per scrape job to skip duplicate media downloads

@@ -3,6 +3,9 @@
 ## When to load: any task involving Ollama, report generation, or LLM inference
 
 > See also: `learned/phase-check-pitfalls.md` — transient LLM-output Pydantic models and the labels rule
+> See also: `learned/sql-param-count-caller-mismatch.md` — adding $N to SQL constant requires updating ALL callers; grep for the constant name
+> See also: `learned/role-constraint-migration-order.md` — update CHECK constraint BEFORE inserting rows with new role values
+> See also: `learned/dual-layer-rls-safety-net.md` — application filtering + PostgreSQL RLS for defence/LEA deployments
 > See also: `learned/optional-dep-lazy-import-two-level-log.md` — WeasyPrint/PyMuPDF lazy import with two-level logging
 > See also: `learned/path-parents-index-off-by-one.md` — Path.parents[] off-by-one bug (geocoder custom_locations.json)
 > See also: `learned/leiden-threshold-per-model.md` — clustering threshold must be calibrated per embedding model; 0.70 for MiniLM, re-calibrate on model change
