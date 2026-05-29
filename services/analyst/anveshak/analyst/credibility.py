@@ -64,10 +64,10 @@ SQL_UPDATE_SOURCE_SCORE = """
 
 SQL_INSERT_AUDIT_LOG = """
     INSERT INTO credibility_audit_log (
-        id, source_id, old_score, new_score, reason, changed_by, created_at, labels
+        id, source_id, old_score, new_score, reason, changed_by, created_at, labels, org_id
     )
     VALUES ($1, $2, $3, $4, $5, $6, $7,
-            '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb)
+            '{"classification":"OPEN","domain":"osint"}'::jsonb, $8)
 """
 
 # Cross-verification (7.1): sources contributing to multi-platform clusters

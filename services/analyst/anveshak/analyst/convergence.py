@@ -41,10 +41,13 @@ SQL_CONVERGENT_CLUSTERS = """
     FROM narrative_clusters nc1
     JOIN narrative_clusters nc2
         ON nc1.topic_id < nc2.topic_id
+    JOIN topics t1 ON t1.id = nc1.topic_id
+    JOIN topics t2 ON t2.id = nc2.topic_id
     WHERE nc1.embedding_centroid IS NOT NULL
       AND nc2.embedding_centroid IS NOT NULL
       AND nc1.archived_at IS NULL
       AND nc2.archived_at IS NULL
+      AND t1.org_id = t2.org_id
       AND 1 - (nc1.embedding_centroid <=> nc2.embedding_centroid) >= $1
     ORDER BY similarity DESC
     LIMIT $2
