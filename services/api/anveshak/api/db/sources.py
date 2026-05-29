@@ -57,8 +57,8 @@ SQL_UPDATE_SOURCE_SCORE = (
 
 SQL_INSERT_CREDIBILITY_AUDIT = """
     INSERT INTO credibility_audit_log
-        (id, source_id, old_score, new_score, reason, changed_by, created_at, labels)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        (id, source_id, old_score, new_score, reason, changed_by, created_at, labels, org_id)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
 """
 
 SQL_TOGGLE_SOURCE_ACTIVE = (
@@ -234,12 +234,13 @@ async def update_credibility(
     changed_by: str,
     now: Any,
     labels_json: str,
+    org_id: str | None = None,
 ) -> None:
     """Atomically update score and write audit log inside caller's transaction."""
     await conn.execute(SQL_UPDATE_SOURCE_SCORE, new_score, now, source_id)
     await conn.execute(
         SQL_INSERT_CREDIBILITY_AUDIT,
-        audit_id, source_id, old_score, new_score, reason, changed_by, now, labels_json,
+        audit_id, source_id, old_score, new_score, reason, changed_by, now, labels_json, org_id,
     )
 
 
