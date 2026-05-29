@@ -1,6 +1,6 @@
 # Content Quality & Relevance Filtering
 
-Consolidated from 9 learned instincts. These apply to all content processing pipelines.
+Consolidated from 13 learned instincts. These apply to all content processing pipelines.
 
 ## Quality Gates — Apply Everywhere
 
@@ -63,6 +63,28 @@ Consolidated from 9 learned instincts. These apply to all content processing pip
   Runs on startup + every 6h in analyst-scheduler; `topics.topic_relevance_threshold` column
   Global default (0.35) is fallback only for topics without enough data
   See: `learned/per-topic-relevance-auto-calibration.md`
+
+## URL-Level Deduplication
+
+- Use in-memory URL set per scrape job to skip duplicate media downloads
+  Redis URL dedup: SHA-256 key with 24h TTL, fail-open on Redis errors
+  Mark URL as seen AFTER successful insert (not before fetch) to avoid missing content on retry
+  See: `learned/redis-url-dedup-sha256-ttl.md`, `learned/url-level-media-dedup.md`
+
+## RSS/Web Paywall Validation
+
+- When fetching full article text from RSS links, validate content BEFORE replacing summary
+  Count paywall indicators ("subscribe", "premium content", "sign in to read")
+  If paywall detected: keep RSS summary, mark source as "degraded" (not "down")
+  Bypass clean/raw ratio check if `clean_text >= 500 chars` — fires AFTER paywall gates
+  See: `learned/rss-fetch-paywall-validation.md`, `learned/quality-ratio-bypass-on-length.md`
+
+## NLP Results in Labels JSONB
+
+- Sentiment scores and keywords are stored in `content_items.labels` JSONB (not separate columns)
+  Thread through CTE UNION ALL + DISTINCT ON dedup for API surfacing
+  Post-process in Python to extract sentiment/keywords from labels dict
+  See: `learned/nlp-results-in-jsonb-labels.md`, `learned/jsonb-labels-api-surfacing.md`
 
 ## Content Enrichment at Ingest Time
 

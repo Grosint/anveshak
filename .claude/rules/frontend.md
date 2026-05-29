@@ -1,6 +1,6 @@
 # Frontend Patterns
 
-Consolidated from 6 learned instincts. These apply to the React + TypeScript analyst workbench.
+Consolidated from 10 learned instincts. These apply to the React + TypeScript analyst workbench.
 
 ## Theming
 
@@ -56,8 +56,27 @@ Consolidated from 6 learned instincts. These apply to the React + TypeScript ana
   page-level header/h1; parent provides its own. Functional content stays identical.
   See: `learned/embedded-prop-page-reuse.md`
 
+## Domain Logic Extraction
+
+- Extract business logic (severity inference, credibility labels, confidence variants)
+  into pure functions in `lib/domain.ts` — testable without React rendering
+  Keep components thin: render + call domain functions, never inline business rules
+  See: `learned/frontend-domain-logic-extraction.md`
+
+## Seam Testing
+
+- Test React Query cache boundaries: verify `queryKey` prefix matching for WebSocket
+  invalidation, full key for optimistic mutations, and `enabled` gate conditions
+  Mock API factories must return unwrapped shape (arrays/objects) matching `.then(r => r.data)`
+  Test both desktop sidebar and mobile bottom nav assertions (jsdom sees both)
+  See: `learned/frontend-seam-testing.md`
+
 ## Testing
 
 - jsdom renders both desktop sidebar and mobile bottom nav (no CSS media queries).
   Use `getAllByRole` not `getByRole` for nav link assertions to handle duplicates.
   See: `learned/jsdom-dual-nav-testing.md`
+
+- `vi.useFakeTimers()` + React Query: queries fire on mount, use `vi.advanceTimersByTime`
+  to let them settle. Don't mix real and fake timers in the same test.
+  See: `learned/fake-timers-react-query-trap.md`

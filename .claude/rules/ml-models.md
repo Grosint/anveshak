@@ -1,6 +1,7 @@
 # ML Models & Inference
 
-Consolidated from 8 learned instincts. These apply to all ML model loading, inference, and testing.
+Consolidated from 11 learned instincts. These apply to all ML model loading, inference, and testing.
+Clustering-specific rules moved to `clustering-signals.md`.
 
 ## Model Packaging
 
@@ -68,6 +69,20 @@ Consolidated from 8 learned instincts. These apply to all ML model loading, infe
   Store MinHash as `BIGINT[]` in PostgreSQL, not `INTEGER[]` (values overflow int32)
   NULL-safe: only blend where BOTH items have minhash
   See: `learned/entity-minhash-clustering-boost.md`
+
+## Volume-Mounted Model Safety
+
+- Volume-mounted models start empty on first deploy — inference returns 0.0 scores silently
+  Add health checks: verify model file exists + returns non-zero on test input
+  `make download-models` must run before first use; compose depends_on waits for init container
+  See: `learned/volume-mounted-models-silent-failure.md`
+
+## Optional Dependencies
+
+- Heavy ML libraries (WeasyPrint, PyMuPDF, facetorch) should be lazy-imported behind tabs/features
+  Use two-level logging: INFO when disabled, WARNING when import fails
+  Unit tests don't catch missing optional extras (e.g., `httpx[socks]` for Tor)
+  See: `learned/optional-dep-lazy-import-two-level-log.md`
 
 ## Testing ML Pipelines
 
