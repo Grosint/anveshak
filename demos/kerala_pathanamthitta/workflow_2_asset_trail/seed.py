@@ -35,6 +35,7 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 OUTPUT_DIR = Path(__file__).parent / "expected_outputs"
 
 TOPIC_ID = "kl-asset-trail-001"
+ORG_ID = os.getenv("DEMO_ORG_ID", "org-anshul")
 
 SOURCE_IDS = {
     "news_synthetic_1": "kl-at-src-manorama",
@@ -75,26 +76,30 @@ def _elapsed(t0: float) -> str:
 async def _seed_db(pool: asyncpg.Pool) -> list[str]:
     async with pool.acquire() as conn:
         await conn.execute("""
-            INSERT INTO topics (id, name, keywords, signal_threshold, status, labels, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6::jsonb, NOW(), NOW())
+            INSERT INTO topics (id, name, keywords, signal_threshold, status, labels, org_id, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, NOW(), NOW())
             ON CONFLICT (id) DO NOTHING
         """, TOPIC_ID, "Multi-State Temple Asset Misappropriation (Synthetic)",
             ["Sree Vaikundeswara", "gold misappropriation", "Idukki", "Chennai",
              "Bengaluru", "temple gold", "PMLA", "Ramachandran", "Sundaram", "Pillai"],
-            3, "active", LABELS)
+            3, "active", LABELS, ORG_ID)
 
         for key, sid in SOURCE_IDS.items():
             meta = SOURCE_METADATA[key]
             await conn.execute("""
                 INSERT INTO sources (id, name, url_or_handle, platform, credibility_score,
-                                     health_status, is_active, labels, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, 'up', true, $6::jsonb, NOW(), NOW())
+                                     health_status, is_active, labels, org_id, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, 'up', true, $6::jsonb, $7, NOW(), NOW())
                 ON CONFLICT (id) DO NOTHING
-            """, sid, meta["name"], meta["url"], meta["platform"], meta["credibility"], LABELS)
+            """, sid, meta["name"], meta["url"], meta["platform"], meta["credibility"], LABELS, ORG_ID)
             await conn.execute("""
                 INSERT INTO topic_sources (topic_id, source_id, added_at)
                 VALUES ($1, $2, NOW()) ON CONFLICT DO NOTHING
             """, TOPIC_ID, sid)
+            await conn.execute("""
+                INSERT INTO org_sources (org_id, source_id)
+                VALUES ($1, $2) ON CONFLICT DO NOTHING
+            """, ORG_ID, sid)
 
         fixtures = json.loads((FIXTURES_DIR / "content.json").read_text())
         content_ids: list[str] = []
@@ -106,13 +111,13 @@ async def _seed_db(pool: asyncpg.Pool) -> list[str]:
                 INSERT INTO content_items (
                     id, topic_id, source_id, raw_text, clean_text, language,
                     content_hash, url, captured_at, credibility_score_at_capture,
-                    content_quality, created_at, updated_at, labels
-                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW(),NOW(),$12::jsonb)
+                    content_quality, created_at, updated_at, labels, org_id
+                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW(),NOW(),$12::jsonb,$13)
                 ON CONFLICT (content_hash) DO NOTHING RETURNING id
             """, item["id"], TOPIC_ID, source_id, item["raw_text"], item["clean_text"],
                 item["language"], content_hash, item.get("url"),
                 datetime.now(timezone.utc) - timedelta(days=5), credibility, "good",
-                json.dumps(item["labels"]))
+                json.dumps(item["labels"]), ORG_ID)
             if result:
                 content_ids.append(result)
 
