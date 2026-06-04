@@ -15,7 +15,7 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, UTC, timedelta
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -111,7 +111,7 @@ async def _seed_db(pool: asyncpg.Pool) -> list[str]:
                 ON CONFLICT (content_hash) DO NOTHING RETURNING id
             """, item["id"], TOPIC_ID, source_id, item["raw_text"], item["clean_text"],
                 item["language"], content_hash, item.get("url"),
-                datetime.now(UTC) - timedelta(days=5), credibility, "good",
+                datetime.now(timezone.utc) - timedelta(days=5), credibility, "good",
                 json.dumps(item["labels"]))
             if result:
                 content_ids.append(result)

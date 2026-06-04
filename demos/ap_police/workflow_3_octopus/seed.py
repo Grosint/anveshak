@@ -17,7 +17,7 @@ import os
 import sys
 import time
 import uuid
-from datetime import datetime, UTC, timedelta
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -138,7 +138,7 @@ async def _insert_content(conn: asyncpg.Connection) -> list[str]:
         """,
             item["id"], TOPIC_ID, source_id,
             item["raw_text"], item["clean_text"], item["language"],
-            content_hash, item.get("url"), datetime.now(UTC) - timedelta(days=1),
+            content_hash, item.get("url"), datetime.now(timezone.utc) - timedelta(days=1),
             credibility, "good", json.dumps(item["labels"]),
         )
         if result:
