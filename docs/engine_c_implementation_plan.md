@@ -703,7 +703,190 @@ Regressions verified:
 | 4 | **Demo scripts.** Step-by-step walkthrough document per agency. | Document: what to click, what signals appear, what the report looks like, talking points per screen. One script per agency. |
 | 5 | **Final gate.** ALL test types pass. Coverage verified. System healthy. | Run full test suite in sequence (or see Makefile targets below). |
 
-**Week 8 exit gate — FINAL ENGINE C GATE:**
+**Week 8 exit gate:**
+```
+  [ ] make test-unit         — all unit tests pass
+  [ ] make test-integration  — all integration tests pass
+  [ ] make test-e2e          — 4 agency E2E scenarios pass
+  [ ] make test-smoke        — /health/ready 200, all endpoints reachable
+  [ ] make test-contract     — all service seam agreements hold
+  [ ] make test-resilience   — all degradation scenarios handled
+  [ ] make test-migration    — all tables, indexes, constraints, seeds present
+  [ ] npm run build          — 0 TypeScript errors
+  [ ] npm run test           — all frontend tests pass
+  [ ] Coverage ≥ 80% on all new Engine C modules
+  [ ] ALL existing tests (267+) still pass
+```
+
+### Phase EC-5: Demo Seed Data + Validation (Week 9)
+**Goal:** 4 agency-specific demo topics seeded with org isolation. `/demo-check` passes all 50 steps.
+
+#### Organization & User Setup
+
+Each agency demo gets its own org + user. Data is completely isolated via multi-tenancy.
+
+| Org | User | Role | Demo Topic |
+|-----|------|------|-----------|
+| `org_mea` | `demo_mea@anveshak.local` | analyst | MEA Beijing Demo |
+| `org_cyber` | `demo_cyber@anveshak.local` | analyst | Cyber Fraud Demo |
+| `org_sebi` | `demo_sebi@anveshak.local` | analyst | SEBI Surveillance Demo |
+| `org_ncb` | `demo_ncb@anveshak.local` | analyst | NCB Intelligence Demo |
+| (existing) | `superadmin@anveshak.local` | super-admin | Can see all orgs for cross-org isolation test |
+
+#### Seed Data Requirements Per Agency
+
+**MEA Beijing Demo (org_mea):**
+```
+Topic: "Anti-India Narratives in Chinese Media"
+Keywords: "India", "LAC", "Arunachal", "South Tibet", "Modi"
+
+Sources (5):
+  - web/RSS: Global Times, CGTN, Xinhua, People's Daily, China Military Online
+
+Content items (10+):
+  - 4 articles in Chinese (zh) → must have translated_text after pipeline
+  - 6 articles in English
+  - 3+ articles about "Arunachal = South Tibet" (same narrative → cluster)
+  - 3+ articles about "India road building near LAC" (second cluster)
+  - At least 3 from different sources sharing same narrative (ISC ≥ 3 → signal)
+
+Expected after pipeline:
+  - ≥ 2 narrative clusters
+  - ≥ 1 multi_source_convergence signal
+  - translated_text populated for Chinese articles
+  - GeoJSON locations extractable (Arunachal, LAC, Tawang)
+
+Templates active: none required (MEA uses custom info_op templates, not built-in)
+Identifiers: not primary for MEA — but URLs of Chinese media extracted as URL_DOMAIN
+```
+
+**Cyber Fraud Demo (org_cyber):**
+```
+Topic: "Mule Account & Investment Fraud Networks"
+Keywords: "bank account", "commission", "guaranteed returns", "easy money"
+
+Sources (6):
+  - telegram: "Easy Money India", "Account Service 24/7", "VIP Earning Group",
+              "Investment Tips Pro", "Trading VIP"
+  - web: fakeinvestment.example.com
+
+Content items (20+):
+  - 8 mule recruitment messages across 4 Telegram channels
+    Each contains: phone number (+91-9876543210 in 3+ channels → cluster)
+    Each contains: UPI ID (service123@paytm in 2+ channels)
+    Each contains: Telegram handle (@account_service in 3+ channels)
+    Keywords: "bank account for sale", "₹5000 per transaction", "no questions"
+  - 6 investment fraud messages across 3 channels
+    Each contains: phone (+91-8765432109 in 2+ channels)
+    Each contains: website URL (fakeinvestment.example.com)
+    Keywords: "guaranteed 5% daily", "invest now", "no risk"
+  - 4 MaaS (Mule-as-a-Service) messages
+    Keywords: "bulk accounts", "verified accounts", "cash out service"
+    Contains: different phone (+91-7654321098)
+  - 2 messages with GSTIN (shell company facade)
+
+Expected after pipeline:
+  - ≥ 3 identifier clusters (one per phone appearing in 2+ sources)
+  - ≥ 1 identifier_convergence signal (phone in 3+ sources)
+  - ≥ 1 scam_template_match signal (mule_recruitment CRITICAL)
+  - content_items.labels.scam_template = "mule_recruitment" on 8+ items
+  - content_items.labels.scam_template = "investment_fraud" on 6+ items
+  - Extracted identifiers: PHONE_IN, UPI, TELEGRAM_HANDLE, GSTIN, URL_DOMAIN
+  - Report contains "Identified Indicators" section
+
+Templates active: mule_recruitment, maas, investment_fraud
+```
+
+**SEBI Surveillance Demo (org_sebi):**
+```
+Topic: "Pump-and-Dump Detection — Small Cap"
+Keywords: "multibagger", "guaranteed returns", "buy before", "insider tip"
+
+Sources (5):
+  - telegram: "Stock Tips Free", "Penny Stock VIP", "Trading Guru India",
+              "Research Reports Daily"
+  - web: fakeresearch.example.com
+
+Content items (15+):
+  - 10 pump-and-dump messages pushing same stock "XYZLTD" across 4 channels
+    Keywords: "XYZLTD next multibagger", "buy before ₹500", "100% guaranteed"
+    Contains: Telegram handle (@stockguru_india in 3+ channels)
+    Contains: UPI (premiumtips@paytm — "₹999 for VIP access")
+    Contains: phone (+91-9998877665 — "call for premium tips")
+  - 3 fake research report messages
+    Contains: URL (fakeresearch.example.com/reports/xyz.pdf)
+    Keywords: "target price ₹500", "buy rating", "SEBI registered"
+    Contains: SEBI_REG number (INZ000123456789 — fake, needs verification)
+  - 2 generic stock tip messages (control — should NOT match templates)
+
+Expected after pipeline:
+  - ≥ 1 narrative cluster (coordinated XYZLTD push, ISC ≥ 4)
+  - ≥ 1 identifier cluster (@stockguru_india in 3+ channels)
+  - ≥ 1 multi_source_convergence signal
+  - ≥ 1 scam_template_match signal (pump_and_dump CRITICAL)
+  - content_items.labels.scam_template = "pump_and_dump" on 10+ items
+  - Extracted identifiers: TELEGRAM_HANDLE, UPI, PHONE_IN, URL_DOMAIN, SEBI_REG
+
+Templates active: pump_and_dump, fake_research_report
+```
+
+**NCB Intelligence Demo (org_ncb):**
+```
+Topic: "Drug Network Monitoring — South India"
+Keywords: "stuff available", "delivery", "420", "green"
+
+Sources (4):
+  - telegram: "Stuff BLR", "420 Club India", "Green Life Bangalore"
+  - darkweb: india-market.onion (simulated as web source for demo)
+
+Content items (12+):
+  - 6 drug sale messages across 3 Telegram channels
+    Contains: phone (+91-9753186420 in 3 channels → cluster)
+    Contains: UPI (dealer420@paytm in 2 channels)
+    Contains: Telegram handle (@stuff_blr admin of 3 channels)
+    Contains: crypto wallet (bc1qr8fake...m4n in 2 channels)
+    Keywords + emoji: "stuff available 🍃", "delivery Bangalore 🔥", "DM for menu"
+  - 3 dark web drug listings
+    Contains: BTC wallet (same bc1qr8fake...m4n → links TG to dark web)
+    Keywords: "India shipping", "quality guaranteed", "escrow accepted"
+  - 3 mule recruitment messages (shared infrastructure with cyber fraud)
+    Keywords: "bank account needed", "commission", "easy money"
+    Contains: different phone (+91-8642097531)
+
+Expected after pipeline:
+  - ≥ 2 identifier clusters (dealer phone + BTC wallet)
+  - ≥ 1 identifier_convergence signal (phone in 3 channels)
+  - ≥ 1 scam_template_match signal (drug_sale HIGH)
+  - content_items.labels.scam_template = "drug_sale" on 6+ items
+  - content_items.labels.scam_template = "mule_recruitment" on 3 items
+  - Extracted identifiers: PHONE_IN, UPI, TELEGRAM_HANDLE, CRYPTO_BTC
+  - BTC wallet links Telegram channels to dark web listing (same identifier)
+
+Templates active: drug_sale, drug_delivery_recruitment, mule_recruitment, crypto_cashout
+```
+
+#### Cross-Org Isolation Verification
+
+After all 4 orgs seeded:
+- Login as demo_mea@anveshak.local → can ONLY see MEA topic, sources, content, signals
+- Login as demo_cyber@anveshak.local → can ONLY see Cyber Fraud topic
+- Login as demo_sebi@anveshak.local → can ONLY see SEBI topic
+- Login as demo_ncb@anveshak.local → can ONLY see NCB topic
+- Login as superadmin → can see all 4 orgs
+- GET /api/v1/identifiers/search with org_cyber creds → returns ONLY cyber fraud identifiers
+- GET /api/v1/identifiers/search with org_ncb creds → returns ONLY NCB identifiers
+- Same phone number in cyber and NCB topics → NOT cross-visible (org-isolated)
+
+#### Session 13 Workflow
+
+| Day | Task | Workflow |
+|-----|------|---------|
+| 1 | **Create seed SQL:** `scripts/seed_demo_engine_c.sql` with 4 orgs, 4 users, 4 topics, ~57 content items, sources, topic_sources, org_sources, topic_templates associations. All INSERTs include org_id. All sources linked via org_sources and topic_sources. | Follow existing `seed_demo_full.sql` patterns. Use ON CONFLICT DO NOTHING for idempotency. Verify org_id on all root tables per multi-tenancy rules. |
+| 2 | **Run seed + pipeline:** `make seed-demo-ec` → wait for analyst pipeline to process all items → verify identifiers extracted, templates matched, clusters formed, signals fired. | If pipeline doesn't auto-process seeded items, manually enqueue `analyse_content` for each. Verify with SQL queries before running demo-check. |
+| 3 | **Run `/demo-check`:** All 50 steps. Fix any failures. | Target: Part A (9/9), Part B (17/17), Part C (21/21 — no SKIPs), Part D (3/3). Verdict: GO. |
+| 4 | **Write demo scripts:** One doc per agency — what to click, what appears, talking points. | Save to `docs/demo_script_mea.md`, `docs/demo_script_cyber.md`, `docs/demo_script_sebi.md`, `docs/demo_script_ncb.md`. |
+
+**Session 13 exit gate — FINAL ENGINE C GATE:**
 ```
 ALL of the following must pass:
 
@@ -719,16 +902,17 @@ ALL of the following must pass:
 
 Coverage:
   [ ] Coverage ≥ 80% on all new Engine C modules
-  [ ] Coverage report reviewed — no untested branches in signal/clustering logic
 
 Regression:
   [ ] ALL existing tests (267+) still pass
-  [ ] No degradation in existing functionality
 
 Demo:
-  [ ] 4 demo topics seeded and working
+  [ ] 4 orgs created (org_mea, org_cyber, org_sebi, org_ncb)
+  [ ] 4 users created (one per org, analyst role)
+  [ ] 4 demo topics seeded with realistic content
+  [ ] Cross-org isolation verified (no data leakage between orgs)
+  [ ] /demo-check verdict = GO (50/50 steps pass, 0 SKIP, 0 FAIL)
   [ ] 4 demo scripts written
-  [ ] /demo-check passes all steps
 
 System health:
   [ ] make ps → all containers healthy
@@ -834,10 +1018,13 @@ test-ec-gate:        make test-unit test-integration test-contract \
 [ ] No regression on existing functionality
 ```
 
-### Demo Readiness
+### Demo Readiness (Phase EC-5)
 ```
-[ ] 4 demo topics seeded with realistic content
-[ ] 4 demo scripts written (MEA, Police, SEBI, NCB)
-[ ] /demo-check passes all steps
+[ ] 4 orgs created (org_mea, org_cyber, org_sebi, org_ncb) — fully isolated
+[ ] 4 users created (demo_mea, demo_cyber, demo_sebi, demo_ncb) — one per org
+[ ] 4 demo topics seeded with ~57 content items exercising Engine C
+[ ] Cross-org isolation verified — no data leakage between agency orgs
+[ ] /demo-check verdict = GO (50/50 steps, 0 SKIP, 0 FAIL)
+[ ] 4 demo scripts written (docs/demo_script_{mea,cyber,sebi,ncb}.md)
 [ ] make ps → all containers healthy
 ```
