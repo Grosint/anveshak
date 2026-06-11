@@ -747,3 +747,13 @@ k3s-teardown:
 	fi
 	@kubectl delete namespace anveshak --ignore-not-found
 	$(call success,k3s namespace deleted)
+
+# =============================================================================
+# AI TOOLING
+# =============================================================================
+
+# graph — rebuild Graphify knowledge graph (code-only, no LLM key needed)
+graph:
+	$(call header,Rebuilding Graphify knowledge graph)
+	@graphify update .
+	$(call success,Knowledge graph updated)
