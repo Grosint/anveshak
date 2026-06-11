@@ -6,11 +6,12 @@ import { useWS } from '../../contexts/WSContext'
 import { sourcesApi } from '../../api/sources'
 
 const primaryNav = [
-  { to: '/topics',    label: 'Topics',     icon: <TargetIcon /> },
-  { to: '/signals',   label: 'Signals',    icon: <ZapIcon /> },
-  { to: '/vision',    label: 'Vision',     icon: <EyeIcon /> },
-  { to: '/reports',   label: 'Reports',    icon: <FileIcon /> },
-  { to: '/analytics', label: 'Analytics',  icon: <ChartIcon /> },
+  { to: '/topics',      label: 'Topics',      icon: <TargetIcon /> },
+  { to: '/signals',     label: 'Signals',     icon: <ZapIcon /> },
+  { to: '/identifiers', label: 'Identifiers', icon: <FingerprintIcon /> },
+  { to: '/vision',      label: 'Vision',      icon: <EyeIcon /> },
+  { to: '/reports',     label: 'Reports',     icon: <FileIcon /> },
+  { to: '/analytics',   label: 'Analytics',   icon: <ChartIcon /> },
 ]
 
 const settingsNav = { to: '/settings', label: 'Settings', icon: <GearIcon /> }
@@ -229,6 +230,13 @@ function MoonIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
       <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+    </svg>
+  )
+}
+function FingerprintIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
+      <path d="M2 12C2 6.5 6.5 2 12 2a10 10 0 018 4"/><path d="M5 19.5C5.5 18 6 15 6 12c0-3.5 2.5-6 6-6 3.5 0 6 2.5 6 6 0 1-.1 4-1 6"/><path d="M12 12v4"/><path d="M8 12h.01"/><path d="M16 12h.01"/>
     </svg>
   )
 }

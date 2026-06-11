@@ -32,8 +32,10 @@ _WINDOW_S = 60  # sliding window size
 
 _LOGIN_PATH = "/api/v1/auth/login"
 _VISION_ANALYSE_PATH = "/api/v1/vision/analyse"
+_TIPLINE_PATH = "/api/v1/tipline/ingest"
 _LOGIN_LIMIT = 10
 _VISION_LIMIT = 30
+_TIPLINE_LIMIT = 100
 _AUTH_DEFAULT_LIMIT = 120
 _ANON_LIMIT = 60
 
@@ -96,6 +98,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if method == "POST" and path == _LOGIN_PATH:
             key = f"login:{_client_ip(request)}"
             allowed, retry_after = _check_rate(key, _LOGIN_LIMIT)
+            if not allowed:
+                return _rate_limit_response(retry_after)
+            return await call_next(request)
+
+        # Tipline ingest: per API key (X-Api-Key header)
+        if method == "POST" and path == _TIPLINE_PATH:
+            api_key = request.headers.get("x-api-key", _client_ip(request))
+            key = f"tipline:{api_key}"
+            allowed, retry_after = _check_rate(key, _TIPLINE_LIMIT)
             if not allowed:
                 return _rate_limit_response(retry_after)
             return await call_next(request)

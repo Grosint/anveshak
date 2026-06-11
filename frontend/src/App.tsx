@@ -11,6 +11,7 @@ import SignalsInbox from './pages/SignalsInbox'
 import ReportBuilder from './pages/ReportBuilder'
 import AnalyticsDashboard from './pages/AnalyticsDashboard'
 import Settings from './pages/Settings'
+import Identifiers from './pages/Identifiers'
 
 // ── Error boundary — catches unhandled render errors so the page never
 // goes silently blank. Shows the error message + a reload button.
@@ -85,6 +86,7 @@ export default function App() {
           <Route path="/topics/:topicId/feed" element={<ContentFeed />} />
           <Route path="/vision" element={<ImageAnalysis />} />
           <Route path="/signals" element={<SignalsInbox />} />
+          <Route path="/identifiers" element={<Identifiers />} />
           <Route path="/reports" element={<ReportBuilder />} />
           <Route path="/analytics" element={<AnalyticsDashboard />} />
           <Route path="/settings/:tab" element={<Settings />} />
