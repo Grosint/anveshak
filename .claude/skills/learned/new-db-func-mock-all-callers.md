@@ -87,3 +87,6 @@ assert "CREDIBILITY_SCORE ASC" in normalised.upper()
 ## Implementation reference
 - `tests/unit/test_reporter_immutability.py` — 3 patches added for `fetch_topic_location_entities`
 - `tests/unit/test_sources_api_filters.py` — relaxed SQL assertion
+- Engine C Step 9: added `fetch_topic_identifiers` + `fetch_topic_template_matches` →
+  fixed 7 tests across 4 files (worker, immutability, rag, arq_hardening)
+  Also hit SimpleNamespace missing `legal_sections`/`three_lens` attrs in arq_hardening
