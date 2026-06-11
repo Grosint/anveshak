@@ -12,6 +12,7 @@ dependencies = [
     "praw>=7.7",
     "atproto>=0.0.46",
     "tweepy>=4.14",
+    "instagrapi>=2.1",
     "aiohttp>=3.9",
     "async_lru>=2.0",
     "oauthlib>=3.2",

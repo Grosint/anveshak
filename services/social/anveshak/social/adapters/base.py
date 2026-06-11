@@ -37,7 +37,7 @@ class RawItem:
     """
     raw_text: str
     url: str
-    platform: str                              # web|telegram|twitter|reddit|bluesky
+    platform: str                              # web|telegram|twitter|reddit|bluesky|instagram
     captured_at: datetime                      # timezone-aware UTC
     source_handle: str                         # channel/subreddit/handle — matches sources.url_or_handle
     media_urls: list[str] = field(default_factory=list)   # images/videos to download later (Phase 4)

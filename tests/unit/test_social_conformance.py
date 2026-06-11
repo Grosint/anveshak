@@ -42,7 +42,7 @@ class SourceAdapterConformanceSuite:
     def assert_platform_defined(self, adapter: SourceAdapterBase) -> None:
         assert hasattr(adapter, "platform"), "adapter must define platform"
         assert isinstance(adapter.platform, str) and adapter.platform
-        assert adapter.platform in {"telegram", "reddit", "bluesky", "twitter", "web"}
+        assert adapter.platform in {"telegram", "reddit", "bluesky", "twitter", "web", "instagram"}
 
     # 2 — RawItem.content_hash() is deterministic and a valid SHA-256 hex string
     def assert_content_hash_deterministic(self, raw: RawItem) -> None:

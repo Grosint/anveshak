@@ -65,6 +65,10 @@ _REQUIRED_CREDENTIALS: dict[str, list[tuple[str, str]]] = {
     "x": [
         ("x_bearer_token", "X_BEARER_TOKEN"),
     ],
+    "instagram": [
+        ("instagram_username", "INSTAGRAM_USERNAME"),
+        ("instagram_password", "INSTAGRAM_PASSWORD"),
+    ],
 }
 
 
@@ -98,6 +102,10 @@ async def startup(ctx: dict) -> None:
     from .adapters.bluesky import BlueskyAdapter
     from .adapters.telegram import TelegramAdapter
     from .adapters.x_adapter import make_x_adapter
+    from .adapters.instagram import (
+        InstagramAdapter, InstagramRateLimitGuard,
+        INSTAGRAM_CIRCUIT_BREAKER_THRESHOLD, INSTAGRAM_CIRCUIT_BREAKER_COOLDOWN_S,
+    )
 
     candidates: list = []
 
@@ -111,6 +119,9 @@ async def startup(ctx: dict) -> None:
         )),
         (settings.telegram_adapter_enabled, "telegram", lambda: TelegramAdapter()),
         (settings.x_adapter_enabled, "x", lambda: make_x_adapter(ctx["arq_pool"])),
+        (settings.instagram_adapter_enabled, "instagram", lambda: InstagramAdapter(
+            rate_guard=InstagramRateLimitGuard(ctx["arq_pool"], settings.instagram_hourly_call_cap)
+        )),
     ]
 
     for enabled, name, factory in adapter_configs:
@@ -131,11 +142,18 @@ async def startup(ctx: dict) -> None:
         try:
             await adapter.authenticate()
             _ADAPTERS[adapter.adapter_id] = adapter
+            # Instagram uses higher threshold + longer cooldown (Meta bans are 24h)
+            if adapter.platform == "instagram":
+                cb_threshold = INSTAGRAM_CIRCUIT_BREAKER_THRESHOLD
+                cb_cooldown = INSTAGRAM_CIRCUIT_BREAKER_COOLDOWN_S
+            else:
+                cb_threshold = settings.social_circuit_breaker_threshold
+                cb_cooldown = settings.social_circuit_breaker_cooldown_s
             _CIRCUIT_BREAKERS[adapter.adapter_id] = AdapterCircuitBreaker(
                 ctx["arq_pool"],
                 adapter.adapter_id,
-                threshold=settings.social_circuit_breaker_threshold,
-                cooldown_s=settings.social_circuit_breaker_cooldown_s,
+                threshold=cb_threshold,
+                cooldown_s=cb_cooldown,
             )
             log.info("social.adapter_ready", adapter_id=adapter.adapter_id)
         except AdapterAuthError as exc:

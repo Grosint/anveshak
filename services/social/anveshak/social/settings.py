@@ -24,6 +24,13 @@ class SocialSettings(BaseSettings):
     bluesky_adapter_enabled: bool = False
     bluesky_daily_call_cap: int = 7200          # Bluesky free API limit: 7200 calls/day
 
+    # Instagram
+    instagram_username: Optional[str] = None
+    instagram_password: Optional[str] = None
+    instagram_adapter_enabled: bool = False
+    instagram_session_path: str = ""
+    instagram_hourly_call_cap: int = 100  # conservative — Meta rate limits
+
     # X/Twitter — pay-per-use
     x_bearer_token: Optional[str] = None
     x_adapter_enabled: bool = False
