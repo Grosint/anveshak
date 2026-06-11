@@ -361,6 +361,14 @@ seed-demo:
 	@printf "  Username: $(_BOLD)demo@anveshak.local$(_RST)\n"
 	@printf "  Password: $(_BOLD)AnveshakDemo2024!$(_RST)\n\n"
 
+seed-demo-ec:
+	$(call header,Loading Engine C Demo — 4 Agency Scenarios)
+	@$(COMPOSE) exec -T postgres psql -U anveshak -d anveshak < scripts/seed_demo_engine_c.sql 2>&1 | tail -1
+	$(call success,Engine C demo loaded (MEA + Cyber + SEBI + NCB))
+	@printf "\n  Orgs: org_mea, org_cyber, org_sebi, org_ncb\n"
+	@printf "  Login: demo_{mea,cyber,sebi,ncb}@anveshak.local\n"
+	@printf "  Password: $(_BOLD)AnveshakDemo2024!$(_RST)\n\n"
+
 # ---------------------------------------------------------------------------
 # Fresh start shortcuts
 # ---------------------------------------------------------------------------
