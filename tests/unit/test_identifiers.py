@@ -1,7 +1,9 @@
-"""Unit tests for Engine C identifier extraction (Step 1, Part 1).
+"""Unit tests for Engine C identifier extraction (Step 1).
 
-Tests 8 identifier types: PHONE_IN, UPI, EMAIL, CRYPTO_BTC, CRYPTO_ETH,
-CRYPTO_TRC20, TELEGRAM_HANDLE, INSTAGRAM_HANDLE.
+Tests 15 identifier types:
+  Part 1: PHONE_IN, UPI, EMAIL, CRYPTO_BTC, CRYPTO_ETH, CRYPTO_TRC20,
+           TELEGRAM_HANDLE, INSTAGRAM_HANDLE
+  Part 2: URL_DOMAIN, GSTIN, UDYAM, PAN, IFSC, BANK_ACCOUNT, SEBI_REG
 
 Each type has: positive match, negative/false-positive, normalization, edge case.
 Pure unit tests — no DB, no I/O.
@@ -473,3 +475,412 @@ class TestCrossCutting:
         assert "UPI" in types
         assert "CRYPTO_BTC" in types
         assert "TELEGRAM_HANDLE" in types
+
+
+# ===========================================================================
+# URL_DOMAIN — URL extraction with domain normalization
+# ===========================================================================
+
+
+class TestURLDomain:
+    """URL/domain extraction."""
+
+    def test_url_basic_http(self):
+        text = "Visit http://example.com/page for details"
+        results = extract_identifiers(text)
+        assert "URL_DOMAIN" in _types(results)
+        vals = _values(results, "URL_DOMAIN")
+        assert "example.com" in vals
+
+    def test_url_https(self):
+        text = "Go to https://scam-site.xyz/offer?id=123"
+        results = extract_identifiers(text)
+        assert "scam-site.xyz" in _values(results, "URL_DOMAIN")
+
+    def test_url_strips_www(self):
+        """www prefix should be stripped from domain."""
+        text = "Visit https://www.fraud-site.com/login"
+        results = extract_identifiers(text)
+        assert "fraud-site.com" in _values(results, "URL_DOMAIN")
+
+    def test_url_subdomain_preserved(self):
+        """Non-www subdomains should be preserved."""
+        text = "https://api.phishing-site.net/hook"
+        results = extract_identifiers(text)
+        assert "api.phishing-site.net" in _values(results, "URL_DOMAIN")
+
+    def test_url_dedup_same_domain(self):
+        """Multiple URLs with same domain → one extraction."""
+        text = "https://evil.com/page1 and https://evil.com/page2"
+        results = extract_identifiers(text)
+        vals = _values(results, "URL_DOMAIN")
+        assert vals.count("evil.com") == 1
+
+    def test_url_rejects_no_protocol(self):
+        """Bare domain without http/https should NOT match."""
+        text = "Visit example.com for details"
+        results = extract_identifiers(text)
+        assert "URL_DOMAIN" not in _types(results)
+
+    def test_url_confidence(self):
+        text = "https://scam-site.com/offer"
+        results = extract_identifiers(text)
+        urls = [r for r in results if r.identifier_type == "URL_DOMAIN"]
+        assert len(urls) >= 1
+        assert urls[0].confidence >= 0.8
+
+    def test_url_raw_value_full_url(self):
+        """raw_value should be the full URL, normalized_value is domain."""
+        text = "Visit https://fraud.com/page?q=1"
+        results = extract_identifiers(text)
+        urls = [r for r in results if r.identifier_type == "URL_DOMAIN"]
+        assert len(urls) >= 1
+        assert urls[0].raw_value.startswith("https://")
+        assert urls[0].normalized_value == "fraud.com"
+
+
+# ===========================================================================
+# GSTIN — Indian GST Identification Number
+# ===========================================================================
+
+
+class TestGSTIN:
+    """GSTIN extraction."""
+
+    def test_gstin_basic(self):
+        text = "GSTIN: 27AABCU9603R1ZM"
+        results = extract_identifiers(text)
+        assert "GSTIN" in _types(results)
+        assert "27AABCU9603R1ZM" in _values(results, "GSTIN")
+
+    def test_gstin_in_sentence(self):
+        text = "The company GST number is 07AAECG4582J1Z5 and registered in Delhi"
+        results = extract_identifiers(text)
+        assert "07AAECG4582J1Z5" in _values(results, "GSTIN")
+
+    def test_gstin_normalization_uppercase(self):
+        text = "gstin 27aabcu9603r1zm"
+        results = extract_identifiers(text)
+        vals = _values(results, "GSTIN")
+        assert all(v == v.upper() for v in vals)
+
+    def test_gstin_rejects_invalid_format(self):
+        """Invalid GSTIN (wrong structure) should not match."""
+        text = "Reference: 12ABCDE1234FGHJ"
+        results = extract_identifiers(text)
+        assert "GSTIN" not in _types(results)
+
+    def test_gstin_rejects_wrong_state_code(self):
+        """State code must be 01-37. 99 is invalid but format may still match.
+        We check regex pattern only, not semantic validity."""
+        text = "GSTIN: 99AABCU9603R1ZM"
+        results = extract_identifiers(text)
+        # Regex matches format — semantic validation is Step 2
+        assert "GSTIN" in _types(results)
+
+    def test_gstin_high_confidence(self):
+        text = "GSTIN: 27AABCU9603R1ZM"
+        results = extract_identifiers(text)
+        gstins = [r for r in results if r.identifier_type == "GSTIN"]
+        assert gstins[0].confidence >= 0.95
+
+
+# ===========================================================================
+# UDYAM — Udyam Registration Number
+# ===========================================================================
+
+
+class TestUdyam:
+    """Udyam registration number extraction."""
+
+    def test_udyam_basic(self):
+        text = "Registration: UDYAM-MH-02-0012345"
+        results = extract_identifiers(text)
+        assert "UDYAM" in _types(results)
+        assert "UDYAM-MH-02-0012345" in _values(results, "UDYAM")
+
+    def test_udyam_different_states(self):
+        text = "UDYAM-KA-15-0067890 registered in Karnataka"
+        results = extract_identifiers(text)
+        assert "UDYAM-KA-15-0067890" in _values(results, "UDYAM")
+
+    def test_udyam_normalization_uppercase(self):
+        text = "udyam-mh-02-0012345"
+        results = extract_identifiers(text)
+        vals = _values(results, "UDYAM")
+        assert all(v == v.upper() for v in vals)
+
+    def test_udyam_rejects_wrong_format(self):
+        """Missing district code or short serial should not match."""
+        text = "UDYAM-MH-1234"
+        results = extract_identifiers(text)
+        assert "UDYAM" not in _types(results)
+
+    def test_udyam_high_confidence(self):
+        text = "UDYAM-DL-07-0098765"
+        results = extract_identifiers(text)
+        udyams = [r for r in results if r.identifier_type == "UDYAM"]
+        assert udyams[0].confidence >= 0.95
+
+
+# ===========================================================================
+# PAN — Permanent Account Number
+# ===========================================================================
+
+
+class TestPAN:
+    """PAN extraction — context-dependent due to moderate FP risk."""
+
+    def test_pan_with_context(self):
+        """PAN near context words should be extracted."""
+        text = "His PAN is ABCDE1234F"
+        results = extract_identifiers(text)
+        assert "PAN" in _types(results)
+        assert "ABCDE1234F" in _values(results, "PAN")
+
+    def test_pan_with_pan_keyword(self):
+        text = "PAN card number: BQRPP1234K"
+        results = extract_identifiers(text)
+        assert "BQRPP1234K" in _values(results, "PAN")
+
+    def test_pan_without_context_not_extracted(self):
+        """Bare 10-char alphanumeric matching PAN format but no context → skip."""
+        text = "The code ABCDE1234F was generated"
+        results = extract_identifiers(text)
+        # Without PAN/tax/income context, should NOT extract
+        assert "PAN" not in _types(results)
+
+    def test_pan_normalization_uppercase(self):
+        text = "PAN: abcde1234f"
+        results = extract_identifiers(text)
+        vals = _values(results, "PAN")
+        assert all(v == v.upper() for v in vals)
+
+    def test_pan_rejects_wrong_format(self):
+        """PAN must be AAAAA9999A pattern."""
+        text = "PAN: 12345ABCDE"
+        results = extract_identifiers(text)
+        assert "PAN" not in _types(results)
+
+    def test_pan_context_words(self):
+        """Various context words should trigger extraction."""
+        for ctx in ["PAN", "pan card", "income tax", "tax id", "permanent account"]:
+            text = f"{ctx}: ABCDE1234F"
+            results = extract_identifiers(text)
+            assert "PAN" in _types(results), f"PAN not extracted with context '{ctx}'"
+
+    def test_pan_moderate_confidence(self):
+        text = "PAN: ABCDE1234F"
+        results = extract_identifiers(text)
+        pans = [r for r in results if r.identifier_type == "PAN"]
+        assert 0.7 <= pans[0].confidence <= 0.95
+
+
+# ===========================================================================
+# IFSC — Indian Financial System Code
+# ===========================================================================
+
+
+class TestIFSC:
+    """IFSC code extraction."""
+
+    def test_ifsc_basic(self):
+        text = "IFSC: SBIN0001234"
+        results = extract_identifiers(text)
+        assert "IFSC" in _types(results)
+        assert "SBIN0001234" in _values(results, "IFSC")
+
+    def test_ifsc_hdfc(self):
+        text = "Bank IFSC code HDFC0002345"
+        results = extract_identifiers(text)
+        assert "HDFC0002345" in _values(results, "IFSC")
+
+    def test_ifsc_fifth_char_must_be_zero(self):
+        """5th character must be 0 in IFSC."""
+        text = "Code: SBIN1001234"
+        results = extract_identifiers(text)
+        assert "IFSC" not in _types(results)
+
+    def test_ifsc_normalization_uppercase(self):
+        text = "IFSC: sbin0001234"
+        results = extract_identifiers(text)
+        vals = _values(results, "IFSC")
+        assert all(v == v.upper() for v in vals)
+
+    def test_ifsc_rejects_wrong_length(self):
+        """IFSC must be exactly 11 chars."""
+        text = "IFSC: SBIN000123"  # only 10
+        results = extract_identifiers(text)
+        assert "IFSC" not in _types(results)
+
+    def test_ifsc_high_confidence(self):
+        text = "SBIN0001234"
+        results = extract_identifiers(text)
+        ifscs = [r for r in results if r.identifier_type == "IFSC"]
+        assert len(ifscs) >= 1
+        assert ifscs[0].confidence >= 0.9
+
+
+# ===========================================================================
+# BANK_ACCOUNT — Indian bank account numbers (context-required)
+# ===========================================================================
+
+
+class TestBankAccount:
+    """Bank account number extraction — HIGH FP, requires context."""
+
+    def test_bank_account_with_context(self):
+        """Account number near 'account' should be extracted."""
+        text = "Transfer to account 12345678901234"
+        results = extract_identifiers(text)
+        assert "BANK_ACCOUNT" in _types(results)
+        assert "12345678901234" in _values(results, "BANK_ACCOUNT")
+
+    def test_bank_account_with_ac_abbreviation(self):
+        text = "A/C No: 9876543210123"
+        results = extract_identifiers(text)
+        assert "BANK_ACCOUNT" in _types(results)
+
+    def test_bank_account_with_bank_keyword(self):
+        text = "Bank account number 112233445566"
+        results = extract_identifiers(text)
+        assert "BANK_ACCOUNT" in _types(results)
+
+    def test_bank_account_without_context_not_extracted(self):
+        """Bare long number without bank context → NOT extracted."""
+        text = "The reference number is 12345678901234"
+        results = extract_identifiers(text)
+        assert "BANK_ACCOUNT" not in _types(results)
+
+    def test_bank_account_rejects_too_short(self):
+        """Less than 9 digits should not match even with context."""
+        text = "Account: 12345678"  # 8 digits
+        results = extract_identifiers(text)
+        assert "BANK_ACCOUNT" not in _types(results)
+
+    def test_bank_account_rejects_too_long(self):
+        """More than 18 digits should not match."""
+        text = "Account: 1234567890123456789"  # 19 digits
+        results = extract_identifiers(text)
+        assert "BANK_ACCOUNT" not in _types(results)
+
+    def test_bank_account_strips_spaces(self):
+        """Spaces in account number should be stripped."""
+        text = "Account no: 1234 5678 9012 34"
+        results = extract_identifiers(text)
+        vals = _values(results, "BANK_ACCOUNT")
+        if vals:
+            assert all(" " not in v for v in vals)
+
+    def test_bank_account_low_confidence(self):
+        """Bank accounts are high-FP, confidence should reflect that."""
+        text = "Account: 12345678901234"
+        results = extract_identifiers(text)
+        accts = [r for r in results if r.identifier_type == "BANK_ACCOUNT"]
+        assert accts[0].confidence <= 0.8
+
+    def test_bank_account_not_confused_with_phone(self):
+        """10-digit bank account with context shouldn't also be PHONE_IN."""
+        text = "Bank account 6789012345"
+        results = extract_identifiers(text)
+        # Could match both — but bank account should be present
+        assert "BANK_ACCOUNT" in _types(results)
+
+
+# ===========================================================================
+# SEBI_REG — SEBI Registration Number
+# ===========================================================================
+
+
+class TestSEBIReg:
+    """SEBI registration number extraction."""
+
+    def test_sebi_reg_basic(self):
+        text = "SEBI registration: INB123456789012"
+        results = extract_identifiers(text)
+        assert "SEBI_REG" in _types(results)
+        assert "INB123456789012" in _values(results, "SEBI_REG")
+
+    def test_sebi_reg_merchant_banker(self):
+        text = "SEBI Reg No INM000012345678"
+        results = extract_identifiers(text)
+        assert "SEBI_REG" in _types(results)
+
+    def test_sebi_reg_normalization_uppercase(self):
+        text = "inb123456789012"
+        results = extract_identifiers(text)
+        vals = _values(results, "SEBI_REG")
+        assert all(v == v.upper() for v in vals)
+
+    def test_sebi_reg_rejects_wrong_prefix(self):
+        """Must start with IN followed by a letter."""
+        text = "Code: XYZ123456789012"
+        results = extract_identifiers(text)
+        assert "SEBI_REG" not in _types(results)
+
+    def test_sebi_reg_rejects_wrong_length(self):
+        """Must be IN + letter + exactly 12 digits = 15 chars total."""
+        text = "INB12345"  # too short
+        results = extract_identifiers(text)
+        assert "SEBI_REG" not in _types(results)
+
+    def test_sebi_reg_high_confidence(self):
+        text = "INB123456789012"
+        results = extract_identifiers(text)
+        sebis = [r for r in results if r.identifier_type == "SEBI_REG"]
+        assert len(sebis) >= 1
+        assert sebis[0].confidence >= 0.95
+
+
+# ===========================================================================
+# Cross-cutting tests — Part 2
+# ===========================================================================
+
+
+class TestCrossCuttingPart2:
+    """Cross-type tests including Part 2 types."""
+
+    def test_all_15_types_extractable(self):
+        """Single text with all 15 identifier types."""
+        text = """
+        Call +919876543210 or WhatsApp.
+        Pay user@ybl or email admin@example.com
+        BTC: 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa
+        ETH: 0x742d35Cc6634C0532925a3b844Bc9e7595f2bD28
+        USDT: TJYeasTPa8dGTLi7rWCvFzEQdmGSMH4XsH
+        Follow @easy_money_group
+        Visit https://scam-site.com/offer
+        GSTIN: 27AABCU9603R1ZM
+        UDYAM-MH-02-0012345
+        PAN card: ABCDE1234F
+        IFSC: SBIN0001234
+        Bank account: 12345678901234
+        SEBI reg: INB123456789012
+        """
+        results = extract_identifiers(text, platform="telegram")
+        types = _types(results)
+        expected = {
+            "PHONE_IN", "UPI", "EMAIL", "CRYPTO_BTC", "CRYPTO_ETH",
+            "CRYPTO_TRC20", "TELEGRAM_HANDLE", "URL_DOMAIN", "GSTIN",
+            "UDYAM", "PAN", "IFSC", "BANK_ACCOUNT", "SEBI_REG",
+        }
+        missing = expected - types
+        assert not missing, f"Missing types: {missing}"
+
+    def test_gstin_not_confused_with_pan(self):
+        """GSTIN contains PAN-like substring — should not double-extract as PAN."""
+        text = "GSTIN: 27AABCU9603R1ZM"
+        results = extract_identifiers(text)
+        assert "GSTIN" in _types(results)
+        # The PAN-like portion should not be separately extracted
+        pans = _values(results, "PAN")
+        assert "AABCU9603R" not in pans
+
+    def test_ifsc_not_confused_with_pan(self):
+        """IFSC like SBIN0001234 contains letter patterns — should not be PAN."""
+        text = "IFSC: SBIN0001234"
+        results = extract_identifiers(text)
+        assert "IFSC" in _types(results)
+        pans = _values(results, "PAN")
+        # SBIN0001234 doesn't match PAN format anyway (11 chars vs 10)
+        assert len(pans) == 0

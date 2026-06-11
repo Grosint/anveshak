@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -84,10 +85,63 @@ _RE_SOCIAL_HANDLE = re.compile(
     r"(?<!\w)@([a-zA-Z][a-zA-Z0-9_]{4,31})(?!\w)"
 )
 
+# URL: http(s) URLs
+_RE_URL = re.compile(
+    r"(https?://[^\s<>\"']+)",
+    re.IGNORECASE,
+)
+
+# GSTIN: 2-digit state code + 10-char PAN + 1 entity + Z + 1 check
+_RE_GSTIN = re.compile(
+    r"\b(\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d])\b",
+    re.IGNORECASE,
+)
+
+# UDYAM: UDYAM-SS-DD-NNNNNNN (state 2-letter, district 2-digit, serial 7-digit)
+_RE_UDYAM = re.compile(
+    r"\b(UDYAM-[A-Z]{2}-\d{2}-\d{7})\b",
+    re.IGNORECASE,
+)
+
+# PAN: AAAAA9999A — 5 letters + 4 digits + 1 letter (exactly 10 chars)
+_RE_PAN = re.compile(
+    r"\b([A-Z]{5}\d{4}[A-Z])\b",
+    re.IGNORECASE,
+)
+
+# IFSC: 4 letters + 0 + 6 alphanumeric (exactly 11 chars)
+_RE_IFSC = re.compile(
+    r"\b([A-Z]{4}0[A-Z0-9]{6})\b",
+    re.IGNORECASE,
+)
+
+# BANK_ACCOUNT: 9-18 digits (with optional spaces)
+_RE_BANK_ACCOUNT = re.compile(
+    r"(?<!\w)(\d[\d ]{8,19}\d)(?!\d)",
+)
+
+# SEBI_REG: IN + letter + 12 digits
+_RE_SEBI_REG = re.compile(
+    r"\b(IN[A-Z]\d{12})\b",
+    re.IGNORECASE,
+)
+
 # Phone context words — boost confidence when near phone number
 _PHONE_CONTEXT_WORDS = frozenset({
     "call", "whatsapp", "phone", "mobile", "contact", "dial", "reach",
     "sms", "text", "msg", "telegram", "signal", "number", "helpline",
+})
+
+# PAN context words — required to extract PAN (moderate FP risk)
+_PAN_CONTEXT_WORDS = frozenset({
+    "pan", "pan card", "income tax", "tax id", "permanent account",
+    "tax", "itr", "assessment",
+})
+
+# Bank account context words — required (HIGH FP risk)
+_BANK_ACCOUNT_CONTEXT_WORDS = frozenset({
+    "account", "a/c", "ac no", "bank", "neft", "rtgs", "imps",
+    "beneficiary", "credit to", "transfer to",
 })
 
 
@@ -107,12 +161,22 @@ def _normalize_phone(raw: str) -> str:
     return digits
 
 
-def _has_phone_context(text: str, match_start: int, window: int = 60) -> bool:
-    """Check if phone number is near context words."""
+def _has_context(text: str, match_start: int, context_words: frozenset[str],
+                  window: int = 80) -> bool:
+    """Check if match is near any of the context words."""
     start = max(0, match_start - window)
     end = min(len(text), match_start + window)
     snippet = text[start:end].lower()
-    return any(w in snippet for w in _PHONE_CONTEXT_WORDS)
+    return any(w in snippet for w in context_words)
+
+
+def _normalize_domain(url: str) -> str:
+    """Extract and normalize domain from URL."""
+    parsed = urlparse(url)
+    domain = parsed.hostname or ""
+    if domain.startswith("www."):
+        domain = domain[4:]
+    return domain.lower()
 
 
 def _has_prefix(text: str, match_start: int) -> bool:
@@ -190,7 +254,7 @@ def extract_identifiers(text: str, platform: str = "") -> list[IdentifierMatch]:
             continue
         # Confidence based on context
         has_prefix = _has_prefix(text, m.start())
-        has_context = _has_phone_context(text, m.start())
+        has_context = _has_context(text, m.start(), _PHONE_CONTEXT_WORDS, window=60)
         if has_prefix:
             confidence = 0.95
         elif has_context:
@@ -226,5 +290,62 @@ def extract_identifiers(text: str, platform: str = "") -> list[IdentifierMatch]:
         else:
             confidence = 0.9 if platform_lower == "telegram" else 0.7
             _add("TELEGRAM_HANDLE", f"@{raw_handle}", norm, confidence)
+
+    # --- URL_DOMAIN ---
+    for m in _RE_URL.finditer(text):
+        raw = m.group(1)
+        # Strip trailing punctuation that may have been captured
+        raw = raw.rstrip(".,;:!?)")
+        domain = _normalize_domain(raw)
+        if domain and "." in domain:
+            _add("URL_DOMAIN", raw, domain, 0.9)
+
+    # --- GSTIN ---
+    # Collect GSTIN normalized values to exclude PAN-like substrings later
+    gstin_ranges: list[tuple[int, int]] = []
+    for m in _RE_GSTIN.finditer(text):
+        raw = m.group(1)
+        _add("GSTIN", raw, raw.upper(), 1.0)
+        gstin_ranges.append((m.start(), m.end()))
+
+    # --- UDYAM ---
+    for m in _RE_UDYAM.finditer(text):
+        raw = m.group(1)
+        _add("UDYAM", raw, raw.upper(), 1.0)
+
+    # --- SEBI_REG ---
+    sebi_ranges: list[tuple[int, int]] = []
+    for m in _RE_SEBI_REG.finditer(text):
+        raw = m.group(1)
+        _add("SEBI_REG", raw, raw.upper(), 1.0)
+        sebi_ranges.append((m.start(), m.end()))
+
+    # --- IFSC ---
+    ifsc_ranges: list[tuple[int, int]] = []
+    for m in _RE_IFSC.finditer(text):
+        raw = m.group(1)
+        _add("IFSC", raw, raw.upper(), 0.95)
+        ifsc_ranges.append((m.start(), m.end()))
+
+    # --- PAN (context-required, skip if inside GSTIN/IFSC/SEBI) ---
+    occupied_ranges = gstin_ranges + ifsc_ranges + sebi_ranges
+    for m in _RE_PAN.finditer(text):
+        # Skip if this PAN match is inside a GSTIN, IFSC, or SEBI match
+        if any(s <= m.start() < e for s, e in occupied_ranges):
+            continue
+        raw = m.group(1)
+        if not _has_context(text, m.start(), _PAN_CONTEXT_WORDS):
+            continue
+        _add("PAN", raw, raw.upper(), 0.8)
+
+    # --- BANK_ACCOUNT (context-required, HIGH FP) ---
+    for m in _RE_BANK_ACCOUNT.finditer(text):
+        raw = m.group(1)
+        digits = re.sub(r"\D", "", raw)
+        if len(digits) < 9 or len(digits) > 18:
+            continue
+        if not _has_context(text, m.start(), _BANK_ACCOUNT_CONTEXT_WORDS):
+            continue
+        _add("BANK_ACCOUNT", raw, digits, 0.7)
 
     return results
