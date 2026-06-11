@@ -127,6 +127,31 @@ SQL_FETCH_TOPIC_LOCATION_ENTITIES = """
       AND ee.confidence >= 0.8
 """
 
+SQL_FETCH_TOPIC_IDENTIFIERS = """
+    SELECT identifier_type, identifier_value, source_count, content_item_count,
+           first_seen_at, last_seen_at
+    FROM identifier_clusters
+    WHERE topic_id = $1
+    ORDER BY source_count DESC
+    LIMIT $2
+"""
+
+SQL_FETCH_TOPIC_TEMPLATE_MATCHES = """
+    SELECT ci.labels->>'scam_template' AS template_name,
+           st.display AS template_display,
+           AVG((ci.labels->>'template_confidence')::float) AS confidence,
+           st.severity,
+           st.legal_sections,
+           COUNT(*) AS match_count
+    FROM content_items ci
+    JOIN scam_templates st ON st.name = ci.labels->>'scam_template'
+    WHERE (ci.topic_id = $1
+       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
+      AND ci.labels->>'scam_template' IS NOT NULL
+    GROUP BY ci.labels->>'scam_template', st.display, st.severity, st.legal_sections
+    ORDER BY COUNT(*) DESC
+"""
+
 
 # ---------------------------------------------------------------------------
 # Pool management
@@ -350,3 +375,24 @@ async def set_report_failed(
     async with pool.acquire() as conn:
         await conn.execute(SQL_SET_REPORT_FAILED, report_id, error_message)
     log.warning("reporter.report_failed", report_id=report_id, error=error_message)
+
+
+async def fetch_topic_identifiers(
+    pool: asyncpg.Pool,
+    topic_id: str,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """Return top identifiers for a topic from identifier_clusters, sorted by source_count DESC."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(SQL_FETCH_TOPIC_IDENTIFIERS, topic_id, limit)
+    return [dict(r) for r in rows]
+
+
+async def fetch_topic_template_matches(
+    pool: asyncpg.Pool,
+    topic_id: str,
+) -> list[dict[str, Any]]:
+    """Return aggregated scam template match data for a topic."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(SQL_FETCH_TOPIC_TEMPLATE_MATCHES, topic_id)
+    return [dict(r) for r in rows]

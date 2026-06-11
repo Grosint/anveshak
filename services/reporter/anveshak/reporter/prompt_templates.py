@@ -194,6 +194,12 @@ You are {{ role }}. {{ report_type_instruction }}
 
 {{ three_lens_instruction }}
 {% endif %}
+{% if identifier_context %}
+
+<identifier_intelligence>
+{{ identifier_context }}
+</identifier_intelligence>
+{% endif %}
 
 <topic>{{ topic_name }}</topic>
 <keywords>{{ keywords }}</keywords>
@@ -258,6 +264,7 @@ def render_prompt(
     date_range: str = "",
     include_legal_mapping: bool = False,
     include_three_lens: bool = False,
+    identifier_context: str = "",
 ) -> str:
     """Render the appropriate Jinja2 template for the given report_type.
 
@@ -273,6 +280,7 @@ def render_prompt(
         date_range: Human-readable date range of context items.
         include_legal_mapping: If True, inject BNS/IT Act/UAPA/PMLA mapping instructions.
         include_three_lens: If True, inject three-lens evaluation framework instructions.
+        identifier_context: Pre-formatted identifier summary for LLM context (Engine C Step 9).
 
     Returns:
         Rendered prompt string ready for Ollama.
@@ -300,6 +308,7 @@ def render_prompt(
         few_shot=_FEW_SHOT_EXAMPLE,
         legal_mapping_instruction=_LEGAL_MAPPING_INSTRUCTION if include_legal_mapping else "",
         three_lens_instruction=_THREE_LENS_INSTRUCTION if include_three_lens else "",
+        identifier_context=identifier_context,
         topic_name=topic_name,
         keywords=keywords_str,
         context=context,

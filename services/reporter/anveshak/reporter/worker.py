@@ -31,7 +31,7 @@ from .geocoder import build_geojson, extract_locations_from_text, geocode_locati
 from .llm import call_ollama_with_retry
 from .metrics import reporter_jobs_total, reporter_job_duration_seconds, reporter_ollama_errors_total, arq_jobs_failed_total
 from .prompt_templates import render_prompt
-from .rag import assemble_context, generate_query_embedding
+from .rag import assemble_context, assemble_identifier_context, build_recommended_actions, generate_query_embedding
 from .settings import settings as _default_settings
 
 log = structlog.get_logger(__name__)
@@ -122,7 +122,12 @@ async def generate_report(ctx: dict, report_id: str) -> None:
         )
         return
 
-    # --- 4. Assemble context and render prompt ---
+    # --- 4. Fetch identifier intelligence (Engine C Step 9) ---
+    identifiers = await db.fetch_topic_identifiers(pool, topic_id)
+    template_matches = await db.fetch_topic_template_matches(pool, topic_id)
+    identifier_ctx = assemble_identifier_context(identifiers)
+
+    # --- 5. Assemble context and render prompt ---
     context, source_count, date_range = assemble_context(chunks, max_tokens=s.rag_max_context_tokens)
     # Legal mapping and three-lens evaluation controlled by settings
     include_legal = getattr(s, "include_legal_mapping", True)
@@ -132,9 +137,10 @@ async def generate_report(ctx: dict, report_id: str) -> None:
         source_count=source_count, date_range=date_range,
         include_legal_mapping=include_legal,
         include_three_lens=include_three_lens,
+        identifier_context=identifier_ctx,
     )
 
-    # --- 5. Call LLM ---
+    # --- 6. Call LLM ---
     report_content = await call_ollama_with_retry(prompt, s, max_retries=s.ollama_retry_max)
 
     if report_content is None:
@@ -149,11 +155,11 @@ async def generate_report(ctx: dict, report_id: str) -> None:
         )
         return
 
-    # --- 6. Build source snapshot ---
+    # --- 7. Build source snapshot ---
     source_ids = list({c["source_id"] for c in chunks if c.get("source_id")})
     sources = await db.fetch_sources_for_snapshot(pool, source_ids)
 
-    # --- 7. Geocode locations (3-layer: NER entities → regex fallback → custom overlay) ---
+    # --- 8. Geocode locations (3-layer: NER entities → regex fallback → custom overlay) ---
     # Layer 1: High-quality NER entities from the analyst pipeline
     ner_entities = await db.fetch_topic_location_entities(pool, topic_id)
     # Layer 2: Regex extraction from LLM output (catches synthesized locations)
@@ -175,10 +181,14 @@ async def generate_report(ctx: dict, report_id: str) -> None:
     locations = geocode_locations(location_names)
     geojson = build_geojson(locations)
 
-    # --- 8. Build content_md (Markdown format) ---
-    content_md = _build_content_md(report_content)
+    # --- 9. Build content_md (Markdown format) ---
+    content_md = _build_content_md(
+        report_content,
+        identifiers=identifiers,
+        template_matches=template_matches,
+    )
 
-    # --- 9. Store (idempotent via generated_at IS NULL guard) ---
+    # --- 10. Store (idempotent via generated_at IS NULL guard) ---
     stored = await db.set_report_generated(
         pool,
         report_id=report_id,
@@ -204,8 +214,16 @@ async def generate_report(ctx: dict, report_id: str) -> None:
         log.info("reporter.report_already_generated", report_id=report_id)
 
 
-def _build_content_md(rc: Any) -> str:
-    """Convert a ReportContent object to Markdown string."""
+def _build_content_md(
+    rc: Any,
+    identifiers: list[dict[str, Any]] | None = None,
+    template_matches: list[dict[str, Any]] | None = None,
+) -> str:
+    """Convert a ReportContent object to Markdown string.
+
+    When identifier data is provided (Engine C Step 9), appends factual
+    sections between Key Findings and Source Citations.
+    """
     lines = [
         f"## Executive Summary\n\n{rc.executive_summary}\n",
         "## Key Findings\n",
@@ -215,6 +233,39 @@ def _build_content_md(rc: Any) -> str:
     lines.append("\n## Recommendations\n")
     for rec in rc.recommendations:
         lines.append(f"- {rec}")
+
+    # --- Engine C Step 9: Identifier intelligence sections ---
+    if identifiers:
+        lines.append("\n## Identified Indicators\n")
+        lines.append("| Type | Value | Sources | Items |")
+        lines.append("|------|-------|---------|-------|")
+        for ident in identifiers:
+            itype = ident.get("identifier_type", "")
+            value = ident.get("identifier_value", "")
+            sc = ident.get("source_count", 0)
+            ic = ident.get("content_item_count", 0)
+            lines.append(f"| {itype} | {value} | {sc} | {ic} |")
+
+    if template_matches:
+        lines.append("\n## Scam Template Matches\n")
+        for match in template_matches:
+            display = match.get("template_display", match.get("template_name", ""))
+            severity = match.get("severity", "")
+            confidence = float(match.get("confidence", 0) or 0)
+            count = match.get("match_count", 0)
+            legal = match.get("legal_sections") or []
+            lines.append(f"**{display}** — Severity: {severity}, Confidence: {confidence:.0%}, Matches: {count}")
+            if legal and isinstance(legal, list):
+                lines.append(f"  Legal provisions: {', '.join(legal)}")
+            lines.append("")
+
+        # Recommended actions
+        actions = build_recommended_actions(template_matches)
+        if actions:
+            lines.append("## Recommended Actions\n")
+            for action in actions:
+                lines.append(f"- {action}")
+
     lines.append("\n## Source Citations\n")
     for citation in rc.source_citations:
         lines.append(f"- {citation}")

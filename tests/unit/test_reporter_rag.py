@@ -128,6 +128,8 @@ class TestRAGCredibilityFiltering:
             mock_db.fetch_rag_chunks = AsyncMock(return_value=chunks)
             mock_db.fetch_sources_for_snapshot = AsyncMock(return_value={})
             mock_db.fetch_topic_location_entities = AsyncMock(return_value=[])
+            mock_db.fetch_topic_identifiers = AsyncMock(return_value=[])
+            mock_db.fetch_topic_template_matches = AsyncMock(return_value=[])
             mock_db.set_report_generated = AsyncMock(return_value=True)
             mock_db.update_job_status = AsyncMock()
             mock_embed.return_value = [0.1] * 384

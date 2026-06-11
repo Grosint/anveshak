@@ -99,6 +99,59 @@ PDF_TEMPLATE = """\
 {% endfor %}
 </ul>
 
+{% if report_data.get('identifiers') %}
+<h2>Identified Indicators</h2>
+<table style="width: 100%; border-collapse: collapse; font-size: 10pt; margin-top: 8px;">
+  <tr style="background: #0f3460; color: white;">
+    <th style="padding: 6px; text-align: left;">Type</th>
+    <th style="padding: 6px; text-align: left;">Value</th>
+    <th style="padding: 6px; text-align: right;">Sources</th>
+    <th style="padding: 6px; text-align: right;">Items</th>
+  </tr>
+  {% for ident in report_data.get('identifiers', []) %}
+  <tr style="border-bottom: 1px solid #ddd;">
+    <td style="padding: 5px;">{{ ident.get('identifier_type', '') }}</td>
+    <td style="padding: 5px; font-family: monospace;">{{ ident.get('identifier_value', '') }}</td>
+    <td style="padding: 5px; text-align: right;">{{ ident.get('source_count', 0) }}</td>
+    <td style="padding: 5px; text-align: right;">{{ ident.get('content_item_count', 0) }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+{% if report_data.get('template_matches') %}
+<h2>Scam Template Matches</h2>
+<table style="width: 100%; border-collapse: collapse; font-size: 10pt; margin-top: 8px;">
+  <tr style="background: #0f3460; color: white;">
+    <th style="padding: 6px; text-align: left;">Template</th>
+    <th style="padding: 6px; text-align: left;">Severity</th>
+    <th style="padding: 6px; text-align: right;">Confidence</th>
+    <th style="padding: 6px; text-align: right;">Matches</th>
+  </tr>
+  {% for match in report_data.get('template_matches', []) %}
+  <tr style="border-bottom: 1px solid #ddd;">
+    <td style="padding: 5px;">{{ match.get('template_display', match.get('template_name', '')) }}</td>
+    <td style="padding: 5px;">
+      <span class="badge" style="background: {% if match.get('severity') == 'CRITICAL' %}#dc2626{% elif match.get('severity') == 'HIGH' %}#ea580c{% else %}#ca8a04{% endif %}; color: white;">
+        {{ match.get('severity', '') }}
+      </span>
+    </td>
+    <td style="padding: 5px; text-align: right;">{{ "%.0f"|format((match.get('confidence', 0)) * 100) }}%</td>
+    <td style="padding: 5px; text-align: right;">{{ match.get('match_count', 0) }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+{% if report_data.get('recommended_actions') %}
+<h2>Recommended Actions</h2>
+<ul>
+{% for action in report_data.get('recommended_actions', []) %}
+  <li>{{ action }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+
 {% if report_data.get('legal_sections') %}
 <h2>Applicable Legal Provisions</h2>
 <p style="font-size: 9pt; color: #666; font-style: italic;">

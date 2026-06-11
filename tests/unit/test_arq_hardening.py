@@ -56,6 +56,8 @@ async def test_generate_report_idempotent_skip():
             confidence_level=0.75,
             threats_identified=[],
             time_period="72h",
+            legal_sections=[],
+            three_lens=None,
         )
 
     async def fake_set_report_generated_first(*args, **kwargs):
@@ -82,6 +84,8 @@ async def test_generate_report_idempotent_skip():
              "credibility_score": 80.0, "captured_at": "2026-01-01T00:00:00Z"}
         ])),
         patch.object(db_module, "fetch_sources_for_snapshot", AsyncMock(return_value={})),
+        patch.object(db_module, "fetch_topic_identifiers", AsyncMock(return_value=[])),
+        patch.object(db_module, "fetch_topic_template_matches", AsyncMock(return_value=[])),
         patch.object(db_module, "update_job_status", AsyncMock()),
         patch.object(db_module, "set_report_generated", AsyncMock(side_effect=fake_set_report_generated_first)),
         patch("anveshak.reporter.worker.call_ollama_with_retry", fake_ollama),
@@ -104,6 +108,8 @@ async def test_generate_report_idempotent_skip():
              "credibility_score": 80.0, "captured_at": "2026-01-01T00:00:00Z"}
         ])),
         patch.object(db_module, "fetch_sources_for_snapshot", AsyncMock(return_value={})),
+        patch.object(db_module, "fetch_topic_identifiers", AsyncMock(return_value=[])),
+        patch.object(db_module, "fetch_topic_template_matches", AsyncMock(return_value=[])),
         patch.object(db_module, "update_job_status", AsyncMock()),
         patch.object(db_module, "set_report_generated", AsyncMock(side_effect=fake_set_report_generated_second)),
         patch("anveshak.reporter.worker.call_ollama_with_retry", fake_ollama),

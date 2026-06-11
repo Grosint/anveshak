@@ -102,3 +102,146 @@ def assemble_context(
             date_range = f"{sorted_dates[0]} to {sorted_dates[-1]}"
 
     return "".join(parts), source_count, date_range
+
+
+# ---------------------------------------------------------------------------
+# Identifier context assembly (Engine C Step 9)
+# ---------------------------------------------------------------------------
+
+# Human-readable type labels
+_TYPE_LABELS: dict[str, str] = {
+    "PHONE_IN": "Phones",
+    "UPI": "UPI IDs",
+    "EMAIL": "Emails",
+    "CRYPTO_BTC": "Crypto (BTC)",
+    "CRYPTO_ETH": "Crypto (ETH)",
+    "CRYPTO_TRC20": "Crypto (TRC-20)",
+    "TELEGRAM_HANDLE": "Telegram Handles",
+    "INSTAGRAM_HANDLE": "Instagram Handles",
+    "URL_DOMAIN": "Domains",
+    "GSTIN": "GSTINs",
+    "UDYAM": "Udyam IDs",
+    "PAN": "PAN Numbers",
+    "IFSC": "IFSC Codes",
+    "BANK_ACCOUNT": "Bank Accounts",
+    "SEBI_REG": "SEBI Registrations",
+}
+
+
+def assemble_identifier_context(identifiers: list[dict[str, Any]]) -> str:
+    """Format identifier data into a text block for LLM prompt injection.
+
+    Groups identifiers by type with source counts so the LLM can reference
+    them in findings and recommendations.
+    """
+    if not identifiers:
+        return ""
+
+    lines = ["IDENTIFIED INDICATORS IN THIS TOPIC:"]
+    # Group by type
+    by_type: dict[str, list[dict[str, Any]]] = {}
+    for ident in identifiers:
+        itype = ident["identifier_type"]
+        by_type.setdefault(itype, []).append(ident)
+
+    for itype, items in by_type.items():
+        label = _TYPE_LABELS.get(itype, itype)
+        entries = ", ".join(
+            f"{it['identifier_value']} ({it['source_count']} sources)"
+            for it in items
+        )
+        lines.append(f"{label}: {entries}")
+
+    return "\n".join(lines)
+
+
+# Recommended actions per template category/name
+_TEMPLATE_ACTIONS: dict[str, list[str]] = {
+    "mule_recruitment": [
+        "Freeze identified bank accounts and UPI IDs under PMLA Section 17",
+        "Request CDR (Call Detail Records) for associated phone numbers",
+        "File STR (Suspicious Transaction Report) with FIU-IND",
+    ],
+    "investment_fraud": [
+        "Report identified accounts to SEBI for investigation under PFUTP Regulations",
+        "Block fraudulent UPI IDs via NPCI dispute mechanism",
+        "Issue investor advisory for identified schemes",
+    ],
+    "maas": [
+        "Freeze mule accounts identified in the network",
+        "Coordinate with banks for KYC details of account holders",
+        "File FIR under BNS 318 (cheating) and PMLA Section 3",
+    ],
+    "digital_arrest": [
+        "Block identified phone numbers via DoT (Department of Telecom)",
+        "Report impersonation accounts to platform operators",
+        "Issue public advisory about digital arrest scam pattern",
+    ],
+    "job_fraud": [
+        "Block identified recruitment portals/URLs",
+        "Report fraudulent company registrations to MCA",
+        "Request CDR for associated phone numbers",
+    ],
+    "pump_and_dump": [
+        "Report manipulated securities to SEBI surveillance division",
+        "Flag identified social media accounts for coordinated promotion",
+        "Request trading data for identified accounts from exchanges",
+    ],
+    "fake_research_report": [
+        "Report fraudulent research reports to SEBI",
+        "Request takedown of hosting domains",
+        "Issue advisory to registered market intermediaries",
+    ],
+    "drug_sale": [
+        "Request CDR and IP logs for identified phone numbers and handles",
+        "Coordinate with NCB for controlled delivery operations",
+        "File case under NDPS Act Sections 20, 22, 25",
+    ],
+    "drug_delivery_recruitment": [
+        "Identify and freeze payment channels (UPI, crypto wallets)",
+        "Request subscriber details for identified Telegram handles",
+        "Coordinate with local police for recruitment hub surveillance",
+    ],
+    "fake_sim_sale": [
+        "Report identified SIM sellers to DoT for TRAI compliance action",
+        "Block identified phone numbers used for SIM activation",
+        "File FIR under IT Act 66C (identity theft)",
+    ],
+    "crypto_cashout": [
+        "Report identified crypto wallet addresses to exchanges for freezing",
+        "Trace blockchain transactions for identified wallets",
+        "Coordinate with ED (Enforcement Directorate) for PMLA investigation",
+    ],
+}
+
+
+def build_recommended_actions(template_matches: list[dict[str, Any]]) -> list[str]:
+    """Generate recommended actions based on matched scam templates.
+
+    Returns a flat list of actionable recommendations derived from template-specific
+    action mappings. Includes legal section references from matched templates.
+    """
+    if not template_matches:
+        return []
+
+    actions: list[str] = []
+    seen: set[str] = set()
+
+    for match in template_matches:
+        name = match.get("template_name", "")
+        template_actions = _TEMPLATE_ACTIONS.get(name, [])
+        for action in template_actions:
+            if action not in seen:
+                seen.add(action)
+                actions.append(action)
+
+        # Add legal section reference if available
+        legal = match.get("legal_sections") or []
+        if legal and isinstance(legal, list):
+            legal_str = ", ".join(legal)
+            ref = f"Applicable legal provisions for {match.get('template_display', name)}: {legal_str}"
+            if ref not in seen:
+                seen.add(ref)
+                actions.append(ref)
+
+    return actions
