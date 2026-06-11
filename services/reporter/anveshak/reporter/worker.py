@@ -123,8 +123,15 @@ async def generate_report(ctx: dict, report_id: str) -> None:
         return
 
     # --- 4. Fetch identifier intelligence (Engine C Step 9) ---
-    identifiers = await db.fetch_topic_identifiers(pool, topic_id)
-    template_matches = await db.fetch_topic_template_matches(pool, topic_id)
+    # Fail-open: identifier data enhances reports but is not required.
+    # DB errors here must not block report generation.
+    try:
+        identifiers = await db.fetch_topic_identifiers(pool, topic_id)
+        template_matches = await db.fetch_topic_template_matches(pool, topic_id)
+    except Exception:
+        log.warning("reporter.identifier_fetch_failed", report_id=report_id, topic_id=topic_id)
+        identifiers = []
+        template_matches = []
     identifier_ctx = assemble_identifier_context(identifiers)
 
     # --- 5. Assemble context and render prompt ---

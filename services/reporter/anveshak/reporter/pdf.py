@@ -136,7 +136,7 @@ PDF_TEMPLATE = """\
         {{ match.get('severity', '') }}
       </span>
     </td>
-    <td style="padding: 5px; text-align: right;">{{ "%.0f"|format((match.get('confidence', 0)) * 100) }}%</td>
+    <td style="padding: 5px; text-align: right;">{{ "%.0f"|format((match.get('confidence') or 0) * 100) }}%</td>
     <td style="padding: 5px; text-align: right;">{{ match.get('match_count', 0) }}</td>
   </tr>
   {% endfor %}
