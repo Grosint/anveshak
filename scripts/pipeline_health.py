@@ -34,6 +34,29 @@ EXIT_HEALTHY = 0
 EXIT_WARNING = 1
 EXIT_CRITICAL = 2
 
+# Engine C identifier types (from migration 009)
+ENGINE_C_IDENTIFIER_TYPES = (
+    "PHONE_IN", "UPI", "EMAIL", "CRYPTO_BTC", "CRYPTO_ETH",
+    "CRYPTO_TRC20", "TELEGRAM_HANDLE", "INSTAGRAM_HANDLE",
+    "URL_DOMAIN", "GSTIN", "UDYAM", "PAN", "IFSC",
+    "BANK_ACCOUNT", "SEBI_REG",
+)
+ENGINE_C_TYPES_SQL = ", ".join(f"''{t}''" for t in ENGINE_C_IDENTIFIER_TYPES)
+
+# Agency detection keywords in topic names
+AGENCY_KEYWORDS = {
+    "mea": ("MEA", "Beijing", "Chinese Media", "Embassy", "Foreign Media"),
+    "cyber": ("Cyber", "Fraud", "Mule", "Investment Fraud"),
+    "sebi": ("SEBI", "Pump", "Surveillance", "Market", "Stock"),
+    "ncb": ("NCB", "Drug", "Narco", "Cannabis", "Stuff"),
+}
+AGENCY_DISPLAY = {
+    "mea": "MEA — Foreign Media Monitoring",
+    "cyber": "Police Cyber Cell — Fraud Detection",
+    "sebi": "SEBI — Market Surveillance",
+    "ncb": "NCB — Narcotics Intelligence",
+}
+
 
 # ---------------------------------------------------------------------------
 # DB query helper
@@ -294,6 +317,306 @@ def report_global(hours: int | None) -> dict:
     return stats
 
 
+# ---------------------------------------------------------------------------
+# Engine C Diagnostics
+# ---------------------------------------------------------------------------
+
+def _engine_c_available() -> bool:
+    """Check if Engine C migration (009) has been applied."""
+    val = _query_val("SELECT to_regclass('scam_templates')")
+    return val is not None and val != ""
+
+
+def report_topic_engine_c(topic_id: str, content_total: int, hours: int | None) -> dict:
+    """Engine C diagnostics for one topic."""
+    time_clause = f"AND ci.captured_at >= NOW() - INTERVAL '{hours} hours'" if hours else ""
+    time_clause_signals = f"AND created_at >= NOW() - INTERVAL '{hours} hours'" if hours else ""
+    stats: dict = {"warnings": []}
+
+    # 1. Identifiers extracted by type
+    id_by_type = _query(f"""
+        SELECT ee.entity_type, COUNT(*) as cnt
+        FROM extracted_entities ee
+        JOIN content_items ci ON ee.content_item_id = ci.id
+        WHERE ci.topic_id = '{topic_id}'
+        AND ee.entity_type IN ({ENGINE_C_TYPES_SQL})
+        {time_clause}
+        GROUP BY ee.entity_type ORDER BY cnt DESC
+    """)
+    stats["identifiers_by_type"] = id_by_type
+    stats["identifiers_total"] = sum(int(r["cnt"]) for r in id_by_type)
+
+    # 2. Content items with zero identifiers
+    no_ids = _query_val(f"""
+        SELECT COUNT(*) FROM content_items ci
+        WHERE ci.topic_id = '{topic_id}'
+        {time_clause.replace('ci.captured_at', 'captured_at') if not time_clause else time_clause}
+        AND NOT EXISTS (
+            SELECT 1 FROM extracted_entities ee
+            WHERE ee.content_item_id = ci.id
+            AND ee.entity_type IN ({ENGINE_C_TYPES_SQL})
+        )
+    """)
+    stats["content_no_identifiers"] = int(no_ids or 0)
+
+    # 3. Template matches
+    tpl_matches = _query(f"""
+        SELECT labels->>'scam_template' as tpl, COUNT(*) as cnt
+        FROM content_items
+        WHERE topic_id = '{topic_id}'
+        AND labels->>'scam_template' IS NOT NULL
+        {time_clause.replace('ci.captured_at', 'captured_at') if not time_clause else time_clause.replace('ci.', '')}
+        GROUP BY labels->>'scam_template' ORDER BY cnt DESC
+    """)
+    stats["template_matches"] = tpl_matches
+    stats["template_match_total"] = sum(int(r["cnt"]) for r in tpl_matches)
+
+    # 4. Template coverage
+    if content_total > 0:
+        stats["template_coverage_pct"] = round(stats["template_match_total"] / content_total * 100, 1)
+    else:
+        stats["template_coverage_pct"] = 0.0
+
+    # 5. Identifier clusters (top 5)
+    clusters = _query(f"""
+        SELECT identifier_type, identifier_value, source_count, content_item_count
+        FROM identifier_clusters
+        WHERE topic_id = '{topic_id}'
+        ORDER BY source_count DESC
+        LIMIT 5
+    """)
+    stats["id_clusters_top"] = clusters
+
+    cluster_count = _query_val(f"""
+        SELECT COUNT(*) FROM identifier_clusters WHERE topic_id = '{topic_id}'
+    """)
+    stats["id_cluster_count"] = int(cluster_count or 0)
+
+    # 6. Engine C signals
+    ec_signals = _query(f"""
+        SELECT signal_type, COUNT(*) as cnt FROM signals
+        WHERE topic_id = '{topic_id}'
+        AND signal_type IN ('identifier_convergence', 'scam_template_match')
+        {time_clause_signals}
+        GROUP BY signal_type
+    """)
+    stats["ec_signals"] = ec_signals
+    ec_signal_map = {r["signal_type"]: int(r["cnt"]) for r in ec_signals}
+    stats["id_convergence_count"] = ec_signal_map.get("identifier_convergence", 0)
+    stats["tpl_match_signal_count"] = ec_signal_map.get("scam_template_match", 0)
+
+    # 7. Warnings
+    if content_total > 0 and stats["identifiers_total"] == 0:
+        stats["warnings"].append("Content exists but 0 identifiers extracted — Engine C extraction may not be running")
+    if stats["id_cluster_count"] > 0 and stats["id_convergence_count"] == 0:
+        stats["warnings"].append("Identifier clusters exist but 0 identifier_convergence signals — check signal engine")
+    if stats["template_match_total"] > 0 and stats["tpl_match_signal_count"] == 0:
+        stats["warnings"].append("Template matches exist but 0 scam_template_match signals — check signal engine")
+
+    return stats
+
+
+def report_global_engine_c(hours: int | None) -> dict:
+    """Global Engine C diagnostics."""
+    stats: dict = {"warnings": []}
+    time_clause = f"AND ee.created_at >= NOW() - INTERVAL '{hours} hours'" if hours else ""
+
+    # Total identifiers by type
+    id_global = _query(f"""
+        SELECT entity_type, COUNT(*) as cnt FROM extracted_entities
+        WHERE entity_type IN ({ENGINE_C_TYPES_SQL})
+        {time_clause.replace('ee.', '')}
+        GROUP BY entity_type ORDER BY cnt DESC
+    """)
+    stats["identifiers_global"] = id_global
+    stats["identifiers_global_total"] = sum(int(r["cnt"]) for r in id_global)
+
+    # Template matches global
+    tpl_global = _query("""
+        SELECT labels->>'scam_template' as tpl, COUNT(*) as cnt
+        FROM content_items
+        WHERE labels->>'scam_template' IS NOT NULL
+        GROUP BY labels->>'scam_template' ORDER BY cnt DESC
+    """)
+    stats["templates_global"] = tpl_global
+    stats["most_active_template"] = tpl_global[0]["tpl"] if tpl_global else "none"
+
+    # Cluster global stats
+    cluster_global = _query("""
+        SELECT COUNT(*) as total, COALESCE(ROUND(AVG(source_count)::numeric, 1), 0) as avg_sc
+        FROM identifier_clusters
+    """)
+    if cluster_global:
+        stats["clusters_total"] = int(cluster_global[0].get("total", 0))
+        stats["clusters_avg_sc"] = cluster_global[0].get("avg_sc", "0")
+    else:
+        stats["clusters_total"] = 0
+        stats["clusters_avg_sc"] = "0"
+
+    # Tipline ingestion
+    tipline = _query_val("""
+        SELECT COUNT(*) FROM content_items ci
+        JOIN sources s ON ci.source_id = s.id
+        WHERE s.platform = 'tipline'
+    """)
+    stats["tipline_count"] = int(tipline or 0)
+
+    # Instagram adapter
+    ig = _query("""
+        SELECT s.platform, COUNT(*) as cnt FROM content_items ci
+        JOIN sources s ON ci.source_id = s.id
+        WHERE s.platform IN ('instagram', 'instagram_bio')
+        GROUP BY s.platform
+    """)
+    stats["instagram"] = ig
+    stats["instagram_total"] = sum(int(r["cnt"]) for r in ig)
+
+    # Template health: built-in vs custom
+    tpl_health = _query("""
+        SELECT
+            COUNT(*) FILTER (WHERE is_builtin = true) as builtin,
+            COUNT(*) FILTER (WHERE is_builtin = false OR is_builtin IS NULL) as custom
+        FROM scam_templates WHERE is_active = true
+    """)
+    if tpl_health:
+        stats["templates_builtin"] = int(tpl_health[0].get("builtin", 0))
+        stats["templates_custom"] = int(tpl_health[0].get("custom", 0))
+    else:
+        stats["templates_builtin"] = 0
+        stats["templates_custom"] = 0
+
+    if stats["templates_builtin"] != 11:
+        stats["warnings"].append(f"Expected 11 built-in templates, found {stats['templates_builtin']} — check migration 009 seed data")
+
+    return stats
+
+
+def _detect_agency(topic_name: str) -> str | None:
+    """Detect agency type from topic name. Returns agency code or None."""
+    name_lower = topic_name.lower()
+    for agency, keywords in AGENCY_KEYWORDS.items():
+        for kw in keywords:
+            if kw.lower() in name_lower:
+                return agency
+    return None
+
+
+def report_agency_summary(topic_id: str, topic_name: str) -> dict | None:
+    """Agency-specific diagnostics. Returns None if not an agency demo topic."""
+    agency = _detect_agency(topic_name)
+    if not agency:
+        return None
+
+    stats: dict = {"agency": agency, "display": AGENCY_DISPLAY.get(agency, agency)}
+
+    if agency == "mea":
+        # Multilingual content
+        langs = _query(f"""
+            SELECT language, COUNT(*) as cnt FROM content_items
+            WHERE topic_id = '{topic_id}' GROUP BY language ORDER BY cnt DESC
+        """)
+        stats["languages"] = langs
+        # Translation count
+        translated = _query_val(f"""
+            SELECT COUNT(*) FROM content_items
+            WHERE topic_id = '{topic_id}' AND translated_text IS NOT NULL AND language != 'en'
+        """)
+        stats["translated_count"] = int(translated or 0)
+        non_en = _query_val(f"""
+            SELECT COUNT(*) FROM content_items
+            WHERE topic_id = '{topic_id}' AND language != 'en'
+        """)
+        stats["non_english_count"] = int(non_en or 0)
+        # Narrative clusters
+        nc = _query_val(f"""
+            SELECT COUNT(*) FROM narrative_clusters
+            WHERE topic_id = '{topic_id}' AND archived_at IS NULL
+        """)
+        stats["narrative_cluster_count"] = int(nc or 0)
+
+    elif agency == "cyber":
+        # Top identifiers by source count
+        top_ids = _query(f"""
+            SELECT identifier_type, identifier_value, source_count
+            FROM identifier_clusters
+            WHERE topic_id = '{topic_id}'
+            AND identifier_type IN ('PHONE_IN', 'UPI', 'TELEGRAM_HANDLE')
+            ORDER BY source_count DESC LIMIT 10
+        """)
+        stats["top_identifiers"] = top_ids
+        # Template breakdown (fraud-focused)
+        tpl = _query(f"""
+            SELECT labels->>'scam_template' as tpl, COUNT(*) as cnt
+            FROM content_items
+            WHERE topic_id = '{topic_id}'
+            AND labels->>'scam_template' IN ('mule_recruitment', 'investment_fraud', 'maas', 'digital_arrest', 'job_fraud')
+            GROUP BY labels->>'scam_template' ORDER BY cnt DESC
+        """)
+        stats["fraud_templates"] = tpl
+
+    elif agency == "sebi":
+        # Finfluencer handles
+        handles = _query(f"""
+            SELECT identifier_type, identifier_value, source_count
+            FROM identifier_clusters
+            WHERE topic_id = '{topic_id}'
+            AND identifier_type IN ('TELEGRAM_HANDLE', 'INSTAGRAM_HANDLE')
+            ORDER BY source_count DESC LIMIT 5
+        """)
+        stats["finfluencer_handles"] = handles
+        # pump_and_dump count
+        pnd = _query_val(f"""
+            SELECT COUNT(*) FROM content_items
+            WHERE topic_id = '{topic_id}'
+            AND labels->>'scam_template' = 'pump_and_dump'
+        """)
+        stats["pump_and_dump_count"] = int(pnd or 0)
+        # fake_research_report count
+        frr = _query_val(f"""
+            SELECT COUNT(*) FROM content_items
+            WHERE topic_id = '{topic_id}'
+            AND labels->>'scam_template' = 'fake_research_report'
+        """)
+        stats["fake_report_count"] = int(frr or 0)
+
+    elif agency == "ncb":
+        # Drug template matches
+        drug = _query_val(f"""
+            SELECT COUNT(*) FROM content_items
+            WHERE topic_id = '{topic_id}'
+            AND labels->>'scam_template' IN ('drug_sale', 'drug_delivery_recruitment')
+        """)
+        stats["drug_template_count"] = int(drug or 0)
+        # Crypto wallets
+        wallets = _query(f"""
+            SELECT identifier_type, identifier_value, source_count
+            FROM identifier_clusters
+            WHERE topic_id = '{topic_id}'
+            AND identifier_type IN ('CRYPTO_BTC', 'CRYPTO_ETH', 'CRYPTO_TRC20')
+            ORDER BY source_count DESC LIMIT 5
+        """)
+        stats["crypto_wallets"] = wallets
+        # Dealer phones
+        phones = _query(f"""
+            SELECT identifier_value, source_count
+            FROM identifier_clusters
+            WHERE topic_id = '{topic_id}'
+            AND identifier_type = 'PHONE_IN'
+            ORDER BY source_count DESC LIMIT 5
+        """)
+        stats["dealer_phones"] = phones
+        # Dark web content
+        dw = _query_val(f"""
+            SELECT COUNT(*) FROM content_items ci
+            JOIN sources s ON ci.source_id = s.id
+            WHERE ci.topic_id = '{topic_id}'
+            AND s.platform = 'darkweb'
+        """)
+        stats["darkweb_count"] = int(dw or 0)
+
+    return stats
+
+
 def check_gpu() -> str | None:
     """Check GPU utilization via nvidia-smi."""
     try:
@@ -427,6 +750,134 @@ def format_global_report(stats: dict) -> str:
     return "\n".join(lines)
 
 
+def format_topic_engine_c(ec: dict) -> str:
+    """Format Engine C per-topic diagnostics."""
+    lines = ["  --- Engine C: Identifier Intelligence ---"]
+
+    # Identifiers by type
+    if ec["identifiers_by_type"]:
+        parts = ", ".join(f"{r['entity_type']}={r['cnt']}" for r in ec["identifiers_by_type"])
+        lines.append(f"  Identifiers extracted:      {ec['identifiers_total']} ({parts})")
+    else:
+        lines.append(f"  Identifiers extracted:      0")
+
+    lines.append(f"  Content w/o identifiers:    {ec['content_no_identifiers']} items")
+
+    # Template matches
+    if ec["template_matches"]:
+        parts = ", ".join(f"{r['tpl']}={r['cnt']}" for r in ec["template_matches"])
+        lines.append(f"  Template matches:           {ec['template_match_total']} ({parts})")
+    else:
+        lines.append(f"  Template matches:           0")
+    lines.append(f"  Template coverage:          {ec['template_coverage_pct']}%")
+
+    # Identifier clusters
+    lines.append(f"  Identifier clusters:        {ec['id_cluster_count']}")
+    for c in ec["id_clusters_top"]:
+        val = c["identifier_value"]
+        if len(val) > 30:
+            val = val[:27] + "..."
+        lines.append(f"    - {c['identifier_type']} / {val}: {c['source_count']} sources, {c['content_item_count']} items")
+
+    # Engine C signals
+    if ec["ec_signals"]:
+        parts = ", ".join(f"{r['signal_type']}={r['cnt']}" for r in ec["ec_signals"])
+        lines.append(f"  Engine C signals:           {parts}")
+    else:
+        lines.append(f"  Engine C signals:           0")
+
+    for w in ec["warnings"]:
+        lines.append(f"  WARNING: {w}")
+
+    return "\n".join(lines)
+
+
+def format_global_engine_c(ec: dict) -> str:
+    """Format Engine C global diagnostics."""
+    lines = ["  --- Engine C: Global ---"]
+
+    # Identifiers
+    if ec["identifiers_global"]:
+        parts = ", ".join(f"{r['entity_type']}={r['cnt']}" for r in ec["identifiers_global"][:6])
+        extra = f", +{len(ec['identifiers_global']) - 6} more" if len(ec["identifiers_global"]) > 6 else ""
+        lines.append(f"  Identifiers (all topics):   {ec['identifiers_global_total']} ({parts}{extra})")
+    else:
+        lines.append(f"  Identifiers (all topics):   0")
+
+    # Templates
+    if ec["templates_global"]:
+        parts = ", ".join(f"{r['tpl']}={r['cnt']}" for r in ec["templates_global"][:5])
+        lines.append(f"  Template matches (global):  {parts}")
+        lines.append(f"  Most active template:       {ec['most_active_template']}")
+    else:
+        lines.append(f"  Template matches (global):  0")
+
+    # Clusters
+    lines.append(f"  Identifier clusters:        {ec['clusters_total']} total, avg {ec['clusters_avg_sc']} sources/cluster")
+
+    # Adapters
+    lines.append(f"  Tipline items ingested:     {ec['tipline_count']}")
+    lines.append(f"  Instagram items:            {ec['instagram_total']}")
+
+    # Template health
+    lines.append(f"  Scam templates:             {ec['templates_builtin']} built-in, {ec['templates_custom']} custom")
+
+    for w in ec["warnings"]:
+        lines.append(f"  WARNING: {w}")
+
+    return "\n".join(lines)
+
+
+def format_agency_summary(agency_stats: dict) -> str:
+    """Format agency-specific summary."""
+    agency = agency_stats["agency"]
+    lines = [f"  --- Agency: {agency_stats['display']} ---"]
+
+    if agency == "mea":
+        if agency_stats.get("languages"):
+            parts = ", ".join(f"{r['language']}={r['cnt']}" for r in agency_stats["languages"])
+            lines.append(f"  Languages:                  {parts}")
+        lines.append(f"  Non-English content:        {agency_stats.get('non_english_count', 0)} items")
+        lines.append(f"  Translated:                 {agency_stats.get('translated_count', 0)} items")
+        lines.append(f"  Narrative clusters:         {agency_stats.get('narrative_cluster_count', 0)}")
+
+    elif agency == "cyber":
+        if agency_stats.get("top_identifiers"):
+            lines.append(f"  Top identifiers (by source count):")
+            for r in agency_stats["top_identifiers"][:5]:
+                lines.append(f"    {r['identifier_type']} / {r['identifier_value']}: {r['source_count']} sources")
+        if agency_stats.get("fraud_templates"):
+            parts = ", ".join(f"{r['tpl']}={r['cnt']}" for r in agency_stats["fraud_templates"])
+            lines.append(f"  Fraud templates:            {parts}")
+        else:
+            lines.append(f"  Fraud templates:            0 matches")
+
+    elif agency == "sebi":
+        if agency_stats.get("finfluencer_handles"):
+            lines.append(f"  Finfluencer handles:")
+            for r in agency_stats["finfluencer_handles"]:
+                lines.append(f"    {r['identifier_value']}: {r['source_count']} sources")
+        lines.append(f"  Pump-and-dump matches:      {agency_stats.get('pump_and_dump_count', 0)}")
+        lines.append(f"  Fake research reports:      {agency_stats.get('fake_report_count', 0)}")
+
+    elif agency == "ncb":
+        lines.append(f"  Drug template matches:      {agency_stats.get('drug_template_count', 0)}")
+        if agency_stats.get("crypto_wallets"):
+            lines.append(f"  Crypto wallets:")
+            for r in agency_stats["crypto_wallets"]:
+                val = r["identifier_value"]
+                if len(val) > 20:
+                    val = val[:17] + "..."
+                lines.append(f"    {r['identifier_type']} / {val}: {r['source_count']} sources")
+        if agency_stats.get("dealer_phones"):
+            lines.append(f"  Dealer phones:")
+            for r in agency_stats["dealer_phones"]:
+                lines.append(f"    {r['identifier_value']}: {r['source_count']} sources")
+        lines.append(f"  Dark web content:           {agency_stats.get('darkweb_count', 0)} items")
+
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -454,6 +905,12 @@ def main() -> int:
         print(f"CRITICAL: Cannot connect to PostgreSQL container ({POSTGRES_CONTAINER})")
         print("Ensure containers are running: make ps")
         return EXIT_CRITICAL
+
+    # Engine C availability
+    engine_c_ok = _engine_c_available()
+    if not engine_c_ok:
+        print("INFO: Engine C tables not found — run migration 009 for identifier intelligence")
+        print()
 
     # GPU
     gpu_info = check_gpu()
@@ -484,6 +941,17 @@ def main() -> int:
             topic["name"], int(topic["signal_threshold"]),
             stats, hours,
         ))
+
+        # Engine C per-topic diagnostics
+        if engine_c_ok:
+            ec_stats = report_topic_engine_c(topic["id"], stats["content_total"], hours)
+            print(format_topic_engine_c(ec_stats))
+            all_warnings.extend(ec_stats.get("warnings", []))
+            # Agency-specific summary
+            agency_stats = report_agency_summary(topic["id"], topic["name"])
+            if agency_stats:
+                print(format_agency_summary(agency_stats))
+
         print()
         all_warnings.extend(stats["warnings"])
         all_criticals.extend(stats["criticals"])
@@ -491,6 +959,13 @@ def main() -> int:
     # Global stats
     global_stats = report_global(hours)
     print(format_global_report(global_stats))
+
+    # Engine C global diagnostics
+    if engine_c_ok:
+        ec_global = report_global_engine_c(hours)
+        print(format_global_engine_c(ec_global))
+        all_warnings.extend(ec_global.get("warnings", []))
+
     print()
     all_warnings.extend(global_stats["warnings"])
     all_criticals.extend(global_stats.get("criticals", []))
