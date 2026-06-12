@@ -351,6 +351,8 @@ async def get_topic_content(
             labels = json.loads(labels)
         d["sentiment"] = labels.get("sentiment")
         d["keywords"] = labels.get("keywords", [])
+        d["scam_template"] = labels.get("scam_template")
+        d["template_confidence"] = labels.get("template_confidence")
         # Round relevance score to 2 decimals for display
         raw_rel = d.get("topic_relevance_score")
         d["topic_relevance_score"] = round(raw_rel, 2) if raw_rel is not None else None

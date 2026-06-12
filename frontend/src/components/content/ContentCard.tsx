@@ -50,6 +50,12 @@ export function ContentCard({ item, onClick }: ContentCardProps) {
             +{dupCount} duplicate{dupCount > 1 ? 's' : ''}
           </Badge>
         )}
+        {item.scam_template && (
+          <span className="text-[10px] font-medium text-red-400 bg-red-500/10 border border-red-500/20 rounded px-1.5 py-0.5">
+            {item.scam_template.replace(/_/g, ' ')}
+            {item.template_confidence != null && ` ${Math.round(item.template_confidence * 100)}%`}
+          </span>
+        )}
         {item.topic_relevance_score != null && (
           <span className="text-[10px] font-mono font-medium text-anveshak-accent/80 bg-anveshak-accent/10 border border-anveshak-accent/20 rounded px-1.5 py-0.5">
             {Math.round(item.topic_relevance_score * 100)}% match

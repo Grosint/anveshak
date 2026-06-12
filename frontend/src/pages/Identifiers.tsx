@@ -227,19 +227,19 @@ function TopIdentifiersTable({ items }: { items: TopIdentifier[] }) {
         <tbody>
           {items.map((item, i) => (
             <tr
-              key={`${item.entity_type}-${item.entity_text}-${i}`}
+              key={`${item.identifier_type}-${item.identifier_value}-${i}`}
               className="border-b border-anveshak-border/50 hover:bg-anveshak-muted/50 transition-colors"
             >
-              <td className="py-2 px-3"><TypeBadge type={item.entity_type} /></td>
-              <td className="py-2 px-3 font-mono text-text-primary text-xs">{item.entity_text}</td>
+              <td className="py-2 px-3"><TypeBadge type={item.identifier_type} /></td>
+              <td className="py-2 px-3 font-mono text-text-primary text-xs">{item.identifier_value}</td>
               <td className="py-2 px-3 text-right">
                 <span className={`font-bold ${item.source_count >= 3 ? 'text-signal-high' : 'text-text-primary'}`}>
                   {item.source_count}
                 </span>
               </td>
               <td className="py-2 px-3 text-right text-text-secondary">{item.content_item_count}</td>
-              <td className="py-2 px-3 text-text-muted text-xs">{formatDate(item.first_seen)}</td>
-              <td className="py-2 px-3 text-text-muted text-xs">{formatDate(item.last_seen)}</td>
+              <td className="py-2 px-3 text-text-muted text-xs">{formatDate(item.first_seen_at)}</td>
+              <td className="py-2 px-3 text-text-muted text-xs">{formatDate(item.last_seen_at)}</td>
             </tr>
           ))}
         </tbody>

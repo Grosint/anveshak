@@ -92,12 +92,9 @@ body {
   color: var(--text-primary);
   max-width: none;
 }
-.prose-anveshak h1, .prose-anveshak h2, .prose-anveshak h3 {
-  color: var(--text-primary);
-  font-weight: 600;
-  margin-top: 1.25em;
-  margin-bottom: 0.5em;
-}
+.prose-anveshak h1 { color: var(--text-primary); font-weight: 700; font-size: 1.5em; margin-top: 1.25em; margin-bottom: 0.5em; }
+.prose-anveshak h2 { color: var(--text-primary); font-weight: 600; font-size: 1.25em; margin-top: 1.25em; margin-bottom: 0.5em; border-bottom: 1px solid var(--anveshak-border); padding-bottom: 0.3em; }
+.prose-anveshak h3 { color: var(--text-primary); font-weight: 600; font-size: 1.1em; margin-top: 1em; margin-bottom: 0.4em; }
 .prose-anveshak p { margin: 0.75em 0; }
 .prose-anveshak ul, .prose-anveshak ol { padding-left: 1.5em; margin: 0.75em 0; }
 .prose-anveshak li { margin: 0.25em 0; }
@@ -116,6 +113,29 @@ body {
   color: var(--text-secondary);
   margin: 0.75em 0;
 }
+.prose-anveshak table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75em 0;
+  font-size: 0.85em;
+}
+.prose-anveshak th {
+  background: var(--anveshak-muted);
+  color: var(--text-primary);
+  font-weight: 600;
+  text-align: left;
+  padding: 0.5em 0.75em;
+  border-bottom: 2px solid var(--anveshak-border);
+}
+.prose-anveshak td {
+  padding: 0.4em 0.75em;
+  border-bottom: 1px solid var(--anveshak-border);
+  color: var(--text-secondary);
+}
+.prose-anveshak tr:hover td { background: rgba(255,255,255,0.02); }
+.prose-anveshak a { color: var(--anveshak-accent); text-decoration: underline; }
+.prose-anveshak a:hover { opacity: 0.8; }
+.prose-anveshak hr { border: none; border-top: 1px solid var(--anveshak-border); margin: 1.5em 0; }
 
 /* ─── Animation utilities ─────────────────────────────────────────────────── */
 @keyframes fadeIn {

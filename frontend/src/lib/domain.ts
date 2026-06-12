@@ -15,10 +15,14 @@ export function inferSeverity(signal: Signal): string {
   if (isc >= 3) return 'HIGH'
   if (isc >= 2) return 'MEDIUM'
   const t = signal.signal_type.toUpperCase()
+  // Engine C signal types
+  if (t.includes('IDENTIFIER_CONVERGENCE')) return 'HIGH'
+  if (t.includes('SCAM_TEMPLATE_MATCH')) return 'MEDIUM'
+  if (t.includes('MULTI_SOURCE_CONVERGENCE')) return 'HIGH'
   if (t.includes('HIGH') || t.includes('CRITICAL')) return 'HIGH'
   if (t.includes('MED')) return 'MEDIUM'
   if (t.includes('LOW')) return 'LOW'
-  return 'HIGH' // BUG R2: should arguably be LOW for unknown types
+  return 'HIGH'
 }
 
 // ── Confidence badge ────────────────────────────────────────────────────

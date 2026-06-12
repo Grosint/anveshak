@@ -29,12 +29,12 @@ export interface IdentifierResult {
 }
 
 export interface TopIdentifier {
-  entity_type: IdentifierType
-  entity_text: string
+  identifier_type: IdentifierType
+  identifier_value: string
   source_count: number
   content_item_count: number
-  first_seen: string
-  last_seen: string
+  first_seen_at: string | null
+  last_seen_at: string | null
 }
 
 export interface IdentifierCluster {

@@ -57,6 +57,11 @@ export const signalsApi = {
   dismiss: (signalId: string) =>
     api.patch<{ signal_id: string; status: string }>(`/api/v1/signals/${signalId}/dismiss`).then((r) => r.data),
 
+  listByTopic: (topicId: string, status: SignalStatus = 'new') =>
+    api.get<Signal[]>('/api/v1/signals', {
+      params: { topic_id: topicId, status },
+    }).then((r) => r.data),
+
   connections: (signalId: string) =>
     api.get<SignalConnections>(`/api/v1/signals/${signalId}/connections`).then((r) => r.data),
 }

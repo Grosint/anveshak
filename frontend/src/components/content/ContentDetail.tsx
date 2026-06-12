@@ -169,6 +169,25 @@ export function ContentDetail({ contentId, onClose }: ContentDetailProps) {
               </p>
             </div>
 
+            {/* ── Scam template match (Engine C) ────────────────────── */}
+            {item.scam_template && (
+              <div className="px-5 py-3 border-b border-anveshak-border/30 bg-red-500/[0.03]">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                    Template Match
+                  </span>
+                  <span className="text-[11px] font-semibold text-red-400 bg-red-500/15 border border-red-500/25 rounded-md px-2 py-0.5">
+                    {item.scam_template.replace(/_/g, ' ')}
+                  </span>
+                  {item.template_confidence != null && (
+                    <span className="text-[10px] font-mono text-text-muted">
+                      {Math.round(item.template_confidence * 100)}% confidence
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* ── Key entities (the intelligence) ─────────────────────── */}
             {sortedGroups.length > 0 && (
               <div className="px-5 py-4 border-b border-anveshak-border/30">

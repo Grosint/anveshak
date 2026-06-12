@@ -22,6 +22,9 @@ export interface ContentItem {
   sentiment?: SentimentScore | null
   keywords?: string[] | null
   topic_relevance_score?: number | null
+  // Engine C: scam template match
+  scam_template?: string | null
+  template_confidence?: number | null
   // Detail-only fields (GET /api/v1/content/{id})
   source_name?: string
   platform?: string

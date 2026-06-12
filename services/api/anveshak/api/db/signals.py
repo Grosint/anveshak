@@ -287,7 +287,7 @@ async def get_signal_connections(
         first = rows[0]
         return _build_topic_graph(rows, first)
 
-    return _build_cluster_graph(rows, first, conn, signal_id)
+    return await _build_cluster_graph(rows, first, conn, signal_id)
 
 
 async def _build_cluster_graph(

@@ -15,6 +15,10 @@ import { Spinner } from '../components/ui/Spinner'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Button } from '../components/ui/Button'
 import ExportButton from '../components/ui/ExportButton'
+import { lazy, Suspense } from 'react'
+
+const Identifiers = lazy(() => import('./Identifiers'))
+const TemplateManager = lazy(() => import('../components/topics/TemplateManager'))
 
 export default function ContentFeed() {
   const { topicId } = useParams<{ topicId: string }>()
@@ -28,6 +32,8 @@ export default function ContentFeed() {
   const [showSources, setShowSources]   = useState(false)
   const [showDiscovery, setShowDiscovery] = useState(false)
   const [showAnalytics, setShowAnalytics] = useState(false)
+  const [showIdentifiers, setShowIdentifiers] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
 
   // Topic meta
   const { data: topic } = useQuery({
@@ -126,6 +132,27 @@ export default function ContentFeed() {
               </svg>
               Discover Sources
             </Button>
+            <Button
+              variant={showIdentifiers ? 'primary' : 'secondary'}
+              size="sm"
+              onClick={() => setShowIdentifiers((v) => !v)}
+              aria-label="Toggle identifiers panel"
+              aria-pressed={showIdentifiers}
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
+                <path fillRule="evenodd" d="M3.5 2A1.5 1.5 0 002 3.5V5c0 .414.336.75.75.75h14.5A.75.75 0 0018 5V3.5A1.5 1.5 0 0016.5 2h-13zm11.066 4.97a.75.75 0 10-1.132-.99l-2.794 3.193-1.283-1.283a.75.75 0 00-1.06 1.06l1.857 1.858a.75.75 0 001.096-.035l3.316-3.803zM2 7.5h4v2H2.75A.75.75 0 012 8.75V7.5zm0 3.5h4v2H2.75a.75.75 0 01-.75-.75V11zm0 3.5h4V16h-.5A1.5 1.5 0 012 14.5zm14.25-7h-4v2h4.75V8.75a.75.75 0 00-.75-.75zm.75 3.5h-4.75v2h4.75v-1.25a.75.75 0 00-.75-.75h.75zm-.75 3.5h-4.25V16h2.75A1.5 1.5 0 0018 14.5V14.5h-1.75z" clipRule="evenodd" />
+              </svg>
+              Identifiers
+            </Button>
+            <Button
+              variant={showTemplates ? 'primary' : 'secondary'}
+              size="sm"
+              onClick={() => setShowTemplates((v) => !v)}
+              aria-label="Toggle templates panel"
+              aria-pressed={showTemplates}
+            >
+              Templates
+            </Button>
             <ExportButton
               endpoint="/api/v1/export/content"
               params={{ topic_id: topicId }}
@@ -194,6 +221,24 @@ export default function ContentFeed() {
       {showDiscovery && (
         <div className="px-6 py-4 border-b border-anveshak-border max-h-[50vh] overflow-y-auto">
           <SourceDiscoveryTab topicId={topicId} />
+        </div>
+      )}
+
+      {/* Identifiers panel (Engine C) */}
+      {showIdentifiers && (
+        <div className="px-6 py-4 border-b border-anveshak-border max-h-[60vh] overflow-y-auto">
+          <Suspense fallback={<Spinner label="Loading identifiers…" />}>
+            <Identifiers embedded topicId={topicId} />
+          </Suspense>
+        </div>
+      )}
+
+      {/* Template manager panel (Engine C) */}
+      {showTemplates && (
+        <div className="px-6 py-4 border-b border-anveshak-border max-h-[50vh] overflow-y-auto">
+          <Suspense fallback={<Spinner label="Loading templates…" />}>
+            <TemplateManager topicId={topicId} />
+          </Suspense>
         </div>
       )}
 

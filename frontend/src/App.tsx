@@ -5,7 +5,7 @@ import { WSProvider } from './contexts/WSContext'
 import Layout from './components/ui/Layout'
 import Login from './pages/Login'
 import TopicsDashboard from './pages/TopicsDashboard'
-import ContentFeed from './pages/ContentFeed'
+import TopicWorkspace from './pages/TopicWorkspace'
 import ImageAnalysis from './pages/ImageAnalysis'
 import SignalsInbox from './pages/SignalsInbox'
 import ReportBuilder from './pages/ReportBuilder'
@@ -83,7 +83,7 @@ export default function App() {
         >
           <Route path="/" element={<Navigate to="/topics" replace />} />
           <Route path="/topics" element={<TopicsDashboard />} />
-          <Route path="/topics/:topicId/feed" element={<ContentFeed />} />
+          <Route path="/topics/:topicId/feed" element={<TopicWorkspace />} />
           <Route path="/vision" element={<ImageAnalysis />} />
           <Route path="/signals" element={<SignalsInbox />} />
           <Route path="/identifiers" element={<Identifiers />} />

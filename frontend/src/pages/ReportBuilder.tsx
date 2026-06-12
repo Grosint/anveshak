@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import rehypeSanitize from 'rehype-sanitize'
 import { topicsApi } from '../api/topics'
 import { reportsApi, Report, ReportType, ReportSummary, CreateReportPayload } from '../api/reports'
@@ -270,7 +271,7 @@ export default function ReportBuilder() {
                         )}
                         {report?.content_md && (
                           <div className="bg-anveshak-card border border-anveshak-border rounded-lg p-6 prose-anveshak">
-                            <ReactMarkdown rehypePlugins={[rehypeSanitize]}>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
                               {report.content_md}
                             </ReactMarkdown>
                           </div>
