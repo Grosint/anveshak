@@ -47,6 +47,8 @@
 > See also: `learned/test-db-same-container-isolation.md` — anveshak_test DB in same container; pool-based tests can't use transaction rollback
 > See also: `learned/fk-cascade-teardown-order.md` — full 13-table delete order for topic/source teardown; circular FK trap with narrative_clusters
 > See also: `learned/pytest-exit-safety-guard.md` — pytest.exit() to hard-block tests from running against production DB
+> See also: `learned/arq-queue-name-all-callers.md` — every enqueue_job must match target worker's queue_name; grep ALL callers
+> See also: `learned/compose-worker-for-every-arq-scheduler.md` — every service calling enqueue_job needs a matching worker container in compose
 
 ---
 

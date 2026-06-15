@@ -36,6 +36,8 @@
 > See also: `learned/credibility-settings-separation.md` — separate penalty magnitude from noise filter threshold
 > See also: `learned/detect-language-must-not-gatekeep.md` — detect_language returns real lang; don't filter on downstream model availability
 > See also: `learned/golden-test-data-ml-pipeline.md` — pre-written multilingual content with expected outputs; fuzzy keyword matching
+> See also: `learned/scope-param-passthrough-invariant.md` — if route accepts topic_id, every code path must pass it through to SQL; silent drop = cross-topic data leak
+> See also: `learned/arq-queue-name-all-callers.md` — enqueue_job _queue_name must match target WorkerSettings.queue_name at every call site
 
 ---
 

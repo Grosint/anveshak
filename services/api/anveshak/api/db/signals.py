@@ -60,6 +60,25 @@ SQL_LIST_SIGNALS_SINCE = """
     LIMIT 200
 """
 
+SQL_LIST_SIGNALS_SINCE_BY_TOPIC = """
+    SELECT s.id, s.topic_id, s.cluster_id, s.signal_type, s.description, s.evidence,
+           s.status, s.created_at,
+           nc.label AS cluster_label,
+           nc.independent_source_count,
+           nc.item_count AS cluster_item_count,
+           nc.executive_summary,
+           t.name AS topic_name
+    FROM signals s
+    LEFT JOIN narrative_clusters nc ON nc.id = s.cluster_id
+    LEFT JOIN topics t ON t.id = s.topic_id
+    WHERE s.status = $1
+      AND s.created_at >= $2
+      AND s.created_at <= $3
+      AND s.topic_id = $4
+    ORDER BY s.created_at DESC
+    LIMIT 200
+"""
+
 SQL_LIST_SIGNALS_BY_ORG = """
     SELECT s.id, s.topic_id, s.cluster_id, s.signal_type, s.description, s.evidence,
            s.status, s.created_at,
@@ -247,9 +266,13 @@ async def list_signals_by_org(
 
 
 async def list_signals_filtered(
-    conn: asyncpg.Connection, status: str, since: Any, until: Any
+    conn: asyncpg.Connection, status: str, since: Any, until: Any,
+    *, topic_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    rows = await conn.fetch(SQL_LIST_SIGNALS_SINCE, status, since, until)
+    if topic_id:
+        rows = await conn.fetch(SQL_LIST_SIGNALS_SINCE_BY_TOPIC, status, since, until, topic_id)
+    else:
+        rows = await conn.fetch(SQL_LIST_SIGNALS_SINCE, status, since, until)
     signals = [dict(r) for r in rows]
     return [await _enrich_signal(conn, s) for s in signals]
 

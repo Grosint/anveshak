@@ -127,11 +127,11 @@ async def list_signals(
     if since is not None or until is not None:
         _since = since or datetime.min.replace(tzinfo=UTC)
         _until = until or datetime.now(UTC)
-        if is_super_admin(user):
-            return await signals_db.list_signals_filtered(db, status, _since, _until)
-        return await signals_db.list_signals_filtered(db, status, _since, _until)
-    if is_super_admin(user):
+        return await signals_db.list_signals_filtered(db, status, _since, _until, topic_id=topic_id)
+    if topic_id:
         return await signals_db.list_signals(db, status, topic_id=topic_id)
+    if is_super_admin(user):
+        return await signals_db.list_signals(db, status)
     org_id = get_user_org(user)
     return await signals_db.list_signals_by_org(db, status, org_id)
 
