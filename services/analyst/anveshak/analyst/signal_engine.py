@@ -17,8 +17,10 @@ from typing import Awaitable, Callable
 import asyncpg
 import structlog
 
+from .identifier_signals import check_identifier_signals
 from .metrics import analyst_signals_fired_total
 from .settings import settings
+from .template_signals import check_template_signals
 
 log = structlog.get_logger(__name__)
 
@@ -354,12 +356,16 @@ async def signal_engine_loop(pool: asyncpg.Pool, broadcast: BroadcastFn) -> None
         try:
             fired = await check_signals(pool, broadcast)
             sentiment_fired = await check_sentiment_shifts(pool, broadcast)
-            total = fired + sentiment_fired
+            identifier_fired = await check_identifier_signals(pool, broadcast)
+            template_fired = await check_template_signals(pool, broadcast)
+            total = fired + sentiment_fired + identifier_fired + template_fired
             if total:
                 log.info(
                     "signal_engine.cycle_complete",
                     signals_fired=fired,
                     sentiment_signals=sentiment_fired,
+                    identifier_signals=identifier_fired,
+                    template_signals=template_fired,
                 )
         except Exception as exc:
             log.error("signal_engine.cycle_error", error=str(exc))

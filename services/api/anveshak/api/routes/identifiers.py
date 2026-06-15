@@ -165,6 +165,43 @@ async def export_identifiers(
     )
 
 
+@router.post("/topics/{topic_id}/templates/{template_id}")
+async def link_template(
+    topic_id: str,
+    template_id: str,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+) -> dict[str, str]:
+    """Link a scam template to a topic."""
+    await topics_db.verify_topic_access(db, topic_id, user)
+    await identifiers_db.link_template(db, topic_id=topic_id, template_id=template_id)
+    return {"status": "linked", "topic_id": topic_id, "template_id": template_id}
+
+
+@router.delete("/topics/{topic_id}/templates/{template_id}")
+async def unlink_template(
+    topic_id: str,
+    template_id: str,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+) -> dict[str, str]:
+    """Unlink a scam template from a topic."""
+    await topics_db.verify_topic_access(db, topic_id, user)
+    await identifiers_db.unlink_template(db, topic_id=topic_id, template_id=template_id)
+    return {"status": "unlinked", "topic_id": topic_id, "template_id": template_id}
+
+
+@router.get("/topics/{topic_id}/templates")
+async def list_topic_templates(
+    topic_id: str,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("viewer", "analyst", "admin")),
+) -> list[dict[str, Any]]:
+    """List all scam templates linked to a topic."""
+    await topics_db.verify_topic_access(db, topic_id, user)
+    return await identifiers_db.list_topic_templates(db, topic_id=topic_id)
+
+
 @router.get("/co-occurrence")
 async def get_co_occurrence(
     topic_id: str = Query(..., description="Topic ID"),

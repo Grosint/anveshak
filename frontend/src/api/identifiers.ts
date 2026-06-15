@@ -76,6 +76,18 @@ export interface CoOccurrenceResult {
   count: number
 }
 
+export interface ScamTemplate {
+  id: string
+  name: string
+  display: string
+  category: string
+  keywords: string[]
+  expected_identifiers: string[]
+  severity: string
+  legal_sections: string[]
+  is_builtin: boolean
+}
+
 export const identifiersApi = {
   search: (topicId: string, q: string, type?: IdentifierType, limit = 50) =>
     api
@@ -110,5 +122,20 @@ export const identifiersApi = {
       .get<CoOccurrenceResult>('/api/v1/identifiers/co-occurrence', {
         params: { topic_id: topicId, identifier_a: a, identifier_b: b, limit },
       })
+      .then((r) => r.data),
+
+  listTopicTemplates: (topicId: string) =>
+    api
+      .get<ScamTemplate[]>(`/api/v1/identifiers/topics/${topicId}/templates`)
+      .then((r) => r.data),
+
+  linkTemplate: (topicId: string, templateId: string) =>
+    api
+      .post<{ status: string }>(`/api/v1/identifiers/topics/${topicId}/templates/${templateId}`)
+      .then((r) => r.data),
+
+  unlinkTemplate: (topicId: string, templateId: string) =>
+    api
+      .delete<{ status: string }>(`/api/v1/identifiers/topics/${topicId}/templates/${templateId}`)
       .then((r) => r.data),
 }

@@ -36,8 +36,9 @@ from prometheus_client import generate_latest
 
 from .clustering import run_clustering
 from .dedup import detect_near_duplicates, upsert_near_duplicates
+from .identifier_clustering import build_clusters, ContentIdentifier
 from .labeller import check_label_staleness
-from .metrics import REGISTRY as ANALYST_REGISTRY, analyst_orphan_sweep_total
+from .metrics import REGISTRY as ANALYST_REGISTRY, analyst_orphan_sweep_total, analyst_identifier_clusters_total
 from .settings import settings
 from .discovery import discover_snowball_sources, discover_telegram_channels, discover_entity_sources  # noqa: E501
 from .effectiveness import compute_source_effectiveness
@@ -454,6 +455,172 @@ async def relevance_calibration_loop(pool: asyncpg.Pool) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Engine C — Identifier Clustering
+# ---------------------------------------------------------------------------
+
+# Engine C identifier types (must match identifiers.py extraction output)
+_ENGINE_C_TYPES = (
+    "PHONE_IN", "UPI", "EMAIL", "CRYPTO_BTC", "CRYPTO_ETH", "CRYPTO_TRC20",
+    "TELEGRAM_HANDLE", "INSTAGRAM_HANDLE", "URL_DOMAIN", "GSTIN", "UDYAM",
+    "PAN", "BANK_ACCOUNT", "SEBI_REG", "IFSC",
+)
+
+SQL_UNCLUSTERED_IDENTIFIERS = """
+    SELECT ee.entity_type, ee.entity_text, ee.confidence,
+           ee.content_item_id, ci.source_id, ci.captured_at,
+           ci.topic_id
+    FROM extracted_entities ee
+    JOIN content_items ci ON ci.id = ee.content_item_id
+    WHERE ci.topic_id = $1
+      AND ee.entity_type = ANY($2)
+      AND NOT EXISTS (
+          SELECT 1 FROM identifier_cluster_items ici
+          WHERE ici.content_item_id = ee.content_item_id
+            AND ici.identifier_cluster_id IN (
+                SELECT ic.id FROM identifier_clusters ic
+                WHERE ic.identifier_type = ee.entity_type
+                  AND ic.identifier_value = ee.entity_text
+                  AND ic.topic_id = ci.topic_id
+            )
+      )
+    LIMIT 1000
+"""
+
+SQL_UPSERT_IDENTIFIER_CLUSTER = """
+    INSERT INTO identifier_clusters (
+        id, topic_id, identifier_type, identifier_value,
+        source_count, content_item_count,
+        first_seen_at, last_seen_at, labels
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+            '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb)
+    ON CONFLICT (topic_id, identifier_type, identifier_value)
+    DO UPDATE SET
+        source_count = EXCLUDED.source_count,
+        content_item_count = EXCLUDED.content_item_count,
+        last_seen_at = EXCLUDED.last_seen_at
+    RETURNING id
+"""
+
+SQL_INSERT_IDENTIFIER_CLUSTER_ITEM = """
+    INSERT INTO identifier_cluster_items (
+        id, identifier_cluster_id, content_item_id, source_id, labels
+    )
+    VALUES ($1, $2, $3, $4,
+            '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb)
+    ON CONFLICT DO NOTHING
+"""
+
+
+async def _run_identifier_cluster_cycle(pool: asyncpg.Pool) -> int:
+    """One pass: query unclustered identifiers per topic, build clusters, upsert to DB.
+
+    Returns total clusters upserted.
+    """
+    total = 0
+
+    async with pool.acquire() as conn:
+        topics = await conn.fetch(SQL_ACTIVE_TOPICS)
+
+    for topic_row in topics:
+        topic_id = topic_row["id"]
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    SQL_UNCLUSTERED_IDENTIFIERS,
+                    topic_id,
+                    list(_ENGINE_C_TYPES),
+                )
+
+            if not rows:
+                continue
+
+            # Build ContentIdentifier objects
+            identifiers = [
+                ContentIdentifier(
+                    identifier_type=r["entity_type"],
+                    normalized_value=r["entity_text"],
+                    content_item_id=r["content_item_id"],
+                    source_id=r["source_id"],
+                    seen_at=r["captured_at"],
+                )
+                for r in rows
+            ]
+
+            clusters = build_clusters(identifiers)
+
+            if not clusters:
+                continue
+
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+                    for cluster in clusters:
+                        row = await conn.fetchrow(
+                            SQL_UPSERT_IDENTIFIER_CLUSTER,
+                            str(uuid.uuid4()),
+                            topic_id,
+                            cluster.identifier_type,
+                            cluster.identifier_value,
+                            cluster.source_count,
+                            cluster.content_item_count,
+                            cluster.first_seen_at,
+                            cluster.last_seen_at,
+                        )
+                        cluster_id = row["id"]
+
+                        for ci_id in cluster.content_item_ids:
+                            # Find the source_id for this content item
+                            source_id = next(
+                                (i.source_id for i in identifiers
+                                 if i.content_item_id == ci_id),
+                                None,
+                            )
+                            if source_id:
+                                await conn.execute(
+                                    SQL_INSERT_IDENTIFIER_CLUSTER_ITEM,
+                                    str(uuid.uuid4()),
+                                    cluster_id,
+                                    ci_id,
+                                    source_id,
+                                )
+
+                        total += 1
+                        analyst_identifier_clusters_total.inc()
+
+            log.info(
+                "scheduler.identifier_cluster.topic_done",
+                topic_id=topic_id,
+                clusters=len(clusters),
+            )
+
+        except Exception as exc:
+            log.warning(
+                "scheduler.identifier_cluster.topic_failed",
+                topic_id=topic_id,
+                error=str(exc),
+            )
+
+    return total
+
+
+async def identifier_cluster_loop(pool: asyncpg.Pool) -> None:
+    """Periodic loop: build identifier clusters at configured interval."""
+    interval = settings.identifier_cluster_interval_s
+    log.info("scheduler.identifier_cluster_loop.started", interval_s=interval)
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            total = await _run_identifier_cluster_cycle(pool)
+            if total:
+                log.info(
+                    "scheduler.identifier_cluster_loop.cycle_done",
+                    clusters_upserted=total,
+                )
+        except Exception as exc:
+            log.error("scheduler.identifier_cluster_loop.error", error=str(exc))
+
+
+# ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
 # Source Discovery + Effectiveness loops
@@ -524,6 +691,7 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(relevance_calibration_loop(pool)),
         asyncio.create_task(discovery_loop(pool, redis)),
         asyncio.create_task(effectiveness_loop(pool)),
+        asyncio.create_task(identifier_cluster_loop(pool)),
     ]
 
     yield

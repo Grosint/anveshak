@@ -46,6 +46,7 @@ def _make_db_row(
     topic_name: str = "Defence Procurement",
     topic_keywords: list[str] | None = None,
     topic_relevance_threshold: float | None = None,
+    platform: str = "web",
 ) -> dict:
     return {
         "id": content_item_id,
@@ -54,6 +55,7 @@ def _make_db_row(
         "topic_name": topic_name,
         "topic_keywords": topic_keywords or ["defence", "missile"],
         "topic_relevance_threshold": topic_relevance_threshold,
+        "platform": platform,
     }
 
 

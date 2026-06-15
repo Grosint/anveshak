@@ -147,6 +147,13 @@ async def make_topic(db_pool):
                 "OR content_item_b_id IN "
                 "(SELECT id FROM content_items WHERE topic_id=$1)", tid)
             await conn.execute("DELETE FROM signals WHERE topic_id=$1", tid)
+            # Engine C: identifier_cluster_items → identifier_clusters
+            await conn.execute(
+                "DELETE FROM identifier_cluster_items WHERE identifier_cluster_id IN "
+                "(SELECT id FROM identifier_clusters WHERE topic_id=$1)", tid)
+            await conn.execute("DELETE FROM identifier_clusters WHERE topic_id=$1", tid)
+            # Engine C: topic_templates
+            await conn.execute("DELETE FROM topic_templates WHERE topic_id=$1", tid)
             # nullify cluster FK before deleting clusters
             await conn.execute(
                 "UPDATE content_items SET narrative_cluster_id = NULL "

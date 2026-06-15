@@ -27,6 +27,7 @@ Anveshak (Sanskrit: investigator, seeker) is a standalone, sovereign AI-OSINT an
 17. [Validation Suite](#validation-suite)
 18. [Deployment](#deployment)
 19. [Key Invariants](#key-invariants)
+20. [Engine C — Identifier Intelligence](#engine-c--identifier-intelligence)
 
 ---
 
@@ -71,6 +72,10 @@ Anveshak (Sanskrit: investigator, seeker) is a standalone, sovereign AI-OSINT an
    │ embeddings   │                                │
    │ sentiment    │                                │
    │ labels       │                                │
+   │ ── Engine C ─│                                │
+   │ identifiers  │ regex: phone, UPI, crypto,     │
+   │ templates    │ GSTIN, handles, URLs           │
+   │ id-clusters  │ scam template matching         │
    └──────┬───────┘                                │
          │          signals + reports              │
          └──────────────────┬──────────────────────┘
@@ -288,7 +293,7 @@ Anveshak runs as **23 containers** (+ 1 optional) on a single Docker network (`a
 
 ### Social Media Monitor (`social`)
 
-**What it does:** Polls social media platforms for content matching active topics. Supports Telegram (Telethon), Reddit (PRAW), Bluesky (atproto), and X/Twitter (tweepy).
+**What it does:** Polls social media platforms for content matching active topics. Supports Telegram (Telethon), Reddit (PRAW), Bluesky (atproto), X/Twitter (tweepy), and Instagram (Instagrapi — Engine C addition).
 
 **Why it's needed:** Social media is a primary OSINT source. Each platform has its own API, rate limits, and authentication requirements. The social service abstracts these behind a common `SourceAdapterBase` interface.
 
@@ -303,7 +308,8 @@ Anveshak runs as **23 containers** (+ 1 optional) on a single Docker network (`a
 
 - `postgres` — reads topics/sources, writes content items
 - `redis` — enqueues social polling jobs
-- External APIs — Telegram, Reddit, Bluesky, X/Twitter (outbound only)
+- External APIs — Telegram, Reddit, Bluesky, X/Twitter, Instagram (outbound only)
+- Instagram circuit breaker: threshold=10, cooldown=86400s (24h) — Meta API is flaky
 
 ---
 
@@ -341,7 +347,7 @@ Runs four concurrent async loops:
 
 Registered ARQ jobs:
 
-1. **`analyse_content`** — full NLP pipeline per content item:
+1. **`analyse_content`** — full NLP + Engine C pipeline per content item:
    - Language detection (langdetect)
    - NLLB-200 translation (non-English → English)
    - spaCy NER (English, Russian, Chinese models)
@@ -349,7 +355,10 @@ Registered ARQ jobs:
    - Entity MinHash fingerprint (128-permutation signature from extracted entities)
    - VADER sentiment analysis + YAKE keyword extraction
    - Topic relevance scoring (cosine similarity vs topic query embedding)
-   - Results stored in `content_items.embedding`, `content_items.entity_minhash`, `content_items.labels`, `extracted_entities`
+   - **Engine C — Identifier extraction** (15 types: PHONE_IN, UPI, EMAIL, CRYPTO_BTC, CRYPTO_ETH, CRYPTO_TRC20, TELEGRAM_HANDLE, INSTAGRAM_HANDLE, URL_DOMAIN, GSTIN, UDYAM, PAN, IFSC, BANK_ACCOUNT, SEBI_REG) — regex patterns with normalization + context validation
+   - **Engine C — Scam template matching** — keyword overlap + embedding similarity against active templates → stores `scam_template` + `template_confidence` in `content_items.labels`
+   - **Engine C — Identifier clustering** — groups content items sharing the same identifier across sources → creates/updates `identifier_clusters`
+   - Results stored in `content_items.embedding`, `content_items.entity_minhash`, `content_items.labels`, `extracted_entities`, `identifier_clusters`
 
 2. **`generate_cluster_label`** — Ollama LLM call to generate human-readable cluster labels
 
@@ -763,16 +772,46 @@ Step 4: Analyst service processes content (within 30 seconds)
   → VADER sentiment → YAKE keywords → stored in labels JSONB
   → INSERT INTO extracted_entities
 
+Step 4b: Engine C — Identifier extraction (in same analyse_content job)
+  → regex patterns extract: phone (+91-9876543210 → PHONE_IN),
+    UPI (user@paytm → UPI), crypto wallets, handles, GSTIN, etc.
+  → normalization: phone → 10 digits, UPI → lowercase, handles → strip @
+  → context validation: PAN only near "PAN card", bank account only near "a/c"
+  → INSERT INTO extracted_entities (same table, new entity_type values)
+
+Step 4c: Engine C — Scam template matching
+  → check content against active templates for this topic
+  → keyword overlap + embedding cosine similarity → confidence score
+  → if confidence ≥ 0.5 → UPDATE content_items.labels with scam_template + confidence
+  → 11 built-in templates: investment_fraud, mule_recruitment, maas,
+    digital_arrest, job_fraud, pump_and_dump, fake_research_report,
+    drug_sale, drug_delivery_recruitment, fake_sim_sale, crypto_cashout
+
+Step 4d: Engine C — Identifier clustering
+  → for each extracted identifier, check identifier_clusters table
+  → if same identifier (type + normalized value) already exists for this topic:
+    add content item to cluster, update source_count + content_item_count
+  → if new identifier appears in 2+ content items from 2+ sources:
+    CREATE new identifier_cluster
+  → source_count = distinct source_ids (consistent with narrative ISC)
+
 Step 5: Clustering (every 5 minutes)
   analyst clustering loop runs Leiden community detection on blended similarity graph
   → groups related content into narrative_clusters
   → counts independent_source_count (distinct platforms per cluster)
   → generates human-readable label via Ollama
 
-Step 6: Signal fires
+Step 6: Signals fire
   analyst signal loop checks:
     cluster.independent_source_count >= topic.signal_threshold?
-  If YES → INSERT INTO signals (type, severity, description)
+  If YES → INSERT INTO signals (type=multi_source_convergence)
+
+Step 6b: Engine C signals fire (in same signal loop)
+  → identifier_convergence: identifier_cluster.source_count >= topic.identifier_signal_threshold?
+    If YES → INSERT INTO signals (type=identifier_convergence, evidence={identifier, sources})
+  → scam_template_match: CRITICAL template matched? → fire immediately
+    HIGH template matched 2+ times in 24h? → fire
+    MEDIUM template matched 3+ times in 24h? → fire
 
 Step 7: Signal delivered to analyst (within ~10 seconds)
   api signal_delivery loop polls: SELECT * FROM signals WHERE delivered_at IS NULL
@@ -905,7 +944,16 @@ topics ─────────────┬──────────�
 
   signals ── (references topic + cluster)
     ├── signal_type: multi_source_convergence
-    └── signal_type: cross_topic_convergence   ← NEW
+    ├── signal_type: cross_topic_convergence
+    ├── signal_type: identifier_convergence      ← Engine C
+    └── signal_type: scam_template_match         ← Engine C
+
+  ── Engine C tables (migration 009) ──
+  scam_templates ── (built-in + custom per org)
+    └── topic_templates ── (M:M join: which templates active per topic)
+  identifier_clusters ── (groups content by shared identifier)
+    └── identifier_cluster_items ── (junction: cluster ↔ content_items)
+
   reports ── (references topic, immutable once generated)
   report_source_warnings ── (links report ↔ source degradation)
   analysis_jobs ── (ARQ job tracking)
@@ -928,7 +976,7 @@ topics ─────────────┬──────────�
 | `topics` | ~20 | Monitored subjects (keywords, thresholds, languages) |
 | `sources` | ~100 | OSINT sources (URLs, platforms, credibility scores, health) |
 | `content_items` | ~100K+ | Scraped/collected text with embeddings (SHA-256 deduplicated) |
-| `extracted_entities` | ~500K+ | NER results (PERSON, ORG, GPE, DATE) linked to content |
+| `extracted_entities` | ~500K+ | NER results (PERSON, ORG, GPE) + Engine C identifiers (PHONE_IN, UPI, CRYPTO_BTC, etc.) linked to content |
 | `narrative_clusters` | ~1K | Leiden clusters with centroids, source diversity, archival status, label tracking |
 | `near_duplicates` | ~5K | Semantically equivalent content pairs (cosine ≥0.95, canonical a<b ordering) |
 | `signals` | ~500 | Threshold-based alerts including cross-topic convergence (new → acknowledged → dismissed) |
@@ -941,6 +989,10 @@ topics ─────────────┬──────────�
 | `analysis_jobs` | ~10K | ARQ job tracking (status, payload, result, error) |
 | `token_blocklist` | ~100 | Revoked JWT IDs (jti) with TTL — logout support |
 | `audit_trail` | ~10K+ | User action log: who, what, when, IP address, details JSONB |
+| `scam_templates` | ~20 | Built-in (11) + custom scam/info-op templates with keywords, severity, legal sections |
+| `topic_templates` | ~50 | M:M join: which templates are active per topic |
+| `identifier_clusters` | ~5K | Groups content items sharing same identifier (type + value), tracks source_count |
+| `identifier_cluster_items` | ~20K | Junction: which content items belong to which identifier cluster |
 | `failed_jobs` | ~100 | Dead-letter queue for ARQ jobs that fail after max retries |
 
 ---
@@ -1545,6 +1597,8 @@ Signals are Anveshak's real-time alerting mechanism. They fire when enough indep
 |------|---------|----------|
 | `multi_source_convergence` | Cluster ISC ≥ topic threshold | HIGH if ISC ≥ 3, else MEDIUM |
 | `cross_topic_convergence` | Two topics share a narrative (centroid similarity ≥ 0.85) | Always HIGH |
+| `identifier_convergence` | Same identifier in N+ distinct sources (Engine C) | CRITICAL if ≥ 5 sources, HIGH if ≥ 3, else MEDIUM |
+| `scam_template_match` | Content matches known fraud/info-op template (Engine C) | Inherits template severity (CRITICAL/HIGH/MEDIUM) |
 
 **Signal lifecycle:**
 
@@ -1904,6 +1958,14 @@ These rules are enforced by code, tests, and CI. They are non-negotiable.
 | Redis AOF prevents job loss | `appendonly yes` + `appendfsync everysec` — no 60s data-loss window |
 | K3s pods run as non-root | `securityContext.runAsNonRoot: true` on all app pods |
 | K3s network is zero-trust | Default-deny NetworkPolicy + explicit allow rules per service |
+| Identifier extraction runs on every content item | Wired into `analyse_content` job after spaCy NER, 15 regex types |
+| Identifiers are normalized before storage | Phone → 10 digits, UPI → lowercase, handles → strip @, GSTIN → uppercase |
+| Context-dependent identifiers require validation | PAN only near "PAN"/"pan card", BANK_ACCOUNT only near "account"/"a/c" |
+| 11 built-in scam templates always present | Seeded in migration 009, `is_builtin=true`, org_id=NULL (global) |
+| Custom templates are org-scoped | org A cannot see org B's custom templates |
+| Identifier clusters count distinct sources, not platforms | Consistent with narrative ISC — `len(set(source_ids))` |
+| Engine C signals dedup within 24h window | Same identifier_cluster_id or template+topic don't fire twice in 24h |
+| Instagram adapter has circuit breaker | threshold=10, cooldown=86400s (24h) — reuses existing `AdapterCircuitBreaker` |
 
 ---
 
@@ -1913,10 +1975,11 @@ These rules are enforced by code, tests, and CI. They are non-negotiable.
 |--------|-----------|------------------|
 | **M1** | analyst | Source credibility scoring, auto-feedback loop, immutable audit log |
 | **M2** | scraper + analyst | Open-web crawling, NLP, multilingual processing, clustering, backfill |
-| **M3** | social | Platform adapters: Telegram, Reddit, Bluesky, X/Twitter |
+| **M3** | social | Platform adapters: Telegram, Reddit, Bluesky, X/Twitter, Instagram |
 | **M4** | vision | YOLO object detection, CLIP search, deepfake detection, EXIF, pHash |
 | **M5** | reporter | LLM reports (RAG), GIS/GeoJSON output, PDF export, scheduled reports |
 | **Cross-cutting** | api + analyst | Signals engine, real-time WebSocket push, webhook notifications |
+| **Engine C** | analyst + api | Identifier extraction (15 types), scam template matching (11 built-in), identifier clustering, 2 new signal types, identifier search API, tipline ingestion |
 
 ---
 
@@ -1936,3 +1999,223 @@ These rules are enforced by code, tests, and CI. They are non-negotiable.
 | `grafana_data` | grafana | Dashboard state, user prefs |
 | `loki_data` | loki | Log chunks and TSDB index (7-day retention) |
 | `promtail_positions` | promtail | Log scrape offset positions |
+
+---
+
+## Engine C — Identifier Intelligence
+
+Engine C transforms Anveshak from a narrative-only OSINT platform to an identifier-aware intelligence system. It answers the question "WHO is behind this?" alongside the existing "WHAT is being said?"
+
+Added in migration 009. All components are additive — zero changes to existing NLP, clustering, or signal logic.
+
+### Architecture
+
+Engine C adds three processing stages to the existing `analyse_content` ARQ job, running AFTER spaCy NER:
+
+```
+Content item arrives
+    │
+    ├── EXISTING NLP (unchanged)
+    │   ├── Language detection → translation → spaCy NER
+    │   ├── Embedding → sentiment → keywords
+    │   └── Entity MinHash
+    │
+    ├── ENGINE C STAGE 1: Identifier Extraction
+    │   ├── 15 regex patterns with normalization
+    │   ├── Context validation (reduce false positives)
+    │   └── Store in extracted_entities (same table, new entity_types)
+    │
+    ├── ENGINE C STAGE 2: Scam Template Matching
+    │   ├── Keyword overlap scoring
+    │   ├── Embedding cosine similarity to template reference
+    │   ├── Expected identifier validation
+    │   └── Store in content_items.labels (scam_template + template_confidence)
+    │
+    ├── ENGINE C STAGE 3: Identifier Clustering
+    │   ├── Group content by shared identifier (type + normalized value)
+    │   ├── Create/update identifier_clusters table
+    │   └── Track source_count (distinct sources per identifier)
+    │
+    ├── EXISTING: Narrative Clustering (unchanged, parallel path)
+    │   └── Leiden → narrative_clusters → ISC
+    │
+    └── SIGNALS (existing + 2 new types)
+        ├── multi_source_convergence (existing)
+        ├── cross_topic_convergence (existing)
+        ├── sentiment_shift (existing)
+        ├── identifier_convergence (NEW — same identifier in N+ sources)
+        └── scam_template_match (NEW — content matches known fraud pattern)
+```
+
+### Identifier Types (15)
+
+| Type | Pattern | Normalization | False Positive Strategy |
+|------|---------|--------------|----------------------|
+| `PHONE_IN` | `(?:\+91\|0)?[6-9]\d{9}` | Strip to 10 digits | Require contact-context words OR +91/0 prefix |
+| `UPI` | `user@(ybl\|paytm\|okaxis\|...)` | Lowercase | Very low FP — bank suffix is distinctive |
+| `EMAIL` | Standard email regex | Lowercase | Exclude UPI matches |
+| `CRYPTO_BTC` | `(1\|3\|bc1)[a-zA-HJ-NP-Z0-9]{25,62}` | Preserve case | Prefix + length validation |
+| `CRYPTO_ETH` | `0x[a-fA-F0-9]{40}` | Lowercase | Prefix + exact length |
+| `CRYPTO_TRC20` | `T[a-zA-Z0-9]{33}` | Preserve case | Moderate — checksum if possible |
+| `TELEGRAM_HANDLE` | `@[a-zA-Z][a-zA-Z0-9_]{4,31}` | Strip @, lowercase | Context: Telegram content = high confidence |
+| `INSTAGRAM_HANDLE` | Same as Telegram | Strip @, lowercase | Context: Instagram content = high confidence |
+| `URL_DOMAIN` | `https?://[^\s]+` | Extract domain, strip params | Standard URL parsing |
+| `GSTIN` | `\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d][Z][A-Z\d]` | Uppercase | Very low FP — exact format |
+| `UDYAM` | `UDYAM-[A-Z]{2}-\d{2}-\d{7}` | Uppercase | Very low FP — exact format |
+| `PAN` | `[A-Z]{5}\d{4}[A-Z]` | Uppercase | Requires context words ("PAN", "pan card") |
+| `IFSC` | `[A-Z]{4}0[A-Z0-9]{6}` | Uppercase | 5th char always 0 |
+| `BANK_ACCOUNT` | `\d{9,18}` | Strip spaces | HIGH FP — only near "account"/"a/c"/"bank" |
+| `SEBI_REG` | `IN[A-Z]\d{12}` | Uppercase | Very low FP — exact format |
+
+All identifiers stored in `extracted_entities` table with these entity_type values alongside existing spaCy NER types (PERSON, ORG, GPE, etc.).
+
+### Scam Template Library
+
+Templates classify content against known fraud, narco, and information operation patterns.
+
+**Matching algorithm:**
+```
+keyword_score = keyword_hits / total_keywords
+identifier_match = found_identifiers / expected_identifiers
+embedding_score = cosine_sim(content.embedding, template.reference_embedding)
+confidence = max(0.6 × keyword_score + 0.4 × identifier_match, embedding_score)
+Match if confidence ≥ 0.5
+```
+
+No ML. Keywords + embedding similarity. ML classifier planned for Phase 2 after 6 months of analyst-labeled data.
+
+**11 built-in templates (seeded in migration 009):**
+
+| Template | Category | Severity | Primary User |
+|----------|----------|----------|-------------|
+| `investment_fraud` | fraud | CRITICAL | SEBI, Police |
+| `mule_recruitment` | fraud | CRITICAL | Police, NCB |
+| `maas` (Mule-as-a-Service) | fraud | CRITICAL | Police |
+| `digital_arrest` | fraud | HIGH | Police |
+| `job_fraud` | fraud | HIGH | Police |
+| `pump_and_dump` | fraud | CRITICAL | SEBI |
+| `fake_research_report` | fraud | HIGH | SEBI |
+| `drug_sale` | narco | HIGH | NCB |
+| `drug_delivery_recruitment` | narco | HIGH | NCB |
+| `fake_sim_sale` | fraud | MEDIUM | Police |
+| `crypto_cashout` | fraud | HIGH | Police, NCB |
+
+Custom templates created by analysts per-org. MEA creates info_op templates (anti_india_territorial, etc.). Org-scoped — org A cannot see org B's templates.
+
+### Identifier Clustering
+
+Groups content items sharing the same identifier to reveal actors/networks.
+
+```
+Phone +91-9876543210 appears in:
+  ├── Telegram "Easy Money India" (3 messages)
+  ├── Telegram "Account Service 24/7" (2 messages)
+  └── Website fakeinvest.com/contact (1 page)
+
+→ identifier_cluster created:
+    identifier_type: PHONE_IN
+    identifier_value: 9876543210
+    source_count: 3 (3 distinct sources)
+    content_item_count: 6
+→ Signal fires: identifier_convergence (3 sources ≥ threshold 2)
+```
+
+Runs incrementally: new content item with known identifier → add to existing cluster, update stats. New cluster created only when identifier appears in 2+ items from 2+ distinct sources.
+
+### API Endpoints (Engine C)
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/v1/identifiers/search?q=...&type=...` | Search identifiers with partial match |
+| `GET /api/v1/identifiers/top?topic_id=...` | Most frequent identifiers by source_count |
+| `GET /api/v1/identifiers/clusters?topic_id=...` | List identifier clusters for a topic |
+| `GET /api/v1/identifiers/clusters/{id}` | Full cluster detail with content items |
+| `GET /api/v1/identifiers/export?topic_id=...&format=csv` | CSV/JSON export for CFCFRMS/I4C |
+| `GET /api/v1/identifiers/co-occurrence?a=...&b=...` | Content items where both identifiers appear |
+| `POST /api/v1/tipline/ingest` | Inbound webhook for citizen-forwarded scam messages |
+| `GET/POST /api/v1/templates` | CRUD for custom scam templates |
+| `POST /api/v1/topics/{id}/templates/{template_id}` | Associate template with topic |
+
+### Tipline Ingestion
+
+`POST /api/v1/tipline/ingest` accepts citizen-forwarded scam messages via HTTP POST. No WhatsApp API dependency — any HTTP client can POST.
+
+```json
+{
+    "text": "Fraud alert: call +91-9876543210 for easy money, send to fraud@paytm",
+    "media_url": "optional",
+    "topic_id": "topic-cyber-fraud"
+}
+```
+
+Auth: API key per organization (`X-Api-Key` header). Rate limited: 100 req/min.
+Creates content_item with `platform="tipline"` → flows through full NLP + Engine C pipeline.
+
+### Instagram Adapter
+
+Profile monitoring + hashtag search via Instagrapi (unofficial API).
+Bio text extracted separately → fed through Engine C for identifier extraction.
+Circuit breaker: threshold=10 consecutive failures, cooldown=86400s (24h).
+Reuses existing `AdapterCircuitBreaker` class from `services/social/anveshak/social/circuit_breaker.py`.
+
+### Report Enhancements
+
+Reports now include Engine C sections:
+- **Identified Indicators** — table of all extracted identifiers with source counts
+- **Identifier Clusters** — summary of actor clusters
+- **Scam Template Matches** — which templates matched with confidence scores
+- **Recommended Actions** — auto-generated per identifier type (CDR request for phone, UPI freeze for UPI, etc.)
+- **Legal Mapping** — template-specific legal sections (PMLA for mule, PFUTP for pump-and-dump, NDPS for drug sale)
+
+### Pipeline Health Diagnostics
+
+`python scripts/pipeline_health.py` now includes Engine C sections:
+- Per-topic: identifiers by type, template matches, identifier clusters, Engine C signals, warnings
+- Global: total identifiers, template health (11 built-in check), cluster stats, tipline/Instagram counts
+- Agency-specific summaries: auto-detected from topic name (MEA, Cyber, SEBI, NCB)
+
+### Target Markets
+
+Engine C enables Anveshak to serve 4 agency types with the same platform:
+
+| Agency | Primary Engine C Use | Key Identifiers |
+|--------|---------------------|----------------|
+| **MEA** | Foreign media monitoring, info-op template matching | URL_DOMAIN (media sites) |
+| **Police Cyber Cell** | Mule account detection, investment fraud networks | PHONE_IN, UPI, TELEGRAM_HANDLE, GSTIN |
+| **SEBI** | Pump-and-dump detection, finfluencer tracking | TELEGRAM_HANDLE, UPI, SEBI_REG |
+| **NCB** | Drug network detection, dealer identification | PHONE_IN, CRYPTO_BTC, TELEGRAM_HANDLE |
+
+### Database Schema (Migration 009)
+
+```sql
+scam_templates (id, org_id, name, display, category, keywords[], min_keyword_hits,
+    expected_identifiers[], severity, reference_embedding, legal_sections[],
+    is_builtin, is_active, labels JSONB)
+
+topic_templates (topic_id FK, template_id FK — PK)
+
+identifier_clusters (id, topic_id, identifier_type, identifier_value,
+    source_count, content_item_count, first_seen_at, last_seen_at, labels JSONB)
+    UNIQUE (topic_id, identifier_type, identifier_value)
+
+identifier_cluster_items (identifier_cluster_id FK, content_item_id FK,
+    source_id — PK on cluster+item)
+
+topics.identifier_signal_threshold (INT DEFAULT 2) — added column
+```
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `services/analyst/anveshak/analyst/identifiers.py` | 15 regex patterns + normalization + context validation |
+| `services/analyst/anveshak/analyst/templates.py` | Template matching engine + CRUD |
+| `services/analyst/anveshak/analyst/identifier_clustering.py` | Identifier cluster create/update logic |
+| `services/analyst/anveshak/analyst/identifier_signals.py` | Identifier convergence signal |
+| `services/analyst/anveshak/analyst/template_signals.py` | Scam template match signal |
+| `services/api/anveshak/api/routes/identifiers.py` | 6 identifier search/browse endpoints |
+| `services/api/anveshak/api/routes/tipline.py` | Tipline inbound webhook |
+| `services/api/anveshak/api/db/identifiers.py` | Identifier DB query functions |
+| `services/social/anveshak/social/adapters/instagram.py` | Instagram adapter with circuit breaker |
+| `services/api/migrations/versions/009_engine_c.py` | Schema migration + template seed data |
+| `docs/engine_c_implementation_plan.md` | Full implementation plan (10 steps, 4 phases, 13 sessions) |

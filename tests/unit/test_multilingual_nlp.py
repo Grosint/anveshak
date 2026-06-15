@@ -244,6 +244,7 @@ class TestAnalyseContentWithTranslation:
             "topic_name": "South China Sea",
             "topic_keywords": ["PLA", "military", "exercises"],
             "topic_relevance_threshold": None,
+            "platform": "web",
         }
 
         # Mock DB pool

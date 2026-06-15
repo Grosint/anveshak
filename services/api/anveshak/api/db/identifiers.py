@@ -153,6 +153,32 @@ SQL_CO_OCCURRENCE = """
 
 
 # ---------------------------------------------------------------------------
+# Template linking SQL
+# ---------------------------------------------------------------------------
+
+SQL_LINK_TEMPLATE = """
+    INSERT INTO topic_templates (topic_id, template_id)
+    VALUES ($1, $2)
+    ON CONFLICT DO NOTHING
+"""
+
+SQL_UNLINK_TEMPLATE = """
+    DELETE FROM topic_templates
+    WHERE topic_id = $1 AND template_id = $2
+"""
+
+SQL_LIST_TOPIC_TEMPLATES = """
+    SELECT st.id, st.name, st.display, st.category,
+           st.keywords, st.expected_identifiers, st.severity,
+           st.legal_sections, st.is_builtin
+    FROM scam_templates st
+    JOIN topic_templates tt ON tt.template_id = st.id
+    WHERE tt.topic_id = $1
+    ORDER BY st.severity DESC, st.display ASC
+"""
+
+
+# ---------------------------------------------------------------------------
 # DB functions
 # ---------------------------------------------------------------------------
 
@@ -257,4 +283,38 @@ async def get_co_occurrence(
         SQL_CO_OCCURRENCE,
         topic_id, identifier_a, identifier_b, limit,
     )
+    return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Template linking functions
+# ---------------------------------------------------------------------------
+
+async def link_template(
+    conn: asyncpg.Connection,
+    *,
+    topic_id: str,
+    template_id: str,
+) -> None:
+    """Link a scam template to a topic. Idempotent (ON CONFLICT DO NOTHING)."""
+    await conn.execute(SQL_LINK_TEMPLATE, topic_id, template_id)
+
+
+async def unlink_template(
+    conn: asyncpg.Connection,
+    *,
+    topic_id: str,
+    template_id: str,
+) -> None:
+    """Unlink a scam template from a topic."""
+    await conn.execute(SQL_UNLINK_TEMPLATE, topic_id, template_id)
+
+
+async def list_topic_templates(
+    conn: asyncpg.Connection,
+    *,
+    topic_id: str,
+) -> list[dict[str, Any]]:
+    """List all scam templates linked to a topic."""
+    rows = await conn.fetch(SQL_LIST_TOPIC_TEMPLATES, topic_id)
     return [dict(r) for r in rows]

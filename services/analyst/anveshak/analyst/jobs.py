@@ -21,6 +21,7 @@ from .metrics import (
     analyst_nlp_jobs_total, analyst_nlp_duration_seconds,
     analyst_clusters_created_total, analyst_relevance_score, arq_jobs_failed_total,
     analyst_embedding_completed_total, analyst_content_skipped_quality_total,
+    analyst_identifiers_extracted_total, analyst_template_matches_total,
 )
 from .nlp import detect_language, is_model_loaded, load_models, parse_entities
 from .settings import settings
@@ -30,6 +31,8 @@ from .translation import needs_translation, translate_to_english
 from .content_quality import is_quality_content
 from .relevance import compute_topic_relevance, build_topic_query_embedding
 from .entity_minhash import compute_entity_minhash
+from .identifiers import extract_identifiers
+from .templates import match_templates, ScamTemplate, BUILTIN_TEMPLATES
 from .llm_discovery import suggest_source_types_job
 
 log = structlog.get_logger(__name__)
@@ -41,9 +44,11 @@ log = structlog.get_logger(__name__)
 SQL_GET_CONTENT = """
     SELECT ci.id, ci.clean_text, ci.topic_id,
            t.name AS topic_name, t.keywords AS topic_keywords,
-           t.topic_relevance_threshold
+           t.topic_relevance_threshold,
+           s.platform
     FROM content_items ci
     JOIN topics t ON ci.topic_id = t.id
+    LEFT JOIN sources s ON ci.source_id = s.id
     WHERE ci.id = $1
 """
 
@@ -68,7 +73,60 @@ SQL_INSERT_ENTITY = """
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 """
 
+SQL_GET_TEMPLATES_FOR_TOPIC = """
+    SELECT st.name, st.display, st.category,
+           st.keywords, st.min_keyword_hits,
+           st.expected_identifiers, st.severity,
+           st.reference_embedding, st.legal_sections,
+           CASE WHEN tt.topic_id IS NOT NULL THEN true ELSE false END AS is_linked
+    FROM scam_templates st
+    LEFT JOIN topic_templates tt
+        ON tt.template_id = st.id AND tt.topic_id = $1
+    WHERE st.org_id IS NULL
+       OR st.org_id = (SELECT org_id FROM topics WHERE id = $1)
+    ORDER BY st.severity DESC, st.name ASC
+"""
+
 _LABELS_JSON = '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'
+
+
+# ---------------------------------------------------------------------------
+# Template loading
+# ---------------------------------------------------------------------------
+
+async def load_templates_for_topic(
+    conn,
+    topic_id: str,
+) -> list[ScamTemplate]:
+    """Load scam templates from DB for a topic.
+
+    If topic has linked templates (via topic_templates), return only those.
+    Otherwise return all builtin templates as fallback.
+    """
+    rows = await conn.fetch(SQL_GET_TEMPLATES_FOR_TOPIC, topic_id)
+
+    if not rows:
+        return list(BUILTIN_TEMPLATES)
+
+    # Check if any templates are explicitly linked
+    linked = [r for r in rows if r["is_linked"]]
+    source_rows = linked if linked else rows
+
+    templates = []
+    for r in source_rows:
+        templates.append(ScamTemplate(
+            name=r["name"],
+            display=r["display"],
+            category=r["category"],
+            keywords=list(r["keywords"] or []),
+            min_keyword_hits=r["min_keyword_hits"],
+            expected_identifiers=list(r["expected_identifiers"] or []),
+            severity=r["severity"],
+            reference_embedding=list(r["reference_embedding"]) if r["reference_embedding"] else None,
+            legal_sections=list(r["legal_sections"] or []),
+        ))
+
+    return templates if templates else list(BUILTIN_TEMPLATES)
 
 
 # ---------------------------------------------------------------------------
@@ -190,16 +248,56 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
             },
             "keywords": [kw.keyword for kw in kw_results],
         }
-        labels_json = json.dumps(labels_dict)
-
         now = datetime.now(UTC)
 
         # --- Step 4c: Entity MinHash fingerprint for clustering boost ---
         entity_texts = [ent.entity_text for ent in entities]
         minhash = compute_entity_minhash(entity_texts, settings.minhash_num_perm)
 
+        # --- Step 4d: Engine C — Identifier extraction (regex, <5ms) ---
+        identifier_matches: list = []
+        if settings.identifier_extraction_enabled:
+            platform = row["platform"] or ""
+            identifier_matches = extract_identifiers(work_text, platform)
+            if identifier_matches:
+                analyst_identifiers_extracted_total.inc(len(identifier_matches))
+
+        # --- Step 4e: Engine C — Scam template matching ---
+        # W1 fix: guard on identifier_extraction_enabled, not truthy check
+        # W2 fix: load templates inside Step 5 connection to avoid nested pool.acquire
+        template_match = None
+        active_templates: list = []
+
+        # Serialize labels AFTER all enrichment (sentiment, keywords, Engine C template)
+        # (template match applied inside transaction block below)
+
         # --- Step 5: Write to DB (criteria 1.16) ---
         async with db_pool.acquire() as conn:
+            # Load templates using this connection (avoids nested pool.acquire — W2)
+            if settings.template_matching_enabled and settings.identifier_extraction_enabled:
+                active_templates = await load_templates_for_topic(
+                    conn, row["topic_id"],
+                )
+                content_kw_set = {kw.keyword for kw in kw_results}
+                id_type_set = {m.identifier_type for m in identifier_matches}
+                template_match = match_templates(
+                    content_kw_set, id_type_set, embedding, active_templates,
+                )
+
+            if template_match:
+                analyst_template_matches_total.labels(
+                    template_name=template_match.template_name,
+                ).inc()
+                labels_dict["scam_template"] = template_match.template_name
+                labels_dict["template_confidence"] = template_match.confidence
+                labels_dict["matched_keywords"] = template_match.matched_keywords
+                id_by_type: dict[str, list[str]] = {}
+                for m in identifier_matches:
+                    id_by_type.setdefault(m.identifier_type, []).append(m.normalized_value)
+                labels_dict["extracted_identifiers"] = id_by_type
+
+            labels_json = json.dumps(labels_dict)
+
             async with conn.transaction():
                 await conn.execute(
                     SQL_UPDATE_CONTENT_NLP,
@@ -215,6 +313,19 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
                         ent.entity_text,
                         ent.confidence,
                         ent.language,
+                        now,
+                        _LABELS_JSON,
+                    )
+                # Engine C: insert identifier matches as extracted_entities
+                for id_match in identifier_matches:
+                    await conn.execute(
+                        SQL_INSERT_ENTITY,
+                        str(uuid.uuid4()),
+                        content_item_id,
+                        id_match.identifier_type,
+                        id_match.normalized_value,
+                        id_match.confidence,
+                        lang,
                         now,
                         _LABELS_JSON,
                     )

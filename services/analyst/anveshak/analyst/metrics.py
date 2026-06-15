@@ -102,6 +102,28 @@ analyst_orphan_sweep_total = Counter(
     registry=REGISTRY,
 )
 
+# Engine C — identifier extraction count
+analyst_identifiers_extracted_total = Counter(
+    "analyst_identifiers_extracted_total",
+    "Identifiers extracted from content items",
+    registry=REGISTRY,
+)
+
+# Engine C — template match count by template name
+analyst_template_matches_total = Counter(
+    "analyst_template_matches_total",
+    "Content items matched to scam templates",
+    ["template_name"],
+    registry=REGISTRY,
+)
+
+# Engine C — identifier clusters created
+analyst_identifier_clusters_total = Counter(
+    "analyst_identifier_clusters_total",
+    "Identifier clusters created or updated",
+    registry=REGISTRY,
+)
+
 # Pipeline funnel — edges in Leiden similarity graph per topic
 analyst_clustering_edges = Gauge(
     "analyst_clustering_edges",

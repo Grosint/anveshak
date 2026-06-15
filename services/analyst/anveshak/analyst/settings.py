@@ -83,6 +83,11 @@ class AnalystSettings(BaseSettings):
     hnsw_m: int = 16                  # max connections per layer
     hnsw_ef_construction: int = 64    # build-time search width
 
+    # Engine C — Identifier intelligence
+    identifier_extraction_enabled: bool = True    # extract phones, UPI, crypto, etc. from content
+    template_matching_enabled: bool = True         # match content against scam/fraud templates
+    identifier_cluster_interval_s: int = 300       # identifier clustering loop interval (seconds)
+
     # Signal engine
     signal_check_interval_s: int = 300  # check every 5 minutes
 
