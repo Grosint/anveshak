@@ -242,6 +242,26 @@ Deleted URLs include: all homepage/category pages for Deccan Chronicle, The Hind
 
 ---
 
+## Engine C — Identifier Intelligence (Initial Values)
+
+**Date:** 2026-06-15
+
+These are initial values set at Engine C launch. No tuning yet — baselines for future calibration.
+
+| Parameter | Value | Location | Rationale |
+|-----------|-------|----------|-----------|
+| Identifier extraction confidence | 0.6–1.0 by type | `identifiers.py` | PHONE_IN 0.6 bare / 0.85 context / 0.95 prefix. UPI/GSTIN/crypto 1.0 (low FP). PAN 0.8 (context-required). BANK_ACCOUNT 0.7 (HIGH FP). |
+| Template keyword weight | 0.6 | `templates.py:_KW_WEIGHT` | Keywords drive most matches. Identifiers are confirmation. |
+| Template identifier weight | 0.4 | `templates.py:_ID_WEIGHT` | Lower than keywords — not all fraud content contains identifiers. |
+| Template confidence threshold | 0.5 | `templates.py:_CONFIDENCE_THRESHOLD` | Below 0.5 → too many false matches on generic financial content. Above 0.6 → misses mule recruitment (fewer keywords). |
+| Template match signal thresholds | CRITICAL=1, HIGH=2, MEDIUM=3 | `template_signals.py` | CRITICAL fires immediately (investment_fraud, mule_recruitment). HIGH needs corroboration. MEDIUM needs pattern. |
+| Identifier cluster min_sources | 2 | `identifier_clustering.py:build_clusters` | 1 source = not yet convergence. 2+ sources = independent confirmation. |
+| Identifier cluster min_items | 2 | `identifier_clustering.py:build_clusters` | Single mention could be noise. 2+ mentions from 2+ sources = signal. |
+| `identifier_signal_threshold` | 2 (default) | `topics.identifier_signal_threshold` | Per-topic, analyst-configurable. SEBI may want 3 (fewer alerts), Police Cyber 2 (catch more). |
+| `IDENTIFIER_CLUSTER_INTERVAL_S` | 300 | `settings.py` | Same cadence as narrative clustering. Could reduce to 60s for high-velocity topics. |
+
+---
+
 ## Parameters NOT YET Changed (candidates for future tuning)
 
 | Parameter | Current | Candidate | Reason to consider |

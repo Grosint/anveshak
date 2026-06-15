@@ -27,6 +27,7 @@ class CreateTopicRequest(BaseModel):
     languages: list[str] = ["en"]
     credibility_min: float = 30.0
     signal_threshold: int = 3
+    identifier_signal_threshold: int = 2
     clip_categories: list[str] = []
     scheduled_report_cron: Optional[str] = None
     scheduled_report_type: Optional[str] = None
@@ -41,11 +42,14 @@ async def create_topic(
 ):
     topic_id = str(uuid.uuid4())
     now = datetime.now(UTC)
+    org_id = get_user_org(user)
     await topics_db.insert_topic(
         db, topic_id, req.name, req.keywords, req.languages,
         req.credibility_min, req.signal_threshold,
         req.clip_categories, req.scheduled_report_cron, req.scheduled_report_type,
         now, _LABELS_JSON,
+        org_id=org_id,
+        identifier_signal_threshold=req.identifier_signal_threshold,
     )
     try:
         redis = await arq_create_pool(RedisSettings.from_dsn(settings.redis_url))

@@ -14,9 +14,13 @@ SQL_INSERT_TOPIC = """
     INSERT INTO topics (
         id, name, keywords, languages, credibility_min, signal_threshold,
         status, clip_categories, scheduled_report_cron, scheduled_report_type,
-        created_at, updated_at, labels, org_id
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        created_at, updated_at, labels, org_id, identifier_signal_threshold
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
 """
+# Param order: topic_id, name, keywords, languages, credibility_min,
+# signal_threshold, status, clip_categories, scheduled_report_cron,
+# scheduled_report_type, created_at, updated_at, labels_json, org_id,
+# identifier_signal_threshold
 
 SQL_LIST_TOPICS = """
     SELECT t.id, t.name, t.status, t.signal_threshold, t.credibility_min, t.created_at,
@@ -123,13 +127,16 @@ async def insert_topic(
     scheduled_report_type: Optional[str],
     now: Any,
     labels_json: str,
+    *,
+    org_id: Optional[str] = None,
+    identifier_signal_threshold: int = 2,
 ) -> None:
     await conn.execute(
         SQL_INSERT_TOPIC,
         topic_id, name, keywords, languages,
         credibility_min, signal_threshold, "active",
         clip_categories, scheduled_report_cron, scheduled_report_type,
-        now, now, labels_json,
+        now, now, labels_json, org_id, identifier_signal_threshold,
     )
 
 
