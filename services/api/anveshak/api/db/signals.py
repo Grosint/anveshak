@@ -193,6 +193,9 @@ SQL_SIGNAL_CROSS_TOPIC = """
     JOIN topics t ON t.id = s2.topic_id
     WHERE s2.signal_type = 'cross_topic_convergence'
       AND s2.cluster_id != (SELECT cluster_id FROM signals WHERE id = $1)
+      AND t.org_id = (SELECT t2.org_id FROM signals s3
+                      JOIN topics t2 ON t2.id = s3.topic_id
+                      WHERE s3.id = $1)
       AND s2.created_at BETWEEN
           (SELECT created_at - INTERVAL '1 hour' FROM signals WHERE id = $1)
           AND
@@ -201,11 +204,14 @@ SQL_SIGNAL_CROSS_TOPIC = """
 """
 
 SQL_MISSED_SIGNALS = """
-    SELECT id, topic_id, cluster_id, signal_type, description, status, created_at
-    FROM signals
-    WHERE created_at > $1
-      AND status = 'new'
-    ORDER BY created_at ASC
+    SELECT s.id, s.topic_id, s.cluster_id, s.signal_type, s.description,
+           s.status, s.created_at
+    FROM signals s
+    JOIN topics t ON t.id = s.topic_id
+    WHERE s.created_at > $1
+      AND s.status = 'new'
+      AND (t.org_id = $2 OR t.org_id IS NULL)
+    ORDER BY s.created_at ASC
     LIMIT 100
 """
 
@@ -447,7 +453,7 @@ def _build_topic_graph(rows: list, first: dict) -> dict[str, Any]:
 
 
 async def get_missed_signals(
-    conn: asyncpg.Connection, since: Any
+    conn: asyncpg.Connection, since: Any, org_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    rows = await conn.fetch(SQL_MISSED_SIGNALS, since)
+    rows = await conn.fetch(SQL_MISSED_SIGNALS, since, org_id)
     return [dict(r) for r in rows]

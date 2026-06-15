@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from ..auth.rbac import require_role
+from ..auth.rbac import require_role, get_user_org
 from ..db.pool import get_db
 from ..db import templates as tpl_db
 from ..db import topics as topics_db
@@ -21,7 +21,8 @@ async def list_templates(
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(require_role("viewer", "analyst", "admin", "super-admin")),
 ) -> list[dict]:
-    return await tpl_db.list_templates(db)
+    org_id = get_user_org(user)
+    return await tpl_db.list_templates(db, org_id=org_id)
 
 
 # ---------------------------------------------------------------------------

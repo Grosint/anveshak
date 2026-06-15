@@ -58,6 +58,7 @@ SQL_TOPIC_SIMILARITY = """
         WHERE t.id != $1
           AND t.status = 'active'
           AND nc2.embedding_centroid IS NOT NULL
+          AND t.org_id = (SELECT org_id FROM topics WHERE id = $1)
         GROUP BY t.id, t.name, t.status
     )
     SELECT ot.id, ot.name, ot.status,

@@ -14,6 +14,7 @@ SQL_LIST_TEMPLATES = """
            severity, legal_sections, is_builtin, is_active, created_at
     FROM scam_templates
     WHERE is_active = true
+      AND (org_id IS NULL OR org_id = $1)
     ORDER BY name
 """
 
@@ -50,8 +51,10 @@ SQL_UNLINK_TEMPLATE = """
 # ---------------------------------------------------------------------------
 
 
-async def list_templates(conn: asyncpg.Connection) -> list[dict[str, Any]]:
-    rows = await conn.fetch(SQL_LIST_TEMPLATES)
+async def list_templates(
+    conn: asyncpg.Connection, org_id: str | None = None,
+) -> list[dict[str, Any]]:
+    rows = await conn.fetch(SQL_LIST_TEMPLATES, org_id)
     return [dict(r) for r in rows]
 
 

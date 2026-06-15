@@ -13,6 +13,7 @@ from ..auth.rbac import require_role, is_super_admin, get_user_org
 from ..db.pool import get_db, get_pool
 from ..db import signals as signals_db
 from ..db import audit as audit_db
+from ..db import topics as topics_db
 
 log = structlog.get_logger(__name__)
 
@@ -64,10 +65,12 @@ async def signal_websocket(
     """
     from ..auth.jwt import verify_token
     try:
-        verify_token(token)
+        user_payload = verify_token(token)
     except Exception:
         await websocket.close(code=4001)
         return
+
+    ws_org_id = user_payload.get("org_id") if isinstance(user_payload, dict) else None
 
     await websocket.accept()
 
@@ -83,7 +86,7 @@ async def signal_websocket(
             pool = get_pool()
             if pool:
                 async with pool.acquire() as conn:
-                    missed = await signals_db.get_missed_signals(conn, since_dt)
+                    missed = await signals_db.get_missed_signals(conn, since_dt, org_id=ws_org_id)
                     for row in missed:
                         await websocket.send_json({
                             "type": "signal_replay",
@@ -143,6 +146,14 @@ async def get_signal_connections(
     user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ):
     """Return graph data (nodes + edges) for a signal's connections."""
+    # Verify org access via signal's topic_id before returning graph data
+    signal_row = await db.fetchrow(
+        "SELECT topic_id FROM signals WHERE id = $1", signal_id,
+    )
+    if not signal_row:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    if signal_row["topic_id"]:
+        await topics_db.verify_topic_access(db, signal_row["topic_id"], user)
     return await signals_db.get_signal_connections(db, signal_id)
 
 
