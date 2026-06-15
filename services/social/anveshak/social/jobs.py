@@ -188,7 +188,7 @@ async def poll_social_topic(ctx: dict, topic_id: str, include_x: bool = True) ->
 
     async with db_pool.acquire() as conn:
         topic_row = await conn.fetchrow(
-            "SELECT id, keywords FROM topics WHERE id = $1 AND status = 'active'",
+            "SELECT id, keywords, org_id FROM topics WHERE id = $1 AND status = 'active'",
             topic_id,
         )
     if not topic_row:
@@ -196,6 +196,7 @@ async def poll_social_topic(ctx: dict, topic_id: str, include_x: bool = True) ->
         return {"inserted": 0}
 
     keywords: list[str] = list(topic_row["keywords"] or [])
+    topic_org_id: str | None = topic_row.get("org_id")
     summary: dict[str, int] = {}
 
     for adapter_id, adapter in _ADAPTERS.items():
@@ -227,7 +228,8 @@ async def poll_social_topic(ctx: dict, topic_id: str, include_x: bool = True) ->
             async for raw_item in adapter.collect(keywords, source_handles, topic_id):
                 try:
                     new = await ingest_raw_item(
-                        raw_item, topic_id, db_pool, arq_pool, adapter_id
+                        raw_item, topic_id, db_pool, arq_pool, adapter_id,
+                        org_id=topic_org_id,
                     )
                     if new:
                         inserted += 1

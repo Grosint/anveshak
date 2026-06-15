@@ -11,8 +11,8 @@ import asyncpg
 
 SQL_INSERT_SOURCE = """
     INSERT INTO sources (id, name, url_or_handle, platform, credibility_score,
-                         auto_score_enabled, is_active, created_at, updated_at, labels)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+                         auto_score_enabled, is_active, created_at, updated_at, labels, org_id)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 """
 
 SQL_LIST_SOURCES = """
@@ -160,6 +160,12 @@ SQL_CHECK_TOPIC_SOURCE = """
     WHERE topic_id = $1 AND source_id = $2
 """
 
+SQL_ADD_ORG_SOURCE = """
+    INSERT INTO org_sources (org_id, source_id)
+    VALUES ($1, $2)
+    ON CONFLICT DO NOTHING
+"""
+
 # ---------------------------------------------------------------------------
 # Repository functions
 # ---------------------------------------------------------------------------
@@ -173,11 +179,13 @@ async def insert_source(
     credibility_score: float,
     now: Any,
     labels_json: str,
+    *,
+    org_id: Optional[str] = None,
 ) -> None:
     await conn.execute(
         SQL_INSERT_SOURCE,
         source_id, name, url_or_handle, platform,
-        credibility_score, True, True, now, now, labels_json,
+        credibility_score, True, True, now, now, labels_json, org_id,
     )
 
 
@@ -346,3 +354,10 @@ async def topic_source_exists(
 ) -> bool:
     row = await conn.fetchrow(SQL_CHECK_TOPIC_SOURCE, topic_id, source_id)
     return row is not None
+
+
+async def add_org_source(
+    conn: asyncpg.Connection, org_id: str, source_id: str
+) -> None:
+    """Link a source to an organization for visibility."""
+    await conn.execute(SQL_ADD_ORG_SOURCE, org_id, source_id)

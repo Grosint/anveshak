@@ -140,12 +140,18 @@ async def create_source(
 
     source_id = str(uuid.uuid4())
     now = datetime.now(UTC)
+    org_id = get_user_org(user)
     await sources_db.insert_source(
         db, source_id, req.name, req.url_or_handle, req.platform,
         req.credibility_score, now, _LABELS_JSON,
+        org_id=org_id,
     )
     # Write initial health status
     await sources_db.update_source_health(db, source_id, initial_health, 0, health_error, now)
+
+    # Auto-link source to org for visibility
+    if org_id:
+        await sources_db.add_org_source(db, org_id, source_id)
 
     # Auto-link to topic(s) if provided
     link_ids: set[str] = set()

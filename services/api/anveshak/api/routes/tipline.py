@@ -166,7 +166,7 @@ async def ingest_tipline(
 
     # 6. Enqueue analyse_content ARQ job
     try:
-        await arq_pool.enqueue_job("analyse_content", inserted_id)
+        await arq_pool.enqueue_job("analyse_content", inserted_id, _queue_name="arq:analyst")
         log.info(
             "tipline.ingest.queued",
             content_item_id=inserted_id,

@@ -297,6 +297,51 @@ services:
     networks:
       - anveshak-net
 
+  # Social-worker: ARQ worker for poll_social_topic jobs enqueued by social scheduler.
+  # Same image, different entrypoint. Handles Telegram, X, Reddit, Bluesky, Instagram.
+  # Telethon session limits this to 1 replica.
+  social-worker:
+    image: anveshak-social:latest
+    build:
+      context: ..
+      dockerfile: services/social/Dockerfile
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      <<: *common-env
+      TELEGRAM_ADAPTER_ENABLED: ${TELEGRAM_ADAPTER_ENABLED:-false}
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:-}
+      TELEGRAM_SESSION_STRING: ${TELEGRAM_SESSION_STRING:-}
+      X_ADAPTER_ENABLED: ${X_ADAPTER_ENABLED:-false}
+      X_BEARER_TOKEN: ${X_BEARER_TOKEN:-}
+      X_MONTHLY_READ_CAP: ${X_MONTHLY_READ_CAP:-40000}
+      REDDIT_CLIENT_ID: ${REDDIT_CLIENT_ID:-}
+      REDDIT_CLIENT_SECRET: ${REDDIT_CLIENT_SECRET:-}
+      REDDIT_USER_AGENT: ${REDDIT_USER_AGENT:-Anveshak OSINT Platform/1.0}
+      REDDIT_ADAPTER_ENABLED: ${REDDIT_ADAPTER_ENABLED:-false}
+      BLUESKY_HANDLE: ${BLUESKY_HANDLE:-}
+      BLUESKY_PASSWORD: ${BLUESKY_PASSWORD:-}
+      BLUESKY_ADAPTER_ENABLED: ${BLUESKY_ADAPTER_ENABLED:-false}
+      INSTAGRAM_ADAPTER_ENABLED: ${INSTAGRAM_ADAPTER_ENABLED:-false}
+      INSTAGRAM_USERNAME: ${INSTAGRAM_USERNAME:-}
+      INSTAGRAM_PASSWORD: ${INSTAGRAM_PASSWORD:-}
+      MEDIA_STORAGE_ROOT: /app/media
+      MEDIA_MAX_SIZE_MB: ${MEDIA_MAX_SIZE_MB:-50}
+    volumes:
+      - vision_media:/app/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
+      <<: *healthcheck-defaults
+    networks:
+      - anveshak-net
+    command: ["python", "-m", "arq", "anveshak.social.jobs.WorkerSettings"]
+
   # Analyst is split into scheduler (lightweight loops) + worker (ARQ ML pipeline).
   # Scheduler: clustering, signals, convergence, orphan sweep — 512 MB, no ML models.
   # Worker: NLP, embedding, label gen, credibility — 6 GB, horizontally scalable.

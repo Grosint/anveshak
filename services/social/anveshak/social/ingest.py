@@ -90,6 +90,8 @@ async def ingest_raw_item(
     pool: asyncpg.Pool,
     arq_pool: ArqRedis,
     adapter_id: str,
+    *,
+    org_id: str | None = None,
 ) -> bool:
     """Normalise a RawItem, insert into content_items, enqueue analyse_content.
 
@@ -148,6 +150,7 @@ async def ingest_raw_item(
             labels,
             raw.forwarded_from_channel_id,     # Telegram Level 2 discovery
             raw.forwarded_from_channel_name,   # Telegram Level 2 discovery
+            org_id,                            # $16 — org_id for multi-tenancy
         )
 
     if result is None:
@@ -162,7 +165,7 @@ async def ingest_raw_item(
     content_item_id = result["id"]
 
     # New row — enqueue NLP analysis job
-    await arq_pool.enqueue_job("analyse_content", content_item_id)
+    await arq_pool.enqueue_job("analyse_content", content_item_id, _queue_name="arq:analyst")
     log.info(
         "social.ingest.inserted",
         content_item_id=content_item_id,

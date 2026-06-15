@@ -176,7 +176,55 @@ class TestIngestRawItem:
 
         result = await ingest_raw_item(raw, "topic-1", pool, arq_pool, "reddit-v1")
         assert result is True
-        arq_pool.enqueue_job.assert_awaited_once_with("analyse_content", content_item_id)
+        arq_pool.enqueue_job.assert_awaited_once_with(
+            "analyse_content", content_item_id, _queue_name="arq:analyst",
+        )
+
+    @pytest.mark.asyncio
+    async def test_insert_sql_passes_org_id(self):
+        """SQL_INSERT_CONTENT has 16 params — org_id must be passed as $16."""
+        from anveshak.social.ingest import ingest_raw_item
+
+        raw = _make_raw_item()
+        pool, conn = _mock_pool()
+        content_item_id = "ci-org-1"
+        conn.fetchrow = AsyncMock(side_effect=[
+            _make_source_row(),
+            {"id": content_item_id},
+        ])
+        arq_pool = AsyncMock()
+
+        result = await ingest_raw_item(
+            raw, "topic-1", pool, arq_pool, "reddit-v1", org_id="org_cyber",
+        )
+        assert result is True
+        # Verify INSERT call received 16 args (SQL has $1-$16)
+        insert_call = conn.fetchrow.call_args_list[1]
+        insert_args = insert_call.args
+        # First arg is SQL string, rest are positional params
+        assert len(insert_args) == 17  # SQL + 16 params
+        assert insert_args[16] == "org_cyber"  # $16 = org_id
+
+    @pytest.mark.asyncio
+    async def test_insert_sql_passes_none_org_id_by_default(self):
+        """When org_id not provided, $16 should be None."""
+        from anveshak.social.ingest import ingest_raw_item
+
+        raw = _make_raw_item()
+        pool, conn = _mock_pool()
+        content_item_id = "ci-org-2"
+        conn.fetchrow = AsyncMock(side_effect=[
+            _make_source_row(),
+            {"id": content_item_id},
+        ])
+        arq_pool = AsyncMock()
+
+        result = await ingest_raw_item(raw, "topic-1", pool, arq_pool, "reddit-v1")
+        assert result is True
+        insert_call = conn.fetchrow.call_args_list[1]
+        insert_args = insert_call.args
+        assert len(insert_args) == 17  # SQL + 16 params
+        assert insert_args[16] is None  # $16 = org_id defaults to None
 
     @pytest.mark.asyncio
     async def test_enqueues_vision_for_media(self):

@@ -26,8 +26,41 @@ from datetime import datetime, timezone
 
 COMPOSE_PROJECT = "anveshak"
 POSTGRES_CONTAINER = f"{COMPOSE_PROJECT}-postgres-1"
+REDIS_CONTAINER = f"{COMPOSE_PROJECT}-redis-1"
 DB_NAME = os.environ.get("POSTGRES_DB", "anveshak")
 DB_USER = os.environ.get("POSTGRES_USER", "anveshak")
+
+# Compose file path (relative to repo root)
+COMPOSE_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "infra", "compose.yml")
+
+# Expected worker containers — if missing, pipeline stage is broken
+WORKER_CONTAINERS = {
+    "social-worker":      {"stage": 1, "role": "Social adapter polling (Telegram, X, Reddit, Instagram)"},
+    "scraper-worker":     {"stage": 1, "role": "Web/RSS/darkweb scraping"},
+    "analyst-worker":     {"stage": 2, "role": "NLP, embedding, identifiers, quality scoring"},
+    "analyst-scheduler":  {"stage": 3, "role": "Clustering, signals, convergence, orphan sweep"},
+    "reporter-worker":    {"stage": 5, "role": "LLM report generation"},
+}
+
+# ARQ queues and their thresholds
+# ARQ default queue is "arq:queue" (social), named queues for scraper/analyst
+ARQ_QUEUES = {
+    "arq:queue":    {"warn": 50, "critical": 200, "stage": 1, "label": "social (default)"},
+    "arq:scraper":  {"warn": 30, "critical": 100, "stage": 1, "label": "scraper"},
+    "arq:analyst":  {"warn": 50, "critical": 200, "stage": 2, "label": "analyst"},
+}
+
+# Source staleness thresholds (seconds)
+SOURCE_STALENESS = {
+    "telegram": 3600,     # 1h (poll_interval=900s, 4× buffer)
+    "twitter":  7200,     # 2h
+    "reddit":   7200,     # 2h
+    "instagram": 7200,    # 2h
+    "bluesky":  7200,     # 2h
+    "rss":      21600,    # 6h
+    "web":      86400,    # 24h
+    "darkweb":  86400,    # 24h
+}
 
 # Exit codes
 EXIT_HEALTHY = 0
@@ -41,7 +74,7 @@ ENGINE_C_IDENTIFIER_TYPES = (
     "URL_DOMAIN", "GSTIN", "UDYAM", "PAN", "IFSC",
     "BANK_ACCOUNT", "SEBI_REG",
 )
-ENGINE_C_TYPES_SQL = ", ".join(f"''{t}''" for t in ENGINE_C_IDENTIFIER_TYPES)
+ENGINE_C_TYPES_SQL = ", ".join(f"'{t}'" for t in ENGINE_C_IDENTIFIER_TYPES)
 
 # Agency detection keywords in topic names
 AGENCY_KEYWORDS = {
@@ -122,7 +155,446 @@ def _query_val(sql: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# Diagnostics
+# Redis query helper
+# ---------------------------------------------------------------------------
+
+def _redis_cmd(args: list[str]) -> str | None:
+    """Run a Redis command via docker exec, return stdout."""
+    cmd = ["docker", "exec", REDIS_CONTAINER, "redis-cli"] + args
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode != 0:
+            return None
+        return result.stdout.strip()
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return None
+
+
+def _redis_queue_depth(queue_name: str) -> int | None:
+    """Get ARQ queue length. ARQ uses sorted sets (ZCARD), not lists (LLEN)."""
+    # Try ZCARD first (ARQ's actual type), fall back to LLEN
+    val = _redis_cmd(["ZCARD", queue_name])
+    if val is not None:
+        try:
+            return int(val)
+        except ValueError:
+            pass
+    # Fallback to LLEN for non-ARQ queues
+    val = _redis_cmd(["LLEN", queue_name])
+    if val is None:
+        return None
+    try:
+        return int(val)
+    except ValueError:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Stage 1: Container Liveness
+# ---------------------------------------------------------------------------
+
+def check_container_health() -> dict:
+    """Check which worker containers are running and healthy."""
+    stats: dict = {"containers": {}, "warnings": [], "criticals": []}
+
+    try:
+        cmd = [
+            "docker", "compose", "--env-file", ".env",
+            "-p", COMPOSE_PROJECT, "-f", COMPOSE_FILE,
+            "ps", "--format", "json",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        if result.returncode != 0:
+            stats["criticals"].append("Cannot query container status — docker compose ps failed")
+            return stats
+
+        # Parse JSON lines (one per container)
+        running = {}
+        for line in result.stdout.strip().split("\n"):
+            if not line.strip():
+                continue
+            try:
+                c = json.loads(line)
+                # Name format: anveshak-social-worker-1 → social-worker
+                name = c.get("Name", "").replace(f"{COMPOSE_PROJECT}-", "").rstrip("-1234567890")
+                # Strip trailing dash from "social-worker-"
+                if name.endswith("-"):
+                    name = name[:-1]
+                health = c.get("Health", "")
+                state = c.get("State", "")
+                running[name] = {"health": health, "state": state}
+            except (json.JSONDecodeError, KeyError):
+                continue
+
+        for worker_name, info in WORKER_CONTAINERS.items():
+            if worker_name in running:
+                r = running[worker_name]
+                status = r["health"] if r["health"] else r["state"]
+                stats["containers"][worker_name] = {
+                    "status": status,
+                    "stage": info["stage"],
+                    "role": info["role"],
+                }
+                if status in ("unhealthy", "restarting"):
+                    stats["warnings"].append(
+                        f"Stage {info['stage']}: {worker_name} is {status} — {info['role']}"
+                    )
+            else:
+                stats["containers"][worker_name] = {
+                    "status": "MISSING",
+                    "stage": info["stage"],
+                    "role": info["role"],
+                }
+                stats["criticals"].append(
+                    f"Stage {info['stage']}: {worker_name} NOT RUNNING — {info['role']}"
+                )
+
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        stats["criticals"].append("Cannot check containers — docker not available")
+
+    return stats
+
+
+# ---------------------------------------------------------------------------
+# Stage 1-2: ARQ Queue Depth
+# ---------------------------------------------------------------------------
+
+def check_queue_depth() -> dict:
+    """Check ARQ queue depths in Redis."""
+    stats: dict = {"queues": {}, "warnings": [], "criticals": []}
+
+    for queue_name, thresholds in ARQ_QUEUES.items():
+        depth = _redis_queue_depth(queue_name)
+        if depth is None:
+            stats["queues"][queue_name] = {"depth": "?", "label": thresholds["label"]}
+            stats["warnings"].append(f"Cannot read queue {queue_name} — Redis unreachable?")
+            continue
+
+        entry = {
+            "depth": depth,
+            "label": thresholds["label"],
+            "stage": thresholds["stage"],
+        }
+        stats["queues"][queue_name] = entry
+
+        if depth >= thresholds["critical"]:
+            stats["criticals"].append(
+                f"Queue {queue_name} ({thresholds['label']}): {depth} pending — "
+                f"stage {thresholds['stage']} worker likely down"
+            )
+        elif depth >= thresholds["warn"]:
+            stats["warnings"].append(
+                f"Queue {queue_name} ({thresholds['label']}): {depth} pending — "
+                f"worker may be overloaded"
+            )
+
+    return stats
+
+
+# ---------------------------------------------------------------------------
+# Stage 2: Pipeline Flow Rate
+# ---------------------------------------------------------------------------
+
+def check_flow_rate(hours: int = 2) -> dict:
+    """Compare items inserted vs items with embeddings in recent window."""
+    stats: dict = {"warnings": [], "criticals": []}
+
+    inserted = _query_val(f"""
+        SELECT COUNT(*) FROM content_items
+        WHERE created_at >= NOW() - INTERVAL '{hours} hours'
+    """)
+    embedded = _query_val(f"""
+        SELECT COUNT(*) FROM content_items
+        WHERE created_at >= NOW() - INTERVAL '{hours} hours'
+        AND embedding IS NOT NULL
+    """)
+    with_identifiers = _query_val(f"""
+        SELECT COUNT(DISTINCT ci.id) FROM content_items ci
+        JOIN extracted_entities ee ON ee.content_item_id = ci.id
+        WHERE ci.created_at >= NOW() - INTERVAL '{hours} hours'
+    """)
+
+    stats["hours"] = hours
+    stats["inserted"] = int(inserted or 0)
+    stats["embedded"] = int(embedded or 0)
+    stats["with_identifiers"] = int(with_identifiers or 0)
+
+    if stats["inserted"] > 0:
+        stats["embed_pct"] = round(stats["embedded"] / stats["inserted"] * 100, 1)
+        stats["identifier_pct"] = round(stats["with_identifiers"] / stats["inserted"] * 100, 1)
+    else:
+        stats["embed_pct"] = 0.0
+        stats["identifier_pct"] = 0.0
+
+    # Detect analyst-worker failure: content inserted but not embedded
+    if stats["inserted"] > 10 and stats["embed_pct"] < 50:
+        stats["criticals"].append(
+            f"Pipeline gap: {stats['inserted']} items inserted but only "
+            f"{stats['embedded']} embedded ({stats['embed_pct']}%) in last {hours}h — "
+            f"analyst-worker may be down or queue misrouted"
+        )
+    elif stats["inserted"] > 10 and stats["embed_pct"] < 80:
+        stats["warnings"].append(
+            f"Analyst falling behind: {stats['embed_pct']}% embed rate in last {hours}h"
+        )
+
+    return stats
+
+
+# ---------------------------------------------------------------------------
+# Stage 1: Per-Source Staleness
+# ---------------------------------------------------------------------------
+
+def check_source_staleness() -> dict:
+    """Check when each active source last produced content."""
+    stats: dict = {"sources": [], "warnings": [], "criticals": []}
+
+    rows = _query("""
+        SELECT s.id, s.name, s.url_or_handle, s.platform, s.health_status,
+               s.is_active,
+               MAX(ci.captured_at) AS last_content_at,
+               COUNT(ci.id) AS total_items,
+               EXTRACT(EPOCH FROM (NOW() - MAX(ci.captured_at))) AS seconds_since_last
+        FROM sources s
+        JOIN topic_sources ts ON ts.source_id = s.id
+        LEFT JOIN content_items ci ON ci.source_id = s.id
+        WHERE s.is_active = true
+        GROUP BY s.id, s.name, s.url_or_handle, s.platform, s.health_status, s.is_active
+        ORDER BY s.platform, seconds_since_last DESC NULLS FIRST
+    """)
+
+    for row in rows:
+        platform = row["platform"]
+        total_items = int(row.get("total_items", 0))
+        seconds_since = float(row["seconds_since_last"]) if row.get("seconds_since_last") else None
+        threshold = SOURCE_STALENESS.get(platform, 86400)
+
+        entry = {
+            "name": row["name"],
+            "handle": row["url_or_handle"],
+            "platform": platform,
+            "health": row["health_status"],
+            "total_items": total_items,
+            "last_content_at": row.get("last_content_at"),
+            "seconds_since_last": seconds_since,
+        }
+
+        if total_items == 0:
+            entry["status"] = "NEVER_SCRAPED"
+            stats["criticals"].append(
+                f"{row['url_or_handle']} ({platform}): NEVER produced content — "
+                f"check adapter auth/access"
+            )
+        elif seconds_since and seconds_since > threshold * 3:
+            entry["status"] = "CRITICAL_STALE"
+            hours_ago = round(seconds_since / 3600, 1)
+            stats["criticals"].append(
+                f"{row['url_or_handle']} ({platform}): last content {hours_ago}h ago"
+            )
+        elif seconds_since and seconds_since > threshold:
+            entry["status"] = "STALE"
+            hours_ago = round(seconds_since / 3600, 1)
+            stats["warnings"].append(
+                f"{row['url_or_handle']} ({platform}): last content {hours_ago}h ago"
+            )
+        else:
+            entry["status"] = "OK"
+
+        stats["sources"].append(entry)
+
+    return stats
+
+
+# ---------------------------------------------------------------------------
+# Stage 3: Cluster Freshness
+# ---------------------------------------------------------------------------
+
+def check_cluster_freshness() -> dict:
+    """Check if clustering is running by looking at most recent cluster update."""
+    stats: dict = {"warnings": []}
+
+    last_cluster = _query_val("""
+        SELECT EXTRACT(EPOCH FROM (NOW() - MAX(updated_at))) FROM narrative_clusters
+    """)
+    stats["seconds_since_last_cluster"] = float(last_cluster) if last_cluster else None
+
+    if stats["seconds_since_last_cluster"] is None:
+        stats["status"] = "NO_CLUSTERS"
+    elif stats["seconds_since_last_cluster"] > 7200:  # 2h
+        hours = round(stats["seconds_since_last_cluster"] / 3600, 1)
+        stats["status"] = "STALE"
+        stats["warnings"].append(
+            f"No cluster updates in {hours}h — analyst-scheduler may be stuck"
+        )
+    else:
+        stats["status"] = "OK"
+
+    # Identifier cluster freshness
+    last_id_cluster = _query_val("""
+        SELECT EXTRACT(EPOCH FROM (NOW() - MAX(updated_at))) FROM identifier_clusters
+    """)
+    stats["seconds_since_last_id_cluster"] = float(last_id_cluster) if last_id_cluster else None
+
+    return stats
+
+
+# ---------------------------------------------------------------------------
+# Formatters — Pipeline Stage Health
+# ---------------------------------------------------------------------------
+
+def format_container_health(stats: dict) -> str:
+    lines = ["  CONTAINERS:"]
+    for name, info in stats["containers"].items():
+        status = info["status"]
+        if status == "MISSING":
+            marker = "MISSING"
+        elif status == "healthy":
+            marker = "UP"
+        else:
+            marker = status.upper()
+        lines.append(f"    {name:<22s} {marker:<12s} (stage {info['stage']}: {info['role'][:50]})")
+    return "\n".join(lines)
+
+
+def format_queue_depth(stats: dict) -> str:
+    lines = ["  ARQ QUEUES:"]
+    for queue_name, info in stats["queues"].items():
+        depth = info["depth"]
+        label = info["label"]
+        if isinstance(depth, int):
+            if depth == 0:
+                marker = "OK"
+            elif depth < 50:
+                marker = f"{depth} pending"
+            else:
+                marker = f"{depth} pending  WARNING"
+        else:
+            marker = "unreachable"
+        lines.append(f"    {queue_name:<20s} {marker:<25s} ({label})")
+    return "\n".join(lines)
+
+
+def format_flow_rate(stats: dict) -> str:
+    lines = [f"  PIPELINE FLOW (last {stats['hours']}h):"]
+    lines.append(f"    Items inserted:           {stats['inserted']}")
+    lines.append(f"    Items embedded:           {stats['embedded']} ({stats['embed_pct']}%)")
+    lines.append(f"    Items with identifiers:   {stats['with_identifiers']} ({stats['identifier_pct']}%)")
+    if stats["inserted"] > 0 and stats["embed_pct"] >= 80:
+        lines.append(f"    Analyst throughput:        OK")
+    elif stats["inserted"] == 0:
+        lines.append(f"    Analyst throughput:        no recent content to evaluate")
+    else:
+        lines.append(f"    Analyst throughput:        DEGRADED — check analyst-worker + arq:analyst queue")
+    return "\n".join(lines)
+
+
+def format_source_staleness(stats: dict) -> str:
+    lines = ["  SOURCE STALENESS:"]
+    if not stats["sources"]:
+        lines.append("    No active sources with topic links")
+        return "\n".join(lines)
+
+    for src in stats["sources"]:
+        handle = src["handle"]
+        if len(handle) > 30:
+            handle = handle[:27] + "..."
+        platform = src["platform"]
+
+        if src["status"] == "NEVER_SCRAPED":
+            age_str = "NEVER scraped"
+        elif src["seconds_since_last"] is not None:
+            secs = src["seconds_since_last"]
+            if secs < 3600:
+                age_str = f"{int(secs / 60)} min ago"
+            elif secs < 86400:
+                age_str = f"{round(secs / 3600, 1)}h ago"
+            else:
+                age_str = f"{round(secs / 86400, 1)}d ago"
+        else:
+            age_str = "unknown"
+
+        status_marker = {
+            "OK": "OK",
+            "STALE": "WARNING",
+            "CRITICAL_STALE": "CRITICAL",
+            "NEVER_SCRAPED": "CRITICAL",
+        }.get(src["status"], "?")
+
+        lines.append(
+            f"    {handle:<32s} ({platform:<10s}) "
+            f"last: {age_str:<16s} {src['total_items']:>4d} items  {status_marker}"
+        )
+    return "\n".join(lines)
+
+
+def format_cluster_freshness(stats: dict) -> str:
+    lines = ["  CLUSTER FRESHNESS:"]
+    secs = stats["seconds_since_last_cluster"]
+    if secs is None:
+        lines.append("    Narrative clusters:        no clusters exist yet")
+    elif secs < 3600:
+        lines.append(f"    Narrative clusters:        updated {int(secs / 60)} min ago  OK")
+    else:
+        lines.append(f"    Narrative clusters:        updated {round(secs / 3600, 1)}h ago  {'WARNING' if secs > 7200 else 'OK'}")
+
+    id_secs = stats["seconds_since_last_id_cluster"]
+    if id_secs is None:
+        lines.append("    Identifier clusters:       no clusters exist yet")
+    elif id_secs < 3600:
+        lines.append(f"    Identifier clusters:       updated {int(id_secs / 60)} min ago  OK")
+    else:
+        lines.append(f"    Identifier clusters:       updated {round(id_secs / 3600, 1)}h ago  {'WARNING' if id_secs > 7200 else 'OK'}")
+
+    return "\n".join(lines)
+
+
+def format_stage_report(container_stats: dict, queue_stats: dict, flow_stats: dict,
+                        staleness_stats: dict, cluster_stats: dict) -> str:
+    """Combine all stage checks into one block."""
+    sep = "=" * 60
+    lines = [
+        f"{sep}",
+        "  PIPELINE FLOW — STAGE HEALTH",
+        f"{sep}",
+        "",
+        format_container_health(container_stats),
+        "",
+        format_queue_depth(queue_stats),
+        "",
+        format_flow_rate(flow_stats),
+        "",
+        format_source_staleness(staleness_stats),
+        "",
+        format_cluster_freshness(cluster_stats),
+        "",
+    ]
+
+    # Collect all warnings/criticals
+    all_w = (container_stats.get("warnings", []) + queue_stats.get("warnings", []) +
+             flow_stats.get("warnings", []) + staleness_stats.get("warnings", []) +
+             cluster_stats.get("warnings", []))
+    all_c = (container_stats.get("criticals", []) + queue_stats.get("criticals", []) +
+             flow_stats.get("criticals", []) + staleness_stats.get("criticals", []) +
+             cluster_stats.get("criticals", []))
+
+    if all_c:
+        lines.append("  STAGE CRITICALS:")
+        for c in all_c:
+            lines.append(f"    CRITICAL: {c}")
+    if all_w:
+        lines.append("  STAGE WARNINGS:")
+        for w in all_w:
+            lines.append(f"    WARNING: {w}")
+
+    if not all_c and not all_w:
+        lines.append("  All pipeline stages: HEALTHY")
+
+    lines.append("")
+    return "\n".join(lines), all_w, all_c
+
+
+# ---------------------------------------------------------------------------
+# Diagnostics (existing)
 # ---------------------------------------------------------------------------
 
 def get_topics(name_filter: str | None = None) -> list[dict]:
@@ -906,6 +1378,20 @@ def main() -> int:
         print("Ensure containers are running: make ps")
         return EXIT_CRITICAL
 
+    # ── Pipeline Stage Health (containers, queues, flow, staleness) ──
+    container_stats = check_container_health()
+    queue_stats = check_queue_depth()
+    flow_stats = check_flow_rate(hours=min(hours, 4) if hours else 4)
+    staleness_stats = check_source_staleness()
+    cluster_stats = check_cluster_freshness()
+
+    stage_report, stage_warnings, stage_criticals = format_stage_report(
+        container_stats, queue_stats, flow_stats, staleness_stats, cluster_stats,
+    )
+    print(stage_report)
+    all_warnings = list(stage_warnings)
+    all_criticals = list(stage_criticals)
+
     # Engine C availability
     engine_c_ok = _engine_c_available()
     if not engine_c_ok:
@@ -925,8 +1411,6 @@ def main() -> int:
         return EXIT_WARNING
 
     exit_code = EXIT_HEALTHY
-    all_warnings = []
-    all_criticals = []
 
     for topic in topics:
         raw_threshold = topic.get("topic_relevance_threshold")
