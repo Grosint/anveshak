@@ -52,6 +52,13 @@ spec:
               cpu: 200m
             limits:
               memory: 1Gi
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import redis; redis.from_url('redis://redis:6379/0').ping()"]
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 3
+            timeoutSeconds: 5
           volumeMounts:
             - name: reports
               mountPath: /app/reports
