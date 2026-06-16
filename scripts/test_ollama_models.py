@@ -1,12 +1,12 @@
-"""Ollama LLM integration tests — runs INSIDE the reporter-worker container.
+"""Ollama LLM integration tests — runs INSIDE the report-worker container.
 
 Tests Ollama connectivity, model availability, and structured output parsing
 using the exact same code paths as production report generation.
 Outputs JSON to stdout.
 
 Usage (from host):
-    docker cp scripts/test_ollama_models.py anveshak-reporter-worker-1:/tmp/
-    docker exec anveshak-reporter-worker-1 python /tmp/test_ollama_models.py
+    docker cp scripts/test_ollama_models.py anveshak-report-worker-1:/tmp/
+    docker exec anveshak-report-worker-1 python /tmp/test_ollama_models.py
 """
 from __future__ import annotations
 

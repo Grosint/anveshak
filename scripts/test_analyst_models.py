@@ -1,12 +1,12 @@
-"""Analyst ML model integration tests — runs INSIDE the analyst-worker container.
+"""Analyst ML model integration tests — runs INSIDE the analyse-worker container.
 
 Tests spaCy NER, sentence-transformers embedding, VADER sentiment, and NLLB
 translation using the exact same code paths and models as production.
 Outputs JSON to stdout for the host orchestrator (make test-integration).
 
 Usage (from host):
-    docker cp scripts/test_analyst_models.py anveshak-analyst-worker-1:/tmp/
-    docker exec anveshak-analyst-worker-1 python /tmp/test_analyst_models.py
+    docker cp scripts/test_analyst_models.py anveshak-analyse-worker-1:/tmp/
+    docker exec anveshak-analyse-worker-1 python /tmp/test_analyst_models.py
 """
 from __future__ import annotations
 

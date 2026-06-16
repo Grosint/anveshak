@@ -1,10 +1,10 @@
-"""Source connectivity test — runs INSIDE the scraper container.
+"""Source connectivity test — runs INSIDE the scrape-web-scheduler container.
 
 Tests RSS, web, and onion fetching using the exact same code paths
 as production scraping. Outputs JSON to stdout for the host orchestrator.
 
 Usage (from host):
-    docker exec anveshak-scraper-1 python /tmp/test_scrape_sources.py
+    docker exec anveshak-scrape-web-scheduler-1 python /tmp/test_scrape_sources.py
 """
 from __future__ import annotations
 

@@ -189,8 +189,8 @@ def main() -> int:
     print(f"\n  {_DIM}Copying test scripts into containers...{_RST}")
 
     # Copy scripts into containers
-    ok1 = _copy_script("scraper", "scripts/test_scrape_sources.py", "/tmp/test_scrape_sources.py")
-    ok2 = _copy_script("social", "scripts/test_scrape_social.py", "/tmp/test_scrape_social.py")
+    ok1 = _copy_script("scrape-web-scheduler", "scripts/test_scrape_sources.py", "/tmp/test_scrape_sources.py")
+    ok2 = _copy_script("scrape-social-scheduler", "scripts/test_scrape_social.py", "/tmp/test_scrape_social.py")
 
     results: list[dict] = []
 
@@ -198,12 +198,12 @@ def main() -> int:
     if ok1:
         print(f"  {_DIM}Running scraper tests (RSS, web, onion) — this may take a few minutes...{_RST}")
         scraper_results = _run_docker_exec(
-            "anveshak-scraper-1", "/tmp/test_scrape_sources.py", timeout=600,
+            "anveshak-scrape-web-scheduler-1", "/tmp/test_scrape_sources.py", timeout=600,
         )
         results.extend(scraper_results)
     else:
         results.append({
-            "type": "error", "name": "scraper container", "status": "FAIL",
+            "type": "error", "name": "scrape-web-scheduler container", "status": "FAIL",
             "chars": 0, "reason": "Failed to copy script", "elapsed_s": 0,
         })
 
@@ -211,12 +211,12 @@ def main() -> int:
     if ok2:
         print(f"  {_DIM}Running social tests (Telegram, X, Reddit)...{_RST}")
         social_results = _run_docker_exec(
-            "anveshak-social-1", "/tmp/test_scrape_social.py", timeout=120,
+            "anveshak-scrape-social-scheduler-1", "/tmp/test_scrape_social.py", timeout=120,
         )
         results.extend(social_results)
     else:
         results.append({
-            "type": "error", "name": "social container", "status": "FAIL",
+            "type": "error", "name": "scrape-social-scheduler container", "status": "FAIL",
             "chars": 0, "reason": "Failed to copy script", "elapsed_s": 0,
         })
 

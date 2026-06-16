@@ -1,4 +1,4 @@
-"""Multilingual analyst pipeline validation — runs INSIDE the analyst-worker container.
+"""Multilingual analyst pipeline validation — runs INSIDE the analyse-worker container.
 
 Tests the full translation → NER → keywords → embedding → clustering chain
 with real NLLB-200, spaCy, YAKE, and sentence-transformers models on
@@ -8,9 +8,9 @@ Golden test data: 2 narratives × 3 languages each = 6 items.
 Pre-decided expected outputs allow us to validate ML model quality.
 
 Usage (from host):
-    docker cp scripts/test_multilingual_pipeline.py anveshak-analyst-worker-1:/tmp/
+    docker cp scripts/test_multilingual_pipeline.py anveshak-analyse-worker-1:/tmp/
     docker exec -e POSTGRES_URL=postgresql://anveshak:...@postgres:5432/anveshak_test \
-        anveshak-analyst-worker-1 python /tmp/test_multilingual_pipeline.py
+        anveshak-analyse-worker-1 python /tmp/test_multilingual_pipeline.py
 """
 from __future__ import annotations
 

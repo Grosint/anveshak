@@ -1,11 +1,11 @@
-"""Vision ML model integration tests — runs INSIDE the vision-worker container.
+"""Vision ML model integration tests — runs INSIDE the analyse-vision-worker container.
 
 Tests YOLO, CLIP, and deepfake detectors using real models from the
 vision_models volume. Outputs JSON to stdout.
 
 Usage (from host):
-    docker cp scripts/test_vision_models.py anveshak-vision-worker-1:/tmp/
-    docker exec anveshak-vision-worker-1 python /tmp/test_vision_models.py
+    docker cp scripts/test_vision_models.py anveshak-analyse-vision-worker-1:/tmp/
+    docker exec anveshak-analyse-vision-worker-1 python /tmp/test_vision_models.py
 """
 from __future__ import annotations
 

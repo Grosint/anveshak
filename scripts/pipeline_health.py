@@ -35,11 +35,11 @@ COMPOSE_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "infra",
 
 # Expected worker containers — if missing, pipeline stage is broken
 WORKER_CONTAINERS = {
-    "social-worker":      {"stage": 1, "role": "Social adapter polling (Telegram, X, Reddit, Instagram)"},
-    "scraper-worker":     {"stage": 1, "role": "Web/RSS/darkweb scraping"},
-    "analyst-worker":     {"stage": 2, "role": "NLP, embedding, identifiers, quality scoring"},
-    "analyst-scheduler":  {"stage": 3, "role": "Clustering, signals, convergence, orphan sweep"},
-    "reporter-worker":    {"stage": 5, "role": "LLM report generation"},
+    "scrape-social-worker":    {"stage": 1, "role": "Social adapter polling (Telegram, X, Reddit, Instagram)"},
+    "scrape-web-worker":       {"stage": 1, "role": "Web/RSS/darkweb scraping"},
+    "analyse-worker":          {"stage": 2, "role": "NLP, embedding, identifiers, quality scoring"},
+    "analyse-scheduler":       {"stage": 3, "role": "Clustering, signals, convergence, orphan sweep"},
+    "report-worker":           {"stage": 5, "role": "LLM report generation"},
 }
 
 # ARQ queues and their thresholds
@@ -215,9 +215,9 @@ def check_container_health() -> dict:
                 continue
             try:
                 c = json.loads(line)
-                # Name format: anveshak-social-worker-1 → social-worker
+                # Name format: anveshak-scrape-social-worker-1 → scrape-social-worker
                 name = c.get("Name", "").replace(f"{COMPOSE_PROJECT}-", "").rstrip("-1234567890")
-                # Strip trailing dash from "social-worker-"
+                # Strip trailing dash
                 if name.endswith("-"):
                     name = name[:-1]
                 health = c.get("Health", "")
@@ -326,12 +326,12 @@ def check_flow_rate(hours: int = 2) -> dict:
         stats["embed_pct"] = 0.0
         stats["identifier_pct"] = 0.0
 
-    # Detect analyst-worker failure: content inserted but not embedded
+    # Detect analyse-worker failure: content inserted but not embedded
     if stats["inserted"] > 10 and stats["embed_pct"] < 50:
         stats["criticals"].append(
             f"Pipeline gap: {stats['inserted']} items inserted but only "
             f"{stats['embedded']} embedded ({stats['embed_pct']}%) in last {hours}h — "
-            f"analyst-worker may be down or queue misrouted"
+            f"analyse-worker may be down or queue misrouted"
         )
     elif stats["inserted"] > 10 and stats["embed_pct"] < 80:
         stats["warnings"].append(
@@ -424,7 +424,7 @@ def check_cluster_freshness() -> dict:
         hours = round(stats["seconds_since_last_cluster"] / 3600, 1)
         stats["status"] = "STALE"
         stats["warnings"].append(
-            f"No cluster updates in {hours}h — analyst-scheduler may be stuck"
+            f"No cluster updates in {hours}h — analyse-scheduler may be stuck"
         )
     else:
         stats["status"] = "OK"
@@ -484,7 +484,7 @@ def format_flow_rate(stats: dict) -> str:
     elif stats["inserted"] == 0:
         lines.append(f"    Analyst throughput:        no recent content to evaluate")
     else:
-        lines.append(f"    Analyst throughput:        DEGRADED — check analyst-worker + arq:analyst queue")
+        lines.append(f"    Analyst throughput:        DEGRADED — check analyse-worker + arq:analyst queue")
     return "\n".join(lines)
 
 
@@ -724,9 +724,9 @@ def report_topic(topic_id: str, topic_name: str, signal_threshold: int, hours: i
 
     # Critical checks
     if stats["content_total"] == 0 and hours and hours <= 48:
-        stats["criticals"].append("ZERO content scraped — check scraper logs")
+        stats["criticals"].append("ZERO content scraped — check scrape-web-scheduler logs")
     if stats["cluster_count"] == 0 and stats["content_total"] > 10:
-        stats["warnings"].append("Content exists but no clusters — check analyst-scheduler")
+        stats["warnings"].append("Content exists but no clusters — check analyse-scheduler")
 
     return stats
 

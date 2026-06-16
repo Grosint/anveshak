@@ -670,9 +670,9 @@ cat << 'CHEATSHEET'
   python3 scripts/pipeline_health.py         # Full pipeline diagnostics
 
   # Monitor logs
-  make logs-scraper                          # Scraper activity
-  make logs-analyst                          # Analyst/clustering
-  make logs-reporter                         # Report generation
+  make logs-scrape-web-scheduler              # Scraper activity
+  make logs-analyse-scheduler                # Analyst/clustering
+  make logs-report-worker                    # Report generation
 
   # GPU monitoring
   nvidia-smi                                 # GPU utilization

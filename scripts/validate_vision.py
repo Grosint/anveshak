@@ -252,7 +252,7 @@ def poll_job(job_id: str, token: str, label: str = "") -> tuple[Check, dict]:
         f"Job ({label})",
         False,
         f"timed out after {JOB_TIMEOUT_S}s — last status: {last_status}. "
-        "Fix: make logs-vision-worker",
+        "Fix: make logs-analyse-vision-worker",
     ), {}
 
 
@@ -399,7 +399,7 @@ def main() -> int:
 
     if not job1_check.passed:
         if "timed out" in job1_check.detail:
-            print("\nBLOCKED: Vision worker not processing jobs. Fix: make logs-vision-worker")
+            print("\nBLOCKED: Vision worker not processing jobs. Fix: make logs-analyse-vision-worker")
         return 1
 
     # ------------------------------------------------------------------
@@ -438,7 +438,7 @@ def main() -> int:
 
     if not job2_check.passed:
         if "timed out" in job2_check.detail:
-            print("\nBLOCKED: Vision worker not processing jobs. Fix: make logs-vision-worker")
+            print("\nBLOCKED: Vision worker not processing jobs. Fix: make logs-analyse-vision-worker")
         return 1
 
     # ------------------------------------------------------------------

@@ -452,7 +452,7 @@ def main() -> int:
     print()
     print("Next steps:")
     print("  1. Verify containers: make ps")
-    print("  2. Watch scraper logs: make logs-scraper")
+    print("  2. Watch scraper logs: make logs-scrape-web-scheduler")
     print("  3. Check first content in ~5 min: GET /api/v1/topics/<id>/content")
     print("  4. Run diagnostics tomorrow: python scripts/pipeline_health.py")
 

@@ -1,10 +1,10 @@
-"""Social adapter connectivity test — runs INSIDE the social container.
+"""Social adapter connectivity test — runs INSIDE the scrape-social-scheduler container.
 
 Tests Telegram, X/Twitter, and Reddit using the exact same adapter code
 as production. Outputs JSON to stdout for the host orchestrator.
 
 Usage (from host):
-    docker exec anveshak-social-1 python /tmp/test_scrape_social.py
+    docker exec anveshak-scrape-social-scheduler-1 python /tmp/test_scrape_social.py
 """
 from __future__ import annotations
 
