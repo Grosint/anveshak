@@ -30,7 +30,7 @@ SQL_GET_AUDIT_TRAIL = """
     FROM audit_trail
     WHERE resource_type = $1
     ORDER BY created_at DESC
-    LIMIT $2
+    LIMIT $2 OFFSET $3
 """
 
 SQL_GET_AUDIT_TRAIL_ALL = """
@@ -38,7 +38,7 @@ SQL_GET_AUDIT_TRAIL_ALL = """
            details, ip_address, created_at
     FROM audit_trail
     ORDER BY created_at DESC
-    LIMIT $1
+    LIMIT $1 OFFSET $2
 """
 
 SQL_GET_AUDIT_TRAIL_BY_RESOURCE = """
@@ -47,7 +47,7 @@ SQL_GET_AUDIT_TRAIL_BY_RESOURCE = """
     FROM audit_trail
     WHERE resource_type = $1 AND resource_id = $2
     ORDER BY created_at DESC
-    LIMIT $3
+    LIMIT $3 OFFSET $4
 """
 
 _LABELS_JSON = '{"classification":"OPEN","domain":"audit","owner_org":"anveshak"}'
@@ -86,14 +86,15 @@ async def get_audit_trail(
     resource_type: Optional[str] = None,
     resource_id: Optional[str] = None,
     limit: int = 100,
+    offset: int = 0,
 ) -> list[dict[str, Any]]:
     """Retrieve audit trail entries, optionally filtered by resource_type and resource_id."""
     if resource_type and resource_id:
         rows = await conn.fetch(
-            SQL_GET_AUDIT_TRAIL_BY_RESOURCE, resource_type, resource_id, limit
+            SQL_GET_AUDIT_TRAIL_BY_RESOURCE, resource_type, resource_id, limit, offset
         )
     elif resource_type:
-        rows = await conn.fetch(SQL_GET_AUDIT_TRAIL, resource_type, limit)
+        rows = await conn.fetch(SQL_GET_AUDIT_TRAIL, resource_type, limit, offset)
     else:
-        rows = await conn.fetch(SQL_GET_AUDIT_TRAIL_ALL, limit)
+        rows = await conn.fetch(SQL_GET_AUDIT_TRAIL_ALL, limit, offset)
     return [dict(r) for r in rows]

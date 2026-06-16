@@ -52,11 +52,12 @@ async def get_audit_trail(
     resource_type: Optional[str] = Query(None, description="Filter by resource type (omit for all)"),
     resource_id: Optional[str] = Query(None, description="Filter by resource ID"),
     limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0, description="Offset for cursor-based pagination"),
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(require_role("admin")),
 ):
     """Return audit trail entries (admin only)."""
-    return await audit_db.get_audit_trail(db, resource_type, resource_id, limit)
+    return await audit_db.get_audit_trail(db, resource_type, resource_id, limit, offset)
 
 
 @router.get("/failed-jobs")
