@@ -65,6 +65,8 @@ SQL_ORPHANED_CONTENT = """
     SELECT id FROM content_items
     WHERE embedding IS NULL
       AND created_at > NOW() - INTERVAL '1 hour'
+      AND (orphan_enqueued_at IS NULL
+           OR orphan_enqueued_at < NOW() - INTERVAL '10 minutes')
     ORDER BY captured_at ASC
     LIMIT 100
 """
@@ -412,6 +414,12 @@ async def orphan_sweep(pool: asyncpg.Pool, redis: object) -> None:
                             row["id"],
                             _queue_name="arq:analyst",
                         )
+                        # Stamp to prevent re-enqueue within 10 minutes
+                        async with pool.acquire() as conn:
+                            await conn.execute(
+                                "UPDATE content_items SET orphan_enqueued_at = NOW() WHERE id = $1",
+                                row["id"],
+                            )
                     except Exception as exc:
                         log.warning(
                             "scheduler.orphan_sweep.enqueue_failed",

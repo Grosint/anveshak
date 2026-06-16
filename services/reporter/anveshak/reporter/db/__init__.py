@@ -298,11 +298,17 @@ async def insert_source_warning(
 async def fetch_reports_for_warning_check(
     pool: asyncpg.Pool,
     lookback_days: int,
+    batch_size: int = 100,
 ) -> list[dict[str, Any]]:
-    """Return recent generated reports for source-warning sweep."""
+    """Return recent generated reports for source-warning sweep.
+
+    Args:
+        batch_size: Max reports per batch (default 100). Prevents loading
+                    thousands of reports into memory on long-running instances.
+    """
     async with pool.acquire() as conn:
         rows = await conn.fetch(SQL_FETCH_REPORTS_FOR_WARNING_CHECK, str(lookback_days))
-    return [dict(r) for r in rows]
+    return [dict(r) for r in rows[:batch_size]]
 
 
 async def create_report_row(

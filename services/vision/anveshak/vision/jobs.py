@@ -51,6 +51,9 @@ log = structlog.get_logger(__name__)
 
 import threading
 
+# Serializes GPU-bound inference to prevent concurrent CUDA kernel conflicts
+_inference_semaphore = asyncio.Semaphore(1)
+
 _yolo_detector: Optional[YOLODetector] = None
 _deepfake_image_detector = None
 _deepfake_video_detector = None

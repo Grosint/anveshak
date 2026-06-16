@@ -51,10 +51,12 @@ async def create_topic(
         org_id=org_id,
         identifier_signal_threshold=req.identifier_signal_threshold,
     )
+    enqueue_failed = False
     try:
         redis = await arq_create_pool(RedisSettings.from_dsn(settings.redis_url))
         await redis.enqueue_job("backfill_topic_job", topic_id, _queue_name="arq:analyst")
     except Exception as exc:
+        enqueue_failed = True
         import structlog
         structlog.get_logger(__name__).warning(
             "topics.backfill_enqueue_failed",
@@ -66,6 +68,17 @@ async def create_topic(
         {"name": req.name, "keywords": req.keywords},
         request.client.host if request.client else "",
     )
+    if enqueue_failed:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=202,
+            content={
+                "id": topic_id,
+                "name": req.name,
+                "status": "active",
+                "warning": "Topic created but background processing delayed",
+            },
+        )
     return {"id": topic_id, "name": req.name, "status": "active"}
 
 

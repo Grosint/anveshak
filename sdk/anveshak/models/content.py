@@ -22,6 +22,7 @@ class ContentItem(AuditedModel):
     content_hash is the deduplication key — SHA-256 of normalised clean_text.
     Inserts use ON CONFLICT(content_hash) DO NOTHING.
     """
+    model_config = ConfigDict(strict=True)
     topic_id: Optional[str] = None        # associated topic (set after backfill)
     source_id: str
     raw_text: str
