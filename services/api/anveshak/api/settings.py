@@ -39,9 +39,15 @@ class Settings(BaseSettings):
     x_monthly_read_cap: int = 40000
 
     # Internal service URLs
-    analyst_service_url: str = "http://analyst-scheduler:8007"
-    vision_service_url: Optional[str] = "http://vision:8003"
+    analyst_service_url: str = "http://analyse-scheduler:8007"
     phash_duplicate_threshold: int = 8   # Hamming distance for reverse-image search
+
+    # Vision file storage (absorbed from vision container)
+    media_storage_root: str = "/app/media"
+    vision_max_video_size_mb: int = 500
+
+    # Report PDF serving (absorbed from reporter container)
+    report_output_dir: str = "/app/reports"
 
     # Signal webhook notifications
     signal_webhook_enabled: bool = False

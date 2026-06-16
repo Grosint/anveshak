@@ -12,6 +12,7 @@ resources:
   - analyst.yml
   - ollama.yml
   - scraper.yml
+  - scrape-social.yml
   - reporter.yml
   - vision.yml
   - frontend.yml

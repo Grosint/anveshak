@@ -296,7 +296,7 @@ pull-models:
 
 download-models:
 	$(call header,Downloading Vision Models (YOLO + CLIP + Deepfake ONNX))
-	@$(COMPOSE) run --rm vision-init
+	@$(COMPOSE) run --rm analyse-vision-init
 	$(call success,All vision models ready)
 
 # Pull upgraded models when hardware is available (see hardware.md)
@@ -428,20 +428,20 @@ test-integration:
 	printf "\n  $(_INFO) Step 1/5: Host-side DB tests\n"; \
 	$(UV) pytest tests/integration/ -v --tb=short -q -m integration \
 		--cov=services --cov=sdk --cov-report=term:skip-covered || _fail=1; \
-	printf "\n  $(_INFO) Step 2/5: Analyst model tests (inside analyst-worker)\n"; \
-	$(COMPOSE) cp scripts/test_analyst_models.py analyst-worker:/tmp/test_analyst_models.py; \
+	printf "\n  $(_INFO) Step 2/5: Analyst model tests (inside analyse-worker)\n"; \
+	$(COMPOSE) cp scripts/test_analyst_models.py analyse-worker:/tmp/test_analyst_models.py; \
 	$(COMPOSE) exec -T -e POSTGRES_URL=postgresql://anveshak:$${POSTGRES_PASSWORD:-change-me-in-production}@postgres:5432/anveshak_test \
-		analyst-worker python /tmp/test_analyst_models.py || _fail=1; \
-	printf "\n  $(_INFO) Step 3/5: Vision model tests (inside vision-worker)\n"; \
-	$(COMPOSE) cp scripts/test_vision_models.py vision-worker:/tmp/test_vision_models.py; \
-	$(COMPOSE) exec -T vision-worker python /tmp/test_vision_models.py || _fail=1; \
-	printf "\n  $(_INFO) Step 4/5: Ollama LLM tests (inside reporter-worker)\n"; \
-	$(COMPOSE) cp scripts/test_ollama_models.py reporter-worker:/tmp/test_ollama_models.py; \
-	$(COMPOSE) exec -T reporter-worker python /tmp/test_ollama_models.py || _fail=1; \
-	printf "\n  $(_INFO) Step 5/5: Multilingual pipeline validation (inside analyst-worker)\n"; \
-	$(COMPOSE) cp scripts/test_multilingual_pipeline.py analyst-worker:/tmp/test_multilingual_pipeline.py; \
+		analyse-worker python /tmp/test_analyst_models.py || _fail=1; \
+	printf "\n  $(_INFO) Step 3/5: Vision model tests (inside analyse-vision-worker)\n"; \
+	$(COMPOSE) cp scripts/test_vision_models.py analyse-vision-worker:/tmp/test_vision_models.py; \
+	$(COMPOSE) exec -T analyse-vision-worker python /tmp/test_vision_models.py || _fail=1; \
+	printf "\n  $(_INFO) Step 4/5: Ollama LLM tests (inside report-worker)\n"; \
+	$(COMPOSE) cp scripts/test_ollama_models.py report-worker:/tmp/test_ollama_models.py; \
+	$(COMPOSE) exec -T report-worker python /tmp/test_ollama_models.py || _fail=1; \
+	printf "\n  $(_INFO) Step 5/5: Multilingual pipeline validation (inside analyse-worker)\n"; \
+	$(COMPOSE) cp scripts/test_multilingual_pipeline.py analyse-worker:/tmp/test_multilingual_pipeline.py; \
 	$(COMPOSE) exec -T -e POSTGRES_URL=postgresql://anveshak:$${POSTGRES_PASSWORD:-change-me-in-production}@postgres:5432/anveshak_test \
-		analyst-worker python /tmp/test_multilingual_pipeline.py || _fail=1; \
+		analyse-worker python /tmp/test_multilingual_pipeline.py || _fail=1; \
 	exit $$_fail
 
 test-e2e:
@@ -496,7 +496,7 @@ health:
 	$(call header,Service Health Check)
 	@printf "  %-20s %s\n" "SERVICE" "STATUS"
 	@printf "  %-20s %s\n" "───────────────────" "──────────────────────────"
-	@for svc in api:8000 scraper:8001 social:8002 vision:8003 analyst:8007 reporter:8005; do \
+	@for svc in api:8000 scrape-web:8001 scrape-social:8002 analyse:8007; do \
 		name=$$(echo $$svc | cut -d: -f1); \
 		port=$$(echo $$svc | cut -d: -f2); \
 		if curl -sf http://localhost:$$port/health > /dev/null 2>&1; then \

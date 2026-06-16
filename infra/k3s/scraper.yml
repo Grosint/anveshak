@@ -1,26 +1,26 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: scraper
+  name: scrape-web-scheduler
   namespace: anveshak
   labels:
-    app: scraper
+    app: scrape-web-scheduler
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: scraper
+      app: scrape-web-scheduler
   template:
     metadata:
       labels:
-        app: scraper
+        app: scrape-web-scheduler
     spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
       containers:
-        - name: scraper
+        - name: scrape-web-scheduler
           image: anveshak-scraper:latest
           imagePullPolicy: IfNotPresent
           ports:
@@ -35,8 +35,8 @@ spec:
               value: "postgresql://anveshak:$(POSTGRES_PASSWORD)@postgres:5432/anveshak"
             - name: REDIS_URL
               value: "redis://redis:6379/0"
-            - name: VISION_SERVICE_URL
-              value: "http://vision:8003"
+            - name: MEDIA_STORAGE_ROOT
+              value: "/app/media"
           securityContext:
             allowPrivilegeEscalation: false
           resources:
@@ -44,7 +44,7 @@ spec:
               memory: 512Mi
               cpu: 250m
             limits:
-              memory: 1Gi
+              memory: 768Mi
           volumeMounts:
             - name: media
               mountPath: /app/media
@@ -66,14 +66,68 @@ spec:
           persistentVolumeClaim:
             claimName: vision-media-pvc
 ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scrape-web-worker
+  namespace: anveshak
+  labels:
+    app: scrape-web-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scrape-web-worker
+  template:
+    metadata:
+      labels:
+        app: scrape-web-worker
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: scrape-web-worker
+          image: anveshak-scraper:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "arq", "anveshak.scraper.jobs.WorkerSettings"]
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: anveshak-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_URL
+              value: "postgresql://anveshak:$(POSTGRES_PASSWORD)@postgres:5432/anveshak"
+            - name: REDIS_URL
+              value: "redis://redis:6379/0"
+            - name: MEDIA_STORAGE_ROOT
+              value: "/app/media"
+          securityContext:
+            allowPrivilegeEscalation: false
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 250m
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: media
+              mountPath: /app/media
+      volumes:
+        - name: media
+          persistentVolumeClaim:
+            claimName: vision-media-pvc
+---
 apiVersion: v1
 kind: Service
 metadata:
-  name: scraper
+  name: scrape-web-scheduler
   namespace: anveshak
 spec:
   selector:
-    app: scraper
+    app: scrape-web-scheduler
   ports:
     - port: 8001
       targetPort: 8001

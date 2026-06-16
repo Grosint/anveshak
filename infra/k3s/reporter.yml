@@ -1,30 +1,33 @@
+# Reporter FastAPI container eliminated — CRUD routes absorbed into API gateway.
+# Only the ARQ worker remains for LLM report generation + PDF.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: reporter
+  name: report-worker
   namespace: anveshak
   labels:
-    app: reporter
+    app: report-worker
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: reporter
+      app: report-worker
   template:
     metadata:
       labels:
-        app: reporter
+        app: report-worker
     spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
       containers:
-        - name: reporter
+        - name: report-worker
           image: anveshak-reporter:latest
           imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "arq", "anveshak.reporter.worker.WorkerSettings"]
           ports:
-            - containerPort: 8005
+            - containerPort: 8006
           env:
             - name: POSTGRES_PASSWORD
               valueFrom:
@@ -38,37 +41,32 @@ spec:
             - name: OLLAMA_HOST
               value: "http://ollama:11434"
             - name: ANALYST_SERVICE_URL
-              value: "http://analyst:8004"
+              value: "http://analyse-scheduler:8007"
+            - name: REPORT_OUTPUT_DIR
+              value: "/app/reports"
           securityContext:
             allowPrivilegeEscalation: false
           resources:
             requests:
-              memory: 256Mi
+              memory: 512Mi
               cpu: 200m
             limits:
-              memory: 512Mi
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8005
-            initialDelaySeconds: 30
-            periodSeconds: 30
-            failureThreshold: 3
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8005
-            initialDelaySeconds: 15
-            periodSeconds: 10
+              memory: 1Gi
+          volumeMounts:
+            - name: reports
+              mountPath: /app/reports
+      volumes:
+        - name: reports
+          persistentVolumeClaim:
+            claimName: reporter-output-pvc
 ---
 apiVersion: v1
-kind: Service
+kind: PersistentVolumeClaim
 metadata:
-  name: reporter
+  name: reporter-output-pvc
   namespace: anveshak
 spec:
-  selector:
-    app: reporter
-  ports:
-    - port: 8005
-      targetPort: 8005
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 5Gi

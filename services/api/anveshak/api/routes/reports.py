@@ -12,6 +12,7 @@ Routes:
 from __future__ import annotations
 
 import json
+import os
 import uuid
 from datetime import datetime, timedelta, UTC
 from typing import Optional
@@ -21,6 +22,7 @@ import structlog
 from arq.connections import RedisSettings
 from arq import create_pool as arq_create_pool
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, ConfigDict
 
 from ..auth.rbac import require_role
@@ -165,3 +167,57 @@ async def get_report_geojson(
         raise HTTPException(status_code=202, detail="Report not yet generated")
     geojson = row["geojson"] or {"type": "FeatureCollection", "features": []}
     return geojson
+
+
+# ---------------------------------------------------------------------------
+# Route: GET /api/v1/reports/{report_id}/pdf
+# ---------------------------------------------------------------------------
+
+@router.get("/api/v1/reports/{report_id}/pdf")
+async def get_report_pdf(
+    report_id: str,
+    request: Request,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+):
+    """Download report as PDF.
+
+    Serves pre-generated PDFs from the shared reporter_output volume.
+    If report is still generating, returns 202 with Retry-After.
+    If report is generated but PDF not yet created, enqueues a PDF generation
+    job and returns 202.
+    """
+    row = await reports_db.fetch_report(db, report_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    await topics_db.verify_topic_access(db, row["topic_id"], user)
+
+    if row.get("generated_at") is None:
+        return Response(
+            status_code=202,
+            headers={"Retry-After": "30"},
+            content="Report generation pending",
+        )
+
+    # Serve cached PDF if it exists
+    pdf_path: Optional[str] = row.get("pdf_path")
+    if pdf_path and os.path.exists(pdf_path):
+        return FileResponse(
+            pdf_path,
+            media_type="application/pdf",
+            filename=f"report_{report_id}.pdf",
+        )
+
+    # PDF not yet generated — enqueue generation job and return 202
+    try:
+        arq_pool = await arq_create_pool(RedisSettings.from_dsn(settings.redis_url))
+        await arq_pool.enqueue_job("generate_report_pdf", report_id, _queue_name="arq:reporter")
+        await arq_pool.close()
+    except Exception as exc:
+        log.warning("reports.pdf_enqueue_failed", report_id=report_id, error=str(exc))
+
+    return Response(
+        status_code=202,
+        headers={"Retry-After": "15"},
+        content="PDF generation queued",
+    )

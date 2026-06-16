@@ -147,11 +147,17 @@ services:
       JWT_SECRET_KEY: ${API_SECRET_KEY}
       API_ALLOWED_ORIGINS: ${API_ALLOWED_ORIGINS:-http://localhost:3000}
       HSTS_ENABLED: ${HSTS_ENABLED:-false}
-      SCRAPER_SERVICE_URL: http://scraper:8001
-      SOCIAL_SERVICE_URL: http://social:8002
-      ANALYST_SERVICE_URL: http://analyst-scheduler:8007
-      REPORTER_SERVICE_URL: http://reporter:8005
-      VISION_SERVICE_URL: http://vision:8003
+      SCRAPER_SERVICE_URL: http://scrape-web-scheduler:8001
+      SOCIAL_SERVICE_URL: http://scrape-social-scheduler:8002
+      ANALYST_SERVICE_URL: http://analyse-scheduler:8007
+      # Vision file storage (absorbed — no separate vision container)
+      MEDIA_STORAGE_ROOT: /app/media
+      VISION_MAX_VIDEO_SIZE_MB: ${VISION_MAX_VIDEO_SIZE_MB:-500}
+      # Report PDF serving (absorbed — no separate reporter container)
+      REPORT_OUTPUT_DIR: /app/reports
+    volumes:
+      - vision_media:/app/media
+      - reporter_output:/app/reports
     ports:
       - "8000:8000"
     depends_on:
@@ -167,7 +173,7 @@ services:
     networks:
       - anveshak-net
 
-  scraper:
+  scrape-web-scheduler:
     image: anveshak-scraper:latest
     build:
       context: ..
@@ -210,7 +216,7 @@ services:
       - anveshak-net
 
   # ARQ worker for scrape_topic, poll_rss_sources, scrape_darkweb_topic, check_all_source_health jobs
-  scraper-worker:
+  scrape-web-worker:
     image: anveshak-scraper:latest
     restart: unless-stopped
     mem_limit: 1g
@@ -251,7 +257,7 @@ services:
       - anveshak-net
     command: ["python", "-m", "arq", "anveshak.scraper.jobs.WorkerSettings"]
 
-  social:
+  scrape-social-scheduler:
     image: anveshak-social:latest
     build:
       context: ..
@@ -297,10 +303,10 @@ services:
     networks:
       - anveshak-net
 
-  # Social-worker: ARQ worker for poll_social_topic jobs enqueued by social scheduler.
+  # ARQ worker for poll_social_topic jobs enqueued by scrape-social-scheduler.
   # Same image, different entrypoint. Handles Telegram, X, Reddit, Bluesky, Instagram.
   # Telethon session limits this to 1 replica.
-  social-worker:
+  scrape-social-worker:
     image: anveshak-social:latest
     build:
       context: ..
@@ -342,12 +348,12 @@ services:
       - anveshak-net
     command: ["python", "-m", "arq", "anveshak.social.jobs.WorkerSettings"]
 
-  # Analyst is split into scheduler (lightweight loops) + worker (ARQ ML pipeline).
+  # Analyse layer: scheduler (lightweight loops) + worker (ARQ ML pipeline).
   # Scheduler: clustering, signals, convergence, orphan sweep — 512 MB, no ML models.
   # Worker: NLP, embedding, label gen, credibility — 6 GB, horizontally scalable.
   # Init: downloads ML models to shared volume on first run (NLLB, sentence-transformers).
 
-  analyst-init:
+  analyse-init:
     image: anveshak-analyst:latest
     command: ["python", "-m", "anveshak.analyst.download_models"]
     environment:
@@ -361,7 +367,7 @@ services:
     networks:
       - anveshak-net
 
-  analyst-scheduler:
+  analyse-scheduler:
     image: anveshak-analyst:latest
     build:
       context: ..
@@ -404,7 +410,7 @@ services:
     networks:
       - anveshak-net
 
-  analyst-worker:
+  analyse-worker:
     image: anveshak-analyst:latest
     restart: unless-stopped
     mem_limit: 6g
@@ -432,7 +438,7 @@ services:
     deploy:
       replicas: ${ANALYST_WORKER_REPLICAS:-1}
     depends_on:
-      analyst-init:
+      analyse-init:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy
@@ -447,42 +453,14 @@ services:
     networks:
       - anveshak-net
 
-  reporter:
+  # ARQ worker for generate_report jobs (RAG retrieval, Ollama LLM, geocoding, PDF)
+  # Reporter FastAPI container eliminated — CRUD routes are in API gateway,
+  # PDF served from shared reporter_output volume.
+  report-worker:
     image: anveshak-reporter:latest
     build:
       context: ..
       dockerfile: services/reporter/Dockerfile
-    restart: unless-stopped
-    mem_limit: 512m
-    environment:
-      <<: *common-env
-      REPORTER_PORT: 8005
-      REPORT_OUTPUT_DIR: /app/reports
-      REPORT_TEMPLATE_DIR: /app/templates
-      ANALYST_SERVICE_URL: http://analyst-scheduler:8007
-      OLLAMA_CIRCUIT_BREAKER_THRESHOLD: ${OLLAMA_CIRCUIT_BREAKER_THRESHOLD:-5}
-      OLLAMA_CIRCUIT_BREAKER_COOLDOWN_S: ${OLLAMA_CIRCUIT_BREAKER_COOLDOWN_S:-120}
-    volumes:
-      - reporter_output:/app/reports
-    ports:
-      - "8005:8005"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      ollama:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8005/health || exit 1"]
-      <<: *healthcheck-defaults
-    networks:
-      - anveshak-net
-
-  # ARQ worker for generate_report jobs — separate process from FastAPI
-  # Handles RAG retrieval, Ollama LLM calls, geocoding, and DB writes
-  reporter-worker:
-    image: anveshak-reporter:latest
     restart: unless-stopped
     mem_limit: 1g
     environment:
@@ -490,7 +468,7 @@ services:
       REPORT_OUTPUT_DIR: /app/reports
       REPORT_TEMPLATE_DIR: /app/templates
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2:7b}
-      ANALYST_SERVICE_URL: http://analyst-scheduler:8007
+      ANALYST_SERVICE_URL: http://analyse-scheduler:8007
       OLLAMA_REPORT_TIMEOUT_S: ${OLLAMA_REPORT_TIMEOUT_S:-540}
       OLLAMA_CIRCUIT_BREAKER_THRESHOLD: ${OLLAMA_CIRCUIT_BREAKER_THRESHOLD:-5}
       OLLAMA_CIRCUIT_BREAKER_COOLDOWN_S: ${OLLAMA_CIRCUIT_BREAKER_COOLDOWN_S:-120}
@@ -519,12 +497,17 @@ services:
 
   # ---------------------------------------------------------------------------
   # Vision (M4: YOLO, CLIP, deepfake, EXIF, pHash)
+  # Vision FastAPI container eliminated — file upload absorbed into API gateway.
+  # Only init (model download) + worker (ML inference) remain.
   # ---------------------------------------------------------------------------
 
   # Vision model init — downloads YOLO, CLIP, facetorch, efficientnet to shared volume.
   # Runs once on first deploy, idempotent on restarts.
-  vision-init:
+  analyse-vision-init:
     image: anveshak-vision:latest
+    build:
+      context: ..
+      dockerfile: services/vision/Dockerfile
     command: ["python", "-m", "anveshak.vision.download_models"]
     environment:
       <<: *vision-env
@@ -535,41 +518,9 @@ services:
     networks:
       - anveshak-net
 
-  vision:
-    image: anveshak-vision:latest
-    build:
-      context: ..
-      dockerfile: services/vision/Dockerfile
-    restart: unless-stopped
-    mem_limit: 4g
-    environment:
-      <<: *vision-env
-      PORT: 8003
-      HF_HOME: /app/models
-    volumes:
-      - vision_models:/app/models
-      - vision_media:/app/media
-    ports:
-      - "8003:8003"
-    depends_on:
-      vision-init:
-        condition: service_completed_successfully
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8003/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 90s
-    networks:
-      - anveshak-net
-
   # ARQ worker for vision analysis jobs (run_vision_analysis)
-  # Separate process from FastAPI so uploads don't block ML inference
-  vision-worker:
+  # Runs YOLO, CLIP, deepfake ONNX inference on media uploaded via API gateway
+  analyse-vision-worker:
     image: anveshak-vision:latest
     restart: unless-stopped
     mem_limit: 6g
@@ -580,7 +531,7 @@ services:
       - vision_models:/app/models
       - vision_media:/app/media
     depends_on:
-      vision-init:
+      analyse-vision-init:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy

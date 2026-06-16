@@ -10,12 +10,14 @@ All heavy ML work dispatched as ARQ jobs (CLAUDE.md rule 5: never block routes).
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import uuid
+from datetime import datetime, UTC
+from pathlib import Path
 from typing import Optional
 
 import asyncpg
-import httpx
 import structlog
 from arq import ArqRedis
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
@@ -27,6 +29,9 @@ from ..settings import settings
 
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api/v1/vision", tags=["vision"])
+
+_IMG_EXTS: frozenset[str] = frozenset({".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"})
+_VID_EXTS: frozenset[str] = frozenset({".mp4", ".avi", ".mov", ".webm", ".mkv"})
 
 
 # ---------------------------------------------------------------------------
@@ -53,35 +58,54 @@ async def analyse_image(
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
-    """Accept image/video upload → store via vision service → dispatch ARQ job.
+    """Accept image/video upload → store to disk → dispatch ARQ job.
 
     Criteria 4.28: multipart upload → ARQ job dispatched → returns {job_id}.
     Never blocks — job processes in background, poll GET /jobs/{job_id}.
     """
-    if not settings.vision_service_url:
-        raise HTTPException(status_code=503, detail="Vision service not configured")
-
     file_bytes = await file.read()
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Empty file upload")
 
-    # Forward file to vision service for storage + content_hash computation
-    try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(
-                f"{settings.vision_service_url}/analyse",
-                files={"file": (file.filename or "upload.jpg", file_bytes,
-                                file.content_type or "image/jpeg")},
-            )
-            resp.raise_for_status()
-            storage_info = resp.json()
-    except httpx.HTTPError as exc:
-        log.error("vision_api.storage_failed", error=str(exc))
-        raise HTTPException(status_code=503, detail="Vision service unavailable")
+    max_bytes = settings.vision_max_video_size_mb * 1024 * 1024
+    if len(file_bytes) > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Max {settings.vision_max_video_size_mb}MB.",
+        )
 
-    content_hash: str = storage_info["content_hash"]
-    storage_path: str = storage_info["storage_path"]
-    asset_type: str = storage_info["asset_type"]
+    # Hash + store file directly (no vision service proxy needed)
+    content_hash = hashlib.sha256(file_bytes).hexdigest()
+    filename = file.filename or "upload.bin"
+    ext = Path(filename).suffix.lower() or ".jpg"
+
+    now = datetime.now(UTC)
+    storage_path_obj = (
+        Path(settings.media_storage_root)
+        / "media"
+        / "uploads"
+        / now.strftime("%Y")
+        / now.strftime("%m")
+        / now.strftime("%d")
+        / f"{content_hash}{ext}"
+    )
+    storage_path_obj.parent.mkdir(parents=True, exist_ok=True)
+    storage_path_obj.write_bytes(file_bytes)
+
+    if ext in _IMG_EXTS:
+        asset_type = "image"
+    elif ext in _VID_EXTS:
+        asset_type = "video"
+    else:
+        asset_type = "document"
+
+    storage_path: str = str(storage_path_obj)
+    log.info(
+        "vision_api.upload_stored",
+        content_hash=content_hash,
+        asset_type=asset_type,
+        size_bytes=len(file_bytes),
+    )
 
     # Resolve content_item_id — required FK on media_assets.
     # For ad-hoc uploads (no existing content_item) create a stub so the FK is satisfied.

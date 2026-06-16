@@ -13,7 +13,7 @@ class ReporterSettings(BaseSettings):
     llm_max_tokens: int = 2048
 
     # Analyst service — embedding endpoint (avoids PyTorch in reporter image)
-    analyst_service_url: str = "http://analyst-scheduler:8007"
+    analyst_service_url: str = "http://analyse-scheduler:8007"
 
     # RAG
     topic_relevance_threshold: float = 0.35  # fallback when per-topic override not set

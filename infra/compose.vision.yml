@@ -1,6 +1,6 @@
 ---
 # Anveshak — Vision GPU overlay
-# Adds NVIDIA GPU device reservation to the vision services.
+# Adds NVIDIA GPU device reservation to the vision worker.
 # Only needed when VISION_DEVICE=cuda and nvidia-container-toolkit is installed.
 #
 # Usage (GPU):
@@ -8,20 +8,11 @@
 #     -f infra/compose.yml \
 #     -f infra/compose.vision.yml up
 #
-# CPU mode: just use compose.yml — vision is included in the core stack.
+# CPU mode: just use compose.yml — vision worker runs on CPU by default.
 
 services:
 
-  vision:
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-
-  vision-worker:
+  analyse-vision-worker:
     deploy:
       resources:
         reservations:

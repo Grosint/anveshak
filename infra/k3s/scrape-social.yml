@@ -1,31 +1,30 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: analyse-scheduler
+  name: scrape-social-scheduler
   namespace: anveshak
   labels:
-    app: analyse-scheduler
+    app: scrape-social-scheduler
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: analyse-scheduler
+      app: scrape-social-scheduler
   template:
     metadata:
       labels:
-        app: analyse-scheduler
+        app: scrape-social-scheduler
     spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
       containers:
-        - name: analyse-scheduler
-          image: anveshak-analyst:latest
+        - name: scrape-social-scheduler
+          image: anveshak-social:latest
           imagePullPolicy: IfNotPresent
-          command: ["python", "-m", "anveshak.analyst.scheduler"]
           ports:
-            - containerPort: 8007
+            - containerPort: 8002
           env:
             - name: POSTGRES_PASSWORD
               valueFrom:
@@ -36,50 +35,50 @@ spec:
               value: "postgresql://anveshak:$(POSTGRES_PASSWORD)@postgres:5432/anveshak"
             - name: REDIS_URL
               value: "redis://redis:6379/0"
-            - name: OLLAMA_HOST
-              value: "http://ollama:11434"
+            - name: MEDIA_STORAGE_ROOT
+              value: "/app/media"
           securityContext:
             allowPrivilegeEscalation: false
           resources:
             requests:
               memory: 256Mi
-              cpu: 250m
+              cpu: 100m
             limits:
               memory: 512Mi
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8007
-            initialDelaySeconds: 60
-            periodSeconds: 30
-            failureThreshold: 3
+          volumeMounts:
+            - name: media
+              mountPath: /app/media
+      volumes:
+        - name: media
+          persistentVolumeClaim:
+            claimName: vision-media-pvc
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: analyse-worker
+  name: scrape-social-worker
   namespace: anveshak
   labels:
-    app: analyse-worker
+    app: scrape-social-worker
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: analyse-worker
+      app: scrape-social-worker
   template:
     metadata:
       labels:
-        app: analyse-worker
+        app: scrape-social-worker
     spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
       containers:
-        - name: analyse-worker
-          image: anveshak-analyst:latest
+        - name: scrape-social-worker
+          image: anveshak-social:latest
           imagePullPolicy: IfNotPresent
-          command: ["python", "-m", "arq", "anveshak.analyst.jobs.WorkerSettings"]
+          command: ["python", "-m", "arq", "anveshak.social.jobs.WorkerSettings"]
           env:
             - name: POSTGRES_PASSWORD
               valueFrom:
@@ -90,45 +89,32 @@ spec:
               value: "postgresql://anveshak:$(POSTGRES_PASSWORD)@postgres:5432/anveshak"
             - name: REDIS_URL
               value: "redis://redis:6379/0"
-            - name: OLLAMA_HOST
-              value: "http://ollama:11434"
-            - name: HF_HOME
-              value: "/app/models"
+            - name: MEDIA_STORAGE_ROOT
+              value: "/app/media"
           securityContext:
             allowPrivilegeEscalation: false
           resources:
             requests:
-              memory: 4Gi
-              cpu: 500m
+              memory: 256Mi
+              cpu: 100m
             limits:
-              memory: 6Gi
+              memory: 512Mi
           volumeMounts:
-            - name: models
-              mountPath: /app/models
+            - name: media
+              mountPath: /app/media
       volumes:
-        - name: models
+        - name: media
           persistentVolumeClaim:
-            claimName: analyst-models-pvc
+            claimName: vision-media-pvc
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: analyse-scheduler
+  name: scrape-social-scheduler
   namespace: anveshak
 spec:
   selector:
-    app: analyse-scheduler
+    app: scrape-social-scheduler
   ports:
-    - port: 8007
-      targetPort: 8007
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: analyst-models-pvc
-  namespace: anveshak
-spec:
-  accessModes: [ReadWriteOnce]
-  resources:
-    requests:
-      storage: 10Gi
+    - port: 8002
+      targetPort: 8002

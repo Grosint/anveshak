@@ -31,9 +31,10 @@ SQL_GET_ACTIVE_TOPICS = """
 """
 
 SQL_GET_SOURCES_FOR_PLATFORM = """
-    SELECT id, url_or_handle, credibility_score
-    FROM sources
-    WHERE platform = $1 AND is_active = TRUE
+    SELECT s.id, s.url_or_handle, s.credibility_score
+    FROM sources s
+    JOIN topic_sources ts ON ts.source_id = s.id
+    WHERE s.platform = $1 AND s.is_active = TRUE AND ts.topic_id = $2
 """
 
 # ---------------------------------------------------------------------------
@@ -216,7 +217,7 @@ async def poll_social_topic(ctx: dict, topic_id: str, include_x: bool = True) ->
 
         async with db_pool.acquire() as conn:
             source_rows = await conn.fetch(
-                SQL_GET_SOURCES_FOR_PLATFORM, platform
+                SQL_GET_SOURCES_FOR_PLATFORM, platform, topic_id
             )
         source_handles = [r["url_or_handle"] for r in source_rows]
 

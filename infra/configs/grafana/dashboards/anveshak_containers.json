@@ -125,7 +125,7 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "description": "Working set memory per container over time. Watch analyst-worker (6 GB limit) and ollama closely. Sustained growth without plateaus may indicate a memory leak.",
+      "description": "Working set memory per container over time. Watch analyse-worker (6 GB limit) and ollama closely. Sustained growth without plateaus may indicate a memory leak.",
       "fieldConfig": {
         "defaults": {
           "color": {"mode": "palette-classic-by-name"},

@@ -105,7 +105,7 @@ groups:
           description: >
             More than 50 media items scored above 0.8 deepfake probability
             in the last hour. Steps: (1) Check Vision dashboard for source patterns.
-            (2) Review vision service logs: {service="vision"} |= "deepfake".
+            (2) Review vision service logs: {service="analyse-vision-worker"} |= "deepfake".
             (3) Check if a single source is flooding — may need circuit-breaker.
 
   - name: anveshak.signals
@@ -123,8 +123,8 @@ groups:
           summary: "Signal engine has fired no signals while content is flowing"
           description: >
             Content is being ingested but no intelligence signals have been
-            generated in the last 30 minutes. Steps: (1) Check analyst-scheduler
-            logs: {service="analyst-scheduler"} |= "signal". (2) Verify
+            generated in the last 30 minutes. Steps: (1) Check analyse-scheduler
+            logs: {service="analyse-scheduler"} |= "signal". (2) Verify
             topic.signal_threshold isn't set too high. (3) Check clustering
             is producing clusters: increase(analyst_clusters_created_total[30m]).
 
@@ -136,7 +136,7 @@ groups:
     rules:
       # Reporter worker metrics endpoint unreachable
       - alert: ReporterWorkerMetricsDown
-        expr: up{job="anveshak_reporter_worker"} == 0
+        expr: up{job="anveshak_report_worker"} == 0
         for: 2m
         labels:
           severity: warning
@@ -144,10 +144,10 @@ groups:
         annotations:
           summary: "Reporter worker Prometheus endpoint is DOWN"
           description: >
-            The reporter-worker service (port 8006) has not responded to
+            The report-worker service (port 8006) has not responded to
             Prometheus scrapes for 2 minutes. Report generation metrics
             (reporter_jobs_total, reporter_job_duration_seconds) are stale.
-            Check if the reporter-worker container is running.
+            Check if the report-worker container is running.
 
   - name: anveshak.deepfake_tactical
     rules:
@@ -170,7 +170,7 @@ groups:
             in the last 15 minutes. This may indicate a coordinated disinformation
             campaign. Steps: (1) Escalate to senior analyst immediately.
             (2) Open Vision dashboard — check which sources are producing high scores.
-            (3) Check if a single topic is the target: {service="vision"} |= "topic_id".
+            (3) Check if a single topic is the target: {service="analyse-vision-worker"} |= "topic_id".
 
   - name: anveshak.credibility_feedback
     rules:

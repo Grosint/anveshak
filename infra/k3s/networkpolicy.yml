@@ -30,7 +30,7 @@ spec:
       ports:
         - port: 8000
 ---
-# Allow api -> postgres
+# Allow services -> postgres
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -49,16 +49,28 @@ spec:
               app: api
         - podSelector:
             matchLabels:
-              app: analyst
+              app: analyse-scheduler
         - podSelector:
             matchLabels:
-              app: scraper
+              app: analyse-worker
         - podSelector:
             matchLabels:
-              app: reporter
+              app: scrape-web-scheduler
         - podSelector:
             matchLabels:
-              app: vision
+              app: scrape-web-worker
+        - podSelector:
+            matchLabels:
+              app: scrape-social-scheduler
+        - podSelector:
+            matchLabels:
+              app: scrape-social-worker
+        - podSelector:
+            matchLabels:
+              app: report-worker
+        - podSelector:
+            matchLabels:
+              app: analyse-vision-worker
       ports:
         - port: 5432
 ---
@@ -81,16 +93,28 @@ spec:
               app: api
         - podSelector:
             matchLabels:
-              app: analyst
+              app: analyse-scheduler
         - podSelector:
             matchLabels:
-              app: scraper
+              app: analyse-worker
         - podSelector:
             matchLabels:
-              app: reporter
+              app: scrape-web-scheduler
         - podSelector:
             matchLabels:
-              app: vision
+              app: scrape-web-worker
+        - podSelector:
+            matchLabels:
+              app: scrape-social-scheduler
+        - podSelector:
+            matchLabels:
+              app: scrape-social-worker
+        - podSelector:
+            matchLabels:
+              app: report-worker
+        - podSelector:
+            matchLabels:
+              app: analyse-vision-worker
       ports:
         - port: 6379
 ---
@@ -110,10 +134,10 @@ spec:
     - from:
         - podSelector:
             matchLabels:
-              app: analyst
+              app: analyse-worker
         - podSelector:
             matchLabels:
-              app: reporter
+              app: report-worker
       ports:
         - port: 11434
 ---
