@@ -56,45 +56,66 @@ def _seconds_until_month_end() -> int:
 
 
 class XSpendGuard:
-    """Atomic spend guard backed by Redis INCR.
+    """Atomic spend guard backed by Redis Lua script.
 
     check_and_increment() must be called BEFORE every X API call.
     Returns True  → under cap, call is permitted, counter incremented.
     Returns False → at or above cap, call is BLOCKED, warning logged.
+
+    Uses a Lua script for true atomicity — no race window between
+    INCR and cap check that could allow concurrent calls to overshoot.
     """
+
+    # Lua script: atomically check cap, increment if under, set TTL on first use.
+    # Returns new count on success, -1 if at/over cap.
+    _LUA_CHECK_AND_INCREMENT = """\
+local key = KEYS[1]
+local cap = tonumber(ARGV[1])
+local ttl = tonumber(ARGV[2])
+local current = tonumber(redis.call('GET', key) or '0')
+if current >= cap then
+    return -1
+end
+local new_count = redis.call('INCR', key)
+if new_count == 1 then
+    redis.call('EXPIRE', key, ttl)
+end
+if new_count > cap then
+    redis.call('DECR', key)
+    return -1
+end
+return new_count
+"""
 
     def __init__(self, redis: ArqRedis, cap: int) -> None:
         self._redis = redis
         self._cap = cap
 
     async def check_and_increment(self) -> bool:
-        """Atomically increment and check monthly cap.
+        """Atomically increment and check monthly cap via Lua script.
 
-        Uses INCR (atomic) so concurrent calls cannot race past the cap.
-        Sets TTL on first write so the key auto-expires at month end.
+        The entire check-increment-TTL sequence runs as a single atomic
+        Redis operation. Concurrent calls cannot race past the cap.
         """
         key = _monthly_key()
-        # INCR returns the new value atomically
-        new_count = await self._redis.incr(key)
+        ttl = _seconds_until_month_end()
 
-        if new_count == 1:
-            # First read this month — set TTL so key auto-expires (criteria 3.24)
-            ttl = _seconds_until_month_end()
-            await self._redis.expire(key, ttl)
-            log.info("x.spend_guard.month_started", cap=self._cap, ttl_seconds=ttl)
+        result = int(await self._redis.eval(
+            self._LUA_CHECK_AND_INCREMENT, 1, key, self._cap, ttl
+        ))
 
-        if new_count > self._cap:
-            # Decrement to avoid inflating the counter on blocked calls
-            await self._redis.decr(key)
+        if result == -1:
             log.warning(
                 "x.spend_guard.cap_reached",
-                monthly_reads=new_count - 1,
                 cap=self._cap,
                 key=key,
             )
             return False
 
-        log.debug("x.spend_guard.ok", monthly_reads=new_count, cap=self._cap)
+        if result == 1:
+            log.info("x.spend_guard.month_started", cap=self._cap, ttl_seconds=ttl)
+
+        log.debug("x.spend_guard.ok", monthly_reads=result, cap=self._cap)
         return True
 
     async def current_count(self) -> int:

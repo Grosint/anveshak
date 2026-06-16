@@ -17,12 +17,13 @@ from anveshak.social.adapters.x_adapter import XSpendGuard, _monthly_key, _secon
 # Mock Redis helper
 # ---------------------------------------------------------------------------
 
-def make_mock_redis(incr_returns: list[int]) -> MagicMock:
-    """Build a mock ArqRedis that returns successive values from incr_returns."""
+def make_mock_redis(eval_returns: list[int]) -> MagicMock:
+    """Build a mock ArqRedis that returns successive values from eval (Lua script).
+
+    The Lua script returns new_count on success, -1 on cap exceeded.
+    """
     redis = MagicMock()
-    redis.incr = AsyncMock(side_effect=incr_returns)
-    redis.decr = AsyncMock(return_value=None)
-    redis.expire = AsyncMock(return_value=True)
+    redis.eval = AsyncMock(side_effect=eval_returns)
     redis.get = AsyncMock(return_value=None)
     return redis
 
@@ -42,25 +43,21 @@ class TestXSpendGuardUnderCap:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_first_call_sets_ttl(self):
-        """On first write (INCR returns 1), TTL must be set (criteria 3.24)."""
+    async def test_first_call_uses_eval(self):
+        """Must use Lua eval (atomic) instead of bare INCR (criteria 3.22)."""
         redis = make_mock_redis([1])
         guard = XSpendGuard(redis, cap=100)
         await guard.check_and_increment()
-        redis.expire.assert_called_once()
-        # TTL arg should be positive and ≤ 31 days
-        ttl_arg = redis.expire.call_args[0][1]
-        assert 0 < ttl_arg <= 31 * 24 * 3600
+        redis.eval.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_second_call_no_ttl_reset(self):
-        """Subsequent calls (INCR > 1) must NOT reset TTL."""
+    async def test_second_call_also_uses_eval(self):
+        """Each call goes through Lua script — no shortcutting."""
         redis = make_mock_redis([1, 2])
         guard = XSpendGuard(redis, cap=100)
         await guard.check_and_increment()
         await guard.check_and_increment()
-        # expire called only once (on first increment)
-        assert redis.expire.call_count == 1
+        assert redis.eval.call_count == 2
 
     @pytest.mark.asyncio
     async def test_call_at_cap_minus_one_allowed(self):
@@ -69,7 +66,6 @@ class TestXSpendGuardUnderCap:
         guard = XSpendGuard(redis, cap=100)
         result = await guard.check_and_increment()
         assert result is True
-        redis.decr.assert_not_called()
 
 
 class TestXSpendGuardAtCap:
@@ -77,22 +73,15 @@ class TestXSpendGuardAtCap:
 
     @pytest.mark.asyncio
     async def test_call_over_cap_returns_false(self):
-        redis = make_mock_redis([101])
+        """Lua script returns -1 when at/over cap → check_and_increment returns False."""
+        redis = make_mock_redis([-1])
         guard = XSpendGuard(redis, cap=100)
         result = await guard.check_and_increment()
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_call_over_cap_decrements_counter(self):
-        """Counter must be decremented when call is blocked — don't inflate the count."""
-        redis = make_mock_redis([101])
-        guard = XSpendGuard(redis, cap=100)
-        await guard.check_and_increment()
-        redis.decr.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_cap_zero_always_blocked(self):
-        redis = make_mock_redis([1])
+        redis = make_mock_redis([-1])
         guard = XSpendGuard(redis, cap=0)
         result = await guard.check_and_increment()
         assert result is False
@@ -104,7 +93,7 @@ class TestXSpendGuardAtCap:
         This simulates criteria 3.30: after cap reached, subsequent calls return
         immediately with no network activity.
         """
-        redis = make_mock_redis([101])
+        redis = make_mock_redis([-1])
         guard = XSpendGuard(redis, cap=100)
 
         api_called = False
@@ -142,12 +131,12 @@ class TestXSpendGuardMonthlyReset:
         assert ttl <= 31 * 24 * 3600 + 1   # max ~31 days + 1s buffer
 
     @pytest.mark.asyncio
-    async def test_new_month_key_gets_fresh_ttl(self):
-        """Simulating month boundary: new key gets TTL set (auto-reset logic)."""
+    async def test_new_month_key_uses_lua(self):
+        """Simulating month boundary: Lua script handles TTL atomically."""
         redis = make_mock_redis([1])   # first read of new month
         guard = XSpendGuard(redis, cap=100)
         await guard.check_and_increment()
-        redis.expire.assert_called_once()
+        redis.eval.assert_called_once()
 
     def test_monthly_key_contains_year_and_month(self):
         """Key must include YYYY-MM so each month gets an independent counter.

@@ -15,9 +15,13 @@ from typing import Optional
 
 import bcrypt as _bcrypt
 from jose import JWTError, jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from ..settings import settings
+
+import structlog
+
+_log = structlog.get_logger(__name__)
 
 
 class _BcryptContext:
@@ -71,11 +75,36 @@ def verify_token(token: str) -> dict:
         ) from e
 
 
+def _get_redis_for_auth(request: Request):
+    """Extract Redis pool from app state for token revocation checks."""
+    return getattr(request.app.state, "arq_pool", None)
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    redis=Depends(_get_redis_for_auth),
 ) -> dict:
-    """FastAPI dependency — extract and verify current user from Bearer token."""
-    return verify_token(credentials.credentials)
+    """FastAPI dependency — extract and verify current user from Bearer token.
+
+    Checks Redis blocklist for revoked tokens. Fails open if Redis is
+    unavailable — a temporary Redis outage must not lock out all users.
+    """
+    payload = verify_token(credentials.credentials)
+    jti = payload.get("jti")
+    if jti and redis is not None:
+        try:
+            if await is_token_revoked(redis, jti):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token has been revoked",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            # Redis unavailable — fail open (don't block all authenticated requests)
+            _log.warning("auth.revocation_check_failed", jti=jti, error=str(exc))
+    return payload
 
 
 # ---------------------------------------------------------------------------

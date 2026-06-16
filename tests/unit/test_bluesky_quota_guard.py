@@ -13,12 +13,13 @@ import pytest
 pytestmark = pytest.mark.unit
 
 
-def make_mock_redis(incr_returns: list[int]) -> MagicMock:
-    """Build a mock ArqRedis that returns successive values from incr_returns."""
+def make_mock_redis(eval_returns: list[int]) -> MagicMock:
+    """Build a mock ArqRedis that returns successive values from eval (Lua script).
+
+    The Lua script returns new_count on success, -1 on cap exceeded.
+    """
     redis = MagicMock()
-    redis.incr = AsyncMock(side_effect=incr_returns)
-    redis.decr = AsyncMock(return_value=None)
-    redis.expire = AsyncMock(return_value=True)
+    redis.eval = AsyncMock(side_effect=eval_returns)
     redis.get = AsyncMock(return_value=None)
     return redis
 
@@ -34,25 +35,23 @@ class TestBlueskyQuotaGuardUnderCap:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_first_call_sets_ttl(self):
-        """On first write (INCR returns 1), TTL must be set."""
+    async def test_first_call_uses_eval(self):
+        """Must use Lua eval (atomic) instead of bare INCR."""
         from anveshak.social.adapters.bluesky import BlueskyQuotaGuard
         redis = make_mock_redis([1])
         guard = BlueskyQuotaGuard(redis, cap=7200)
         await guard.check_and_increment()
-        redis.expire.assert_called_once()
-        # TTL should be <= 86400 (24h) and > 0
-        ttl = redis.expire.call_args[0][1]
-        assert 0 < ttl <= 86400
+        redis.eval.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_subsequent_call_no_ttl_reset(self):
-        """Second call (INCR returns 2) must NOT reset TTL."""
+    async def test_subsequent_call_also_uses_eval(self):
+        """Each call goes through Lua script."""
         from anveshak.social.adapters.bluesky import BlueskyQuotaGuard
-        redis = make_mock_redis([2])
+        redis = make_mock_redis([1, 2])
         guard = BlueskyQuotaGuard(redis, cap=7200)
         await guard.check_and_increment()
-        redis.expire.assert_not_called()
+        await guard.check_and_increment()
+        assert redis.eval.call_count == 2
 
     @pytest.mark.asyncio
     async def test_at_cap_minus_one_allowed(self):
@@ -68,27 +67,18 @@ class TestBlueskyQuotaGuardAtCap:
 
     @pytest.mark.asyncio
     async def test_over_cap_blocked(self):
-        """Call over cap returns False — blocked."""
+        """Lua script returns -1 when over cap → check_and_increment returns False."""
         from anveshak.social.adapters.bluesky import BlueskyQuotaGuard
-        redis = make_mock_redis([101])
+        redis = make_mock_redis([-1])
         guard = BlueskyQuotaGuard(redis, cap=100)
         result = await guard.check_and_increment()
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_over_cap_decrements(self):
-        """Blocked call decrements counter to avoid inflation."""
-        from anveshak.social.adapters.bluesky import BlueskyQuotaGuard
-        redis = make_mock_redis([101])
-        guard = BlueskyQuotaGuard(redis, cap=100)
-        await guard.check_and_increment()
-        redis.decr.assert_awaited_once()
-
-    @pytest.mark.asyncio
     async def test_zero_cap_always_blocked(self):
         """Cap of 0 blocks every call."""
         from anveshak.social.adapters.bluesky import BlueskyQuotaGuard
-        redis = make_mock_redis([1])
+        redis = make_mock_redis([-1])
         guard = BlueskyQuotaGuard(redis, cap=0)
         result = await guard.check_and_increment()
         assert result is False
@@ -129,4 +119,4 @@ class TestBlueskyQuotaGuardCurrentCount:
         guard = BlueskyQuotaGuard(redis, cap=7200)
         count = await guard.current_count()
         assert count == 42
-        redis.incr.assert_not_awaited()
+        redis.eval.assert_not_awaited()

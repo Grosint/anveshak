@@ -96,7 +96,13 @@ async def analyse_upload(file: UploadFile = File(...)):
 
     content_hash = hashlib.sha256(image_bytes).hexdigest()
     filename = file.filename or "upload.bin"
-    ext = Path(filename).suffix.lower() or ".jpg"
+
+    # Validate actual file content via magic bytes — reject non-image/video
+    from .mime_check import validate_upload_mime, UnsafeMimeError
+    try:
+        detected_mime, ext = validate_upload_mime(image_bytes, filename)
+    except UnsafeMimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     from datetime import datetime, UTC
     now = datetime.now(UTC)

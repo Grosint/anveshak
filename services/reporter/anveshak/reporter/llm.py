@@ -92,15 +92,39 @@ _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]+?)\s*```", re.IGNORECASE)
 
 
 def _extract_json_from_text(text: str) -> str:
-    """Strip markdown code fences and return raw JSON string."""
+    """Strip markdown code fences and return raw JSON string.
+
+    Uses balanced-brace matching that respects JSON string escaping,
+    so } characters inside string values don't prematurely end extraction.
+    """
     match = _JSON_FENCE_RE.search(text)
     if match:
         return match.group(1).strip()
-    # Try to find bare JSON object
+    # Balanced brace extraction — respects string escaping
     start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        return text[start : end + 1]
+    if start == -1:
+        return text.strip()
+    depth = 0
+    in_string = False
+    escape_next = False
+    for i, ch in enumerate(text[start:], start):
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\" and in_string:
+            escape_next = True
+            continue
+        if ch == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        if not in_string:
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start : i + 1]
+    # Fallback: no balanced match found
     return text.strip()
 
 

@@ -668,7 +668,11 @@ async def _download_page_media(
     if not media_urls:
         return
 
+    from .url_safety import validate_external_url
+
     for media_url in media_urls:
+        if not validate_external_url(media_url):
+            continue
         if seen_media_urls is not None:
             if media_url in seen_media_urls:
                 continue
