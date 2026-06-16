@@ -54,6 +54,7 @@ class TelegramAdapter(SourceAdapterBase):
 
     def __init__(self) -> None:
         self._client: TelegramClient | None = None
+        self._needs_reauth: bool = False
 
     # ------------------------------------------------------------------
     # SourceAdapterBase implementation
@@ -181,6 +182,9 @@ class TelegramAdapter(SourceAdapterBase):
             log.warning("telegram.channel_private", channel=channel_id)   # criteria 3.11
         except ChannelInvalidError:
             log.warning("telegram.channel_invalid", channel=channel_id)   # criteria 3.11
+        except SessionExpiredError:
+            log.warning("telegram.session_expired_mid_channel", channel=channel_id)
+            self._needs_reauth = True
         except FloodWaitError as exc:
             log.warning("telegram.flood_wait", seconds=exc.seconds)
             raise AdapterRateLimitError(f"Telegram flood wait: {exc.seconds}s") from exc

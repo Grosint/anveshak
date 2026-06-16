@@ -15,15 +15,51 @@ Limits (per 60-second window):
 from __future__ import annotations
 
 import time
-from collections import defaultdict, deque
+from collections import OrderedDict, deque
 from typing import Deque
 
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+
+class _LRURateLimitStore:
+    """Bounded LRU store for rate limit windows.
+
+    Prevents unbounded memory growth when many unique (IP, path) pairs
+    are seen over the lifetime of the API process.
+    """
+
+    def __init__(self, max_entries: int = 10_000) -> None:
+        self._store: OrderedDict[str, Deque[float]] = OrderedDict()
+        self._max = max_entries
+        self.max_entries = max_entries  # public for test introspection
+
+    def __getitem__(self, key: str) -> Deque[float]:
+        if key in self._store:
+            self._store.move_to_end(key)
+            return self._store[key]
+        # Create new entry
+        val: Deque[float] = deque()
+        self._store[key] = val
+        self._store.move_to_end(key)
+        # Evict oldest if over cap
+        while len(self._store) > self._max:
+            self._store.popitem(last=False)
+        return val
+
+    def __len__(self) -> int:
+        return len(self._store)
+
+    def __contains__(self, key: str) -> bool:
+        return key in self._store
+
+    def clear(self) -> None:
+        self._store.clear()
+
+
 # (identity_key) → deque of request timestamps within the window
-_windows: dict[str, Deque[float]] = defaultdict(deque)
+_windows = _LRURateLimitStore(max_entries=10_000)
 
 _WINDOW_S = 60  # sliding window size
 

@@ -70,7 +70,19 @@ async def signal_websocket(
         await websocket.close(code=4001)
         return
 
-    ws_org_id = user_payload.get("org_id") if isinstance(user_payload, dict) else None
+    if not isinstance(user_payload, dict):
+        await websocket.close(code=4001)
+        return
+
+    # Enforce org boundary: super-admin sees all, others MUST have org_id
+    user_role = user_payload.get("role", "")
+    if user_role == "super-admin":
+        ws_org_id = None  # intentional: super-admin sees all orgs' signals
+    else:
+        ws_org_id = user_payload.get("org_id")
+        if not ws_org_id:
+            await websocket.close(code=4003)
+            return
 
     await websocket.accept()
 

@@ -92,44 +92,19 @@ class TestWorkerRole:
 
 
 # ===================================================================
-# 5. set_org_context() in pool.py
+# 5. set_org_context() removed — dead code cleanup
 # ===================================================================
 
 class TestSetOrgContext:
 
-    @pytest.mark.asyncio
-    async def test_set_org_context_exists(self):
-        """set_org_context() function must exist in pool module."""
-        from services.api.anveshak.api.db.pool import set_org_context
+    def test_set_org_context_removed(self):
+        """set_org_context() was dead code — removed in security review.
 
-        assert callable(set_org_context)
-
-    @pytest.mark.asyncio
-    async def test_set_org_context_executes_set_local(self):
-        """set_org_context() must execute SET LOCAL app.current_org."""
-        from unittest.mock import AsyncMock
-        from services.api.anveshak.api.db.pool import set_org_context
-
-        mock_conn = AsyncMock()
-        mock_conn.execute = AsyncMock()
-
-        await set_org_context(mock_conn, "org-nia")
-
-        mock_conn.execute.assert_awaited_once()
-        call_args = mock_conn.execute.call_args[0][0]
-        assert "set local" in call_args.lower() or "SET LOCAL" in call_args
-        assert "app.current_org" in call_args
-
-    @pytest.mark.asyncio
-    async def test_set_org_context_with_none_sets_empty(self):
-        """set_org_context(conn, None) sets empty string (super-admin bypass)."""
-        from unittest.mock import AsyncMock
-        from services.api.anveshak.api.db.pool import set_org_context
-
-        mock_conn = AsyncMock()
-        mock_conn.execute = AsyncMock()
-
-        await set_org_context(mock_conn, None)
-
-        call_args = mock_conn.execute.call_args[0][0]
-        assert "''" in call_args
+        Application-level verify_topic_access() is the primary isolation
+        mechanism. RLS policies in migration 008 still exist as a secondary
+        safety net, but SET LOCAL is not called from application code.
+        """
+        import anveshak.api.db.pool as pool_mod
+        assert not hasattr(pool_mod, "set_org_context"), (
+            "set_org_context was dead code — should have been removed"
+        )

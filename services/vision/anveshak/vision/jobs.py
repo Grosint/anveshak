@@ -49,41 +49,56 @@ log = structlog.get_logger(__name__)
 # Module-level singletons — loaded once per worker process, reused across jobs
 # ---------------------------------------------------------------------------
 
+import threading
+
 _yolo_detector: Optional[YOLODetector] = None
 _deepfake_image_detector = None
 _deepfake_video_detector = None
 _clip_classifier: Optional[CLIPClassifier] = None
 
+_yolo_lock = threading.Lock()
+_deepfake_image_lock = threading.Lock()
+_deepfake_video_lock = threading.Lock()
+_clip_lock = threading.Lock()
+
 
 def _get_yolo() -> YOLODetector:
     global _yolo_detector
     if _yolo_detector is None:
-        _yolo_detector = YOLODetector()
+        with _yolo_lock:
+            if _yolo_detector is None:  # double-checked locking
+                _yolo_detector = YOLODetector()
     return _yolo_detector
 
 
 def _get_deepfake_image_detector():
     global _deepfake_image_detector
     if _deepfake_image_detector is None:
-        _deepfake_image_detector = get_deepfake_detector(
-            settings.vision_deepfake_image_model, settings.vision_device
-        )
+        with _deepfake_image_lock:
+            if _deepfake_image_detector is None:
+                _deepfake_image_detector = get_deepfake_detector(
+                    settings.vision_deepfake_image_model, settings.vision_device
+                )
     return _deepfake_image_detector
 
 
 def _get_deepfake_video_detector():
     global _deepfake_video_detector
     if _deepfake_video_detector is None:
-        _deepfake_video_detector = get_deepfake_detector(
-            settings.vision_deepfake_video_model, settings.vision_device
-        )
+        with _deepfake_video_lock:
+            if _deepfake_video_detector is None:
+                _deepfake_video_detector = get_deepfake_detector(
+                    settings.vision_deepfake_video_model, settings.vision_device
+                )
     return _deepfake_video_detector
 
 
 def _get_clip() -> CLIPClassifier:
     global _clip_classifier
     if _clip_classifier is None:
-        _clip_classifier = CLIPClassifier()
+        with _clip_lock:
+            if _clip_classifier is None:
+                _clip_classifier = CLIPClassifier()
     return _clip_classifier
 
 
