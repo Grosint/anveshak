@@ -94,7 +94,7 @@ function reportStatusBadgeClass(status: string): string {
 }
 
 export default function TrackerDetail() {
-  const { id } = useParams<{ id: string }>()
+  const { trackerId: id } = useParams<{ trackerId: string }>()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [activeTab, setActiveTab] = useState<Tab>('overview')
