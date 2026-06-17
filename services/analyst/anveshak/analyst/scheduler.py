@@ -627,6 +627,85 @@ async def identifier_cluster_loop(pool: asyncpg.Pool) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Tracker auto-matching
+# ---------------------------------------------------------------------------
+
+
+SQL_ACTIVE_TRACKERS = """
+    SELECT t.id, t.topic_id, t.centroid, t.centroid_threshold
+    FROM trackers t
+    WHERE t.status IN ('watching', 'active')
+      AND t.centroid IS NOT NULL
+"""
+
+SQL_TRACKER_CANDIDATES = """
+    SELECT ci.id, 1 - (ci.embedding <=> $1) AS similarity
+    FROM content_items ci
+    WHERE (ci.topic_id = $2
+       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $2))
+      AND ci.embedding IS NOT NULL
+      AND ci.captured_at >= NOW() - INTERVAL '24 hours'
+      AND ci.id NOT IN (SELECT content_item_id FROM tracker_content_items WHERE tracker_id = $3)
+      AND ci.id NOT IN (SELECT content_item_id FROM tracker_content_exclusions WHERE tracker_id = $3)
+      AND 1 - (ci.embedding <=> $1) >= $4
+    ORDER BY similarity DESC
+    LIMIT 50
+"""
+
+SQL_INSERT_TRACKER_PENDING = """
+    INSERT INTO tracker_content_items (
+        tracker_id, content_item_id, attached_by, status, similarity_score, attached_at
+    ) VALUES ($1, $2, 'auto', 'pending', $3, NOW())
+    ON CONFLICT DO NOTHING
+"""
+
+
+async def _run_tracker_matching_cycle(pool: asyncpg.Pool) -> int:
+    """Match newly processed content against active tracker centroids.
+
+    Runs AFTER clustering completes. Inserts matches as 'pending' —
+    analyst must accept/reject via review queue. Never auto-inserts.
+    """
+    total = 0
+    async with pool.acquire() as conn:
+        trackers = await conn.fetch(SQL_ACTIVE_TRACKERS)
+
+        for tracker in trackers:
+            try:
+                candidates = await conn.fetch(
+                    SQL_TRACKER_CANDIDATES,
+                    tracker["centroid"],
+                    tracker["topic_id"],
+                    tracker["id"],
+                    tracker["centroid_threshold"],
+                )
+
+                for item in candidates:
+                    await conn.execute(
+                        SQL_INSERT_TRACKER_PENDING,
+                        tracker["id"],
+                        item["id"],
+                        item["similarity"],
+                    )
+                    total += 1
+
+                if candidates:
+                    log.info(
+                        "scheduler.tracker_matching.matched",
+                        tracker_id=tracker["id"],
+                        candidates=len(candidates),
+                    )
+            except Exception as exc:
+                log.warning(
+                    "scheduler.tracker_matching.error",
+                    tracker_id=tracker["id"],
+                    error=str(exc),
+                )
+
+    return total
+
+
+# ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
 # Source Discovery + Effectiveness loops
