@@ -11,7 +11,6 @@ import SignalsInbox from './pages/SignalsInbox'
 import ReportBuilder from './pages/ReportBuilder'
 import AnalyticsDashboard from './pages/AnalyticsDashboard'
 import Settings from './pages/Settings'
-import Identifiers from './pages/Identifiers'
 import Trackers from './pages/Trackers'
 import TrackerDetail from './pages/TrackerDetail'
 
@@ -88,7 +87,6 @@ export default function App() {
           <Route path="/topics/:topicId/feed" element={<TopicWorkspace />} />
           <Route path="/vision" element={<ImageAnalysis />} />
           <Route path="/signals" element={<SignalsInbox />} />
-          <Route path="/identifiers" element={<Identifiers />} />
           <Route path="/trackers" element={<Trackers />} />
           <Route path="/trackers/:trackerId" element={<TrackerDetail />} />
           <Route path="/reports" element={<ReportBuilder />} />

@@ -98,6 +98,18 @@ describe('Layout sidebar navigation', () => {
     expect(schedLinks).toHaveLength(0)
   })
 
+  it('does NOT have Identifiers as a standalone nav link', () => {
+    renderWithProviders(<Layout />)
+    const links = screen.getAllByRole('link')
+    const idLinks = links.filter((l) => l.textContent?.trim() === 'Identifiers')
+    expect(idLinks).toHaveLength(0)
+  })
+
+  it('has a global identifier search button', () => {
+    renderWithProviders(<Layout />)
+    expect(screen.getByRole('button', { name: /search identifiers/i })).toBeInTheDocument()
+  })
+
   // ─────────────────────────────────────────────────────────────────────
   // User footer
   // ─────────────────────────────────────────────────────────────────────

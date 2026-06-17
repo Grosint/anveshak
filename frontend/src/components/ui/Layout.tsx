@@ -1,15 +1,16 @@
+import { useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { useWS } from '../../contexts/WSContext'
 import { sourcesApi } from '../../api/sources'
+import IdentifierSearch from '../search/IdentifierSearch'
 
 const primaryNav = [
   { to: '/topics',      label: 'Topics',      icon: <TargetIcon /> },
   { to: '/trackers',    label: 'Trackers',    icon: <TrackerIcon /> },
   { to: '/signals',     label: 'Signals',     icon: <ZapIcon /> },
-  { to: '/identifiers', label: 'Identifiers', icon: <FingerprintIcon /> },
   { to: '/vision',      label: 'Vision',      icon: <EyeIcon /> },
   { to: '/reports',     label: 'Reports',     icon: <FileIcon /> },
   { to: '/analytics',   label: 'Analytics',   icon: <ChartIcon /> },
@@ -29,6 +30,7 @@ export default function Layout() {
   const { user, logout } = useAuth()
   const { status: wsStatus } = useWS()
   const navigate = useNavigate()
+  const [searchOpen, setSearchOpen] = useState(false)
 
   // Lightweight poll for down-source count — shown as red badge on Source Health nav item
   const { data: sources } = useQuery({
@@ -85,6 +87,16 @@ export default function Layout() {
             </NavLink>
           ))}
 
+          {/* Global identifier search */}
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="flex items-center gap-3 px-3 py-2 rounded text-sm transition-colors text-text-secondary hover:bg-anveshak-muted hover:text-text-primary w-full"
+            aria-label="Search identifiers"
+          >
+            <span className="w-4 h-4 shrink-0" aria-hidden="true"><SearchIcon /></span>
+            <span className="flex-1 text-left">Search IDs</span>
+            <kbd className="text-[9px] text-text-muted bg-anveshak-muted px-1 rounded">⌘K</kbd>
+          </button>
         </div>
 
         {/* Footer: user profile + utility row */}
@@ -172,6 +184,9 @@ export default function Layout() {
       <main className="flex-1 overflow-auto pb-14 md:pb-0" id="main-content">
         <Outlet />
       </main>
+
+      {/* Global identifier search modal */}
+      <IdentifierSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   )
 }
@@ -241,10 +256,10 @@ function MoonIcon() {
     </svg>
   )
 }
-function FingerprintIcon() {
+function SearchIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
-      <path d="M2 12C2 6.5 6.5 2 12 2a10 10 0 018 4"/><path d="M5 19.5C5.5 18 6 15 6 12c0-3.5 2.5-6 6-6 3.5 0 6 2.5 6 6 0 1-.1 4-1 6"/><path d="M12 12v4"/><path d="M8 12h.01"/><path d="M16 12h.01"/>
+      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
     </svg>
   )
 }

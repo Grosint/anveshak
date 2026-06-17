@@ -68,6 +68,16 @@ export interface ClusterDetail {
   }[]
 }
 
+export interface GlobalSearchResult {
+  identifier_type: IdentifierType
+  identifier_value: string
+  topic_id: string
+  topic_name: string
+  source_count: number
+  content_item_count: number
+  last_seen_at: string | null
+}
+
 export interface CoOccurrenceResult {
   topic_id: string
   identifier_a: string
@@ -89,6 +99,13 @@ export interface ScamTemplate {
 }
 
 export const identifiersApi = {
+  searchGlobal: (q: string, type?: IdentifierType, limit = 50) =>
+    api
+      .get<GlobalSearchResult[]>('/api/v1/identifiers/search-global', {
+        params: { q, ...(type ? { type } : {}), limit },
+      })
+      .then((r) => r.data),
+
   search: (topicId: string, q: string, type?: IdentifierType, limit = 50) =>
     api
       .get<IdentifierResult[]>('/api/v1/identifiers/search', {

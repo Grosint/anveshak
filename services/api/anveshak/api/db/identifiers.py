@@ -134,6 +134,33 @@ SQL_EXPORT_IDENTIFIERS = """
     LIMIT $2
 """
 
+SQL_SEARCH_IDENTIFIERS_GLOBAL = """
+    SELECT ic.identifier_type, ic.identifier_value,
+           ic.topic_id, t.name AS topic_name,
+           ic.source_count, ic.content_item_count,
+           ic.last_seen_at
+    FROM identifier_clusters ic
+    JOIN topics t ON ic.topic_id = t.id
+    WHERE t.org_id = $1
+      AND ic.identifier_value ILIKE $2
+    ORDER BY ic.source_count DESC
+    LIMIT $3
+"""
+
+SQL_SEARCH_IDENTIFIERS_GLOBAL_WITH_TYPE = """
+    SELECT ic.identifier_type, ic.identifier_value,
+           ic.topic_id, t.name AS topic_name,
+           ic.source_count, ic.content_item_count,
+           ic.last_seen_at
+    FROM identifier_clusters ic
+    JOIN topics t ON ic.topic_id = t.id
+    WHERE t.org_id = $1
+      AND ic.identifier_type = $2
+      AND ic.identifier_value ILIKE $3
+    ORDER BY ic.source_count DESC
+    LIMIT $4
+"""
+
 SQL_CO_OCCURRENCE = """
     SELECT DISTINCT ci.id AS content_item_id,
            ci.url AS content_url, ci.captured_at,
@@ -267,6 +294,29 @@ async def export_identifiers(
 ) -> list[dict[str, Any]]:
     """Flat identifier rows for CSV/JSON export."""
     rows = await conn.fetch(SQL_EXPORT_IDENTIFIERS, topic_id, limit)
+    return [dict(r) for r in rows]
+
+
+async def search_identifiers_global(
+    conn: asyncpg.Connection,
+    *,
+    q: str,
+    org_id: str,
+    identifier_type: Optional[str] = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Cross-topic identifier search, scoped to user's org."""
+    pattern = f"%{q}%"
+    if identifier_type:
+        rows = await conn.fetch(
+            SQL_SEARCH_IDENTIFIERS_GLOBAL_WITH_TYPE,
+            org_id, identifier_type, pattern, limit,
+        )
+    else:
+        rows = await conn.fetch(
+            SQL_SEARCH_IDENTIFIERS_GLOBAL,
+            org_id, pattern, limit,
+        )
     return [dict(r) for r in rows]
 
 

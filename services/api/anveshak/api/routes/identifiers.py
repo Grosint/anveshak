@@ -63,6 +63,24 @@ def _rows_to_json(rows: list[dict[str, Any]]) -> str:
 # Routes
 # ---------------------------------------------------------------------------
 
+@router.get("/search-global")
+async def search_identifiers_global(
+    q: str = Query(..., min_length=2, description="Search query (partial match)"),
+    type: Optional[str] = Query(None, description="Filter by identifier type"),
+    limit: int = Query(50, ge=1, le=200, description="Max results"),
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("viewer", "analyst", "admin")),
+) -> list[dict[str, Any]]:
+    """Cross-topic identifier search, scoped to user's org."""
+    from ..auth.rbac import get_user_org
+    org_id = get_user_org(user)
+    if not org_id:
+        raise HTTPException(status_code=400, detail="Org context required for global search")
+    return await identifiers_db.search_identifiers_global(
+        db, q=q, org_id=org_id, identifier_type=type, limit=limit,
+    )
+
+
 @router.get("/search")
 async def search_identifiers(
     topic_id: str = Query(..., description="Topic ID to search within"),

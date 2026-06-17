@@ -8,22 +8,23 @@ vi.mock('../../api/identifiers', () => ({
   identifiersApi: {
     top: vi.fn().mockResolvedValue([
       {
-        entity_type: 'PHONE_IN',
-        entity_text: '+919876543210',
+        identifier_type: 'PHONE_IN',
+        identifier_value: '+919876543210',
         source_count: 5,
         content_item_count: 12,
-        first_seen: '2026-06-01T10:00:00Z',
-        last_seen: '2026-06-10T15:30:00Z',
+        first_seen_at: '2026-06-01T10:00:00Z',
+        last_seen_at: '2026-06-10T15:30:00Z',
       },
       {
-        entity_type: 'UPI',
-        entity_text: 'scammer@paytm',
+        identifier_type: 'UPI',
+        identifier_value: 'scammer@paytm',
         source_count: 3,
         content_item_count: 7,
-        first_seen: '2026-06-02T08:00:00Z',
-        last_seen: '2026-06-09T12:00:00Z',
+        first_seen_at: '2026-06-02T08:00:00Z',
+        last_seen_at: '2026-06-09T12:00:00Z',
       },
     ]),
+    searchGlobal: vi.fn().mockResolvedValue([]),
     clusters: vi.fn().mockResolvedValue([]),
     search: vi.fn().mockResolvedValue([]),
     clusterDetail: vi.fn().mockResolvedValue(null),
@@ -52,31 +53,21 @@ vi.mock('../../contexts/WSContext', () => ({
   WSProvider: ({ children }: any) => children,
 }))
 
-describe('Identifiers page', () => {
-  it('renders page title', () => {
-    renderWithProviders(<Identifiers />)
-    expect(screen.getByText('Identifiers')).toBeInTheDocument()
-  })
-
-  it('renders view mode tabs', () => {
-    renderWithProviders(<Identifiers />)
+describe('Identifiers page (embedded mode — standalone route removed)', () => {
+  it('renders view mode tabs when embedded with topicId', () => {
+    renderWithProviders(<Identifiers embedded topicId="topic-001" />)
     expect(screen.getByText('Top')).toBeInTheDocument()
     expect(screen.getByText('Clusters')).toBeInTheDocument()
     expect(screen.getByText('Search')).toBeInTheDocument()
   })
 
   it('renders type filter dropdown', () => {
-    renderWithProviders(<Identifiers />)
+    renderWithProviders(<Identifiers embedded topicId="topic-001" />)
     expect(screen.getByText('All types')).toBeInTheDocument()
   })
 
-  it('shows prompt when no topic selected', () => {
-    renderWithProviders(<Identifiers />)
-    expect(screen.getByText('Select a topic to view identifiers.')).toBeInTheDocument()
-  })
-
   it('renders top identifiers when topicId provided', async () => {
-    renderWithProviders(<Identifiers topicId="topic-001" />)
+    renderWithProviders(<Identifiers embedded topicId="topic-001" />)
     await waitFor(() => {
       expect(screen.getByText('+919876543210')).toBeInTheDocument()
       expect(screen.getByText('scammer@paytm')).toBeInTheDocument()
@@ -84,7 +75,7 @@ describe('Identifiers page', () => {
   })
 
   it('renders source count column', async () => {
-    renderWithProviders(<Identifiers topicId="topic-001" />)
+    renderWithProviders(<Identifiers embedded topicId="topic-001" />)
     await waitFor(() => {
       expect(screen.getByText('5')).toBeInTheDocument()
       expect(screen.getByText('3')).toBeInTheDocument()
@@ -92,7 +83,7 @@ describe('Identifiers page', () => {
   })
 
   it('renders type badges', async () => {
-    renderWithProviders(<Identifiers topicId="topic-001" />)
+    renderWithProviders(<Identifiers embedded topicId="topic-001" />)
     await waitFor(() => {
       expect(screen.getByText('Phone')).toBeInTheDocument()
       expect(screen.getByText('UPI')).toBeInTheDocument()
@@ -105,8 +96,9 @@ describe('Identifiers page', () => {
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
   })
 
-  it('renders export button when topic selected', () => {
-    renderWithProviders(<Identifiers topicId="topic-001" />)
-    expect(screen.getByText('Export CSV')).toBeInTheDocument()
+  it('always requires topicId (no standalone topic input)', () => {
+    renderWithProviders(<Identifiers embedded topicId="topic-001" />)
+    // No "Enter topic ID" input — embedded always has topicId from parent
+    expect(screen.queryByPlaceholderText(/enter topic id/i)).not.toBeInTheDocument()
   })
 })
