@@ -56,6 +56,18 @@ Consolidated from 10 learned instincts. These apply to the React + TypeScript an
   page-level header/h1; parent provides its own. Functional content stays identical.
   See: `learned/embedded-prop-page-reuse.md`
 
+- Kill standalone route for topic-scoped pages that require a UUID to show anything.
+  Keep the embedded tab in TopicWorkspace, add a global action (search button, command
+  palette) in Layout sidebar for cross-topic access. Don't add a topic picker dropdown.
+  See: `learned/kill-standalone-add-global-action.md`
+
+## Cross-Page Modal Communication
+
+- URL-param modal trigger: open a Layout-level modal from any child page via
+  `?search=X` query param. Layout reads param, opens modal with prefilled state,
+  clears param with `{ replace: true }`. Modal needs `initialQuery` prop for prefill.
+  See: `learned/url-param-modal-trigger.md`
+
 ## Domain Logic Extraction
 
 - Extract business logic (severity inference, credibility labels, confidence variants)
