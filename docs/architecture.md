@@ -923,7 +923,7 @@ The first condition gets items scraped directly for this topic. The second gets 
 
 ## Database Schema
 
-20 tables, all following conventions: `snake_case` names, `created_at`/`updated_at` timestamps, `labels JSONB` field (never Optional). Multi-tenancy via `org_id` on root entities (users, topics, sources, content_items, credibility_audit_log).
+27 tables, all following conventions: `snake_case` names, `created_at`/`updated_at` timestamps, `labels JSONB` field (never Optional). Multi-tenancy via `org_id` on root entities (users, topics, sources, content_items, credibility_audit_log, trackers).
 
 ### Entity Relationship Overview
 
@@ -954,7 +954,15 @@ topics ─────────────┬──────────�
   identifier_clusters ── (groups content by shared identifier)
     └── identifier_cluster_items ── (junction: cluster ↔ content_items)
 
-  reports ── (references topic, immutable once generated)
+  ── Trackers (migration 010) ──
+  trackers ── (permanent analyst-owned case files, seeded from clusters)
+    ├── tracker_content_items ── (provenance: seed/auto/manual + review status)
+    ├── tracker_content_exclusions ── (rejected items never re-suggested)
+    ├── tracker_notes ── (append-only immutable analyst notes)
+    ├── tracker_signals ── (M:M: tracker ↔ signals)
+    └── tracker_audit_log ── (every action logged)
+
+  reports ── (references topic + optional tracker_id, immutable once generated)
   report_source_warnings ── (links report ↔ source degradation)
   analysis_jobs ── (ARQ job tracking)
   organizations ── (multi-tenancy root entity)
@@ -993,6 +1001,12 @@ topics ─────────────┬──────────�
 | `topic_templates` | ~50 | M:M join: which templates are active per topic |
 | `identifier_clusters` | ~5K | Groups content items sharing same identifier (type + value), tracks source_count |
 | `identifier_cluster_items` | ~20K | Junction: which content items belong to which identifier cluster |
+| `trackers` | ~100 | Persistent analyst-owned case files (case_number, centroid, status, priority, org_id) |
+| `tracker_content_items` | ~10K | Provenance-tracked content linkage (seed/auto/manual, pending/confirmed) |
+| `tracker_content_exclusions` | ~500 | Rejected auto-matched items (never re-suggested) |
+| `tracker_notes` | ~1K | Append-only immutable analyst notes per tracker |
+| `tracker_signals` | ~200 | M:M junction: which signals are linked to which tracker |
+| `tracker_audit_log` | ~5K | Every tracker action logged (created, status_changed, content_confirmed, etc.) |
 | `failed_jobs` | ~100 | Dead-letter queue for ARQ jobs that fail after max retries |
 
 ---
@@ -2219,3 +2233,139 @@ topics.identifier_signal_threshold (INT DEFAULT 2) — added column
 | `services/social/anveshak/social/adapters/instagram.py` | Instagram adapter with circuit breaker |
 | `services/api/migrations/versions/009_engine_c.py` | Schema migration + template seed data |
 | `docs/engine_c_implementation_plan.md` | Full implementation plan (10 steps, 4 phases, 13 sessions) |
+
+
+## Trackers — Persistent Analyst Case Files
+
+### Problem
+
+Leiden clustering re-runs periodically, merging/splitting/renumbering narrative clusters.
+Analysts lose work continuity — yesterday's cluster is gone today. This breaks trust.
+
+### Architecture: Two-Tier Model
+
+```
+Tier 1: Active Narratives (ephemeral)      Tier 2: Trackers (permanent)
+┌────────────────────────────┐              ┌────────────────────────────┐
+│ Leiden cluster output       │   "Open     │ Analyst-owned case file     │
+│ Re-computed every cycle     │   Tracker"  │ Survives re-clustering     │
+│ IDs change, items move      │  ────────→  │ Content seeded + auto-     │
+│ Discovery layer only        │             │ matched (review queue)     │
+└────────────────────────────┘              └────────────────────────────┘
+```
+
+Core principle: **The system finds. The analyst decides. The tracker remembers.**
+
+### Key Design Decisions (validated by 8 agency personas)
+
+1. **Review queue, not auto-insert.** Auto-matched content goes to "pending" status. Analyst accepts/rejects. Rejected items go to exclusion list and are never re-suggested.
+2. **Provenance on every content link.** Each item tagged: `seed` (from cluster), `auto` (centroid match), `manual` (analyst added). Provenance visible in UI.
+3. **Append-only immutable notes.** No update/delete SQL exists. Notes are the digital case diary.
+4. **Mandatory closing summary.** Concluding a tracker requires a summary — handover document for next IO.
+5. **External case ref.** Free-text field for FIR numbers, ECIR, RC numbers — analyst's own system.
+6. **Org-scoped case numbers.** TRK-YYYY-NNNN from PostgreSQL sequence.
+
+### Auto-Matching Loop
+
+Runs in `analyst-scheduler` after clustering, every 5 minutes:
+
+```
+1. Load active/watching trackers with centroids
+2. For each tracker:
+   a. Find content items from last 24h matching centroid (cosine similarity ≥ threshold)
+   b. Skip items already in tracker or exclusion list
+   c. Insert as pending (attached_by='auto')
+3. Analyst reviews pending items in UI: Accept / Reject / Accept All
+```
+
+### Tracker-Scoped Reports
+
+Reports can be generated from a tracker's confirmed content only (not full topic).
+Reporter worker detects `tracker_id` on report row and uses `fetch_tracker_rag_chunks()`
+instead of `fetch_rag_chunks()`. RAG context is filtered to confirmed items only.
+
+### Database Schema (Migration 010)
+
+```
+trackers (id, case_number UNIQUE, org_id, topic_id FK, origin_cluster_id FK NULL,
+    title, external_case_ref, centroid vector(384), centroid_threshold FLOAT,
+    status CHECK('watching','active','concluded'), priority CHECK('low','medium','high','critical'),
+    assigned_to, created_by, concluded_by, concluded_at, closing_summary,
+    created_at, updated_at, labels JSONB)
+
+tracker_content_items (tracker_id FK, content_item_id FK — PK,
+    attached_by CHECK('seed','auto','manual'), status CHECK('pending','confirmed'),
+    similarity_score, confirmed_by, confirmed_at, attached_at)
+
+tracker_content_exclusions (tracker_id FK, content_item_id FK — PK,
+    excluded_by, excluded_at)
+
+tracker_notes (id, tracker_id FK, user_id, body, created_at, labels JSONB)
+    — APPEND-ONLY: no UPDATE or DELETE SQL exists
+
+tracker_signals (tracker_id FK, signal_id FK — PK, linked_at, linked_by)
+
+tracker_audit_log (id, tracker_id FK, action, actor_id, detail JSONB, created_at)
+
+reports.tracker_id (nullable FK) — added column
+```
+
+### API Endpoints (20)
+
+| Method | Path | Action |
+|--------|------|--------|
+| POST | `/api/v1/trackers` | Create tracker from scratch |
+| POST | `/api/v1/trackers/from-cluster/{id}` | Create from narrative cluster (seeds content + centroid) |
+| GET | `/api/v1/trackers` | List (filtered by topic, status, org) |
+| GET | `/api/v1/trackers/{id}` | Detail with content_count, pending_count, topic_name |
+| PATCH | `/api/v1/trackers/{id}/status` | Change status (concluded requires closing_summary) |
+| PATCH | `/api/v1/trackers/{id}/priority` | Change priority |
+| PATCH | `/api/v1/trackers/{id}/assign` | Assign to analyst |
+| PATCH | `/api/v1/trackers/{id}` | Update title, external_case_ref |
+| GET | `/api/v1/trackers/{id}/content` | Confirmed content (paginated) |
+| GET | `/api/v1/trackers/{id}/pending` | Pending review items |
+| POST | `/api/v1/trackers/{id}/content/{item}/confirm` | Confirm pending item |
+| POST | `/api/v1/trackers/{id}/content/{item}/reject` | Reject (moves to exclusion) |
+| POST | `/api/v1/trackers/{id}/content/confirm-all` | Bulk confirm |
+| POST | `/api/v1/trackers/{id}/content/{item}` | Manually add content |
+| DELETE | `/api/v1/trackers/{id}/content/{item}` | Soft remove (exclusion) |
+| POST/GET | `/api/v1/trackers/{id}/notes` | Add / list notes |
+| GET/POST | `/api/v1/trackers/{id}/signals/{sig}` | List / link signals |
+| GET/POST | `/api/v1/trackers/{id}/reports` | List / generate tracker-scoped report |
+| GET | `/api/v1/trackers/{id}/audit-log` | Audit trail |
+
+### Frontend
+
+- **Trackers** nav item in sidebar (between Topics and Signals)
+- **List page:** status filter chips, case number, items count, pending badge, priority badge
+- **Detail page (7 tabs):** Overview, Content, Pending Review, Notes, Signals, Reports, Audit Log
+- **Create modal:** from scratch (title + topic + case ref) or from cluster (one-click)
+- **Conclude modal:** mandatory closing summary
+- **Cluster card buttons:** Watch / Open Tracker with dedup (shows "Tracked as TRK-YYYY-NNNN" if exists)
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `services/api/anveshak/api/db/trackers.py` | 20 SQL constants + 15 repository functions |
+| `services/api/anveshak/api/routes/trackers.py` | 20 API endpoints |
+| `services/analyst/anveshak/analyst/scheduler.py` | `_run_tracker_matching_cycle` + `tracker_matching_loop` |
+| `services/reporter/anveshak/reporter/db/__init__.py` | `fetch_tracker_rag_chunks` for scoped reports |
+| `services/reporter/anveshak/reporter/worker.py` | Tracker-scoped RAG branch in `generate_report` |
+| `services/api/migrations/versions/010_trackers.py` | Schema: 7 tables + indexes + sequence |
+| `sdk/anveshak/models/tracker.py` | Pydantic model with mandatory Labels |
+| `frontend/src/pages/TrackerDetail.tsx` | Detail page (7 tabs, 700+ lines) |
+| `frontend/src/pages/Trackers.tsx` | List page with filters |
+| `docs/future_trackers_v2_roadmap.md` | v2+ roadmap from 8 agency persona reviews |
+
+### v2 Roadmap
+
+See `docs/future_trackers_v2_roadmap.md` for agency-specific enhancements:
+- v2.1: Hash chain + BSA certificate (NIA, ED, NCB, SEBI)
+- v2.2: Dormancy + reactivation (MEA)
+- v2.3: Geographic tagging + flow visualization (MEA, NCB)
+- v2.4: Parent-child tracker hierarchy (NIA, ED, NCB)
+- v2.5: Classification levels + intra-org ACL (NIA, MEA, SEBI)
+- v2.6: Cross-topic trackers (NIA, ED)
+- v2.7: Velocity/reach dashboards (MEA, SEBI)
+- v2.8: Multi-agency sanitized sharing (all)
