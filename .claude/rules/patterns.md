@@ -29,6 +29,17 @@ class VisionSettings(BaseSettings):
     vision_device: str = "cpu"     # cpu → cuda on GPU upgrade
 ```
 
+## Threshold Invariant Testing Pattern (mandatory for config)
+```python
+# Test that thresholds don't defeat each other
+def test_threshold_invariants():
+    assert settings.credibility_contradiction_drop >= settings.credibility_min_auto_drop
+    assert settings.clustering_similarity_threshold <= settings.cluster_assign_threshold
+    # Quality gate applied at ALL consumption points
+    for sql in [SQL_TOPIC_CONTENT, SQL_RAG_CHUNKS, SQL_CLUSTER_INPUT]:
+        assert "content_quality" in sql.lower() or "quality" in sql.lower()
+```
+
 ## Report Immutability Pattern (mandatory)
 ```python
 # generated_at is set ONCE. Never in an UPDATE.
