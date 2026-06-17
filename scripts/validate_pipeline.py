@@ -261,6 +261,61 @@ def check_multilingual(metrics: dict) -> list[Check]:
 
 
 # ---------------------------------------------------------------------------
+# Stage 8 — Trackers
+# ---------------------------------------------------------------------------
+
+def check_trackers(token: str) -> list[Check]:
+    """Validate tracker subsystem: API reachable, schema exists, matching loop running."""
+    checks = []
+
+    # Check API endpoint responds (admin sees all orgs, may be empty list)
+    status, body = http_get(f"{BASE}/api/v1/trackers", headers=_auth(token))
+    checks.append(Check(
+        "Trackers API",
+        status == 200,
+        f"HTTP {status}" if status != 200 else f"{len(body)} tracker(s) across all orgs",
+    ))
+
+    # Check scheduler logs for tracker matching loop
+    # (this is a best-effort check — looks for the log message in recent scheduler output)
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["docker", "logs", "--tail=200", "anveshak-analyse-scheduler-1"],
+            capture_output=True, text=True, timeout=5,
+        )
+        logs = result.stdout + result.stderr
+        loop_running = "tracker_matching_loop.started" in logs
+        checks.append(Check(
+            "Tracker matching loop",
+            loop_running,
+            "running ✓" if loop_running else "not found in scheduler logs — check scheduler rebuild",
+            warning=not loop_running,
+        ))
+
+        # Check if matching has produced results
+        cycle_done = "tracker_matching_loop.cycle_done" in logs
+        if cycle_done:
+            checks.append(Check("Tracker auto-matching", True, "cycle completed ✓"))
+        else:
+            checks.append(Check(
+                "Tracker auto-matching",
+                True,
+                "no matches yet — may need active trackers with centroids",
+                warning=True,
+            ))
+    except Exception:
+        checks.append(Check(
+            "Tracker matching loop",
+            True,
+            "could not check scheduler logs — skipped",
+            warning=True,
+        ))
+
+    return checks
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -340,6 +395,12 @@ def main() -> int:
     print()
     print("Stage 7 — Multilingual pipeline:")
     for c in check_multilingual(metrics):
+        _p(c)
+
+    # Stage 8 — Trackers
+    print()
+    print("Stage 8 — Trackers:")
+    for c in check_trackers(token):
         _p(c)
 
     # Summary
