@@ -50,6 +50,15 @@ SQL_GET_AUDIT_TRAIL_BY_RESOURCE = """
     LIMIT $3 OFFSET $4
 """
 
+SQL_GET_AUDIT_TRAIL_BY_RESOURCE_ID = """
+    SELECT id, user_id, action, resource_type, resource_id,
+           details, ip_address, created_at
+    FROM audit_trail
+    WHERE resource_id = $1
+    ORDER BY created_at DESC
+    LIMIT $2 OFFSET $3
+"""
+
 _LABELS_JSON = '{"classification":"OPEN","domain":"audit","owner_org":"anveshak"}'
 
 # ---------------------------------------------------------------------------
@@ -92,6 +101,10 @@ async def get_audit_trail(
     if resource_type and resource_id:
         rows = await conn.fetch(
             SQL_GET_AUDIT_TRAIL_BY_RESOURCE, resource_type, resource_id, limit, offset
+        )
+    elif resource_id:
+        rows = await conn.fetch(
+            SQL_GET_AUDIT_TRAIL_BY_RESOURCE_ID, resource_id, limit, offset
         )
     elif resource_type:
         rows = await conn.fetch(SQL_GET_AUDIT_TRAIL, resource_type, limit, offset)

@@ -8,6 +8,16 @@ interface TrendingKeywordsProps {
   topicId: string
 }
 
+/** Map frequency ratio (0–1) to font size in px. */
+function pillFontSize(ratio: number): number {
+  return 11 + ratio * 4 // 11px → 15px
+}
+
+/** Map frequency ratio (0–1) to background opacity. */
+function pillOpacity(ratio: number): number {
+  return 0.15 + ratio * 0.45 // 0.15 → 0.60
+}
+
 export function TrendingKeywords({ topicId }: TrendingKeywordsProps) {
   const [days, setDays] = useState<number>(7)
 
@@ -51,23 +61,28 @@ export function TrendingKeywords({ topicId }: TrendingKeywordsProps) {
           No keyword data yet
         </div>
       ) : (
-        <div className="space-y-1.5 max-h-[160px] overflow-y-auto">
-          {data.map((kw: { keyword: string; frequency: number }) => (
-            <div key={kw.keyword} className="flex items-center gap-2">
-              <span className="text-xs text-text-primary truncate min-w-[100px] max-w-[160px]">
+        <div className="flex flex-wrap gap-2">
+          {data.map((kw: { keyword: string; frequency: number }) => {
+            const ratio = kw.frequency / maxFreq
+            return (
+              <span
+                key={kw.keyword}
+                className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-text-primary cursor-default transition-colors hover:brightness-125"
+                style={{
+                  fontSize: `${pillFontSize(ratio)}px`,
+                  backgroundColor: `color-mix(in srgb, var(--anveshak-accent) ${Math.round(pillOpacity(ratio) * 100)}%, transparent)`,
+                }}
+              >
                 {kw.keyword}
+                <span
+                  className="text-text-muted tabular-nums"
+                  style={{ fontSize: `${Math.max(pillFontSize(ratio) - 2, 9)}px` }}
+                >
+                  {kw.frequency}
+                </span>
               </span>
-              <div className="flex-1 h-3 bg-anveshak-muted rounded-sm overflow-hidden">
-                <div
-                  className="h-full bg-anveshak-accent/40 rounded-sm transition-all"
-                  style={{ width: `${(kw.frequency / maxFreq) * 100}%` }}
-                />
-              </div>
-              <span className="text-[10px] text-text-muted tabular-nums w-6 text-right">
-                {kw.frequency}
-              </span>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

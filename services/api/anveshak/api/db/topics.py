@@ -51,7 +51,19 @@ SQL_LIST_TOPICS_BY_ORG = """
     ORDER BY t.created_at DESC
 """
 
-SQL_GET_TOPIC = "SELECT * FROM topics WHERE id = $1"
+SQL_GET_TOPIC = """
+    SELECT t.*,
+           (SELECT COUNT(DISTINCT x.id) FROM (
+               SELECT ci.id FROM content_items ci WHERE ci.topic_id = t.id
+               UNION
+               SELECT tci.content_item_id FROM topic_content_items tci WHERE tci.topic_id = t.id
+           ) x) AS content_count,
+           COUNT(DISTINCT sig.id) FILTER (WHERE sig.status = 'new') AS signal_count
+    FROM topics t
+    LEFT JOIN signals sig ON sig.topic_id = t.id
+    WHERE t.id = $1
+    GROUP BY t.id
+"""
 
 SQL_GET_TOPIC_ORG = "SELECT org_id FROM topics WHERE id = $1"
 

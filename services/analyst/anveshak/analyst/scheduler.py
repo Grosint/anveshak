@@ -512,10 +512,9 @@ SQL_UPSERT_IDENTIFIER_CLUSTER = """
 
 SQL_INSERT_IDENTIFIER_CLUSTER_ITEM = """
     INSERT INTO identifier_cluster_items (
-        id, identifier_cluster_id, content_item_id, source_id, labels
+        identifier_cluster_id, content_item_id, source_id
     )
-    VALUES ($1, $2, $3, $4,
-            '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb)
+    VALUES ($1, $2, $3)
     ON CONFLICT DO NOTHING
 """
 
@@ -586,7 +585,6 @@ async def _run_identifier_cluster_cycle(pool: asyncpg.Pool) -> int:
                             if source_id:
                                 await conn.execute(
                                     SQL_INSERT_IDENTIFIER_CLUSTER_ITEM,
-                                    str(uuid.uuid4()),
                                     cluster_id,
                                     ci_id,
                                     source_id,

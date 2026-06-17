@@ -7,10 +7,13 @@ import asyncpg
 import structlog
 from fastapi import APIRouter, Depends, Query
 
+from fastapi import HTTPException
+
 from ..auth.rbac import require_role
 from ..db import system as system_db
 from ..db import audit as audit_db
 from ..db import failed_jobs as failed_jobs_db
+from ..db import topics as topics_db
 from ..db.pool import get_db
 
 router = APIRouter(prefix="/api/v1/system", tags=["system"])
@@ -54,9 +57,14 @@ async def get_audit_trail(
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0, description="Offset for cursor-based pagination"),
     db: asyncpg.Connection = Depends(get_db),
-    user: dict = Depends(require_role("admin")),
+    user: dict = Depends(require_role("analyst", "admin")),
 ):
-    """Return audit trail entries (admin only)."""
+    """Return audit trail entries. Analysts must provide resource_id (scoped to their org)."""
+    user_role = user.get("role", "")
+    if user_role == "analyst":
+        if not resource_id:
+            raise HTTPException(status_code=403, detail="Analysts must filter by resource_id")
+        await topics_db.verify_topic_access(db, resource_id, user)
     return await audit_db.get_audit_trail(db, resource_type, resource_id, limit, offset)
 
 
