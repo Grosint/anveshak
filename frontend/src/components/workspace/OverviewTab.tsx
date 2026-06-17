@@ -1,5 +1,8 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { topicsApi } from '../../api/topics'
+import { trackersApi } from '../../api/trackers'
 import { signalsApi, Signal } from '../../api/signals'
 import { identifiersApi } from '../../api/identifiers'
 import { reportsApi } from '../../api/reports'
@@ -118,6 +121,8 @@ export default function OverviewTab({ topicId, onSelectSignal, onNavigateTab, on
                       ))}
                     </div>
                   )}
+                  {/* Tracker buttons */}
+                  <ClusterTrackerButtons clusterId={cluster.id} />
                 </div>
               )
             })}
@@ -284,6 +289,78 @@ export default function OverviewTab({ topicId, onSelectSignal, onNavigateTab, on
           </div>
         </section>
       )}
+    </div>
+  )
+}
+
+
+function ClusterTrackerButtons({ clusterId }: { clusterId: string }) {
+  const navigate = useNavigate()
+  const [creating, setCreating] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  // Check if a tracker already exists for this cluster
+  const { data: trackers = [] } = useQuery({
+    queryKey: ['trackers'],
+    queryFn: () => trackersApi.list(),
+    staleTime: 30_000,
+  })
+  const existing = trackers.find((t) => t.origin_cluster_id === clusterId)
+
+  const handleCreate = async (status: 'watching' | 'active') => {
+    setCreating(status)
+    setError(null)
+    try {
+      const tracker = await trackersApi.createFromCluster(clusterId, { status })
+      if (status === 'active') {
+        navigate(`/trackers/${tracker.id}`)
+      } else {
+        navigate('/trackers')
+      }
+    } catch {
+      setError('Failed to create tracker')
+      setTimeout(() => setError(null), 3000)
+    } finally {
+      setCreating(null)
+    }
+  }
+
+  if (existing) {
+    return (
+      <div className="flex gap-2 mt-2 pt-2 border-t border-anveshak-border">
+        <span className="text-[10px] text-text-muted">
+          Tracked as{' '}
+          <button
+            onClick={() => navigate(`/trackers/${existing.id}`)}
+            className="text-anveshak-accent underline hover:no-underline"
+          >
+            {existing.case_number}
+          </button>
+          {' '}({existing.status})
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-2 pt-2 border-t border-anveshak-border">
+      {error && <p className="text-[10px] text-red-400 mb-1">{error}</p>}
+      <div className="flex gap-2">
+        <button
+          onClick={() => handleCreate('watching')}
+          disabled={creating !== null}
+          className="text-[10px] px-2 py-0.5 rounded text-text-muted hover:text-anveshak-accent hover:bg-anveshak-accent/10 transition-colors"
+        >
+          {creating === 'watching' ? 'Creating...' : 'Watch'}
+        </button>
+        <button
+          onClick={() => handleCreate('active')}
+          disabled={creating !== null}
+          className="text-[10px] px-2 py-0.5 rounded bg-anveshak-accent/10 text-anveshak-accent hover:bg-anveshak-accent/20 transition-colors"
+        >
+          {creating === 'active' ? 'Creating...' : 'Open Tracker'}
+        </button>
+      </div>
     </div>
   )
 }

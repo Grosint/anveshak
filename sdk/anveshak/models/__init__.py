@@ -6,6 +6,7 @@ from .signal import Signal, SignalType, SignalStatus
 from .report import Report, ReportType, ReportSourceWarning
 from .job import AnalysisJob, JobType, JobStatus
 from .catalog import CatalogEntry, CatalogApproval, DiscoveredSource, SourceSuggestion
+from .tracker import Tracker
 
 __all__ = [
     "Labels", "Topic", "TopicStatus", "Source", "CredibilityAuditLog",
@@ -13,4 +14,5 @@ __all__ = [
     "Report", "ReportType", "ReportSourceWarning",
     "AnalysisJob", "JobType", "JobStatus",
     "CatalogEntry", "CatalogApproval", "DiscoveredSource", "SourceSuggestion",
+    "Tracker",
 ]

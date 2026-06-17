@@ -30,6 +30,7 @@ from .routes.organizations import router as organizations_router
 from .routes.identifiers import router as identifiers_router
 from .routes.tipline import router as tipline_router
 from .routes.templates import router as templates_router
+from .routes.trackers import router as trackers_router
 
 log = structlog.get_logger(__name__)
 
@@ -119,6 +120,7 @@ app.include_router(organizations_router)   # Organization management (super-admi
 app.include_router(identifiers_router)    # Engine C: identifier search, clusters, export
 app.include_router(tipline_router)        # Engine C: citizen tipline ingest
 app.include_router(templates_router)      # Engine C: scam template CRUD
+app.include_router(trackers_router)       # Trackers: persistent analyst case files
 
 # Prometheus metrics endpoint — uses isolated registry (API_REGISTRY) so custom
 # api_* metrics are exposed alongside default process metrics.

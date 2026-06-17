@@ -7,6 +7,7 @@ import { sourcesApi } from '../../api/sources'
 
 const primaryNav = [
   { to: '/topics',      label: 'Topics',      icon: <TargetIcon /> },
+  { to: '/trackers',    label: 'Trackers',    icon: <TrackerIcon /> },
   { to: '/signals',     label: 'Signals',     icon: <ZapIcon /> },
   { to: '/identifiers', label: 'Identifiers', icon: <FingerprintIcon /> },
   { to: '/vision',      label: 'Vision',      icon: <EyeIcon /> },
@@ -177,6 +178,13 @@ export default function Layout() {
 
 // ── Inline SVG icons (zero dep, accessible via aria-hidden on containers) ────
 
+function TrackerIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M12 5V3"/><path d="M12 21v-2"/>
+    </svg>
+  )
+}
 function TargetIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">

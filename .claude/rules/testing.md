@@ -40,6 +40,10 @@ paths:
 
 - Mock return value must match the shape the code actually unpacks — not a wrapper
   around it. If the function returns `dict`, mock must return `dict` (not `[dict]`).
+- Common mismatch: API returns `r.data` (unwrapped) but mock returns `[{...}]` (wrapped)
+- When JOIN changes add columns, expand fake_row dicts to include new columns
+- When function signature changes (new param), grep all test mocks for that function
+  and add the new param — stale mocks cause `TypeError` at runtime
   See: `learned/mock-shape-unwrap-mismatch.md`
 
 ## Test-Reality Seams (A→cache→B Boundaries)

@@ -60,6 +60,24 @@ Pydantic reads `PORT=8000 # api` as string `"8000 # api"` and crashes.
 Put comments on separate lines above the variable.
 See: `learned/dotenv-inline-comment-int-fields.md`
 
+## Fail-Open on Non-Critical Enrichment
+
+Pipeline step A→B→C→D where C adds optional enrichment (identifiers, metadata).
+If C fails, the pipeline should NOT crash — A→B→D produces valid (less rich) output.
+
+Wrap non-critical enrichment in try/except with structured log warning + safe defaults:
+```python
+try:
+    identifiers = await db.fetch_topic_identifiers(pool, topic_id)
+except Exception:
+    log.warning("enrichment_failed", step="identifiers", topic_id=topic_id)
+    identifiers = []  # downstream uses `if identifiers:` guard
+```
+
+Apply when: step is additive, output valid without it, downstream uses `if data:` guards.
+Do NOT apply when: step produces data downstream REQUIRES (RAG chunks, content_hash).
+See: `learned/fail-open-enrichment-steps.md`
+
 ## Invariant Tests
 
 Test that settings don't defeat themselves:

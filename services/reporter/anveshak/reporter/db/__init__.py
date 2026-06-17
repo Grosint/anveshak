@@ -53,6 +53,22 @@ SQL_FETCH_RAG_CHUNKS = """
     LIMIT $4
 """
 
+SQL_FETCH_TRACKER_RAG_CHUNKS = """
+    SELECT ci.id,
+           COALESCE(ci.translated_text, ci.clean_text) AS clean_text,
+           ci.credibility_score_at_capture,
+           ci.url,
+           ci.source_id
+    FROM tracker_content_items tci
+    JOIN content_items ci ON ci.id = tci.content_item_id
+    WHERE tci.tracker_id = $1
+      AND tci.status = 'confirmed'
+      AND ci.embedding IS NOT NULL
+      AND ci.credibility_score_at_capture >= $2
+    ORDER BY ci.embedding <-> $3
+    LIMIT $4
+"""
+
 SQL_FETCH_SOURCES_FOR_SNAPSHOT = """
     SELECT id, name, credibility_score
     FROM sources
@@ -212,6 +228,26 @@ async def fetch_rag_chunks(
             vec_str,
             top_k,
             relevance_threshold,
+        )
+    return [dict(r) for r in rows]
+
+
+async def fetch_tracker_rag_chunks(
+    pool: asyncpg.Pool,
+    tracker_id: str,
+    query_embedding: list[float],
+    credibility_min: float,
+    top_k: int,
+) -> list[dict[str, Any]]:
+    """Return top-k confirmed tracker content chunks ordered by vector similarity."""
+    vec_str = "[" + ",".join(str(v) for v in query_embedding) + "]"
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            SQL_FETCH_TRACKER_RAG_CHUNKS,
+            tracker_id,
+            credibility_min,
+            vec_str,
+            top_k,
         )
     return [dict(r) for r in rows]
 

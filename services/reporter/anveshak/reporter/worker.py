@@ -102,16 +102,28 @@ async def generate_report(ctx: dict, report_id: str) -> None:
     query_embedding = await generate_query_embedding(topic_name, keywords)
 
     # --- 3. Fetch RAG chunks ---
-    # Per-topic relevance threshold (auto-calibrated); fallback to global default
-    relevance_threshold = float(topic["topic_relevance_threshold"]) if topic.get("topic_relevance_threshold") is not None else s.topic_relevance_threshold
-    chunks = await db.fetch_rag_chunks(
-        pool,
-        topic_id,
-        query_embedding,
-        credibility_min,
-        s.rag_top_k,
-        relevance_threshold=relevance_threshold,
-    )
+    tracker_id = report.get("tracker_id")
+    if tracker_id:
+        # Tracker-scoped: use only confirmed tracker content
+        chunks = await db.fetch_tracker_rag_chunks(
+            pool,
+            tracker_id,
+            query_embedding,
+            credibility_min,
+            s.rag_top_k,
+        )
+        log.info("reporter.tracker_scoped_rag", tracker_id=tracker_id, chunks=len(chunks))
+    else:
+        # Topic-scoped: standard RAG
+        relevance_threshold = float(topic["topic_relevance_threshold"]) if topic.get("topic_relevance_threshold") is not None else s.topic_relevance_threshold
+        chunks = await db.fetch_rag_chunks(
+            pool,
+            topic_id,
+            query_embedding,
+            credibility_min,
+            s.rag_top_k,
+            relevance_threshold=relevance_threshold,
+        )
 
     if not chunks:
         log.warning("reporter.no_rag_chunks", report_id=report_id, topic_id=topic_id)

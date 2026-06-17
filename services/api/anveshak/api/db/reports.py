@@ -12,8 +12,8 @@ import asyncpg
 SQL_INSERT_REPORT = """
     INSERT INTO reports (
         id, topic_id, report_type, time_window_start, time_window_end,
-        credibility_min_filter, created_at, updated_at, labels
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8)
+        credibility_min_filter, tracker_id, created_at, updated_at, labels
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9)
 """
 
 SQL_FETCH_REPORT = """
@@ -67,12 +67,14 @@ async def insert_report(
     credibility_min: float,
     now: Any,
     labels_json: str,
+    *,
+    tracker_id: str | None = None,
 ) -> None:
     await conn.execute(
         SQL_INSERT_REPORT,
         report_id, topic_id, report_type,
         time_start, time_end, credibility_min,
-        now, labels_json,
+        tracker_id, now, labels_json,
     )
 
 
