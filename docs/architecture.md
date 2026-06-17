@@ -579,6 +579,10 @@ Workers are separate container processes that execute heavy background jobs disp
 - WebSocket connection for real-time signal notifications
 - JWT authentication with expiry countdown and warning dialog
 - Export buttons (CSV/JSON) on ContentFeed, wired to backend `/api/v1/export/*` endpoints via reusable `ExportButton` component
+- **Sidebar nav:** Topics, Trackers, Signals, Vision, Reports, Analytics + Search IDs button (global identifier search modal)
+- **Global identifier search:** command-palette-style modal (`IdentifierSearch`) — cross-topic search via `search-global` endpoint, accessible from sidebar or via `?search=` URL param
+- **Identifiers tab:** embedded in TopicWorkspace (no standalone page — topic-scoped features live inside the topic workspace, not as separate routes)
+- **Analytics convergence card:** cross-topic identifier convergence on Analytics dashboard — click opens search modal prefilled
 - Built into a static bundle, served by Nginx inside the container
 - Depends on `api` being healthy before starting
 
@@ -2140,7 +2144,9 @@ Runs incrementally: new content item with known identifier → add to existing c
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /api/v1/identifiers/search?q=...&type=...` | Search identifiers with partial match |
+| `GET /api/v1/identifiers/search?q=...&type=...` | Search identifiers with partial match (topic-scoped) |
+| `GET /api/v1/identifiers/search-global?q=...` | Cross-topic identifier search (org-scoped) |
+| `GET /api/v1/identifiers/convergence` | Identifiers appearing in 2+ topics (org-scoped) |
 | `GET /api/v1/identifiers/top?topic_id=...` | Most frequent identifiers by source_count |
 | `GET /api/v1/identifiers/clusters?topic_id=...` | List identifier clusters for a topic |
 | `GET /api/v1/identifiers/clusters/{id}` | Full cluster detail with content items |
@@ -2227,9 +2233,11 @@ topics.identifier_signal_threshold (INT DEFAULT 2) — added column
 | `services/analyst/anveshak/analyst/identifier_clustering.py` | Identifier cluster create/update logic |
 | `services/analyst/anveshak/analyst/identifier_signals.py` | Identifier convergence signal |
 | `services/analyst/anveshak/analyst/template_signals.py` | Scam template match signal |
-| `services/api/anveshak/api/routes/identifiers.py` | 6 identifier search/browse endpoints |
+| `services/api/anveshak/api/routes/identifiers.py` | 8 identifier search/browse endpoints (incl. global search + convergence) |
 | `services/api/anveshak/api/routes/tipline.py` | Tipline inbound webhook |
-| `services/api/anveshak/api/db/identifiers.py` | Identifier DB query functions |
+| `services/api/anveshak/api/db/identifiers.py` | Identifier DB query functions (incl. global search + convergence SQL) |
+| `frontend/src/components/search/IdentifierSearch.tsx` | Global identifier search modal (command palette) |
+| `frontend/src/pages/Identifiers.tsx` | Embedded identifier browser (used inside TopicWorkspace) |
 | `services/social/anveshak/social/adapters/instagram.py` | Instagram adapter with circuit breaker |
 | `services/api/migrations/versions/009_engine_c.py` | Schema migration + template seed data |
 | `docs/engine_c_implementation_plan.md` | Full implementation plan (10 steps, 4 phases, 13 sessions) |
