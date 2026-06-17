@@ -5,6 +5,7 @@ export interface Tracker {
   case_number: string
   org_id?: string
   topic_id: string
+  topic_name?: string
   origin_cluster_id?: string
   title: string
   external_case_ref?: string
@@ -125,5 +126,19 @@ export const trackersApi = {
   listAuditLog: (id: string, params?: { limit?: number; offset?: number }) =>
     api
       .get<TrackerAuditEntry[]>(`/api/v1/trackers/${id}/audit-log`, { params })
+      .then((r) => r.data),
+
+  listReports: (id: string) =>
+    api.get(`/api/v1/trackers/${id}/reports`).then((r) => r.data),
+
+  generateReport: (
+    id: string,
+    data?: { report_type?: string; time_window_hours?: number; credibility_min?: number }
+  ) =>
+    api
+      .post<{ report_id: string; status: string; arq_job_id: string | null }>(
+        `/api/v1/trackers/${id}/reports`,
+        data || {}
+      )
       .then((r) => r.data),
 }

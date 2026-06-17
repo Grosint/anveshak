@@ -358,6 +358,75 @@ async def link_signal(
     return {"status": "ok"}
 
 
+# -- Reports --
+
+class GenerateTrackerReportRequest(BaseModel):
+    model_config = ConfigDict(strict=True)
+    report_type: Literal["intelligence_brief", "research_summary", "weekly_digest"] = "intelligence_brief"
+    time_window_hours: int = 72
+    credibility_min: float = 30.0
+
+
+@router.get("/{tracker_id}/reports")
+async def list_tracker_reports(
+    tracker_id: str,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+):
+    await trackers_db.verify_tracker_access(db, tracker_id, user)
+    return await trackers_db.list_tracker_reports(db, tracker_id)
+
+
+@router.post("/{tracker_id}/reports", status_code=status.HTTP_201_CREATED)
+async def generate_tracker_report(
+    tracker_id: str,
+    req: GenerateTrackerReportRequest,
+    request: Request,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+):
+    """Generate a report scoped to this tracker's confirmed content."""
+    await trackers_db.verify_tracker_access(db, tracker_id, user)
+    tracker = await trackers_db.get_tracker(db, tracker_id)
+    if not tracker:
+        raise HTTPException(status_code=404, detail="Tracker not found")
+
+    import uuid
+    from datetime import datetime, UTC
+    from ..db import reports as reports_db
+    from ..settings import settings
+
+    report_id = str(uuid.uuid4())
+    now = datetime.now(UTC)
+    from datetime import timedelta
+    time_start = now - timedelta(hours=req.time_window_hours)
+    labels_json = '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'
+
+    await reports_db.insert_report(
+        db, report_id, tracker["topic_id"], req.report_type,
+        time_start, now, req.credibility_min, now, labels_json,
+        tracker_id=tracker_id,
+    )
+
+    # Enqueue ARQ job
+    try:
+        from arq import create_pool as arq_create_pool
+        from arq.connections import RedisSettings
+        redis = await arq_create_pool(RedisSettings.from_dsn(settings.redis_url))
+        arq_job = await redis.enqueue_job("generate_report", report_id, _queue_name="arq:reporter")
+        arq_job_id = arq_job.job_id if arq_job else None
+    except Exception as exc:
+        log.warning("tracker.report_enqueue_failed", tracker_id=tracker_id, error=str(exc))
+        arq_job_id = None
+
+    await audit_db.log_action(
+        db, user["sub"], "tracker.report_generated", "tracker", tracker_id,
+        {"report_id": report_id, "report_type": req.report_type},
+        request.client.host if request.client else "",
+    )
+    return {"report_id": report_id, "status": "queued", "arq_job_id": arq_job_id}
+
+
 # -- Audit log --
 
 @router.get("/{tracker_id}/audit-log")

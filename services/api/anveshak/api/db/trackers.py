@@ -29,11 +29,13 @@ SQL_INSERT_TRACKER = """
 
 SQL_GET_TRACKER = """
     SELECT t.*,
+           tp.name AS topic_name,
            (SELECT COUNT(*) FROM tracker_content_items tci
             WHERE tci.tracker_id = t.id AND tci.status = 'confirmed') AS content_count,
            (SELECT COUNT(*) FROM tracker_content_items tci
             WHERE tci.tracker_id = t.id AND tci.status = 'pending') AS pending_count
     FROM trackers t
+    LEFT JOIN topics tp ON tp.id = t.topic_id
     WHERE t.id = $1
 """
 
@@ -41,22 +43,26 @@ SQL_GET_TRACKER_ORG = "SELECT org_id FROM trackers WHERE id = $1"
 
 SQL_LIST_TRACKERS_BY_ORG = """
     SELECT t.*,
+           tp.name AS topic_name,
            (SELECT COUNT(*) FROM tracker_content_items tci
             WHERE tci.tracker_id = t.id AND tci.status = 'confirmed') AS content_count,
            (SELECT COUNT(*) FROM tracker_content_items tci
             WHERE tci.tracker_id = t.id AND tci.status = 'pending') AS pending_count
     FROM trackers t
+    LEFT JOIN topics tp ON tp.id = t.topic_id
     WHERE t.org_id = $1
     ORDER BY t.updated_at DESC
 """
 
 SQL_LIST_TRACKERS_BY_TOPIC = """
     SELECT t.*,
+           tp.name AS topic_name,
            (SELECT COUNT(*) FROM tracker_content_items tci
             WHERE tci.tracker_id = t.id AND tci.status = 'confirmed') AS content_count,
            (SELECT COUNT(*) FROM tracker_content_items tci
             WHERE tci.tracker_id = t.id AND tci.status = 'pending') AS pending_count
     FROM trackers t
+    LEFT JOIN topics tp ON tp.id = t.topic_id
     WHERE t.topic_id = $1 AND t.org_id = $2
     ORDER BY t.updated_at DESC
 """
@@ -199,6 +205,19 @@ SQL_SEED_FROM_CLUSTER = """
     FROM content_items ci
     WHERE ci.narrative_cluster_id = $2
     ON CONFLICT DO NOTHING
+"""
+
+SQL_LIST_TRACKER_REPORTS = """
+    SELECT id, topic_id, tracker_id, report_type, generated_at, confidence_score,
+           content_item_count, created_at,
+           CASE
+               WHEN generated_at IS NOT NULL THEN 'complete'
+               WHEN generation_error IS NOT NULL THEN 'failed'
+               ELSE 'queued'
+           END AS generation_status
+    FROM reports
+    WHERE tracker_id = $1
+    ORDER BY created_at DESC
 """
 
 SQL_GET_CLUSTER_CENTROID = """
@@ -457,6 +476,13 @@ async def link_signal(
     now = datetime.now(UTC)
     await conn.execute(SQL_LINK_SIGNAL, tracker_id, signal_id, now, user_id)
     await _log_audit(conn, tracker_id, "signal_linked", user_id, {"signal_id": signal_id})
+
+
+async def list_tracker_reports(
+    conn: asyncpg.Connection, tracker_id: str
+) -> list[dict[str, Any]]:
+    rows = await conn.fetch(SQL_LIST_TRACKER_REPORTS, tracker_id)
+    return [dict(r) for r in rows]
 
 
 async def list_signals(

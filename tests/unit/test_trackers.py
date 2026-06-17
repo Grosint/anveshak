@@ -56,11 +56,31 @@ class TestTrackerSQLConstants:
         assert "content_count" in sql or "tracker_content_items" in sql, \
             "SQL_GET_TRACKER should compute content/pending counts"
 
+    def test_sql_get_tracker_includes_topic_name(self):
+        """SQL_GET_TRACKER must JOIN topics to get topic_name."""
+        from anveshak.api.db.trackers import SQL_GET_TRACKER
+        sql = SQL_GET_TRACKER.lower()
+        assert "topic_name" in sql, "SQL_GET_TRACKER must select topic_name"
+        assert "topics" in sql, "SQL_GET_TRACKER must JOIN topics table"
+
+    def test_sql_list_trackers_includes_topic_name(self):
+        """SQL_LIST_TRACKERS_BY_ORG must include topic_name."""
+        from anveshak.api.db.trackers import SQL_LIST_TRACKERS_BY_ORG
+        sql = SQL_LIST_TRACKERS_BY_ORG.lower()
+        assert "topic_name" in sql, "SQL_LIST_TRACKERS_BY_ORG must select topic_name"
+
     def test_sql_list_trackers_exists(self):
         from anveshak.api.db.trackers import SQL_LIST_TRACKERS_BY_ORG
         sql = SQL_LIST_TRACKERS_BY_ORG.lower()
         assert "trackers" in sql
         assert "org_id" in sql or "$1" in sql
+
+    def test_sql_list_tracker_reports_exists(self):
+        """SQL constant for listing reports by tracker must exist."""
+        from anveshak.api.db.trackers import SQL_LIST_TRACKER_REPORTS
+        sql = SQL_LIST_TRACKER_REPORTS.lower()
+        assert "reports" in sql
+        assert "tracker_id" in sql
 
     def test_sql_insert_tracker_content_exists(self):
         from anveshak.api.db.trackers import SQL_INSERT_TRACKER_CONTENT

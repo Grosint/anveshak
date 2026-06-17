@@ -5,7 +5,7 @@ import { trackersApi, type TrackerContentItem, type TrackerNote, type TrackerAud
 import { Spinner } from '../components/ui/Spinner'
 import { ConcludeModal } from '../components/trackers/ConcludeModal'
 
-type Tab = 'overview' | 'content' | 'pending' | 'notes' | 'signals' | 'audit'
+type Tab = 'overview' | 'content' | 'pending' | 'notes' | 'signals' | 'reports' | 'audit'
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'overview', label: 'Overview' },
@@ -13,6 +13,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'pending',  label: 'Pending Review' },
   { key: 'notes',    label: 'Notes' },
   { key: 'signals',  label: 'Signals' },
+  { key: 'reports',  label: 'Reports' },
   { key: 'audit',    label: 'Audit Log' },
 ]
 
@@ -60,6 +61,38 @@ function formatDate(iso: string): string {
   })
 }
 
+function formatAuditDetail(action: string, detail: Record<string, unknown>): string {
+  if (action === 'content_confirmed') return `Confirmed item`
+  if (action === 'content_rejected') return `Rejected item`
+  if (action === 'note_added') return 'Added a note'
+  if (action === 'status_changed') return `Status → ${detail.status}`
+  if (action === 'priority_changed') return `Priority → ${detail.priority}`
+  if (action === 'assigned') return `Assigned to ${detail.assigned_to || 'unassigned'}`
+  if (action === 'created') return `Tracker created`
+  if (action === 'signal_linked') return `Linked signal`
+  if (action === 'all_pending_confirmed') return 'Confirmed all pending items'
+  return JSON.stringify(detail)
+}
+
+function severityBadgeClass(severity: string): string {
+  switch (severity) {
+    case 'critical': return 'bg-red-500/20 text-red-400'
+    case 'high':     return 'bg-orange-500/20 text-orange-400'
+    case 'medium':   return 'bg-yellow-500/20 text-yellow-400'
+    case 'low':      return 'bg-blue-500/20 text-blue-400'
+    default:         return 'bg-gray-500/20 text-gray-400'
+  }
+}
+
+function reportStatusBadgeClass(status: string): string {
+  switch (status) {
+    case 'queued':   return 'bg-yellow-500/20 text-yellow-400'
+    case 'complete': return 'bg-green-500/20 text-green-400'
+    case 'failed':   return 'bg-red-500/20 text-red-400'
+    default:         return 'bg-gray-500/20 text-gray-400'
+  }
+}
+
 export default function TrackerDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -103,6 +136,19 @@ export default function TrackerDetail() {
     queryKey: ['tracker-audit', id],
     queryFn: () => trackersApi.listAuditLog(id!),
     enabled: !!id && activeTab === 'audit',
+  })
+
+  const { data: reports = [], isLoading: reportsLoading } = useQuery({
+    queryKey: ['tracker-reports', id],
+    queryFn: () => trackersApi.listReports(id!),
+    enabled: !!id && activeTab === 'reports',
+  })
+
+  const generateReportMutation = useMutation({
+    mutationFn: () => trackersApi.generateReport(id!),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tracker-reports', id] })
+    },
   })
 
   const confirmMutation = useMutation({
@@ -225,10 +271,10 @@ export default function TrackerDetail() {
               )}
               {tracker.topic_id && (
                 <Link
-                  to={`/topics/${tracker.topic_id}`}
+                  to={`/topics/${tracker.topic_id}/feed`}
                   className="text-anveshak-accent hover:underline"
                 >
-                  View Topic
+                  {tracker.topic_name || tracker.topic_id}
                 </Link>
               )}
               {tracker.assigned_to && (
@@ -290,6 +336,11 @@ export default function TrackerDetail() {
             {tab.key === 'pending' && tracker.pending_count > 0 && (
               <span className="ml-1.5 inline-flex items-center justify-center min-w-[1.1rem] px-1 py-0.5 rounded text-[10px] font-bold bg-yellow-500/20 text-yellow-400">
                 {tracker.pending_count}
+              </span>
+            )}
+            {tab.key === 'content' && tracker.content_count > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center min-w-[1.1rem] px-1 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400">
+                {tracker.content_count}
               </span>
             )}
           </button>
@@ -504,10 +555,92 @@ export default function TrackerDetail() {
               <div className="space-y-3">
                 {(signals as Record<string, unknown>[]).map((signal, i) => (
                   <div key={String(signal.id ?? i)} className="bg-anveshak-card border border-anveshak-border rounded-lg p-4">
-                    <p className="text-sm text-text-primary">{String(signal.title ?? signal.id ?? 'Signal')}</p>
-                    {signal.created_at != null && (
-                      <p className="text-xs text-text-muted mt-1">{formatDate(String(signal.created_at))}</p>
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <p className="text-sm font-medium text-text-primary">{String(signal.title ?? signal.id ?? 'Signal')}</p>
+                      {typeof signal.severity === 'string' && (
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${severityBadgeClass(signal.severity)}`}>
+                          {signal.severity}
+                        </span>
+                      )}
+                      {typeof signal.signal_type === 'string' && (
+                        <span className="text-xs text-text-muted">({signal.signal_type})</span>
+                      )}
+                      {typeof signal.status === 'string' && (
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                          signal.status === 'new' ? 'bg-blue-500/20 text-blue-400'
+                          : signal.status === 'acknowledged' ? 'bg-yellow-500/20 text-yellow-400'
+                          : 'bg-gray-500/20 text-gray-400'
+                        }`}>
+                          {signal.status}
+                        </span>
+                      )}
+                    </div>
+                    {typeof signal.description === 'string' && signal.description && (
+                      <p className="text-sm text-text-secondary mb-2">{signal.description}</p>
                     )}
+                    {typeof signal.detail === 'string' && signal.detail && (
+                      <p className="text-sm text-text-muted">{signal.detail}</p>
+                    )}
+                    <div className="flex items-center gap-4 mt-2 text-xs text-text-muted">
+                      {typeof signal.independent_source_count === 'number' && (
+                        <span>{signal.independent_source_count} independent sources</span>
+                      )}
+                      {signal.created_at != null && (
+                        <span>{formatDate(String(signal.created_at))}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Reports tab */}
+        {activeTab === 'reports' && (
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <button
+                onClick={() => generateReportMutation.mutate()}
+                disabled={generateReportMutation.isPending}
+                className="bg-anveshak-accent hover:bg-anveshak-accent/80 text-white rounded px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {generateReportMutation.isPending ? 'Generating...' : 'Generate Report'}
+              </button>
+            </div>
+            {reportsLoading ? (
+              <div className="flex justify-center py-10"><Spinner /></div>
+            ) : !reports || (reports as unknown[]).length === 0 ? (
+              <p className="text-text-muted text-sm">No reports generated for this tracker.</p>
+            ) : (
+              <div className="space-y-3">
+                {(reports as Record<string, unknown>[]).map((report, i) => (
+                  <div key={String(report.id ?? i)} className="bg-anveshak-card border border-anveshak-border rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {typeof report.report_type === 'string' && (
+                          <span className="text-sm font-medium text-text-primary">{report.report_type}</span>
+                        )}
+                        {typeof report.generation_status === 'string' && (
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${reportStatusBadgeClass(report.generation_status)}`}>
+                            {report.generation_status}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {report.created_at != null && (
+                          <span className="text-xs text-text-muted">{formatDate(String(report.created_at))}</span>
+                        )}
+                        {typeof report.id === 'string' && (
+                          <Link
+                            to={`/reports?id=${report.id}`}
+                            className="text-xs text-anveshak-accent hover:underline"
+                          >
+                            View
+                          </Link>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -533,8 +666,8 @@ export default function TrackerDetail() {
                     <div className="flex items-center gap-3">
                       <span className="text-xs text-text-secondary">{entry.actor_id}</span>
                       {entry.detail && Object.keys(entry.detail).length > 0 && (
-                        <span className="text-xs text-text-muted font-mono">
-                          {JSON.stringify(entry.detail)}
+                        <span className="text-xs text-text-muted">
+                          {formatAuditDetail(entry.action, entry.detail as Record<string, unknown>)}
                         </span>
                       )}
                     </div>
