@@ -81,10 +81,11 @@ export function ConcludeModal({ open, trackerId, onClose, onConcluded }: Conclud
         )}
 
         <div>
-          <label className="block text-xs font-medium text-text-muted mb-1">
+          <label htmlFor="closing-summary" className="block text-xs font-medium text-text-muted mb-1">
             Closing Summary <span className="text-red-400">*</span>
           </label>
           <textarea
+            id="closing-summary"
             value={summary}
             onChange={(e) => setSummary(e.target.value)}
             placeholder="Summarise findings, outcome, and disposition of this investigation…"

@@ -108,37 +108,37 @@ export default function TrackerDetail() {
     enabled: !!id,
   })
 
-  const { data: content = [], isLoading: contentLoading } = useQuery({
+  const { data: content = [], isLoading: contentLoading, isError: contentError } = useQuery({
     queryKey: ['tracker-content', id],
     queryFn: () => trackersApi.listContent(id!),
     enabled: !!id && activeTab === 'content',
   })
 
-  const { data: pending = [], isLoading: pendingLoading } = useQuery({
+  const { data: pending = [], isLoading: pendingLoading, isError: pendingError } = useQuery({
     queryKey: ['tracker-pending', id],
     queryFn: () => trackersApi.listPending(id!),
     enabled: !!id && activeTab === 'pending',
   })
 
-  const { data: notes = [], isLoading: notesLoading } = useQuery({
+  const { data: notes = [], isLoading: notesLoading, isError: notesError } = useQuery({
     queryKey: ['tracker-notes', id],
     queryFn: () => trackersApi.listNotes(id!),
     enabled: !!id && activeTab === 'notes',
   })
 
-  const { data: signals = [], isLoading: signalsLoading } = useQuery({
+  const { data: signals = [], isLoading: signalsLoading, isError: signalsError } = useQuery({
     queryKey: ['tracker-signals', id],
     queryFn: () => trackersApi.listSignals(id!),
     enabled: !!id && activeTab === 'signals',
   })
 
-  const { data: auditLog = [], isLoading: auditLoading } = useQuery({
+  const { data: auditLog = [], isLoading: auditLoading, isError: auditError } = useQuery({
     queryKey: ['tracker-audit', id],
     queryFn: () => trackersApi.listAuditLog(id!),
     enabled: !!id && activeTab === 'audit',
   })
 
-  const { data: reports = [], isLoading: reportsLoading } = useQuery({
+  const { data: reports = [], isLoading: reportsLoading, isError: reportsError } = useQuery({
     queryKey: ['tracker-reports', id],
     queryFn: () => trackersApi.listReports(id!),
     enabled: !!id && activeTab === 'reports',
@@ -149,6 +149,7 @@ export default function TrackerDetail() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tracker-reports', id] })
     },
+    onError: () => { /* handled by mutation.isError in UI */ },
   })
 
   const confirmMutation = useMutation({
@@ -209,6 +210,7 @@ export default function TrackerDetail() {
       setNoteBody('')
       qc.invalidateQueries({ queryKey: ['tracker-notes', id] })
     },
+    onError: () => { /* handled by mutation.isError in UI */ },
   })
 
   const updateStatusMutation = useMutation({
@@ -218,6 +220,7 @@ export default function TrackerDetail() {
       qc.invalidateQueries({ queryKey: ['tracker', id] })
       qc.invalidateQueries({ queryKey: ['trackers'] })
     },
+    onError: () => { setStatusChanging(false) },
   })
 
   if (isLoading) {
@@ -403,7 +406,9 @@ export default function TrackerDetail() {
         {/* Content tab */}
         {activeTab === 'content' && (
           <div>
-            {contentLoading ? (
+            {contentError ? (
+              <p className="text-sm text-red-400 py-4">Failed to load content.</p>
+            ) : contentLoading ? (
               <div className="flex justify-center py-10"><Spinner /></div>
             ) : content.length === 0 ? (
               <p className="text-text-muted text-sm">No confirmed content items yet.</p>
@@ -439,7 +444,9 @@ export default function TrackerDetail() {
         {/* Pending Review tab */}
         {activeTab === 'pending' && (
           <div>
-            {pendingLoading ? (
+            {pendingError ? (
+              <p className="text-sm text-red-400 py-4">Failed to load pending items.</p>
+            ) : pendingLoading ? (
               <div className="flex justify-center py-10"><Spinner /></div>
             ) : pending.length === 0 ? (
               <p className="text-text-muted text-sm">No items pending review.</p>
@@ -524,7 +531,9 @@ export default function TrackerDetail() {
               </div>
             </div>
 
-            {notesLoading ? (
+            {notesError ? (
+              <p className="text-sm text-red-400 py-4">Failed to load notes.</p>
+            ) : notesLoading ? (
               <div className="flex justify-center py-6"><Spinner /></div>
             ) : notes.length === 0 ? (
               <p className="text-text-muted text-sm">No notes yet.</p>
@@ -547,7 +556,9 @@ export default function TrackerDetail() {
         {/* Signals tab */}
         {activeTab === 'signals' && (
           <div>
-            {signalsLoading ? (
+            {signalsError ? (
+              <p className="text-sm text-red-400 py-4">Failed to load signals.</p>
+            ) : signalsLoading ? (
               <div className="flex justify-center py-10"><Spinner /></div>
             ) : !signals || (signals as unknown[]).length === 0 ? (
               <p className="text-text-muted text-sm">No signals linked to this tracker.</p>
@@ -608,7 +619,9 @@ export default function TrackerDetail() {
                 {generateReportMutation.isPending ? 'Generating...' : 'Generate Report'}
               </button>
             </div>
-            {reportsLoading ? (
+            {reportsError ? (
+              <p className="text-sm text-red-400 py-4">Failed to load reports.</p>
+            ) : reportsLoading ? (
               <div className="flex justify-center py-10"><Spinner /></div>
             ) : !reports || (reports as unknown[]).length === 0 ? (
               <p className="text-text-muted text-sm">No reports generated for this tracker.</p>
@@ -651,7 +664,9 @@ export default function TrackerDetail() {
         {/* Audit Log tab */}
         {activeTab === 'audit' && (
           <div>
-            {auditLoading ? (
+            {auditError ? (
+              <p className="text-sm text-red-400 py-4">Failed to load audit log.</p>
+            ) : auditLoading ? (
               <div className="flex justify-center py-10"><Spinner /></div>
             ) : auditLog.length === 0 ? (
               <p className="text-text-muted text-sm">No audit log entries.</p>

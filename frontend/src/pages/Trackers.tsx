@@ -45,7 +45,7 @@ export default function Trackers() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [createOpen, setCreateOpen] = useState(false)
 
-  const { data: trackers = [], isLoading } = useQuery({
+  const { data: trackers = [], isLoading, isError } = useQuery({
     queryKey: ['trackers'],
     queryFn: () => trackersApi.list(),
     refetchInterval: 30_000,
@@ -92,7 +92,11 @@ export default function Trackers() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
-        {isLoading ? (
+        {isError ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <p className="text-red-400 text-sm">Failed to load trackers.</p>
+          </div>
+        ) : isLoading ? (
           <div className="flex justify-center py-20">
             <Spinner label="Loading trackers…" />
           </div>

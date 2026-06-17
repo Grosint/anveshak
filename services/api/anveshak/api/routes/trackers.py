@@ -1,17 +1,23 @@
 """Tracker endpoints — persistent analyst-owned case files."""
 from __future__ import annotations
 
+import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Literal, Optional
 
 import asyncpg
 import structlog
+from arq import create_pool as arq_create_pool
+from arq.connections import RedisSettings
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict
 
 from ..auth.rbac import require_role, get_user_org
+from ..db import reports as reports_db
 from ..db import trackers as trackers_db
 from ..db import audit as audit_db
 from ..db.pool import get_db
+from ..settings import settings
 
 router = APIRouter(prefix="/api/v1/trackers", tags=["trackers"])
 log = structlog.get_logger(__name__)
@@ -218,11 +224,21 @@ async def update_tracker(
     tracker = await trackers_db.get_tracker(db, tracker_id)
     if not tracker:
         raise HTTPException(status_code=404, detail="Tracker not found")
-    from datetime import datetime, UTC
     now = datetime.now(UTC)
     title = req.title or tracker["title"]
     ext_ref = req.external_case_ref if req.external_case_ref is not None else tracker.get("external_case_ref")
     await db.execute(trackers_db.SQL_UPDATE_TRACKER_DETAILS, title, ext_ref, now, tracker_id)
+    changes: dict = {}
+    if req.title is not None:
+        changes["title"] = req.title
+    if req.external_case_ref is not None:
+        changes["external_case_ref"] = req.external_case_ref
+    await audit_db.log_action(
+        db, user["sub"], "tracker.updated", "tracker", tracker_id,
+        changes,
+        request.client.host if request.client else "",
+    )
+    await trackers_db._log_audit(db, tracker_id, "updated", user["sub"], changes)
     return {"status": "ok"}
 
 
@@ -391,14 +407,8 @@ async def generate_tracker_report(
     if not tracker:
         raise HTTPException(status_code=404, detail="Tracker not found")
 
-    import uuid
-    from datetime import datetime, UTC
-    from ..db import reports as reports_db
-    from ..settings import settings
-
     report_id = str(uuid.uuid4())
     now = datetime.now(UTC)
-    from datetime import timedelta
     time_start = now - timedelta(hours=req.time_window_hours)
     labels_json = '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'
 
@@ -410,8 +420,6 @@ async def generate_tracker_report(
 
     # Enqueue ARQ job
     try:
-        from arq import create_pool as arq_create_pool
-        from arq.connections import RedisSettings
         redis = await arq_create_pool(RedisSettings.from_dsn(settings.redis_url))
         arq_job = await redis.enqueue_job("generate_report", report_id, _queue_name="arq:reporter")
         arq_job_id = arq_job.job_id if arq_job else None

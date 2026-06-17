@@ -297,6 +297,7 @@ export default function OverviewTab({ topicId, onSelectSignal, onNavigateTab, on
 function ClusterTrackerButtons({ clusterId }: { clusterId: string }) {
   const navigate = useNavigate()
   const [creating, setCreating] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   // Check if a tracker already exists for this cluster
   const { data: trackers = [] } = useQuery({
@@ -308,6 +309,7 @@ function ClusterTrackerButtons({ clusterId }: { clusterId: string }) {
 
   const handleCreate = async (status: 'watching' | 'active') => {
     setCreating(status)
+    setError(null)
     try {
       const tracker = await trackersApi.createFromCluster(clusterId, { status })
       if (status === 'active') {
@@ -316,7 +318,8 @@ function ClusterTrackerButtons({ clusterId }: { clusterId: string }) {
         navigate('/trackers')
       }
     } catch {
-      // silently fail — cluster may not exist
+      setError('Failed to create tracker')
+      setTimeout(() => setError(null), 3000)
     } finally {
       setCreating(null)
     }
@@ -340,21 +343,24 @@ function ClusterTrackerButtons({ clusterId }: { clusterId: string }) {
   }
 
   return (
-    <div className="flex gap-2 mt-2 pt-2 border-t border-anveshak-border">
-      <button
-        onClick={() => handleCreate('watching')}
-        disabled={creating !== null}
-        className="text-[10px] px-2 py-0.5 rounded text-text-muted hover:text-anveshak-accent hover:bg-anveshak-accent/10 transition-colors"
-      >
-        {creating === 'watching' ? 'Creating...' : 'Watch'}
-      </button>
-      <button
-        onClick={() => handleCreate('active')}
-        disabled={creating !== null}
-        className="text-[10px] px-2 py-0.5 rounded bg-anveshak-accent/10 text-anveshak-accent hover:bg-anveshak-accent/20 transition-colors"
-      >
-        {creating === 'active' ? 'Creating...' : 'Open Tracker'}
-      </button>
+    <div className="mt-2 pt-2 border-t border-anveshak-border">
+      {error && <p className="text-[10px] text-red-400 mb-1">{error}</p>}
+      <div className="flex gap-2">
+        <button
+          onClick={() => handleCreate('watching')}
+          disabled={creating !== null}
+          className="text-[10px] px-2 py-0.5 rounded text-text-muted hover:text-anveshak-accent hover:bg-anveshak-accent/10 transition-colors"
+        >
+          {creating === 'watching' ? 'Creating...' : 'Watch'}
+        </button>
+        <button
+          onClick={() => handleCreate('active')}
+          disabled={creating !== null}
+          className="text-[10px] px-2 py-0.5 rounded bg-anveshak-accent/10 text-anveshak-accent hover:bg-anveshak-accent/20 transition-colors"
+        >
+          {creating === 'active' ? 'Creating...' : 'Open Tracker'}
+        </button>
+      </div>
     </div>
   )
 }

@@ -92,10 +92,11 @@ export function CreateTrackerModal({ open, onClose, onCreated }: CreateTrackerMo
         )}
 
         <div>
-          <label className="block text-xs font-medium text-text-muted mb-1">
+          <label htmlFor="tracker-title" className="block text-xs font-medium text-text-muted mb-1">
             Title <span className="text-red-400">*</span>
           </label>
           <input
+            id="tracker-title"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -106,10 +107,11 @@ export function CreateTrackerModal({ open, onClose, onCreated }: CreateTrackerMo
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-text-muted mb-1">
+          <label htmlFor="tracker-topic" className="block text-xs font-medium text-text-muted mb-1">
             Topic <span className="text-red-400">*</span>
           </label>
           <select
+            id="tracker-topic"
             value={topicId}
             onChange={(e) => setTopicId(e.target.value)}
             className="w-full bg-anveshak-card border border-anveshak-border rounded px-3 py-2 text-text-primary text-sm focus:outline-none focus:border-anveshak-accent"
@@ -124,10 +126,11 @@ export function CreateTrackerModal({ open, onClose, onCreated }: CreateTrackerMo
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-text-muted mb-1">
+          <label htmlFor="tracker-external-ref" className="block text-xs font-medium text-text-muted mb-1">
             External Case Ref <span className="text-text-muted font-normal">(optional)</span>
           </label>
           <input
+            id="tracker-external-ref"
             type="text"
             value={externalRef}
             onChange={(e) => setExternalRef(e.target.value)}
@@ -137,10 +140,11 @@ export function CreateTrackerModal({ open, onClose, onCreated }: CreateTrackerMo
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-text-muted mb-1">
+          <label htmlFor="tracker-priority" className="block text-xs font-medium text-text-muted mb-1">
             Priority <span className="text-text-muted font-normal">(optional)</span>
           </label>
           <select
+            id="tracker-priority"
             value={priority}
             onChange={(e) => setPriority(e.target.value as typeof priority)}
             className="w-full bg-anveshak-card border border-anveshak-border rounded px-3 py-2 text-text-primary text-sm focus:outline-none focus:border-anveshak-accent"
