@@ -63,6 +63,22 @@ def _rows_to_json(rows: list[dict[str, Any]]) -> str:
 # Routes
 # ---------------------------------------------------------------------------
 
+@router.get("/convergence")
+async def get_identifier_convergence(
+    limit: int = Query(20, ge=1, le=100, description="Max results"),
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("viewer", "analyst", "admin")),
+) -> list[dict[str, Any]]:
+    """Identifiers appearing in 2+ topics — cross-topic convergence detection."""
+    from ..auth.rbac import get_user_org
+    org_id = get_user_org(user)
+    if not org_id:
+        raise HTTPException(status_code=400, detail="Org context required for convergence")
+    return await identifiers_db.get_identifier_convergence(
+        db, org_id=org_id, limit=limit,
+    )
+
+
 @router.get("/search-global")
 async def search_identifiers_global(
     q: str = Query(..., min_length=2, description="Search query (partial match)"),

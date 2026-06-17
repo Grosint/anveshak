@@ -161,6 +161,20 @@ SQL_SEARCH_IDENTIFIERS_GLOBAL_WITH_TYPE = """
     LIMIT $4
 """
 
+SQL_IDENTIFIER_CONVERGENCE = """
+    SELECT ic.identifier_type, ic.identifier_value,
+           COUNT(DISTINCT ic.topic_id) AS topic_count,
+           SUM(ic.source_count) AS total_source_count,
+           array_agg(DISTINCT t.name ORDER BY t.name) AS topic_names
+    FROM identifier_clusters ic
+    JOIN topics t ON ic.topic_id = t.id
+    WHERE t.org_id = $1
+    GROUP BY ic.identifier_type, ic.identifier_value
+    HAVING COUNT(DISTINCT ic.topic_id) >= 2
+    ORDER BY COUNT(DISTINCT ic.topic_id) DESC, SUM(ic.source_count) DESC
+    LIMIT $2
+"""
+
 SQL_CO_OCCURRENCE = """
     SELECT DISTINCT ci.id AS content_item_id,
            ci.url AS content_url, ci.captured_at,
@@ -317,6 +331,17 @@ async def search_identifiers_global(
             SQL_SEARCH_IDENTIFIERS_GLOBAL,
             org_id, pattern, limit,
         )
+    return [dict(r) for r in rows]
+
+
+async def get_identifier_convergence(
+    conn: asyncpg.Connection,
+    *,
+    org_id: str,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """Identifiers appearing in 2+ topics within the same org — convergence detection."""
+    rows = await conn.fetch(SQL_IDENTIFIER_CONVERGENCE, org_id, limit)
     return [dict(r) for r in rows]
 
 

@@ -1,9 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts'
 import { systemApi } from '../api/system'
 import { sourcesApi } from '../api/sources'
+import { identifiersApi, type ConvergenceResult } from '../api/identifiers'
 import { Spinner } from '../components/ui/Spinner'
+import IdentifierSearch from '../components/search/IdentifierSearch'
 
 function StatCard({ label, value, sub }: { label: string; value: number | string; sub?: string }) {
   return (
@@ -64,6 +66,9 @@ function ChartTooltip({ active, payload, label }: ChartTooltipProps) {
 }
 
 export default function AnalyticsDashboard() {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+
   const { data: health, isLoading: healthLoading } = useQuery({
     queryKey: ['pipeline-health'],
     queryFn: systemApi.pipelineHealth,
@@ -76,7 +81,18 @@ export default function AnalyticsDashboard() {
     staleTime: 30_000,
   })
 
+  const { data: convergence = [] } = useQuery({
+    queryKey: ['identifier-convergence'],
+    queryFn: () => identifiersApi.convergence(),
+    staleTime: 60_000,
+  })
+
   const isLoading = healthLoading || sourcesLoading
+
+  function handleConvergenceClick(item: ConvergenceResult) {
+    setSearchQuery(item.identifier_value)
+    setSearchOpen(true)
+  }
 
   // Derive chart data from sources
   const healthDistribution = useMemo(() => {
@@ -257,9 +273,60 @@ export default function AnalyticsDashboard() {
                 </table>
               </div>
             )}
+
+            {/* Cross-topic convergence */}
+            {convergence.length > 0 && (
+              <div className="bg-anveshak-card border border-anveshak-border rounded-lg overflow-hidden">
+                <div className="px-4 py-3 border-b border-anveshak-border">
+                  <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">
+                    Cross-Topic Convergence
+                  </h2>
+                  <p className="text-xs text-text-muted mt-0.5">Identifiers appearing in 2+ topics</p>
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-anveshak-border text-left text-xs text-text-muted uppercase tracking-wide">
+                      <th className="px-4 py-2.5">Type</th>
+                      <th className="px-4 py-2.5">Value</th>
+                      <th className="px-4 py-2.5">Topics</th>
+                      <th className="px-4 py-2.5">Appears In</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {convergence.map((item, i) => (
+                      <tr
+                        key={`${item.identifier_value}-${i}`}
+                        onClick={() => handleConvergenceClick(item)}
+                        className="border-b border-anveshak-border last:border-0 hover:bg-anveshak-accent/10 cursor-pointer transition-colors"
+                      >
+                        <td className="px-4 py-2.5">
+                          <span className="text-[10px] font-medium bg-gray-500/20 text-gray-400 px-1.5 py-0.5 rounded">
+                            {item.identifier_type.replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 font-mono text-text-primary text-xs">{item.identifier_value}</td>
+                        <td className="px-4 py-2.5">
+                          <span className="text-xs font-bold text-signal-high">{item.topic_count} topics</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-xs text-text-muted truncate max-w-[300px]">
+                          {item.topic_names.join(', ')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {/* Identifier search modal (triggered from convergence card click) */}
+      <IdentifierSearch
+        open={searchOpen}
+        onClose={() => { setSearchOpen(false); setSearchQuery('') }}
+        initialQuery={searchQuery}
+      />
     </div>
   )
 }

@@ -24,22 +24,23 @@ const IDENTIFIER_TYPES: { value: IdentifierType; label: string }[] = [
 interface IdentifierSearchProps {
   open: boolean
   onClose: () => void
+  initialQuery?: string
 }
 
-export default function IdentifierSearch({ open, onClose }: IdentifierSearchProps) {
+export default function IdentifierSearch({ open, onClose, initialQuery = '' }: IdentifierSearchProps) {
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<IdentifierType | ''>('')
   const inputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
 
-  // Focus input when modal opens
+  // Focus input when modal opens; prefill with initialQuery if provided
   useEffect(() => {
     if (open) {
-      setQuery('')
+      setQuery(initialQuery)
       setTypeFilter('')
       setTimeout(() => inputRef.current?.focus(), 50)
     }
-  }, [open])
+  }, [open, initialQuery])
 
   // Escape to close
   useEffect(() => {

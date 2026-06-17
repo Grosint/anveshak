@@ -1,7 +1,8 @@
-"""Unit tests for global identifier search — cross-topic, org-scoped.
+"""Unit tests for global identifier search + convergence — cross-topic, org-scoped.
 
-New endpoint: GET /api/v1/identifiers/search-global
-Searches identifier_clusters across all topics the user's org can access.
+Endpoints:
+  GET /api/v1/identifiers/search-global — cross-topic identifier search
+  GET /api/v1/identifiers/convergence   — identifiers appearing in 2+ topics
 """
 from __future__ import annotations
 
@@ -11,8 +12,10 @@ from unittest.mock import AsyncMock
 import pytest
 
 from anveshak.api.db.identifiers import (
+    SQL_IDENTIFIER_CONVERGENCE,
     SQL_SEARCH_IDENTIFIERS_GLOBAL,
     SQL_SEARCH_IDENTIFIERS_GLOBAL_WITH_TYPE,
+    get_identifier_convergence,
     search_identifiers_global,
 )
 from anveshak.api.routes.identifiers import router
@@ -203,3 +206,133 @@ class TestGlobalSearchRoute:
                 break
         else:
             pytest.fail("search-global route not found")
+
+
+# ===========================================================================
+# 4. Convergence — SQL constants
+# ===========================================================================
+
+def _fake_convergence_result(
+    *,
+    identifier_type: str = "PHONE_IN",
+    identifier_value: str = "9876543210",
+    topic_count: int = 3,
+    total_source_count: int = 8,
+    topic_names: list[str] | None = None,
+) -> dict:
+    return {
+        "identifier_type": identifier_type,
+        "identifier_value": identifier_value,
+        "topic_count": topic_count,
+        "total_source_count": total_source_count,
+        "topic_names": topic_names or ["Case A", "Case B", "Case C"],
+    }
+
+
+class TestConvergenceSQL:
+    """Verify SQL constants for identifier convergence."""
+
+    def test_sql_constant_exists(self):
+        assert SQL_IDENTIFIER_CONVERGENCE is not None
+
+    def test_sql_groups_by_identifier(self):
+        sql = SQL_IDENTIFIER_CONVERGENCE.lower()
+        assert "group by" in sql
+        assert "identifier_value" in sql
+
+    def test_sql_filters_by_org_id(self):
+        """CRITICAL: cross-topic query MUST filter by org_id."""
+        sql = SQL_IDENTIFIER_CONVERGENCE.lower()
+        assert "org_id" in sql
+
+    def test_sql_requires_multiple_topics(self):
+        """HAVING COUNT(DISTINCT topic_id) >= 2."""
+        sql = SQL_IDENTIFIER_CONVERGENCE.lower()
+        assert "having" in sql
+        assert "topic_id" in sql
+
+    def test_sql_orders_by_topic_count(self):
+        sql = SQL_IDENTIFIER_CONVERGENCE.lower()
+        assert "topic_count" in sql or "count" in sql
+        assert "desc" in sql
+
+    def test_sql_includes_topic_names(self):
+        """Should aggregate topic names for display."""
+        sql = SQL_IDENTIFIER_CONVERGENCE.lower()
+        assert "array_agg" in sql or "string_agg" in sql
+
+
+# ===========================================================================
+# 5. Convergence — DB function
+# ===========================================================================
+
+class TestGetIdentifierConvergence:
+    """DB function: identifiers appearing in 2+ topics, org-scoped."""
+
+    @pytest.mark.asyncio
+    async def test_returns_converging_identifiers(self):
+        conn = AsyncMock()
+        conn.fetch.return_value = [_fake_convergence_result()]
+
+        result = await get_identifier_convergence(conn, org_id=ORG_ID)
+        assert len(result) == 1
+        assert result[0]["identifier_value"] == "9876543210"
+        assert result[0]["topic_count"] == 3
+
+    @pytest.mark.asyncio
+    async def test_scopes_to_org(self):
+        """Query MUST pass org_id — cross-org leak prevention."""
+        conn = AsyncMock()
+        conn.fetch.return_value = []
+
+        await get_identifier_convergence(conn, org_id=ORG_ID)
+        args = conn.fetch.call_args[0]
+        assert ORG_ID in args
+
+    @pytest.mark.asyncio
+    async def test_includes_topic_names(self):
+        conn = AsyncMock()
+        conn.fetch.return_value = [
+            _fake_convergence_result(topic_names=["Case A", "Case B"]),
+        ]
+
+        result = await get_identifier_convergence(conn, org_id=ORG_ID)
+        assert "Case A" in result[0]["topic_names"]
+        assert "Case B" in result[0]["topic_names"]
+
+    @pytest.mark.asyncio
+    async def test_respects_limit(self):
+        conn = AsyncMock()
+        conn.fetch.return_value = []
+
+        await get_identifier_convergence(conn, org_id=ORG_ID, limit=5)
+        args = conn.fetch.call_args[0]
+        assert 5 in args
+
+    @pytest.mark.asyncio
+    async def test_empty_when_no_convergence(self):
+        conn = AsyncMock()
+        conn.fetch.return_value = []
+
+        result = await get_identifier_convergence(conn, org_id=ORG_ID)
+        assert result == []
+
+
+# ===========================================================================
+# 6. Convergence — Route registration
+# ===========================================================================
+
+class TestConvergenceRoute:
+    """Verify the convergence route is registered."""
+
+    def test_route_exists(self):
+        paths = [r.path for r in router.routes]
+        assert "/api/v1/identifiers/convergence" in paths
+
+    def test_route_is_get(self):
+        for route in router.routes:
+            if hasattr(route, "path") and route.path == "/api/v1/identifiers/convergence":
+                assert "GET" in route.methods
+                break
+        else:
+            pytest.fail("convergence route not found")

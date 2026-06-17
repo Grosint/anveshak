@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Outlet, NavLink, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useAuth } from '../../contexts/AuthContext'
@@ -30,7 +30,19 @@ export default function Layout() {
   const { user, logout } = useAuth()
   const { status: wsStatus } = useWS()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [searchOpen, setSearchOpen] = useState(false)
+  const [searchInitialQuery, setSearchInitialQuery] = useState('')
+
+  // Open search modal from URL param ?search=...
+  useEffect(() => {
+    const q = searchParams.get('search')
+    if (q) {
+      setSearchInitialQuery(q)
+      setSearchOpen(true)
+      setSearchParams({}, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
 
   // Lightweight poll for down-source count — shown as red badge on Source Health nav item
   const { data: sources } = useQuery({
@@ -186,7 +198,7 @@ export default function Layout() {
       </main>
 
       {/* Global identifier search modal */}
-      <IdentifierSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <IdentifierSearch open={searchOpen} onClose={() => { setSearchOpen(false); setSearchInitialQuery('') }} initialQuery={searchInitialQuery} />
     </div>
   )
 }

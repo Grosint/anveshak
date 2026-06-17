@@ -43,6 +43,28 @@ vi.mock('../../api/sources', () => ({
   },
 }))
 
+vi.mock('../../api/identifiers', () => ({
+  identifiersApi: {
+    convergence: vi.fn().mockResolvedValue([
+      {
+        identifier_type: 'PHONE_IN',
+        identifier_value: '+919876543210',
+        topic_count: 3,
+        total_source_count: 8,
+        topic_names: ['Cyber Fraud Ring X', 'UPI Scam Network', 'Phone Fraud Cases'],
+      },
+      {
+        identifier_type: 'UPI',
+        identifier_value: 'scammer@ybl',
+        topic_count: 2,
+        total_source_count: 5,
+        topic_names: ['Cyber Fraud Ring X', 'UPI Scam Network'],
+      },
+    ]),
+    searchGlobal: vi.fn().mockResolvedValue([]),
+  },
+}))
+
 vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({
     isAuthenticated: true,
@@ -100,5 +122,40 @@ describe('AnalyticsDashboard page', () => {
       expect(screen.getByText('500')).toBeInTheDocument()  // wait for load
     })
     expect(screen.queryByText(/Topics \(/)).not.toBeInTheDocument()
+  })
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Convergence card
+  // ─────────────────────────────────────────────────────────────────────
+
+  it('renders Cross-Topic Convergence section', async () => {
+    renderWithProviders(<AnalyticsDashboard />)
+    await waitFor(() => {
+      expect(screen.getByText(/cross-topic convergence/i)).toBeInTheDocument()
+    })
+  })
+
+  it('shows converging identifier values', async () => {
+    renderWithProviders(<AnalyticsDashboard />)
+    await waitFor(() => {
+      expect(screen.getByText('+919876543210')).toBeInTheDocument()
+      expect(screen.getByText('scammer@ybl')).toBeInTheDocument()
+    })
+  })
+
+  it('shows topic count for converging identifiers', async () => {
+    renderWithProviders(<AnalyticsDashboard />)
+    await waitFor(() => {
+      // "3 topics" for the phone number
+      expect(screen.getByText(/3 topics/i)).toBeInTheDocument()
+    })
+  })
+
+  it('shows topic names for converging identifiers', async () => {
+    renderWithProviders(<AnalyticsDashboard />)
+    await waitFor(() => {
+      // "Cyber Fraud Ring X" appears in both rows' topic_names
+      expect(screen.getAllByText(/Cyber Fraud Ring X/).length).toBeGreaterThanOrEqual(1)
+    })
   })
 })

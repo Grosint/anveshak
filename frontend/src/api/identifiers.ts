@@ -68,6 +68,14 @@ export interface ClusterDetail {
   }[]
 }
 
+export interface ConvergenceResult {
+  identifier_type: IdentifierType
+  identifier_value: string
+  topic_count: number
+  total_source_count: number
+  topic_names: string[]
+}
+
 export interface GlobalSearchResult {
   identifier_type: IdentifierType
   identifier_value: string
@@ -99,6 +107,13 @@ export interface ScamTemplate {
 }
 
 export const identifiersApi = {
+  convergence: (limit = 20) =>
+    api
+      .get<ConvergenceResult[]>('/api/v1/identifiers/convergence', {
+        params: { limit },
+      })
+      .then((r) => r.data),
+
   searchGlobal: (q: string, type?: IdentifierType, limit = 50) =>
     api
       .get<GlobalSearchResult[]>('/api/v1/identifiers/search-global', {
