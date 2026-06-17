@@ -705,6 +705,20 @@ async def _run_tracker_matching_cycle(pool: asyncpg.Pool) -> int:
     return total
 
 
+async def tracker_matching_loop(pool: asyncpg.Pool) -> None:
+    """Periodic loop: match new content to active tracker centroids."""
+    interval = settings.identifier_cluster_interval_s
+    log.info("scheduler.tracker_matching_loop.started", interval_s=interval)
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            total = await _run_tracker_matching_cycle(pool)
+            if total:
+                log.info("scheduler.tracker_matching_loop.cycle_done", pending_items=total)
+        except Exception as exc:
+            log.error("scheduler.tracker_matching_loop.error", error=str(exc))
+
+
 # ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
@@ -777,6 +791,7 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(discovery_loop(pool, redis)),
         asyncio.create_task(effectiveness_loop(pool)),
         asyncio.create_task(identifier_cluster_loop(pool)),
+        asyncio.create_task(tracker_matching_loop(pool)),
     ]
 
     yield

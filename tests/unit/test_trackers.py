@@ -355,6 +355,18 @@ class TestTrackerMatching:
         from anveshak.analyst.scheduler import _run_tracker_matching_cycle
         assert callable(_run_tracker_matching_cycle)
 
+    def test_tracker_matching_loop_exists(self):
+        from anveshak.analyst.scheduler import tracker_matching_loop
+        assert callable(tracker_matching_loop)
+
+    def test_tracker_matching_registered_in_lifespan(self):
+        """tracker_matching_loop must be registered in the scheduler lifespan."""
+        import inspect
+        from anveshak.analyst import scheduler
+        source = inspect.getsource(scheduler.lifespan)
+        assert "tracker_matching_loop" in source, \
+            "tracker_matching_loop must be registered in lifespan task list"
+
     @pytest.mark.asyncio
     async def test_tracker_matching_skips_when_no_trackers(self):
         """When no active trackers exist, matching should complete without error."""
