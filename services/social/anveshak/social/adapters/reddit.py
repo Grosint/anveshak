@@ -152,6 +152,18 @@ class RedditAdapter(SourceAdapterBase):
                 text = self._post_to_text(post)
                 if not text:
                     continue
+
+                # Capture engagement metrics from PRAW Submission
+                engagement: dict[str, int | float] = {}
+                if hasattr(post, "score") and post.score is not None:
+                    engagement["score"] = post.score
+                if hasattr(post, "upvote_ratio") and post.upvote_ratio is not None:
+                    engagement["upvote_ratio"] = post.upvote_ratio
+                if hasattr(post, "num_comments") and post.num_comments is not None:
+                    engagement["comments"] = post.num_comments
+
+                author_name = str(post.author) if getattr(post, "author", None) else None
+
                 yield RawItem(
                     raw_text=text,
                     url=f"https://www.reddit.com{post.permalink}",   # criteria 3.15
@@ -159,6 +171,9 @@ class RedditAdapter(SourceAdapterBase):
                     captured_at=datetime.fromtimestamp(post.created_utc, tz=UTC),
                     source_handle=handle,
                     media_urls=self._extract_media_urls(post),
+                    engagement=engagement or None,
+                    author_id=author_name,
+                    author_handle=author_name,
                 )
 
     def _fetch_feed(self, subreddit_name: str, feed_type: str) -> list:

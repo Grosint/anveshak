@@ -44,6 +44,12 @@ class RawItem:
     language: str | None = None                # ISO 639-1; None = detect in analyst pipeline
     forwarded_from_channel_id: str | None = None    # Telegram: origin channel ID for forwarded messages
     forwarded_from_channel_name: str | None = None  # Telegram: origin channel name
+    # Engagement metrics — keys vary per platform (likes, views, score, etc.)
+    engagement: dict[str, int | float] | None = None
+    # Network/threading — for reply graph and influence analysis
+    reply_to_id: str | None = None             # platform-specific parent post/message ID
+    author_id: str | None = None               # platform-specific author identifier
+    author_handle: str | None = None           # display handle of post author
 
     def content_hash(self) -> str:
         """SHA-256 of normalised text — dedup key, same as scraper convention."""

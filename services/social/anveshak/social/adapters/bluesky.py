@@ -201,6 +201,19 @@ class BlueskyAdapter(SourceAdapterBase):
                     continue
 
                 url = self._uri_to_url(uri, post.author.handle)
+
+                # Capture engagement metrics from Bluesky post
+                engagement: dict[str, int | float] = {}
+                for attr, key in (
+                    ("like_count", "likes"),
+                    ("reply_count", "replies"),
+                    ("repost_count", "reposts"),
+                    ("quote_count", "quotes"),
+                ):
+                    val = getattr(post, attr, None)
+                    if val is not None:
+                        engagement[key] = val
+
                 yield RawItem(
                     raw_text=text,
                     url=url,    # criteria 3.19
@@ -208,6 +221,9 @@ class BlueskyAdapter(SourceAdapterBase):
                     captured_at=self._parse_indexed_at(post.indexed_at),
                     source_handle=settings.bluesky_handle,  # registered source handle
                     media_urls=self._extract_media_urls(post),
+                    engagement=engagement or None,
+                    author_id=getattr(post.author, "did", None),
+                    author_handle=getattr(post.author, "handle", None),
                 )
 
     async def refresh_credentials(self) -> bool:

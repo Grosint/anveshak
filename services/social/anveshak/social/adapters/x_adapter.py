@@ -193,7 +193,7 @@ class XPollingAdapter(SourceAdapterBase):
             response = await self._client.search_recent_tweets(
                 query=f"{query} -is:retweet lang:en",
                 max_results=10,
-                tweet_fields=["created_at", "lang", "author_id"],
+                tweet_fields=["created_at", "lang", "author_id", "public_metrics"],
             )
         except tweepy.TooManyRequests as exc:
             raise AdapterRateLimitError("X API rate limit hit") from exc
@@ -207,6 +207,20 @@ class XPollingAdapter(SourceAdapterBase):
             return
 
         for tweet in response.data:
+            # Capture engagement metrics from public_metrics
+            engagement: dict[str, int | float] = {}
+            metrics = getattr(tweet, "public_metrics", None) or {}
+            for api_key, eng_key in (
+                ("like_count", "likes"),
+                ("retweet_count", "retweets"),
+                ("reply_count", "replies"),
+                ("quote_count", "quotes"),
+                ("impression_count", "impressions"),
+            ):
+                val = metrics.get(api_key)
+                if val is not None:
+                    engagement[eng_key] = val
+
             yield RawItem(
                 raw_text=tweet.text,
                 url=f"https://x.com/i/web/status/{tweet.id}",
@@ -214,6 +228,8 @@ class XPollingAdapter(SourceAdapterBase):
                 captured_at=tweet.created_at or datetime.now(UTC),
                 source_handle=settings.x_bearer_token[:8] + "...",  # anonymised
                 language=tweet.lang if hasattr(tweet, "lang") else None,
+                engagement=engagement or None,
+                author_id=str(tweet.author_id) if getattr(tweet, "author_id", None) else None,
             )
 
     async def health(self) -> dict:

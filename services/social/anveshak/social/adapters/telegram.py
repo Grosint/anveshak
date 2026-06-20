@@ -167,6 +167,25 @@ class TelegramAdapter(SourceAdapterBase):
                     from telethon import utils as tl_utils
                     fwd_channel_id = str(tl_utils.get_peer_id(message.forward.from_id))
 
+                # Capture engagement metrics (views/forwards) and reply threading
+                engagement: dict[str, int | float] = {}
+                if getattr(message, "views", None) is not None:
+                    engagement["views"] = message.views
+                if getattr(message, "forwards", None) is not None:
+                    engagement["forwards"] = message.forwards
+
+                reply_to_id = None
+                if message.reply_to and getattr(message.reply_to, "reply_to_msg_id", None):
+                    reply_to_id = str(message.reply_to.reply_to_msg_id)
+
+                author_id = None
+                if getattr(message, "from_id", None):
+                    from telethon import utils as _tl_utils
+                    try:
+                        author_id = str(_tl_utils.get_peer_id(message.from_id))
+                    except Exception:
+                        pass
+
                 yield RawItem(
                     raw_text=text or f"[media] {msg_url}",
                     url=msg_url,
@@ -176,6 +195,9 @@ class TelegramAdapter(SourceAdapterBase):
                     media_urls=media_urls,
                     forwarded_from_channel_id=fwd_channel_id,
                     forwarded_from_channel_name=fwd_channel_name,
+                    engagement=engagement or None,
+                    reply_to_id=reply_to_id,
+                    author_id=author_id,
                 )
 
         except ChannelPrivateError:

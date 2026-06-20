@@ -131,7 +131,23 @@ async def ingest_raw_item(
 
         now = datetime.now(UTC)
         content_item_id = str(uuid.uuid4())
-        labels = _LABELS_TEMPLATE.format(adapter_id=adapter_id)
+
+        # Build labels dict — engagement, author, reply metadata stored in JSONB
+        labels_dict: dict[str, Any] = {
+            "classification": "OPEN",
+            "domain": "social",
+            "owner_org": "anveshak",
+            "source_id": adapter_id,
+        }
+        if raw.engagement:
+            labels_dict["engagement"] = raw.engagement
+        if raw.author_id:
+            labels_dict["author_id"] = raw.author_id
+        if raw.author_handle:
+            labels_dict["author_handle"] = raw.author_handle
+        if raw.reply_to_id:
+            labels_dict["reply_to_id"] = raw.reply_to_id
+        labels = json.dumps(labels_dict)
 
         result = await conn.fetchrow(
             SQL_INSERT_CONTENT,

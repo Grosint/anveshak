@@ -321,6 +321,18 @@ class InstagramAdapter(SourceAdapterBase):
         else:
             captured_at = datetime.now(UTC)
 
+        # Capture engagement metrics available from Instagrapi Media object
+        engagement: dict[str, int | float] = {}
+        for attr, key in (
+            ("like_count", "likes"),
+            ("comment_count", "comments"),
+            ("view_count", "views"),
+            ("play_count", "plays"),
+        ):
+            val = getattr(media, attr, None)
+            if val is not None:
+                engagement[key] = val
+
         return RawItem(
             raw_text=caption,
             url=f"https://www.instagram.com/p/{shortcode}/",
@@ -328,6 +340,8 @@ class InstagramAdapter(SourceAdapterBase):
             captured_at=captured_at,
             source_handle=source_handle,
             media_urls=InstagramAdapter._extract_media_urls(media),
+            engagement=engagement or None,
+            author_handle=source_handle,
         )
 
     @staticmethod
@@ -336,6 +350,17 @@ class InstagramAdapter(SourceAdapterBase):
         username = user_info.username if hasattr(user_info, "username") else "unknown"
         biography = user_info.biography if hasattr(user_info, "biography") else ""
 
+        # Capture follower/following counts from profile if available
+        engagement: dict[str, int | float] = {}
+        for attr, key in (
+            ("follower_count", "followers"),
+            ("following_count", "following"),
+            ("media_count", "posts"),
+        ):
+            val = getattr(user_info, attr, None)
+            if val is not None:
+                engagement[key] = val
+
         return RawItem(
             raw_text=biography,
             url=f"https://www.instagram.com/{username}/",
@@ -343,6 +368,8 @@ class InstagramAdapter(SourceAdapterBase):
             captured_at=datetime.now(UTC),
             source_handle=username,
             media_urls=[],
+            engagement=engagement or None,
+            author_handle=username,
         )
 
     @staticmethod

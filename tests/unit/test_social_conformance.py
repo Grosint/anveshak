@@ -70,6 +70,17 @@ class SourceAdapterConformanceSuite:
             f"RawItem.platform={raw.platform!r} must equal adapter.platform={adapter.platform!r}"
         )
 
+    # 6 — engagement is dict with numeric values or None
+    def assert_engagement_is_dict_or_none(self, raw: RawItem) -> None:
+        if raw.engagement is None:
+            return
+        assert isinstance(raw.engagement, dict), "engagement must be dict or None"
+        for key, val in raw.engagement.items():
+            assert isinstance(key, str), f"engagement key must be str, got {type(key)}"
+            assert isinstance(val, (int, float)), (
+                f"engagement[{key!r}] must be int|float, got {type(val)}"
+            )
+
 
 # ---------------------------------------------------------------------------
 # Fixtures — minimal RawItems per platform
