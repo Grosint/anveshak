@@ -171,6 +171,110 @@ SQL_CLUSTER_DUPLICATES = """
 
 
 # ---------------------------------------------------------------------------
+# Social Media Analytics — Topic Stats, Top Authors, Network Graph
+# ---------------------------------------------------------------------------
+
+SQL_TOPIC_PLATFORM_STATS = """
+    SELECT s.platform,
+           COUNT(*) AS post_count,
+           COUNT(DISTINCT ci.source_id) AS source_count,
+           MAX(ci.captured_at) AS latest_post
+    FROM content_items ci
+    JOIN sources s ON ci.source_id = s.id
+    WHERE ci.topic_id = $1
+      AND ci.captured_at >= NOW() - make_interval(days => $2)
+    GROUP BY s.platform
+    ORDER BY post_count DESC
+"""
+
+SQL_TOPIC_VOLUME_TIMELINE = """
+    SELECT DATE(captured_at) AS date,
+           COUNT(*) AS count
+    FROM content_items
+    WHERE topic_id = $1
+      AND captured_at >= NOW() - make_interval(days => $2)
+    GROUP BY DATE(captured_at)
+    ORDER BY date ASC
+"""
+
+SQL_TOPIC_ENGAGEMENT_SUMMARY = """
+    SELECT
+        SUM(COALESCE((labels->'engagement'->>'likes')::int, 0)) AS total_likes,
+        SUM(COALESCE((labels->'engagement'->>'comments')::int, 0)) AS total_comments,
+        SUM(COALESCE((labels->'engagement'->>'shares')::int, 0)
+          + COALESCE((labels->'engagement'->>'retweets')::int, 0)
+          + COALESCE((labels->'engagement'->>'reposts')::int, 0)
+          + COALESCE((labels->'engagement'->>'forwards')::int, 0)) AS total_shares,
+        SUM(COALESCE((labels->'engagement'->>'views')::int, 0)) AS total_views,
+        COUNT(*) FILTER (WHERE labels->'engagement' IS NOT NULL) AS posts_with_engagement
+    FROM content_items
+    WHERE topic_id = $1
+      AND captured_at >= NOW() - make_interval(days => $2)
+"""
+
+SQL_TOP_AUTHORS = """
+    SELECT
+        ci.labels->>'author_handle' AS author_handle,
+        ci.labels->>'author_id' AS author_id,
+        s.platform,
+        COUNT(*) AS post_count,
+        SUM(COALESCE((ci.labels->'engagement'->>'likes')::int, 0)) AS total_likes,
+        SUM(COALESCE((ci.labels->'engagement'->>'views')::int, 0)) AS total_views,
+        SUM(COALESCE((ci.labels->'engagement'->>'shares')::int, 0)
+          + COALESCE((ci.labels->'engagement'->>'retweets')::int, 0)
+          + COALESCE((ci.labels->'engagement'->>'reposts')::int, 0)
+          + COALESCE((ci.labels->'engagement'->>'forwards')::int, 0)) AS total_shares,
+        AVG(COALESCE((ci.labels->'sentiment'->>'compound')::float, 0)) AS avg_sentiment
+    FROM content_items ci
+    JOIN sources s ON ci.source_id = s.id
+    WHERE ci.topic_id = $1
+      AND ci.captured_at >= NOW() - make_interval(days => $2)
+      AND ci.labels->>'author_handle' IS NOT NULL
+    GROUP BY ci.labels->>'author_handle', ci.labels->>'author_id', s.platform
+    ORDER BY
+        SUM(COALESCE((ci.labels->'engagement'->>'likes')::int, 0))
+        + SUM(COALESCE((ci.labels->'engagement'->>'views')::int, 0))
+        + SUM(COALESCE((ci.labels->'engagement'->>'shares')::int, 0)
+            + COALESCE((ci.labels->'engagement'->>'retweets')::int, 0)
+            + COALESCE((ci.labels->'engagement'->>'reposts')::int, 0)
+            + COALESCE((ci.labels->'engagement'->>'forwards')::int, 0)) * 5
+        DESC
+    LIMIT $3
+"""
+
+SQL_FORWARD_NETWORK = """
+    SELECT
+        labels->>'author_handle' AS source_author,
+        forwarded_from_channel_name AS target_author,
+        'forward' AS edge_type,
+        COUNT(*) AS weight
+    FROM content_items
+    WHERE topic_id = $1
+      AND forwarded_from_channel_name IS NOT NULL
+      AND labels->>'author_handle' IS NOT NULL
+    GROUP BY source_author, target_author
+    HAVING COUNT(*) >= $2
+    ORDER BY weight DESC
+    LIMIT $3
+"""
+
+SQL_AUTHOR_POST_COUNTS = """
+    SELECT
+        ci.labels->>'author_handle' AS author_handle,
+        s.platform,
+        COUNT(*) AS post_count
+    FROM content_items ci
+    JOIN sources s ON ci.source_id = s.id
+    WHERE ci.topic_id = $1
+      AND ci.captured_at >= NOW() - INTERVAL '30 days'
+      AND labels->>'author_handle' IS NOT NULL
+    GROUP BY labels->>'author_handle', s.platform
+    ORDER BY post_count DESC
+    LIMIT $2
+"""
+
+
+# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
@@ -412,4 +516,120 @@ async def merge_clusters(
         "kept_cluster_id": keep_id,
         "removed_cluster_id": remove_id,
         "topic_id": keep["topic_id"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Social Media Analytics Routes
+# ---------------------------------------------------------------------------
+
+@router.get("/topics/{topic_id}/stats")
+async def get_topic_stats(
+    topic_id: str,
+    days: int = Query(30, ge=1, le=365, description="Lookback window in days"),
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("viewer", "analyst", "admin")),
+) -> dict[str, Any]:
+    """Topic analytics — platform breakdown, volume timeline, engagement summary."""
+    await topics_db.verify_topic_access(db, topic_id, user)
+
+    platform_rows = await db.fetch(SQL_TOPIC_PLATFORM_STATS, topic_id, days)
+    volume_rows = await db.fetch(SQL_TOPIC_VOLUME_TIMELINE, topic_id, days)
+    eng_row = await db.fetchrow(SQL_TOPIC_ENGAGEMENT_SUMMARY, topic_id, days)
+
+    return {
+        "topic_id": topic_id,
+        "days": days,
+        "platforms": [
+            {
+                "platform": r["platform"],
+                "post_count": r["post_count"],
+                "source_count": r["source_count"],
+                "latest_post": r["latest_post"].isoformat() if r["latest_post"] else None,
+            }
+            for r in platform_rows
+        ],
+        "volume_timeline": [
+            {"date": str(r["date"]), "count": r["count"]}
+            for r in volume_rows
+        ],
+        "engagement": {
+            "total_likes": eng_row["total_likes"] or 0,
+            "total_comments": eng_row["total_comments"] or 0,
+            "total_shares": eng_row["total_shares"] or 0,
+            "total_views": eng_row["total_views"] or 0,
+            "posts_with_engagement": eng_row["posts_with_engagement"] or 0,
+        } if eng_row else {"total_likes": 0, "total_comments": 0, "total_shares": 0, "total_views": 0, "posts_with_engagement": 0},
+    }
+
+
+@router.get("/topics/{topic_id}/top-authors")
+async def get_top_authors(
+    topic_id: str,
+    days: int = Query(30, ge=1, le=365),
+    limit: int = Query(20, ge=1, le=100),
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("viewer", "analyst", "admin")),
+) -> list[dict[str, Any]]:
+    """Top content authors ranked by engagement impact."""
+    await topics_db.verify_topic_access(db, topic_id, user)
+    rows = await db.fetch(SQL_TOP_AUTHORS, topic_id, days, limit)
+    return [
+        {
+            "author_handle": r["author_handle"],
+            "author_id": r["author_id"],
+            "platform": r["platform"],
+            "post_count": r["post_count"],
+            "total_likes": r["total_likes"] or 0,
+            "total_views": r["total_views"] or 0,
+            "total_shares": r["total_shares"] or 0,
+            "avg_sentiment": round(float(r["avg_sentiment"] or 0), 3),
+        }
+        for r in rows
+    ]
+
+
+@router.get("/topics/{topic_id}/network-graph")
+async def get_network_graph(
+    topic_id: str,
+    min_weight: int = Query(1, ge=1, description="Minimum edge weight"),
+    limit: int = Query(200, ge=1, le=500, description="Max edges"),
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+) -> dict[str, Any]:
+    """Social network graph — forwarding chains between authors/channels."""
+    await topics_db.verify_topic_access(db, topic_id, user)
+
+    fwd_rows = await db.fetch(SQL_FORWARD_NETWORK, topic_id, min_weight, limit)
+    author_rows = await db.fetch(SQL_AUTHOR_POST_COUNTS, topic_id, 100)
+
+    nodes: dict[str, dict[str, Any]] = {}
+    for r in author_rows:
+        nodes[r["author_handle"]] = {
+            "id": r["author_handle"],
+            "platform": r["platform"],
+            "post_count": r["post_count"],
+        }
+
+    edges = []
+    for r in fwd_rows:
+        src = r["source_author"]
+        tgt = r["target_author"]
+        if src not in nodes:
+            nodes[src] = {"id": src, "platform": "unknown", "post_count": 0}
+        if tgt not in nodes:
+            nodes[tgt] = {"id": tgt, "platform": "unknown", "post_count": 0}
+        edges.append({
+            "source": src,
+            "target": tgt,
+            "edge_type": r["edge_type"],
+            "weight": r["weight"],
+        })
+
+    return {
+        "topic_id": topic_id,
+        "nodes": list(nodes.values()),
+        "edges": edges,
+        "node_count": len(nodes),
+        "edge_count": len(edges),
     }
