@@ -292,13 +292,21 @@ def extract_identifiers(text: str, platform: str = "") -> list[IdentifierMatch]:
             _add("TELEGRAM_HANDLE", f"@{raw_handle}", norm, confidence)
 
     # --- URL_DOMAIN ---
+    _TELEGRAM_NOISE_PATHS = {"s", "share", "joinchat", "addstickers"}
     for m in _RE_URL.finditer(text):
         raw = m.group(1)
         # Strip trailing punctuation that may have been captured
         raw = raw.rstrip(".,;:!?)")
         domain = _normalize_domain(raw)
-        if domain and "." in domain:
-            _add("URL_DOMAIN", raw, domain, 0.9)
+        if not domain or "." not in domain:
+            continue
+        # Telegram URLs → extract as TELEGRAM_HANDLE, not URL_DOMAIN
+        if domain == "t.me":
+            path = urlparse(raw).path.strip("/").split("/")[0]
+            if path and path.lower() not in _TELEGRAM_NOISE_PATHS:
+                _add("TELEGRAM_HANDLE", raw, path.lower(), 0.9)
+            continue
+        _add("URL_DOMAIN", raw, domain, 0.9)
 
     # --- GSTIN ---
     # Collect GSTIN normalized values to exclude PAN-like substrings later

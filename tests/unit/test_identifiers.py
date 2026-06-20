@@ -538,6 +538,33 @@ class TestURLDomain:
         assert urls[0].raw_value.startswith("https://")
         assert urls[0].normalized_value == "fraud.com"
 
+    def test_telegram_url_extracts_handle_not_domain(self):
+        """https://t.me/username should extract as TELEGRAM_HANDLE, NOT URL_DOMAIN."""
+        text = "Join https://t.me/defencenews for updates"
+        results = extract_identifiers(text)
+        assert "t.me" not in _values(results, "URL_DOMAIN"), \
+            "t.me must NOT appear as URL_DOMAIN"
+        assert "defencenews" in _values(results, "TELEGRAM_HANDLE"), \
+            "Telegram URL path must be extracted as TELEGRAM_HANDLE"
+
+    def test_normal_url_still_extracts_domain(self):
+        """Non-Telegram URLs must still extract as URL_DOMAIN."""
+        text = "Visit https://ndtv.com/article/123"
+        results = extract_identifiers(text)
+        assert "ndtv.com" in _values(results, "URL_DOMAIN")
+
+    def test_telegram_joinchat_url_skipped(self):
+        """https://t.me/joinchat/abc is not a handle — skip it."""
+        text = "Join https://t.me/joinchat/abc123"
+        results = extract_identifiers(text)
+        assert "joinchat" not in _values(results, "TELEGRAM_HANDLE")
+
+    def test_telegram_share_url_skipped(self):
+        """https://t.me/share/url is not a handle — skip it."""
+        text = "Share via https://t.me/share/url?text=hello"
+        results = extract_identifiers(text)
+        assert "share" not in _values(results, "TELEGRAM_HANDLE")
+
 
 # ===========================================================================
 # GSTIN — Indian GST Identification Number

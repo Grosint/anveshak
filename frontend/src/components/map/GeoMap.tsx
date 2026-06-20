@@ -10,9 +10,11 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 
 interface GeoMapProps {
   geojson: GeoJSON.FeatureCollection
+  /** When set, circle radius scales by this numeric feature property. */
+  sizeProperty?: string
 }
 
-export default function GeoMap({ geojson }: GeoMapProps) {
+export default function GeoMap({ geojson, sizeProperty }: GeoMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
 
@@ -54,7 +56,9 @@ export default function GeoMap({ geojson }: GeoMapProps) {
         type: 'circle',
         source: 'locations',
         paint: {
-          'circle-radius': 8,
+          'circle-radius': sizeProperty
+            ? ['interpolate', ['linear'], ['get', sizeProperty], 1, 6, 5, 10, 20, 18, 50, 24]
+            : 8,
           'circle-color': '#3b82f6',
           'circle-opacity': 0.85,
           'circle-stroke-color': '#ffffff',
@@ -67,11 +71,13 @@ export default function GeoMap({ geojson }: GeoMapProps) {
         const feature = e.features?.[0]
         if (!feature || feature.geometry.type !== 'Point') return
         const coords = feature.geometry.coordinates.slice() as [number, number]
-        const name   = (feature.properties as Record<string, unknown>)?.name ?? 'Unknown location'
+        const props = feature.properties as Record<string, unknown>
+        const name = props?.name ?? 'Unknown location'
+        const count = sizeProperty && props?.[sizeProperty] ? ` <span style="color:#64748b">(${props[sizeProperty]} mentions)</span>` : ''
 
         new maplibregl.Popup({ closeButton: true, closeOnClick: true })
           .setLngLat(coords)
-          .setHTML(`<strong style="color:#0f172a">${name}</strong>`)
+          .setHTML(`<strong style="color:#0f172a">${name}</strong>${count}`)
           .addTo(map!)
       })
 
@@ -97,7 +103,7 @@ export default function GeoMap({ geojson }: GeoMapProps) {
     } else {
       map.once('load', addLayer)
     }
-  }, [geojson])
+  }, [geojson, sizeProperty])
 
   return (
     <div

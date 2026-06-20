@@ -24,6 +24,7 @@ dependencies = [
     "alembic>=1.13",
     "psycopg2-binary>=2.9",
     "httpx>=0.27",
+    "geonamescache>=2.0",
 ]
 
 [tool.hatch.build.targets.wheel]

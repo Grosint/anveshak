@@ -70,7 +70,7 @@ def check_services() -> list[Check]:
         ("Scraper",  "http://localhost:8001/health"),
         ("Social",   "http://localhost:8002/health"),
         ("Analyst",  "http://localhost:8007/health"),
-        ("Reporter", "http://localhost:8005/health"),
+        ("Reporter", "http://localhost:8006/health"),
     ]
     checks = []
     for name, url in services:

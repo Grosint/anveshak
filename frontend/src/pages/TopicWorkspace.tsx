@@ -23,14 +23,16 @@ const ReportsTab = lazy(() => import('../components/workspace/ReportsTab'))
 const SourcesTab = lazy(() => import('../components/workspace/SourcesTab'))
 import EntityGraph from '../components/workspace/EntityGraph'
 const OverviewTab = lazy(() => import('../components/workspace/OverviewTab'))
+const LocationMap = lazy(() => import('../components/workspace/LocationMap'))
 const SignalGraph = lazy(() => import('../components/signals/SignalGraph').then(m => ({ default: m.SignalGraph })))
 
-type CenterTab = 'overview' | 'feed' | 'clusters' | 'identifiers' | 'reports' | 'sources'
+type CenterTab = 'overview' | 'feed' | 'clusters' | 'map' | 'identifiers' | 'reports' | 'sources'
 
 const TABS: { key: CenterTab; label: string }[] = [
   { key: 'overview', label: 'Overview' },
   { key: 'feed', label: 'Feed' },
   { key: 'clusters', label: 'Clusters' },
+  { key: 'map', label: 'Map' },
   { key: 'identifiers', label: 'Identifiers' },
   { key: 'reports', label: 'Reports' },
   { key: 'sources', label: 'Sources' },
@@ -288,6 +290,12 @@ export default function TopicWorkspace() {
                   </div>
                 )}
               </div>
+            )}
+
+            {activeTab === 'map' && (
+              <Suspense fallback={<div className="p-4"><Spinner label="Loading map..." /></div>}>
+                <LocationMap topicId={topicId} />
+              </Suspense>
             )}
 
             {activeTab === 'identifiers' && (

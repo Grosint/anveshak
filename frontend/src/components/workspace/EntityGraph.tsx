@@ -94,7 +94,7 @@ export default function EntityGraph({ topicId, onClose }: Props) {
 
   const { data: entityGraph, isLoading: l1 } = useQuery({
     queryKey: ['entity-graph', topicId],
-    queryFn: () => intelligenceApi.entityGraph(topicId, 1, 200),
+    queryFn: () => intelligenceApi.entityGraph(topicId, 2, 150),
     staleTime: 300_000,
   })
 
@@ -196,9 +196,10 @@ export default function EntityGraph({ topicId, onClose }: Props) {
   }, [details, entityGraph])
 
   useEffect(() => {
-    if (!isLoading && details.length > 0) initGraph()
+    const hasData = details.length > 0 || (entityGraph?.nodes?.length ?? 0) > 0
+    if (!isLoading && hasData) initGraph()
     return () => { cyRef.current?.destroy(); cyRef.current = null }
-  }, [isLoading, initGraph])
+  }, [isLoading, initGraph, details.length, entityGraph])
 
   // ESC to close
   useEffect(() => {

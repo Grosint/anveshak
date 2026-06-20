@@ -28,4 +28,11 @@ export const intelligenceApi = {
         params: { min_count: minCount, limit },
       })
       .then((r) => r.data),
+
+  locationMap: (topicId: string, minMentions = 2, limit = 100) =>
+    api
+      .get<GeoJSON.FeatureCollection>(`/api/v1/topics/${topicId}/location-map`, {
+        params: { min_mentions: minMentions, limit },
+      })
+      .then((r) => r.data),
 }

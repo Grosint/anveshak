@@ -15,8 +15,57 @@ from ..db.pool import get_db
 from ..db import audit as audit_db
 from ..db import topics as topics_db
 
+import json
+from pathlib import Path
+
+import geonamescache
+
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["intelligence"])
+
+# ---------------------------------------------------------------------------
+# Lightweight geocoder (reuses same geonamescache + custom overlay as reporter)
+# ---------------------------------------------------------------------------
+_gc = geonamescache.GeonamesCache()
+_CITIES: dict[str, dict[str, Any]] = {}
+_COUNTRIES: dict[str, dict[str, Any]] = {}
+_CUSTOM_LOCS: dict[str, tuple[float, float]] = {}
+
+for _k, _city in _gc.get_cities().items():
+    _n = _city["name"].lower()
+    if _n not in _CITIES or _city.get("population", 0) > _CITIES[_n].get("population", 0):
+        _CITIES[_n] = _city
+
+for _k, _country in _gc.get_countries().items():
+    _COUNTRIES[_country["name"].lower()] = _country
+
+_custom_path = Path(__file__).resolve().parents[5] / "infra" / "configs" / "geocoder" / "custom_locations.json"
+if not _custom_path.is_file():
+    _custom_path = Path("/app/infra/configs/geocoder/custom_locations.json")
+if _custom_path.is_file():
+    try:
+        for _name, _coords in json.loads(_custom_path.read_text()).items():
+            _CUSTOM_LOCS[_name.lower()] = (float(_coords[0]), float(_coords[1]))
+    except Exception:
+        pass
+
+
+def _geocode(names: list[str]) -> dict[str, tuple[float, float]]:
+    """Return {name: (lat, lon)} for recognised locations. Unknown names skipped."""
+    result: dict[str, tuple[float, float]] = {}
+    for name in names:
+        key = name.lower().strip()
+        if key in _CUSTOM_LOCS:
+            result[name] = _CUSTOM_LOCS[key]
+        elif key in _CITIES:
+            c = _CITIES[key]
+            result[name] = (float(c["latitude"]), float(c["longitude"]))
+        elif key in _COUNTRIES:
+            capital = _COUNTRIES[key].get("capital", "").lower()
+            if capital in _CITIES:
+                c = _CITIES[capital]
+                result[name] = (float(c["latitude"]), float(c["longitude"]))
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -28,18 +77,18 @@ SQL_ENTITY_COOCCURRENCE = """
            e1.entity_type AS type_a,
            e2.entity_text AS entity_b,
            e2.entity_type AS type_b,
-           COUNT(DISTINCT e1.content_item_id) AS co_occurrence_count
+           COUNT(DISTINCT e1.content_item_id) AS count
     FROM extracted_entities e1
     JOIN extracted_entities e2
         ON e1.content_item_id = e2.content_item_id
         AND e1.id < e2.id
     JOIN content_items ci ON e1.content_item_id = ci.id
     WHERE ci.topic_id = $1
-      AND e1.entity_type IN ('PERSON', 'ORG', 'GPE', 'LOC', 'FACILITY')
-      AND e2.entity_type IN ('PERSON', 'ORG', 'GPE', 'LOC', 'FACILITY')
+      AND e1.entity_type IN ('PERSON', 'ORG', 'FAC')
+      AND e2.entity_type IN ('PERSON', 'ORG', 'FAC')
     GROUP BY e1.entity_text, e1.entity_type, e2.entity_text, e2.entity_type
     HAVING COUNT(DISTINCT e1.content_item_id) >= $2
-    ORDER BY co_occurrence_count DESC
+    ORDER BY count DESC
     LIMIT $3
 """
 
@@ -82,6 +131,22 @@ SQL_OUTBOUND_LINKS = r"""
 
 SQL_EXISTING_SOURCE_URLS = """
     SELECT url_or_handle FROM sources WHERE is_active = TRUE
+"""
+
+SQL_TOPIC_LOCATION_MAP = """
+    SELECT ee.entity_text,
+           ee.entity_type,
+           COUNT(DISTINCT ee.content_item_id) AS mention_count
+    FROM extracted_entities ee
+    JOIN content_items ci ON ee.content_item_id = ci.id
+    WHERE (ci.topic_id = $1
+       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
+      AND ee.entity_type IN ('GPE', 'LOC', 'FAC')
+      AND ee.confidence >= 0.8
+    GROUP BY ee.entity_text, ee.entity_type
+    HAVING COUNT(DISTINCT ee.content_item_id) >= $2
+    ORDER BY mention_count DESC
+    LIMIT $3
 """
 
 SQL_CLUSTER_DUPLICATES = """
@@ -139,6 +204,41 @@ async def get_entity_cooccurrence(
         "node_count": len(nodes),
         "edge_count": len(edges),
     }
+
+
+@router.get("/topics/{topic_id}/location-map")
+async def get_location_map(
+    topic_id: str,
+    min_mentions: int = Query(2, ge=1, description="Minimum mention count"),
+    limit: int = Query(100, ge=1, le=500, description="Max locations"),
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+) -> dict[str, Any]:
+    """Location heatmap — geocoded GPE/LOC/FACILITY entities from NER.
+
+    Returns GeoJSON FeatureCollection with mention_count in properties.
+    Uses offline geonamescache + custom defence overlay for geocoding.
+    """
+    await topics_db.verify_topic_access(db, topic_id, user)
+    rows = await db.fetch(SQL_TOPIC_LOCATION_MAP, topic_id, min_mentions, limit)
+
+    location_names = [row["entity_text"] for row in rows]
+    coords = _geocode(location_names)
+
+    # Build GeoJSON with mention_count in properties
+    mention_counts = {row["entity_text"]: row["mention_count"] for row in rows}
+    features: list[dict[str, Any]] = []
+    for name, (lat, lon) in coords.items():
+        features.append({
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [lon, lat]},
+            "properties": {
+                "name": name,
+                "mention_count": mention_counts.get(name, 1),
+            },
+        })
+
+    return {"type": "FeatureCollection", "features": features}
 
 
 @router.get("/topics/{topic_id}/similar")
