@@ -610,9 +610,10 @@ async def get_network_graph(
         tgt = r["target_author"]
         connected_ids.add(src)
         connected_ids.add(tgt)
+        # Swap: show info flow direction (origin → forwarder)
         edges.append({
-            "source": src,
-            "target": tgt,
+            "source": tgt,
+            "target": src,
             "edge_type": r["edge_type"],
             "weight": r["weight"],
         })
