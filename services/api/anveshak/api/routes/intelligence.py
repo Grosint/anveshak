@@ -267,8 +267,8 @@ SQL_AUTHOR_POST_COUNTS = """
     JOIN sources s ON ci.source_id = s.id
     WHERE ci.topic_id = $1
       AND ci.captured_at >= NOW() - INTERVAL '30 days'
-      AND labels->>'author_handle' IS NOT NULL
-    GROUP BY labels->>'author_handle', s.platform
+      AND ci.labels->>'author_handle' IS NOT NULL
+    GROUP BY ci.labels->>'author_handle', s.platform
     ORDER BY post_count DESC
     LIMIT $2
 """
