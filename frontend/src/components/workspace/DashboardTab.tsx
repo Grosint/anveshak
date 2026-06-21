@@ -214,26 +214,35 @@ const CY_STYLE: any[] = [
     label: 'data(label)',
     'text-valign': 'bottom',
     'text-halign': 'center',
-    'font-size': 9,
-    color: '#cbd5e1',
-    'text-margin-y': 4,
+    'font-size': 10,
+    'font-weight': 600,
+    color: '#e2e8f0',
+    'text-margin-y': 6,
+    'text-outline-color': '#0f172a',
+    'text-outline-width': 2,
     'background-color': 'data(color)',
     width: 'data(size)',
     height: 'data(size)',
-    'border-width': 1,
+    'border-width': 2,
     'border-color': '#334155',
   }},
   { selector: 'edge', style: {
-    width: 'data(weight)',
-    'line-color': '#475569',
-    'target-arrow-color': '#475569',
+    width: 'data(thickness)',
+    'line-color': 'data(edgeColor)',
+    'target-arrow-color': 'data(edgeColor)',
     'target-arrow-shape': 'triangle',
     'curve-style': 'bezier',
-    opacity: 0.7,
+    opacity: 0.85,
+    label: 'data(edgeLabel)',
+    'font-size': 8,
+    color: '#94a3b8',
+    'text-outline-color': '#0f172a',
+    'text-outline-width': 1.5,
+    'text-rotation': 'autorotate',
   }},
   { selector: 'node:active, node:selected', style: {
     'border-color': '#38bdf8',
-    'border-width': 2,
+    'border-width': 3,
   }},
 ]
 
@@ -248,18 +257,31 @@ function ForwardingNetwork({ topicId }: { topicId: string }) {
   })
 
   const initGraph = useCallback(() => {
-    if (!cyContainer.current || !graph || graph.nodes.length === 0) return
+    if (!cyContainer.current || !graph || graph.edges.length === 0) return
     if (cyRef.current) cyRef.current.destroy()
 
-    const maxPosts = Math.max(...graph.nodes.map((n) => n.post_count), 1)
+    // Only show nodes that participate in at least one edge
+    const connectedIds = new Set<string>()
+    graph.edges.forEach((e) => { connectedIds.add(e.source); connectedIds.add(e.target) })
+    const connectedNodes = graph.nodes.filter((n) => connectedIds.has(n.id))
+    // Add missing nodes referenced by edges but not in nodes list
+    graph.edges.forEach((e) => {
+      if (!connectedNodes.find((n) => n.id === e.source))
+        connectedNodes.push({ id: e.source, platform: 'unknown', post_count: 0 })
+      if (!connectedNodes.find((n) => n.id === e.target))
+        connectedNodes.push({ id: e.target, platform: 'unknown', post_count: 0 })
+    })
+
+    const maxPosts = Math.max(...connectedNodes.map((n) => n.post_count), 1)
+    const maxWeight = Math.max(...graph.edges.map((e) => e.weight), 1)
 
     const elements: cytoscape.ElementDefinition[] = [
-      ...graph.nodes.map((n) => ({
+      ...connectedNodes.map((n) => ({
         data: {
           id: n.id,
-          label: n.id.length > 18 ? n.id.slice(0, 16) + '…' : n.id,
+          label: n.id,
           color: PLATFORM_COLORS[n.platform] || PLATFORM_COLORS.unknown,
-          size: 16 + (n.post_count / maxPosts) * 30,
+          size: 22 + (n.post_count / maxPosts) * 35,
         },
       })),
       ...graph.edges.map((e, i) => ({
@@ -267,7 +289,9 @@ function ForwardingNetwork({ topicId }: { topicId: string }) {
           id: `e-${i}`,
           source: e.source,
           target: e.target,
-          weight: Math.min(e.weight, 6),
+          thickness: 1.5 + (e.weight / maxWeight) * 4,
+          edgeColor: e.weight >= 4 ? '#f59e0b' : e.weight >= 2 ? '#38bdf8' : '#64748b',
+          edgeLabel: `${e.weight}x`,
         },
       })),
     ]

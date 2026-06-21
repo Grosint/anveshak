@@ -244,7 +244,7 @@ SQL_TOP_AUTHORS = """
 
 SQL_FORWARD_NETWORK = """
     SELECT
-        labels->>'author_handle' AS source_author,
+        REPLACE(labels->>'author_handle', '@', '') AS source_author,
         forwarded_from_channel_name AS target_author,
         'forward' AS edge_type,
         COUNT(*) AS weight
@@ -260,7 +260,7 @@ SQL_FORWARD_NETWORK = """
 
 SQL_AUTHOR_POST_COUNTS = """
     SELECT
-        ci.labels->>'author_handle' AS author_handle,
+        REPLACE(ci.labels->>'author_handle', '@', '') AS author_handle,
         s.platform,
         COUNT(*) AS post_count
     FROM content_items ci
@@ -268,7 +268,7 @@ SQL_AUTHOR_POST_COUNTS = """
     WHERE ci.topic_id = $1
       AND ci.captured_at >= NOW() - INTERVAL '30 days'
       AND ci.labels->>'author_handle' IS NOT NULL
-    GROUP BY ci.labels->>'author_handle', s.platform
+    GROUP BY REPLACE(ci.labels->>'author_handle', '@', ''), s.platform
     ORDER BY post_count DESC
     LIMIT $2
 """
