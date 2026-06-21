@@ -70,6 +70,9 @@ _REQUIRED_CREDENTIALS: dict[str, list[tuple[str, str]]] = {
         ("instagram_username", "INSTAGRAM_USERNAME"),
         ("instagram_password", "INSTAGRAM_PASSWORD"),
     ],
+    "youtube": [
+        ("youtube_api_key", "YOUTUBE_API_KEY"),
+    ],
 }
 
 
@@ -107,6 +110,7 @@ async def startup(ctx: dict) -> None:
         InstagramAdapter, InstagramRateLimitGuard,
         INSTAGRAM_CIRCUIT_BREAKER_THRESHOLD, INSTAGRAM_CIRCUIT_BREAKER_COOLDOWN_S,
     )
+    from .adapters.youtube_adapter import YouTubeAdapter, YouTubeQuotaGuard
 
     candidates: list = []
 
@@ -122,6 +126,9 @@ async def startup(ctx: dict) -> None:
         (settings.x_adapter_enabled, "x", lambda: make_x_adapter(ctx["arq_pool"])),
         (settings.instagram_adapter_enabled, "instagram", lambda: InstagramAdapter(
             rate_guard=InstagramRateLimitGuard(ctx["arq_pool"], settings.instagram_hourly_call_cap)
+        )),
+        (settings.youtube_adapter_enabled, "youtube", lambda: YouTubeAdapter(
+            quota_guard=YouTubeQuotaGuard(ctx["arq_pool"], settings.youtube_daily_quota_cap)
         )),
     ]
 

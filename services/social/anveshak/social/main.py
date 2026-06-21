@@ -49,12 +49,15 @@ async def main() -> None:
         enabled.append("bluesky")
     if settings.x_adapter_enabled:
         enabled.append(f"x/{settings.x_adapter_mode}")
+    if settings.youtube_adapter_enabled:
+        enabled.append("youtube")
 
     if not enabled:
         log.warning(
             "social.no_adapters_enabled",
             hint="Set TELEGRAM_ADAPTER_ENABLED=true, REDDIT_ADAPTER_ENABLED=true, "
-                 "BLUESKY_ADAPTER_ENABLED=true, or X_ADAPTER_ENABLED=true",
+                 "BLUESKY_ADAPTER_ENABLED=true, X_ADAPTER_ENABLED=true, "
+                 "or YOUTUBE_ADAPTER_ENABLED=true",
         )
 
     db_pool = await asyncpg.create_pool(settings.postgres_url, min_size=1, max_size=3)

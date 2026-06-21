@@ -7,10 +7,13 @@ from .base import (
     SourceAdapterBase,
 )
 
+from .youtube_adapter import YouTubeAdapter
+
 __all__ = [
     "SourceAdapterBase",
     "RawItem",
     "AdapterAuthError",
     "AdapterRateLimitError",
     "AdapterDegradedError",
+    "YouTubeAdapter",
 ]

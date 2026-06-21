@@ -38,6 +38,16 @@ class SocialSettings(BaseSettings):
     x_monthly_read_cap: int = 40000           # $200/month budget cap at $0.005/read
     x_poll_interval_s: int = 900              # 15 minutes
 
+    # YouTube — Data API v3 (free tier: 10K units/day)
+    youtube_api_key: Optional[str] = None
+    youtube_adapter_enabled: bool = False
+    youtube_daily_quota_cap: int = 9000       # reserve 1K headroom from 10K limit
+    youtube_poll_interval_s: int = 900        # 15 minutes
+    youtube_fetch_comments: bool = True       # gate comment collection
+    youtube_max_comments_per_video: int = 100 # limit per video per poll
+    youtube_backfill_count: int = 50          # initial videos to fetch when channel added
+    youtube_max_video_size_mb: int = 500      # on-demand video download limit
+
     poll_interval_s: int = 900  # default for all adapters
 
     # Circuit breaker — per-adapter failure tracking

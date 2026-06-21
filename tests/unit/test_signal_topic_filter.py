@@ -86,5 +86,5 @@ class TestListSignalsTopicFilter:
             )
 
             mock_db.list_signals_filtered.assert_awaited_once_with(
-                db, "new", since, until, topic_id="topic-123",
+                db, "new", since, until, topic_id="topic-123", org_id="org_cyber",
             )

@@ -144,6 +144,47 @@ async def analyse_image(
 
 
 # ---------------------------------------------------------------------------
+# POST /api/v1/vision/analyse-youtube
+# ---------------------------------------------------------------------------
+
+@router.post("/analyse-youtube")
+async def analyse_youtube_video(
+    request: Request,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+):
+    """Accept YouTube video URL → dispatch download + vision analysis as ARQ job.
+
+    On-demand only — not automatic. Downloads video via yt-dlp, stores as media_asset,
+    enqueues run_vision_analysis for keyframe deepfake detection.
+    """
+    body = await request.json()
+    video_url = body.get("video_url", "")
+    content_item_id = body.get("content_item_id")
+
+    if not video_url or "youtube.com" not in video_url and "youtu.be" not in video_url:
+        raise HTTPException(status_code=400, detail="Valid YouTube URL required")
+
+    arq_pool: ArqRedis = get_arq_pool(request)
+    job = await arq_pool.enqueue_job(
+        "download_and_analyse_youtube",
+        video_url,
+        content_item_id,
+        _queue_name="arq:vision",
+    )
+
+    log.info(
+        "vision_api.youtube_job_dispatched",
+        job_id=job.job_id,
+        video_url=video_url,
+    )
+    return {
+        "job_id": job.job_id,
+        "status": "queued",
+    }
+
+
+# ---------------------------------------------------------------------------
 # GET /api/v1/vision/jobs/recent
 # ---------------------------------------------------------------------------
 

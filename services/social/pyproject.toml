@@ -24,6 +24,8 @@ dependencies = [
     "prometheus-client>=0.20",
     "langdetect>=1.0",
     "trafilatura>=1.8",
+    "google-api-python-client>=2.100.0",
+    "youtube-transcript-api>=0.6.0",
 ]
 [tool.hatch.build.targets.wheel]
 packages = ["anveshak"]

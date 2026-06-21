@@ -486,6 +486,103 @@ async def run_clip(ctx: dict, media_asset_id: str, categories: list[str]) -> dic
     return {"media_asset_id": media_asset_id, "clip_labels": clip_labels}
 
 
+# ---------------------------------------------------------------------------
+# YouTube video download + analyse (on-demand only)
+# ---------------------------------------------------------------------------
+
+async def download_and_analyse_youtube(
+    ctx: dict, video_url: str, content_item_id: str | None = None
+) -> dict:
+    """Download YouTube video via yt-dlp, store as media_asset, run vision pipeline.
+
+    On-demand only — triggered by analyst clicking "Analyse Video" button.
+    Uses yt-dlp (lazy import, not in base deps). Max size from YOUTUBE_MAX_VIDEO_SIZE_MB.
+    """
+    import hashlib
+    import uuid
+    from pathlib import Path
+    from datetime import datetime, UTC
+
+    try:
+        import yt_dlp
+    except ImportError:
+        log.error("vision.youtube.yt_dlp_not_installed",
+                  hint="Install yt-dlp: pip install yt-dlp")
+        return {"error": "yt-dlp not installed", "video_url": video_url}
+
+    max_size_mb = settings.vision_max_video_size_mb
+    now = datetime.now(UTC)
+    dl_dir = Path(settings.media_storage_root) / "media" / "youtube" / now.strftime("%Y/%m/%d")
+    dl_dir.mkdir(parents=True, exist_ok=True)
+
+    tmp_path = dl_dir / f"tmp_{uuid.uuid4().hex}"
+
+    ydl_opts = {
+        "format": "best[filesize<{}M]/best".format(max_size_mb),
+        "outtmpl": str(tmp_path) + ".%(ext)s",
+        "quiet": True,
+        "no_warnings": True,
+        "max_filesize": max_size_mb * 1024 * 1024,
+    }
+
+    try:
+        log.info("vision.youtube.downloading", video_url=video_url)
+        info = await asyncio.to_thread(lambda: _yt_download(ydl_opts, video_url))
+    except Exception as exc:
+        log.error("vision.youtube.download_failed", video_url=video_url, error=str(exc))
+        return {"error": str(exc), "video_url": video_url}
+
+    # Find downloaded file
+    downloaded = None
+    for f in dl_dir.glob(f"tmp_{tmp_path.name.split('_')[1]}*"):
+        if f.is_file() and f.stat().st_size > 0:
+            downloaded = f
+            break
+
+    if not downloaded:
+        log.error("vision.youtube.file_not_found", video_url=video_url)
+        return {"error": "Downloaded file not found", "video_url": video_url}
+
+    # Hash and rename
+    file_bytes = downloaded.read_bytes()
+    content_hash = hashlib.sha256(file_bytes).hexdigest()
+    ext = downloaded.suffix or ".mp4"
+    final_path = dl_dir / f"{content_hash}{ext}"
+    downloaded.rename(final_path)
+
+    log.info("vision.youtube.stored",
+             content_hash=content_hash, size_mb=len(file_bytes) / (1024 * 1024))
+
+    # Create media_asset and run vision
+    pool = ctx.get("db_pool")
+    if pool:
+        async with pool.acquire() as conn:
+            cid = content_item_id
+            if not cid:
+                from .db import get_or_create_stub_content_item
+                cid = await get_or_create_stub_content_item(conn, content_hash, video_url)
+
+            asset_id = str(uuid.uuid4())
+            await conn.execute(
+                """INSERT INTO media_assets (id, content_item_id, asset_type, storage_path, content_hash)
+                   VALUES ($1, $2, 'video', $3, $4)
+                   ON CONFLICT (content_hash) DO NOTHING""",
+                asset_id, cid, str(final_path), content_hash,
+            )
+
+        # Chain to existing vision analysis
+        return await run_vision_analysis(ctx, asset_id)
+
+    return {"error": "no db_pool", "video_url": video_url}
+
+
+def _yt_download(opts: dict, url: str) -> dict:
+    """Blocking yt-dlp download — called via asyncio.to_thread."""
+    import yt_dlp
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        return ydl.extract_info(url, download=True)
+
+
 class WorkerSettings:
     """ARQ worker entry point: arq anveshak.vision.jobs.WorkerSettings"""
 
@@ -493,6 +590,7 @@ class WorkerSettings:
         arq.func(run_vision_analysis, max_tries=2),  # idempotent via content_hash dedup
         arq.func(run_yolo, max_tries=2),
         arq.func(run_clip, max_tries=2),
+        arq.func(download_and_analyse_youtube, max_tries=1),
     ]
     cron_jobs = [
         arq.cron(cleanup_expired_media, hour=3, minute=0),  # daily at 03:00 UTC

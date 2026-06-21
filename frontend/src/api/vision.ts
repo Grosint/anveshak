@@ -79,4 +79,12 @@ export const visionApi = {
 
   listRecentJobs: (limit = 10) =>
     api.get<VisionJobSummary[]>('/api/v1/vision/jobs/recent', { params: { limit } }).then((r) => r.data),
+
+  analyseYoutubeVideo: (videoUrl: string, contentItemId?: string) =>
+    api
+      .post<{ job_id: string; status: string }>('/api/v1/vision/analyse-youtube', {
+        video_url: videoUrl,
+        content_item_id: contentItemId,
+      })
+      .then((r) => r.data),
 }

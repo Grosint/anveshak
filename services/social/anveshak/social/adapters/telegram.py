@@ -96,6 +96,10 @@ class TelegramAdapter(SourceAdapterBase):
             raise AdapterAuthError(
                 "Telegram account is banned"
             ) from exc
+        except (ConnectionError, TimeoutError, OSError) as exc:
+            raise AdapterAuthError(
+                f"Telegram connection failed — check network/firewall: {exc}"
+            ) from exc
 
     async def collect(
         self,

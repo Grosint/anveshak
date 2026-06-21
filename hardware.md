@@ -543,3 +543,39 @@ ollama rm qwen2:7b
 ```
 
 Zero application code changes required for any of the above.
+
+---
+
+## YouTube Adapter — `social` service (2026-06-21)
+
+**Current implementation:**
+- YouTube Data API v3 for video metadata + comments (API key, free tier)
+- `youtube-transcript-api` for caption extraction (zero API quota cost)
+- On-demand video download via `yt-dlp` → existing vision pipeline
+- No ML models — purely API-driven text extraction
+
+**Hardware impact:**
+- Caption extraction: ~0 CPU (text download, <1KB per video)
+- Comment ingestion: ~0 CPU (API response parsing)
+- On-demand video deepfake analysis: uses existing EfficientNet keyframe pipeline
+  - 10-min video at 5s intervals = ~120 frames × ~200ms/frame = ~24s on CPU
+  - Per-video only, analyst-triggered, not bulk
+- Storage: video files 100MB-1GB each — `YOUTUBE_MAX_VIDEO_SIZE_MB=500` default
+
+**Quota constraints (not hardware):**
+- YouTube Data API v3: 10,000 units/day (free tier)
+- `playlistItems.list` = 1 unit, `videos.list` = 1 unit, `commentThreads.list` = 1 unit
+- `YouTubeQuotaGuard` enforces daily cap via Redis atomic counter (same pattern as `XSpendGuard`)
+- `YOUTUBE_DAILY_QUOTA_CAP=9000` (reserve 1K headroom)
+
+**Upgrade path:** Apply for elevated API quota through Google Cloud console for government use.
+
+**Config change:**
+```
+YOUTUBE_API_KEY=<key>
+YOUTUBE_ADAPTER_ENABLED=true
+YOUTUBE_DAILY_QUOTA_CAP=9000
+YOUTUBE_FETCH_COMMENTS=true
+```
+
+**Code change:** None required for hardware upgrades. GPU improves video deepfake speed only.
