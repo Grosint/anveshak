@@ -50,3 +50,13 @@ multiple topics/trackers.
 
 Pattern: `INSERT INTO join_table (parent_id, item_id) ... ON CONFLICT DO NOTHING`
 See: `learned/additive-backfill-join-table.md`
+
+## Adapter authenticate() Must Catch All Connection Errors
+
+Every adapter's `authenticate()` must convert ALL platform-specific exceptions
+to `AdapterAuthError`. The worker startup loop in `jobs.py` only catches
+`AdapterAuthError` — any other exception crashes the entire worker, preventing
+ALL adapters from registering (not just the failing one).
+
+Catch: `ConnectionError`, `TimeoutError`, `OSError`, plus platform-specific errors.
+See: `learned/adapter-auth-must-catch-connection-errors.md`
