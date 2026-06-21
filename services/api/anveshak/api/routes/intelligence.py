@@ -601,30 +601,39 @@ async def get_network_graph(
     await topics_db.verify_topic_access(db, topic_id, user)
 
     fwd_rows = await db.fetch(SQL_FORWARD_NETWORK, topic_id, min_weight, limit)
-    author_rows = await db.fetch(SQL_AUTHOR_POST_COUNTS, topic_id, 100)
 
-    nodes: dict[str, dict[str, Any]] = {}
-    for r in author_rows:
-        nodes[r["author_handle"]] = {
-            "id": r["author_handle"],
-            "platform": r["platform"],
-            "post_count": r["post_count"],
-        }
-
+    # Build edges first, then only include connected nodes
     edges = []
+    connected_ids: set[str] = set()
     for r in fwd_rows:
         src = r["source_author"]
         tgt = r["target_author"]
-        if src not in nodes:
-            nodes[src] = {"id": src, "platform": "unknown", "post_count": 0}
-        if tgt not in nodes:
-            nodes[tgt] = {"id": tgt, "platform": "unknown", "post_count": 0}
+        connected_ids.add(src)
+        connected_ids.add(tgt)
         edges.append({
             "source": src,
             "target": tgt,
             "edge_type": r["edge_type"],
             "weight": r["weight"],
         })
+
+    # Only fetch post counts for connected authors
+    author_rows = await db.fetch(SQL_AUTHOR_POST_COUNTS, topic_id, 100)
+
+    nodes: dict[str, dict[str, Any]] = {}
+    for r in author_rows:
+        handle = r["author_handle"]
+        if handle in connected_ids:
+            nodes[handle] = {
+                "id": handle,
+                "platform": r["platform"],
+                "post_count": r["post_count"],
+            }
+
+    # Add missing nodes referenced by edges but not in author_rows
+    for nid in connected_ids:
+        if nid not in nodes:
+            nodes[nid] = {"id": nid, "platform": "unknown", "post_count": 0}
 
     return {
         "topic_id": topic_id,
