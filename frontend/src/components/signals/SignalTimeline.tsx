@@ -62,16 +62,16 @@ function SnakeRow({
   totalRows,
   timeRange,
   topicColor,
-  selectedId,
-  onSelect,
+  selectedIds,
+  onSelectGroup,
 }: {
   signals: Signal[]
   rowIndex: number
   totalRows: number
   timeRange: { min: number; max: number }
   topicColor: string
-  selectedId: string | null
-  onSelect: (id: string | null) => void
+  selectedIds: Set<string>
+  onSelectGroup: (ids: string[]) => void
 }) {
   const isReversed = rowIndex % 2 === 1
   const range = timeRange.max - timeRange.min || 1
@@ -143,7 +143,8 @@ function SnakeRow({
           const primary = group.signals[0]
           const count = group.signals.length
           const severity = inferSeverity(primary)
-          const isSelected = group.signals.some((s) => s.id === selectedId)
+          const groupIds = group.signals.map((s) => s.id)
+          const isSelected = group.signals.some((s) => selectedIds.has(s.id))
           const dotSize = count > 1 ? DOT_SIZE + Math.min(count * 3, 16) : DOT_SIZE
           return (
             <button
@@ -152,7 +153,7 @@ function SnakeRow({
               style={{ left: `${group.pct}%` }}
               onClick={(e) => {
                 e.stopPropagation()
-                onSelect(isSelected ? null : primary.id)
+                onSelectGroup(isSelected ? [] : groupIds)
               }}
               aria-label={primary.cluster_label || primary.description}
             >
@@ -208,8 +209,8 @@ function SnakeRow({
 function TopicLane({
   group,
   colorIndex,
-  selectedId,
-  onSelect,
+  selectedIds,
+  onSelectGroup,
   onAcknowledge,
   onDismiss,
   isActioning,
@@ -217,8 +218,8 @@ function TopicLane({
 }: {
   group: TopicGroup
   colorIndex: number
-  selectedId: string | null
-  onSelect: (id: string | null) => void
+  selectedIds: Set<string>
+  onSelectGroup: (ids: string[]) => void
   onAcknowledge: (id: string) => void
   onDismiss: (id: string) => void
   isActioning: boolean
@@ -245,7 +246,7 @@ function TopicLane({
     rows.push(sorted.slice(i, i + DOTS_PER_ROW))
   }
 
-  const selectedSignal = sorted.find((s) => s.id === selectedId) ?? null
+  const selectedSignals = sorted.filter((s) => selectedIds.has(s.id))
 
   return (
     <div className="mb-4">
@@ -280,28 +281,35 @@ function TopicLane({
               totalRows={rows.length}
               timeRange={timeRange}
               topicColor={color}
-              selectedId={selectedId}
-              onSelect={onSelect}
+              selectedIds={selectedIds}
+              onSelectGroup={onSelectGroup}
             />
           ))}
 
-          {/* Expanded signal detail */}
-          {selectedSignal && (
-            <div className="mt-2 mb-3 animate-fade-in">
-              <div className="flex items-center gap-2 mb-1">
-                <button
-                  className="text-[10px] text-anveshak-accent hover:underline"
-                  onClick={() => onShowGraph(selectedSignal.id)}
-                >
-                  View Graph
-                </button>
-              </div>
-              <SignalCard
-                signal={selectedSignal}
-                onAcknowledge={onAcknowledge}
-                onDismiss={onDismiss}
-                isActioning={isActioning}
-              />
+          {/* Expanded signal details (all selected) */}
+          {selectedSignals.length > 0 && (
+            <div className="mt-2 mb-3 animate-fade-in space-y-2">
+              {selectedSignals.length > 1 && (
+                <p className="text-[10px] text-text-muted">{selectedSignals.length} signals in this group</p>
+              )}
+              {selectedSignals.map((sig) => (
+                <div key={sig.id}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <button
+                      className="text-[10px] text-anveshak-accent hover:underline"
+                      onClick={() => onShowGraph(sig.id)}
+                    >
+                      View Graph
+                    </button>
+                  </div>
+                  <SignalCard
+                    signal={sig}
+                    onAcknowledge={onAcknowledge}
+                    onDismiss={onDismiss}
+                    isActioning={isActioning}
+                  />
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -327,7 +335,12 @@ export function SignalTimeline({
   isActioning,
   onShowGraph,
 }: SignalTimelineProps) {
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  const handleSelectGroup = (ids: string[]) => {
+    if (ids.length === 0) setSelectedIds(new Set())
+    else setSelectedIds(new Set(ids))
+  }
 
   const topicGroups = useMemo(() => groupByTopic(signals), [signals])
 
@@ -353,8 +366,8 @@ export function SignalTimeline({
           key={group.topic_id}
           group={group}
           colorIndex={idx}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
+          selectedIds={selectedIds}
+          onSelectGroup={handleSelectGroup}
           onAcknowledge={onAcknowledge}
           onDismiss={onDismiss}
           isActioning={isActioning}
