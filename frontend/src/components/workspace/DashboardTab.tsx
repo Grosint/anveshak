@@ -131,34 +131,56 @@ export default function DashboardTab({ topicId }: DashboardTabProps) {
         <TrendingKeywords topicId={topicId} />
       </div>
 
-      {/* Row 3: Top authors + alerts */}
+      {/* Row 3: Influence Score + alerts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top authors */}
+        {/* Influence Score Ranking */}
         <div className="bg-anveshak-card border border-anveshak-border rounded-lg p-4">
           <h3 className="text-xs font-semibold text-text-primary uppercase tracking-wide mb-3">
-            Top Authors
+            Influence Score
           </h3>
           {authorsLoading ? (
             <div className="h-40 flex items-center justify-center"><Spinner /></div>
           ) : !authors || authors.length === 0 ? (
             <div className="h-40 flex items-center justify-center text-xs text-text-muted">No author data yet</div>
-          ) : (
-            <div className="space-y-2 max-h-[240px] overflow-y-auto">
-              {authors.map((a, i) => (
-                <div key={`${a.author_handle}-${a.platform}`} className="flex items-center justify-between text-xs py-1.5 border-b border-anveshak-border/50 last:border-0">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-text-muted w-4 text-right">{i + 1}</span>
-                    <span className="text-text-primary font-medium truncate">{a.author_handle}</span>
-                    <span className="text-text-muted px-1.5 py-0.5 rounded bg-anveshak-muted text-[9px]">{a.platform}</span>
-                  </div>
-                  <div className="flex gap-3 text-text-secondary tabular-nums">
-                    <span>{a.post_count} posts</span>
-                    <span>{a.total_likes.toLocaleString()} likes</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          ) : (() => {
+            const scored = authors.map((a) => ({
+              ...a,
+              score: a.post_count * 1 + (a.total_likes || 0) * 0.5 + (a.total_shares || 0) * 2 + (a.total_views || 0) * 0.01,
+            })).sort((x, y) => y.score - x.score)
+            const maxScore = scored[0]?.score || 1
+            return (
+              <div className="space-y-1.5 max-h-[260px] overflow-y-auto">
+                {scored.map((a, i) => {
+                  const sentColor = a.avg_sentiment > 0.05 ? '#22c55e' : a.avg_sentiment < -0.05 ? '#ef4444' : '#94a3b8'
+                  return (
+                    <div key={`${a.author_handle}-${a.platform}`} className="text-xs">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-text-muted w-4 text-right font-mono">{i + 1}</span>
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: sentColor }} />
+                          <span className="text-text-primary font-medium truncate">{a.author_handle}</span>
+                          <span className="text-text-muted px-1 py-0.5 rounded bg-anveshak-muted text-[8px]">{a.platform}</span>
+                        </div>
+                        <span className="text-anveshak-accent font-mono font-bold tabular-nums">{Math.round(a.score).toLocaleString()}</span>
+                      </div>
+                      <div className="ml-6 flex items-center gap-2">
+                        <div className="flex-1 h-1.5 rounded-full bg-anveshak-border overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${(a.score / maxScore) * 100}%`,
+                              backgroundColor: `color-mix(in srgb, var(--anveshak-accent) ${Math.round(30 + (a.score / maxScore) * 70)}%, transparent)`,
+                            }}
+                          />
+                        </div>
+                        <span className="text-[9px] text-text-muted tabular-nums shrink-0">{a.post_count}p · {(a.total_likes || 0).toLocaleString()}l · {(a.total_shares || 0).toLocaleString()}s</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
         </div>
 
         {/* Active alerts */}
@@ -191,7 +213,13 @@ export default function DashboardTab({ topicId }: DashboardTabProps) {
       </div>
 
       {/* Row 4: Forwarding Network Graph */}
-      <ForwardingNetwork topicId={topicId} />
+      {/* Row 5: Forwarding Network + Influence Matrix */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <ForwardingNetwork topicId={topicId} />
+        </div>
+        <InfluenceMatrix topicId={topicId} />
+      </div>
     </div>
   )
 }
@@ -353,6 +381,96 @@ function ForwardingNetwork({ topicId }: { topicId: string }) {
           <div ref={cyContainer} className="h-[320px] w-full rounded border border-anveshak-border/50" />
         </>
       )}
+    </div>
+  )
+}
+
+
+function InfluenceMatrix({ topicId }: { topicId: string }) {
+  const { data: graph } = useQuery({
+    queryKey: ['network-graph', topicId],
+    queryFn: () => intelligenceApi.networkGraph(topicId, 1, 200),
+    staleTime: 120_000,
+  })
+
+  if (!graph || graph.edges.length === 0) {
+    return (
+      <div className="bg-anveshak-card border border-anveshak-border rounded-lg p-4">
+        <h3 className="text-xs font-semibold text-text-primary uppercase tracking-wide mb-3">
+          Influence Matrix
+        </h3>
+        <div className="h-[320px] flex items-center justify-center text-xs text-text-muted">
+          No forwarding data
+        </div>
+      </div>
+    )
+  }
+
+  // Build matrix: origin (source) → forwarder (target)
+  const origins = new Set<string>()
+  const forwarders = new Set<string>()
+  const weights = new Map<string, number>()
+
+  graph.edges.forEach((e) => {
+    origins.add(e.source)
+    forwarders.add(e.target)
+    weights.set(`${e.source}→${e.target}`, e.weight)
+  })
+
+  const originList = [...origins].sort()
+  const forwarderList = [...forwarders].sort()
+  const maxWeight = Math.max(...graph.edges.map((e) => e.weight), 1)
+
+  return (
+    <div className="bg-anveshak-card border border-anveshak-border rounded-lg p-4">
+      <h3 className="text-xs font-semibold text-text-primary uppercase tracking-wide mb-3">
+        Influence Matrix
+      </h3>
+      <p className="text-[9px] text-text-muted mb-3">Origin → Forwarder · cell = forwarding count</p>
+      <div className="overflow-auto">
+        <table className="text-[10px] w-full">
+          <thead>
+            <tr>
+              <th className="text-left text-text-muted font-normal p-1 border-b border-anveshak-border">Origin ↓</th>
+              {forwarderList.map((f) => (
+                <th key={f} className="text-center text-text-muted font-normal p-1 border-b border-anveshak-border whitespace-nowrap">
+                  {f.length > 12 ? f.slice(0, 10) + '…' : f}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {originList.map((o) => (
+              <tr key={o}>
+                <td className="text-text-primary font-medium p-1 border-b border-anveshak-border/30 whitespace-nowrap">
+                  {o.length > 14 ? o.slice(0, 12) + '…' : o}
+                </td>
+                {forwarderList.map((f) => {
+                  const w = weights.get(`${o}→${f}`) || 0
+                  const intensity = w / maxWeight
+                  return (
+                    <td key={f} className="text-center p-1 border-b border-anveshak-border/30">
+                      {w > 0 ? (
+                        <span
+                          className="inline-block w-7 h-7 rounded flex items-center justify-center text-[10px] font-bold"
+                          style={{
+                            backgroundColor: `color-mix(in srgb, #38bdf8 ${Math.round(intensity * 100)}%, transparent)`,
+                            color: intensity > 0.5 ? '#0f172a' : '#e2e8f0',
+                          }}
+                        >
+                          {w}
+                        </span>
+                      ) : (
+                        <span className="text-text-muted/30">·</span>
+                      )}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
