@@ -34,6 +34,7 @@ from .entity_minhash import compute_entity_minhash
 from .identifiers import extract_identifiers
 from .templates import match_templates, ScamTemplate, BUILTIN_TEMPLATES
 from .llm_discovery import suggest_source_types_job
+from .keyword_alerts import check_keyword_alerts
 
 log = structlog.get_logger(__name__)
 
@@ -329,6 +330,9 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
                         now,
                         _LABELS_JSON,
                     )
+
+        # Check keyword alert rules (non-critical, fail-open)
+        await check_keyword_alerts(db_pool, content_item_id, row["topic_id"], clean_text)
 
         analyst_nlp_jobs_total.labels(status="success").inc()
         analyst_embedding_completed_total.inc()

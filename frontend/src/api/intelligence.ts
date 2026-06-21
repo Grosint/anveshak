@@ -35,4 +35,36 @@ export const intelligenceApi = {
         params: { min_mentions: minMentions, limit },
       })
       .then((r) => r.data),
+
+  topicStats: (topicId: string, days = 30) =>
+    api
+      .get<{
+        topic_id: string
+        days: number
+        platforms: { platform: string; post_count: number; source_count: number; latest_post: string | null }[]
+        volume_timeline: { date: string; count: number }[]
+        engagement: { total_likes: number; total_comments: number; total_shares: number; total_views: number; posts_with_engagement: number }
+      }>(`/api/v1/topics/${topicId}/stats`, { params: { days } })
+      .then((r) => r.data),
+
+  topAuthors: (topicId: string, days = 30, limit = 20) =>
+    api
+      .get<{ author_handle: string; author_id: string; platform: string; post_count: number; total_likes: number; total_views: number; total_shares: number; avg_sentiment: number }[]>(
+        `/api/v1/topics/${topicId}/top-authors`,
+        { params: { days, limit } },
+      )
+      .then((r) => r.data),
+
+  networkGraph: (topicId: string, minWeight = 1, limit = 200) =>
+    api
+      .get<{
+        topic_id: string
+        nodes: { id: string; platform: string; post_count: number }[]
+        edges: { source: string; target: string; edge_type: string; weight: number }[]
+        node_count: number
+        edge_count: number
+      }>(`/api/v1/topics/${topicId}/network-graph`, {
+        params: { min_weight: minWeight, limit },
+      })
+      .then((r) => r.data),
 }

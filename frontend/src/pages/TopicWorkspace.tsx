@@ -25,10 +25,12 @@ import EntityGraph from '../components/workspace/EntityGraph'
 const OverviewTab = lazy(() => import('../components/workspace/OverviewTab'))
 const LocationMap = lazy(() => import('../components/workspace/LocationMap'))
 const SignalGraph = lazy(() => import('../components/signals/SignalGraph').then(m => ({ default: m.SignalGraph })))
+const DashboardTab = lazy(() => import('../components/workspace/DashboardTab'))
 
-type CenterTab = 'overview' | 'feed' | 'clusters' | 'map' | 'identifiers' | 'reports' | 'sources'
+type CenterTab = 'dashboard' | 'overview' | 'feed' | 'clusters' | 'map' | 'identifiers' | 'reports' | 'sources'
 
 const TABS: { key: CenterTab; label: string }[] = [
+  { key: 'dashboard', label: 'Dashboard' },
   { key: 'overview', label: 'Overview' },
   { key: 'feed', label: 'Feed' },
   { key: 'clusters', label: 'Clusters' },
@@ -42,7 +44,7 @@ export default function TopicWorkspace() {
   const { topicId } = useParams<{ topicId: string }>()
   const navigate = useNavigate()
 
-  const [activeTab, setActiveTab] = useState<CenterTab>('overview')
+  const [activeTab, setActiveTab] = useState<CenterTab>('dashboard')
   const [filters, setFilters] = useState<ContentFilters>({})
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [panelItem, setPanelItem] = useState<PanelItem>(null)
@@ -212,6 +214,12 @@ export default function TopicWorkspace() {
 
           {/* Tab content */}
           <div className="flex-1 overflow-y-auto">
+            {activeTab === 'dashboard' && (
+              <Suspense fallback={<div className="p-4"><Spinner label="Loading dashboard..." /></div>}>
+                <DashboardTab topicId={topicId!} />
+              </Suspense>
+            )}
+
             {activeTab === 'overview' && (
               <Suspense fallback={<div className="p-4"><Spinner label="Loading overview..." /></div>}>
                 <OverviewTab

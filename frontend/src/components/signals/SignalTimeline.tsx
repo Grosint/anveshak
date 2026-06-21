@@ -62,31 +62,43 @@ function SnakeRow({
   totalRows,
   timeRange,
   topicColor,
-  selectedId,
-  onSelect,
+  selectedIds,
+  onSelectGroup,
 }: {
   signals: Signal[]
   rowIndex: number
   totalRows: number
   timeRange: { min: number; max: number }
   topicColor: string
-  selectedId: string | null
-  onSelect: (id: string | null) => void
+  selectedIds: Set<string>
+  onSelectGroup: (ids: string[]) => void
 }) {
   const isReversed = rowIndex % 2 === 1
   const range = timeRange.max - timeRange.min || 1
 
-  // Position dots along the row based on timestamp
+  // Position dots along the row based on timestamp, grouping co-temporal signals
   const positioned = signals.map((s) => {
     const ts = new Date(s.created_at).getTime()
     const pct = ((ts - timeRange.min) / range) * 100
     return { signal: s, pct: Math.max(2, Math.min(98, pct)) }
   })
 
+  // Group dots within 1% of each other (co-temporal)
+  const grouped: { signals: Signal[]; pct: number }[] = []
+  const sorted = [...positioned].sort((a, b) => a.pct - b.pct)
+  for (const dot of sorted) {
+    const last = grouped[grouped.length - 1]
+    if (last && Math.abs(last.pct - dot.pct) < 1.5) {
+      last.signals.push(dot.signal)
+    } else {
+      grouped.push({ signals: [dot.signal], pct: dot.pct })
+    }
+  }
+
   // Reverse positioning for odd rows (snake pattern)
   const dots = isReversed
-    ? positioned.map((d) => ({ ...d, pct: 100 - d.pct }))
-    : positioned
+    ? grouped.map((d) => ({ ...d, pct: 100 - d.pct }))
+    : grouped
 
   // Compute time labels for this row's range segment
   const rowFraction = 1 / (totalRows || 1)
@@ -126,30 +138,34 @@ function SnakeRow({
           />
         )}
 
-        {/* Signal dots */}
-        {dots.map(({ signal, pct }) => {
-          const severity = inferSeverity(signal)
-          const isSelected = selectedId === signal.id
+        {/* Signal dots (grouped when co-temporal) */}
+        {dots.map((group) => {
+          const primary = group.signals[0]
+          const count = group.signals.length
+          const severity = inferSeverity(primary)
+          const groupIds = group.signals.map((s) => s.id)
+          const isSelected = group.signals.some((s) => selectedIds.has(s.id))
+          const dotSize = count > 1 ? DOT_SIZE + Math.min(count * 3, 16) : DOT_SIZE
           return (
             <button
-              key={signal.id}
+              key={primary.id}
               className="absolute -translate-x-1/2 -translate-y-1/2 top-1/2 z-10 group/dot"
-              style={{ left: `${pct}%` }}
+              style={{ left: `${group.pct}%` }}
               onClick={(e) => {
                 e.stopPropagation()
-                onSelect(isSelected ? null : signal.id)
+                onSelectGroup(isSelected ? [] : groupIds)
               }}
-              aria-label={signal.cluster_label || signal.description}
+              aria-label={primary.cluster_label || primary.description}
             >
               {/* Pulse ring for new signals */}
-              {signal.status === 'new' && (
+              {primary.status === 'new' && (
                 <span
                   className="absolute inset-0 rounded-full animate-ping opacity-30"
                   style={{
-                    width: DOT_SIZE + 8,
-                    height: DOT_SIZE + 8,
-                    marginLeft: -(DOT_SIZE + 8) / 2 + DOT_SIZE / 2,
-                    marginTop: -(DOT_SIZE + 8) / 2 + DOT_SIZE / 2,
+                    width: dotSize + 8,
+                    height: dotSize + 8,
+                    marginLeft: -(dotSize + 8) / 2 + dotSize / 2,
+                    marginTop: -(dotSize + 8) / 2 + dotSize / 2,
                     backgroundColor: severityColor[severity],
                   }}
                 />
@@ -157,23 +173,27 @@ function SnakeRow({
 
               {/* Dot */}
               <span
-                className="block rounded-full border-2 border-anveshak-bg transition-all duration-200"
+                className="flex items-center justify-center rounded-full border-2 border-anveshak-bg transition-all duration-200"
                 style={{
-                  width: isSelected ? DOT_SIZE + 4 : DOT_SIZE,
-                  height: isSelected ? DOT_SIZE + 4 : DOT_SIZE,
+                  width: isSelected ? dotSize + 4 : dotSize,
+                  height: isSelected ? dotSize + 4 : dotSize,
                   backgroundColor: severityColor[severity],
                   boxShadow: isSelected
                     ? `0 0 12px ${severityColor[severity]}80`
                     : `0 0 4px ${severityColor[severity]}40`,
                 }}
-              />
+              >
+                {count > 1 && (
+                  <span className="text-[8px] font-bold text-white">{count}</span>
+                )}
+              </span>
 
               {/* Hover tooltip */}
               <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 rounded bg-anveshak-card border border-anveshak-border text-[10px] text-text-primary whitespace-nowrap opacity-0 group-hover/dot:opacity-100 transition-opacity pointer-events-none z-20 shadow-lg">
-                {signal.cluster_label || signal.signal_type}
+                {count > 1 ? `${count} signals` : (primary.cluster_label || primary.signal_type)}
                 <br />
                 <span className="text-text-muted">
-                  {format(new Date(signal.created_at), 'MMM d, HH:mm')}
+                  {format(new Date(primary.created_at), 'MMM d, HH:mm')}
                 </span>
               </span>
             </button>
@@ -189,8 +209,8 @@ function SnakeRow({
 function TopicLane({
   group,
   colorIndex,
-  selectedId,
-  onSelect,
+  selectedIds,
+  onSelectGroup,
   onAcknowledge,
   onDismiss,
   isActioning,
@@ -198,8 +218,8 @@ function TopicLane({
 }: {
   group: TopicGroup
   colorIndex: number
-  selectedId: string | null
-  onSelect: (id: string | null) => void
+  selectedIds: Set<string>
+  onSelectGroup: (ids: string[]) => void
   onAcknowledge: (id: string) => void
   onDismiss: (id: string) => void
   isActioning: boolean
@@ -226,7 +246,7 @@ function TopicLane({
     rows.push(sorted.slice(i, i + DOTS_PER_ROW))
   }
 
-  const selectedSignal = sorted.find((s) => s.id === selectedId) ?? null
+  const selectedSignals = sorted.filter((s) => selectedIds.has(s.id))
 
   return (
     <div className="mb-4">
@@ -261,28 +281,35 @@ function TopicLane({
               totalRows={rows.length}
               timeRange={timeRange}
               topicColor={color}
-              selectedId={selectedId}
-              onSelect={onSelect}
+              selectedIds={selectedIds}
+              onSelectGroup={onSelectGroup}
             />
           ))}
 
-          {/* Expanded signal detail */}
-          {selectedSignal && (
-            <div className="mt-2 mb-3 animate-fade-in">
-              <div className="flex items-center gap-2 mb-1">
-                <button
-                  className="text-[10px] text-anveshak-accent hover:underline"
-                  onClick={() => onShowGraph(selectedSignal.id)}
-                >
-                  View Graph
-                </button>
-              </div>
-              <SignalCard
-                signal={selectedSignal}
-                onAcknowledge={onAcknowledge}
-                onDismiss={onDismiss}
-                isActioning={isActioning}
-              />
+          {/* Expanded signal details (all selected) */}
+          {selectedSignals.length > 0 && (
+            <div className="mt-2 mb-3 animate-fade-in space-y-2">
+              {selectedSignals.length > 1 && (
+                <p className="text-[10px] text-text-muted">{selectedSignals.length} signals in this group</p>
+              )}
+              {selectedSignals.map((sig) => (
+                <div key={sig.id}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <button
+                      className="text-[10px] text-anveshak-accent hover:underline"
+                      onClick={() => onShowGraph(sig.id)}
+                    >
+                      View Graph
+                    </button>
+                  </div>
+                  <SignalCard
+                    signal={sig}
+                    onAcknowledge={onAcknowledge}
+                    onDismiss={onDismiss}
+                    isActioning={isActioning}
+                  />
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -308,7 +335,12 @@ export function SignalTimeline({
   isActioning,
   onShowGraph,
 }: SignalTimelineProps) {
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  const handleSelectGroup = (ids: string[]) => {
+    if (ids.length === 0) setSelectedIds(new Set())
+    else setSelectedIds(new Set(ids))
+  }
 
   const topicGroups = useMemo(() => groupByTopic(signals), [signals])
 
@@ -334,8 +366,8 @@ export function SignalTimeline({
           key={group.topic_id}
           group={group}
           colorIndex={idx}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
+          selectedIds={selectedIds}
+          onSelectGroup={handleSelectGroup}
           onAcknowledge={onAcknowledge}
           onDismiss={onDismiss}
           isActioning={isActioning}
