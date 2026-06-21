@@ -250,6 +250,16 @@ INSERT INTO keyword_alert_triggers (id, rule_id, content_item_id, matched_keywor
 ON CONFLICT (id) DO NOTHING;
 
 -- ==========================================================================
+-- 9. Forwarding Chains (for network graph)
+-- ==========================================================================
+-- @ne_underground_watch forwards FROM @naga_updates
+UPDATE content_items SET forwarded_from_channel_name = 'naga_updates' WHERE id IN ('nag-ci-06', 'nag-ci-14', 'nag-ci-18', 'nag-ci-37', 'nag-ci-44');
+-- @dimapur_connect forwards FROM @kohima_pulse
+UPDATE content_items SET forwarded_from_channel_name = 'kohima_pulse' WHERE id IN ('nag-ci-09', 'nag-ci-16', 'nag-ci-36', 'nag-ci-47');
+-- @kohima_pulse forwards FROM @naga_updates
+UPDATE content_items SET forwarded_from_channel_name = 'naga_updates' WHERE id IN ('nag-ci-04', 'nag-ci-12', 'nag-ci-49');
+
+-- ==========================================================================
 -- Done. Verify counts:
 -- ==========================================================================
 SELECT 'Topics' AS entity, COUNT(*) FROM topics WHERE id = 'nag-topic-01'

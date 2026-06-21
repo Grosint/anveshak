@@ -1,8 +1,10 @@
+import { useCallback, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line,
   XAxis, YAxis, Tooltip, CartesianGrid,
 } from 'recharts'
+import cytoscape from 'cytoscape'
 import { intelligenceApi } from '../../api/intelligence'
 import { signalsApi } from '../../api/signals'
 import { alertsApi } from '../../api/alerts'
@@ -187,6 +189,143 @@ export default function DashboardTab({ topicId }: DashboardTabProps) {
           )}
         </div>
       </div>
+
+      {/* Row 4: Forwarding Network Graph */}
+      <ForwardingNetwork topicId={topicId} />
+    </div>
+  )
+}
+
+
+const PLATFORM_COLORS: Record<string, string> = {
+  telegram: '#38bdf8',
+  instagram: '#e879f9',
+  web: '#94a3b8',
+  rss: '#a3e635',
+  reddit: '#f97316',
+  twitter: '#60a5fa',
+  bluesky: '#818cf8',
+  unknown: '#64748b',
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CY_STYLE: any[] = [
+  { selector: 'node', style: {
+    label: 'data(label)',
+    'text-valign': 'bottom',
+    'text-halign': 'center',
+    'font-size': 9,
+    color: '#cbd5e1',
+    'text-margin-y': 4,
+    'background-color': 'data(color)',
+    width: 'data(size)',
+    height: 'data(size)',
+    'border-width': 1,
+    'border-color': '#334155',
+  }},
+  { selector: 'edge', style: {
+    width: 'data(weight)',
+    'line-color': '#475569',
+    'target-arrow-color': '#475569',
+    'target-arrow-shape': 'triangle',
+    'curve-style': 'bezier',
+    opacity: 0.7,
+  }},
+  { selector: 'node:active, node:selected', style: {
+    'border-color': '#38bdf8',
+    'border-width': 2,
+  }},
+]
+
+function ForwardingNetwork({ topicId }: { topicId: string }) {
+  const cyContainer = useRef<HTMLDivElement>(null)
+  const cyRef = useRef<cytoscape.Core | null>(null)
+
+  const { data: graph, isLoading } = useQuery({
+    queryKey: ['network-graph', topicId],
+    queryFn: () => intelligenceApi.networkGraph(topicId, 1, 200),
+    staleTime: 120_000,
+  })
+
+  const initGraph = useCallback(() => {
+    if (!cyContainer.current || !graph || graph.nodes.length === 0) return
+    if (cyRef.current) cyRef.current.destroy()
+
+    const maxPosts = Math.max(...graph.nodes.map((n) => n.post_count), 1)
+
+    const elements: cytoscape.ElementDefinition[] = [
+      ...graph.nodes.map((n) => ({
+        data: {
+          id: n.id,
+          label: n.id.length > 18 ? n.id.slice(0, 16) + '…' : n.id,
+          color: PLATFORM_COLORS[n.platform] || PLATFORM_COLORS.unknown,
+          size: 16 + (n.post_count / maxPosts) * 30,
+        },
+      })),
+      ...graph.edges.map((e, i) => ({
+        data: {
+          id: `e-${i}`,
+          source: e.source,
+          target: e.target,
+          weight: Math.min(e.weight, 6),
+        },
+      })),
+    ]
+
+    cyRef.current = cytoscape({
+      container: cyContainer.current,
+      elements,
+      style: CY_STYLE,
+      layout: {
+        name: 'cose',
+        nodeRepulsion: () => 8000,
+        idealEdgeLength: () => 150,
+        gravity: 0.4,
+        numIter: 300,
+        animate: true,
+        animationDuration: 600,
+      } as cytoscape.LayoutOptions,
+      minZoom: 0.3,
+      maxZoom: 3,
+    })
+
+    cyRef.current.on('tap', 'node', (evt) => {
+      const node = evt.target
+      cyRef.current?.elements().style({ opacity: 0.2 })
+      node.style({ opacity: 1 })
+      node.neighborhood().style({ opacity: 1 })
+    })
+    cyRef.current.on('tap', (evt) => {
+      if (evt.target === cyRef.current) {
+        cyRef.current?.elements().style({ opacity: 1 })
+      }
+    })
+  }, [graph])
+
+  useEffect(() => {
+    initGraph()
+    return () => { cyRef.current?.destroy() }
+  }, [initGraph])
+
+  return (
+    <div className="bg-anveshak-card border border-anveshak-border rounded-lg p-4">
+      <h3 className="text-xs font-semibold text-text-primary uppercase tracking-wide mb-3">
+        Forwarding Network
+      </h3>
+      {isLoading ? (
+        <div className="h-[320px] flex items-center justify-center"><Spinner /></div>
+      ) : !graph || graph.nodes.length === 0 ? (
+        <div className="h-[320px] flex items-center justify-center text-xs text-text-muted">
+          No forwarding data detected
+        </div>
+      ) : (
+        <>
+          <p className="text-[10px] text-text-muted mb-2">
+            {graph.node_count} authors · {graph.edge_count} forwarding chains · click node to highlight
+          </p>
+          <div ref={cyContainer} className="h-[320px] w-full rounded border border-anveshak-border/50" />
+        </>
+      )}
     </div>
   )
 }
