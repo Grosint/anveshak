@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { topicsApi } from '../../api/topics'
 import { SourceDiscoveryTab } from '../discovery/SourceDiscoveryTab'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { Spinner } from '../ui/Spinner'
+
+const SourceAssessmentPanel = lazy(() => import('./SourceAssessmentPanel'))
 
 const HEALTH_VARIANT: Record<string, 'success' | 'warning' | 'danger' | 'default'> = {
   healthy: 'success', degraded: 'warning', down: 'danger', unverified: 'default',
@@ -17,6 +19,7 @@ interface SourcesTabProps {
 export default function SourcesTab({ topicId }: SourcesTabProps) {
   const qc = useQueryClient()
   const [view, setView] = useState<'linked' | 'discover'>('linked')
+  const [assessSource, setAssessSource] = useState<{ id: string; name: string } | null>(null)
 
   const { data: linkedSources = [], isLoading } = useQuery({
     queryKey: ['topic-sources', topicId],
@@ -60,14 +63,23 @@ export default function SourcesTab({ topicId }: SourcesTabProps) {
                     <span className="text-sm text-text-primary truncate">{src.name}</span>
                     <span className="text-[10px] text-text-muted">{src.item_count} items</span>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => unlinkMut.mutate(src.id)}
-                    disabled={unlinkMut.isPending}
-                  >
-                    Unlink
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setAssessSource({ id: src.id, name: src.name })}
+                    >
+                      Assess
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => unlinkMut.mutate(src.id)}
+                      disabled={unlinkMut.isPending}
+                    >
+                      Unlink
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -76,6 +88,20 @@ export default function SourcesTab({ topicId }: SourcesTabProps) {
           <SourceDiscoveryTab topicId={topicId} />
         )}
       </div>
+
+      {/* Source Assessment slide-over */}
+      {assessSource && (
+        <div className="border-t border-anveshak-border bg-anveshak-card">
+          <Suspense fallback={<Spinner label="Loading assessment..." />}>
+            <SourceAssessmentPanel
+              topicId={topicId}
+              sourceId={assessSource.id}
+              sourceName={assessSource.name}
+              onClose={() => setAssessSource(null)}
+            />
+          </Suspense>
+        </div>
+      )}
     </div>
   )
 }

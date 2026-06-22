@@ -131,6 +131,39 @@ class TelegramAdapter(SourceAdapterBase):
                 "error": str(exc),
             }
 
+    async def fetch_profile_metadata(self, handle: str) -> dict | None:
+        """Fetch Telegram channel/group metadata via GetFullChannel."""
+        if self._client is None:
+            return None
+        try:
+            channel_id = self._normalise_handle(handle)
+            entity = await self._client.get_entity(channel_id)
+            full = await self._client(
+                __import__("telethon.tl.functions.channels", fromlist=["GetFullChannelRequest"])
+                .GetFullChannelRequest(channel=entity)
+            )
+            chat = full.chats[0] if full.chats else entity
+            full_chat = full.full_chat
+            return {
+                "title": getattr(chat, "title", None),
+                "username": getattr(chat, "username", None),
+                "about": getattr(full_chat, "about", None) or "",
+                "participants_count": getattr(full_chat, "participants_count", None),
+                "created_at": getattr(chat, "date", None).isoformat() if getattr(chat, "date", None) else None,
+                "is_verified": getattr(chat, "verified", False),
+                "is_scam": getattr(chat, "scam", False),
+                "is_fake": getattr(chat, "fake", False),
+            }
+        except (ChannelPrivateError, ChannelInvalidError):
+            log.info("telegram.profile_metadata.private", handle=handle)
+            return None
+        except FloodWaitError as exc:
+            log.warning("telegram.profile_metadata.flood", seconds=exc.seconds)
+            return None
+        except Exception as exc:
+            log.warning("telegram.profile_metadata.failed", handle=handle, error=str(exc))
+            return None
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------

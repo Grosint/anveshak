@@ -32,6 +32,7 @@ from .routes.tipline import router as tipline_router
 from .routes.templates import router as templates_router
 from .routes.trackers import router as trackers_router
 from .routes.alerts import router as alerts_router
+from .routes.assessments import router as assessments_router
 
 log = structlog.get_logger(__name__)
 
@@ -123,6 +124,7 @@ app.include_router(tipline_router)        # Engine C: citizen tipline ingest
 app.include_router(templates_router)      # Engine C: scam template CRUD
 app.include_router(trackers_router)       # Trackers: persistent analyst case files
 app.include_router(alerts_router)         # Keyword alert rules for social monitoring
+app.include_router(assessments_router)   # Source Assessment: topic-scoped source intelligence cards
 
 # Prometheus metrics endpoint — uses isolated registry (API_REGISTRY) so custom
 # api_* metrics are exposed alongside default process metrics.

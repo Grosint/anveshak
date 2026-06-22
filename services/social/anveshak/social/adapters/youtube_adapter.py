@@ -537,3 +537,51 @@ class YouTubeAdapter(SourceAdapterBase):
             "checked_at": datetime.now(UTC).isoformat(),
             **details,
         }
+
+    async def fetch_profile_metadata(self, handle: str) -> dict | None:
+        """Fetch YouTube channel profile via channels().list (1 quota unit)."""
+        import asyncio
+
+        if self._youtube is None:
+            return None
+
+        try:
+            channel_id = await self._resolve_channel(handle)
+            if not channel_id:
+                return None
+
+            if not await self._quota_guard.check_and_increment(units=1):
+                log.warning("youtube.profile_metadata.quota_exhausted", handle=handle)
+                return None
+
+            resp = await asyncio.to_thread(
+                lambda: self._youtube.channels().list(
+                    part="snippet,statistics",
+                    id=channel_id,
+                ).execute()
+            )
+
+            items = resp.get("items", [])
+            if not items:
+                return None
+
+            ch = items[0]
+            snippet = ch.get("snippet", {})
+            stats = ch.get("statistics", {})
+
+            return {
+                "channel_id": channel_id,
+                "title": snippet.get("title"),
+                "description": snippet.get("description", "")[:500],
+                "custom_url": snippet.get("customUrl"),
+                "published_at": snippet.get("publishedAt"),
+                "country": snippet.get("country"),
+                "thumbnail_url": snippet.get("thumbnails", {}).get("default", {}).get("url"),
+                "subscriber_count": int(stats.get("subscriberCount", 0)),
+                "hidden_subscriber_count": stats.get("hiddenSubscriberCount", False),
+                "video_count": int(stats.get("videoCount", 0)),
+                "view_count": int(stats.get("viewCount", 0)),
+            }
+        except Exception as exc:
+            log.warning("youtube.profile_metadata.failed", handle=handle, error=str(exc))
+            return None

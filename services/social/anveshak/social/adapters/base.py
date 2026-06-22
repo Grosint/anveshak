@@ -117,6 +117,16 @@ class SourceAdapterBase(ABC):
         """
         return False
 
+    async def fetch_profile_metadata(self, handle: str) -> dict | None:
+        """Fetch platform profile metadata for a source handle.
+
+        Returns platform-specific metadata dict (subscriber count, bio,
+        account creation date, etc.) or None if not supported / failed.
+        Default implementation returns None — override in subclasses
+        that support profile fetching.
+        """
+        return None
+
     @abstractmethod
     async def health(self) -> dict:
         """Return adapter health status.

@@ -438,3 +438,112 @@ async def fetch_topic_template_matches(
     async with pool.acquire() as conn:
         rows = await conn.fetch(SQL_FETCH_TOPIC_TEMPLATE_MATCHES, topic_id)
     return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Source Assessment — Phase 2
+# ---------------------------------------------------------------------------
+
+SQL_FETCH_ASSESSMENT = """
+    SELECT * FROM source_assessments WHERE id = $1
+"""
+
+SQL_FETCH_SOURCE_INFO = """
+    SELECT name, platform, url_or_handle FROM sources WHERE id = $1
+"""
+
+SQL_SOURCE_CONTENT_FOR_BRIEF = """
+    SELECT id,
+           COALESCE(translated_text, clean_text) AS clean_text,
+           credibility_score_at_capture,
+           url,
+           captured_at
+    FROM content_items
+    WHERE source_id = $2
+      AND (topic_id = $1
+           OR id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
+      AND clean_text IS NOT NULL
+      AND length(clean_text) > 20
+    ORDER BY captured_at DESC
+    LIMIT $3
+"""
+
+SQL_SET_ASSESSMENT_BRIEF = """
+    UPDATE source_assessments
+    SET brief_md = $2,
+        confidence_score = $3,
+        generated_at = $4,
+        updated_at = $4
+    WHERE id = $1 AND generated_at IS NULL
+"""
+
+SQL_SET_ASSESSMENT_FAILED = """
+    UPDATE source_assessments
+    SET generation_error = $2,
+        updated_at = NOW()
+    WHERE id = $1
+"""
+
+
+async def fetch_assessment(
+    pool: asyncpg.Pool, assessment_id: str
+) -> dict[str, Any] | None:
+    """Fetch assessment row for the reporter worker."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(SQL_FETCH_ASSESSMENT, assessment_id)
+    return dict(row) if row else None
+
+
+async def fetch_source_info(
+    pool: asyncpg.Pool, source_id: str
+) -> dict[str, Any] | None:
+    """Fetch source name, platform, url_or_handle for assessment prompt."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(SQL_FETCH_SOURCE_INFO, source_id)
+    return dict(row) if row else None
+
+
+async def fetch_source_content_for_brief(
+    pool: asyncpg.Pool,
+    topic_id: str,
+    source_id: str,
+    limit: int = 30,
+) -> list[dict[str, Any]]:
+    """Fetch content items for a source in a topic, most recent first."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(SQL_SOURCE_CONTENT_FOR_BRIEF, topic_id, source_id, limit)
+    return [dict(r) for r in rows]
+
+
+async def set_assessment_brief(
+    pool: asyncpg.Pool,
+    assessment_id: str,
+    brief_md: str,
+    confidence_score: float,
+) -> bool:
+    """Set brief_md + generated_at ONCE via WHERE generated_at IS NULL guard.
+
+    Returns True if updated, False if already set (idempotency).
+    """
+    now = datetime.now(UTC)
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            SQL_SET_ASSESSMENT_BRIEF,
+            assessment_id,
+            brief_md,
+            confidence_score,
+            now,
+        )
+    updated = int(result.split()[-1])
+    return updated > 0
+
+
+async def set_assessment_failed(
+    pool: asyncpg.Pool,
+    assessment_id: str,
+    error_message: str,
+) -> None:
+    """Write failure reason into source_assessments.generation_error."""
+    async with pool.acquire() as conn:
+        await conn.execute(SQL_SET_ASSESSMENT_FAILED, assessment_id, error_message)
+    log.warning("reporter.assessment_failed", assessment_id=assessment_id, error=error_message)

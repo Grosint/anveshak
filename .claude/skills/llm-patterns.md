@@ -3,6 +3,8 @@
 ## When to load: any task involving Ollama, report generation, or LLM inference
 
 > See also: `learned/phase-check-pitfalls.md` — transient LLM-output Pydantic models and the labels rule
+> See also: `learned/stats-first-llm-second.md` — deterministic SQL stats as Phase 0, LLM brief as Phase 2 with separate endpoint
+> See also: `learned/generated-at-null-for-stats-only.md` — generated_at must stay NULL until LLM brief is stored; setting at Phase 0 breaks idempotency guard
 > See also: `learned/sql-param-count-caller-mismatch.md` — adding $N to SQL constant requires updating ALL callers; grep for the constant name
 > See also: `learned/role-constraint-migration-order.md` — update CHECK constraint BEFORE inserting rows with new role values
 > See also: `learned/dual-layer-rls-safety-net.md` — application filtering + PostgreSQL RLS for defence/LEA deployments

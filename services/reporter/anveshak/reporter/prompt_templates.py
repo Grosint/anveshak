@@ -315,3 +315,92 @@ def render_prompt(
         source_count=source_count,
         date_range=date_range,
     )
+
+
+# ---------------------------------------------------------------------------
+# Source Assessment prompt — Phase 2
+# ---------------------------------------------------------------------------
+
+_ASSESSMENT_JSON_SCHEMA = """\
+You MUST respond with ONLY a JSON object matching this exact schema (no other text):
+{
+  "source_characterization": "<string: 2-3 sentences describing what this source is>",
+  "posting_behavior": "<string: posting patterns, frequency, timing observations>",
+  "key_themes": ["<string: theme 1>", "<string: theme 2>", ...],
+  "narrative_role": "<originator|amplifier|aggregator>",
+  "intelligence_value": "<HIGH|MEDIUM|LOW: with justification>",
+  "risk_indicators": ["<string: red flag or concern>", ...],
+  "cited_claims": [
+    {
+      "claim": "<factual statement>",
+      "content_item_ids": ["<id1>", "<id2>"],
+      "labels": {"classification": "OPEN", "domain": "assessment", "owner_org": "anveshak"}
+    }
+  ],
+  "confidence_level": <float 0.0-1.0>,
+  "labels": {"classification": "OPEN", "domain": "assessment", "owner_org": "anveshak"}
+}"""
+
+_ASSESSMENT_TEMPLATE = """\
+You are an OSINT intelligence analyst assessing a monitored source.
+
+RULES:
+1. Only use facts present in the CONTEXT below.
+2. If a fact is not in the context, do NOT invent it.
+3. Every factual claim in cited_claims MUST reference specific content_item_id values from the CONTEXT.
+4. narrative_role: "originator" if this source was the earliest in its narrative clusters,
+   "amplifier" if it shares content from other sources, "aggregator" if it curates from multiple.
+5. intelligence_value: HIGH = unique sourcing or early narrative detection,
+   MEDIUM = corroborative value, LOW = noise or duplicate content.
+6. risk_indicators: look for coordinated behavior, rapid topic shifts, bot-like patterns,
+   propaganda markers, or suspicious identifier patterns.
+
+<source>{{ source_name }}</source>
+<platform>{{ platform }}</platform>
+<topic>{{ topic_name }}</topic>
+<keywords>{{ keywords }}</keywords>
+
+{% if stats_summary %}
+<stats>
+{{ stats_summary }}
+</stats>
+{% endif %}
+
+{% if platform_metadata %}
+<profile>
+{{ platform_metadata }}
+</profile>
+{% endif %}
+
+<context>
+{{ context }}
+</context>
+
+{{ json_schema }}
+"""
+
+
+def render_assessment_prompt(
+    source_name: str,
+    platform: str,
+    topic_name: str,
+    keywords: list[str],
+    context: str,
+    stats_summary: str = "",
+    platform_metadata: str = "",
+) -> str:
+    """Render prompt for source assessment LLM brief.
+
+    User-controlled values wrapped in XML boundary markers per CLAUDE.md security rule.
+    """
+    tmpl = _env.from_string(_ASSESSMENT_TEMPLATE)
+    return tmpl.render(
+        source_name=source_name,
+        platform=platform,
+        topic_name=topic_name,
+        keywords=", ".join(keywords) if keywords else "(none)",
+        context=context,
+        stats_summary=stats_summary,
+        platform_metadata=platform_metadata,
+        json_schema=_ASSESSMENT_JSON_SCHEMA,
+    )

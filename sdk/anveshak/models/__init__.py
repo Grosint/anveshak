@@ -7,6 +7,7 @@ from .report import Report, ReportType, ReportSourceWarning
 from .job import AnalysisJob, JobType, JobStatus
 from .catalog import CatalogEntry, CatalogApproval, DiscoveredSource, SourceSuggestion
 from .tracker import Tracker
+from .assessment import SourceAssessment, SourceStats
 
 __all__ = [
     "Labels", "Topic", "TopicStatus", "Source", "CredibilityAuditLog",
@@ -15,4 +16,5 @@ __all__ = [
     "AnalysisJob", "JobType", "JobStatus",
     "CatalogEntry", "CatalogApproval", "DiscoveredSource", "SourceSuggestion",
     "Tracker",
+    "SourceAssessment", "SourceStats",
 ]
