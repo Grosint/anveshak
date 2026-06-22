@@ -29,6 +29,7 @@ BENCHMARK_LABELS = json.dumps({
     "domain": "benchmark",
     "owner_org": "anveshak",
 })
+BENCHMARK_ORG_ID = "org_benchmark"
 
 # ---------------------------------------------------------------------------
 # SQL
@@ -46,16 +47,16 @@ SQL_INSERT_TOPIC = """
     INSERT INTO topics (
         id, name, keywords, languages, credibility_min, signal_threshold,
         status, clip_categories, scheduled_report_cron, scheduled_report_type,
-        created_at, updated_at, labels
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        created_at, updated_at, labels, org_id
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
     ON CONFLICT (id) DO NOTHING
 """
 
 SQL_INSERT_SOURCE = """
     INSERT INTO sources (
         id, name, url_or_handle, platform, credibility_score,
-        is_active, created_at, updated_at, labels
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        is_active, created_at, updated_at, labels, org_id
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
     ON CONFLICT (id) DO NOTHING
 """
 
@@ -65,13 +66,21 @@ SQL_LINK_TOPIC_SOURCE = """
     ON CONFLICT (topic_id, source_id) DO NOTHING
 """
 
+SQL_LINK_ORG_SOURCE = """
+    INSERT INTO org_sources (org_id, source_id)
+    VALUES ($1, $2)
+    ON CONFLICT DO NOTHING
+"""
+
 SQL_INSERT_CONTENT = """
     INSERT INTO content_items (
         id, topic_id, source_id, raw_text, clean_text, language,
         content_hash, url, captured_at, credibility_score_at_capture,
-        created_at, updated_at, labels
+        created_at, updated_at, labels,
+        content_quality, clean_hash, title, org_id
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+            $14, $15, $16, $17)
     ON CONFLICT(content_hash) DO NOTHING
     RETURNING id
 """
@@ -159,6 +168,7 @@ async def inject_event(
             now,
             now,
             BENCHMARK_LABELS,
+            BENCHMARK_ORG_ID,
         )
 
         # 2. Create sources and link to topic
@@ -180,9 +190,11 @@ async def inject_event(
                 now,
                 now,
                 BENCHMARK_LABELS,
+                BENCHMARK_ORG_ID,
             )
 
             await conn.execute(SQL_LINK_TOPIC_SOURCE, topic_id, source_id)
+            await conn.execute(SQL_LINK_ORG_SOURCE, BENCHMARK_ORG_ID, source_id)
 
         # 3. Insert content items from fixtures
         fixtures_dir = corpus_dir / "fixtures"
@@ -213,6 +225,9 @@ async def inject_event(
             from datetime import timedelta
             captured_at = now - timedelta(days=5) + timedelta(seconds=offset_from_earliest)
             source_id = source_ids[src["fixture"]]
+            clean_text = fixture["clean_text"]
+            clean_hash = _compute_hash(clean_text)
+            title = clean_text[:120].split("\n")[0] if clean_text else ""
 
             result = await conn.fetchrow(
                 SQL_INSERT_CONTENT,
@@ -220,7 +235,7 @@ async def inject_event(
                 topic_id,
                 source_id,
                 fixture["raw_text"],
-                fixture["clean_text"],
+                clean_text,
                 fixture.get("language", "en"),
                 content_hash,
                 fixture.get("url", ""),
@@ -229,6 +244,10 @@ async def inject_event(
                 now,
                 now,
                 BENCHMARK_LABELS,
+                "good",         # content_quality — benchmark fixtures are curated
+                clean_hash,
+                title,
+                BENCHMARK_ORG_ID,
             )
             if result:
                 items_inserted += 1

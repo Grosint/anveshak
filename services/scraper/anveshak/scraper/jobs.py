@@ -233,6 +233,7 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
                 quality,
                 c_hash,
                 title,
+                topic["org_id"],
             )
         if result is not None:
             content_item_id = result["id"]
@@ -442,6 +443,7 @@ async def poll_rss_sources(ctx: dict, topic_id: str) -> int:
                                 quality,
                                 c_hash,
                                 title,
+                                topic["org_id"],
                             )
 
                         if result is not None:
@@ -541,6 +543,7 @@ async def scrape_darkweb_topic(ctx: dict, topic_id: str) -> int:
                 quality,
                 c_hash,
                 title,
+                topic["org_id"],
             )
         if result is not None:
             content_item_id = result["id"]
