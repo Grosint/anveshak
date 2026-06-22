@@ -239,7 +239,7 @@ async def _download_media_attachments(
                 row = await conn.fetchrow(SQL_GET_MEDIA_ASSET_BY_HASH, dl.content_hash)
 
             if row:
-                await arq_pool.enqueue_job("run_vision_analysis", row["id"])
+                await arq_pool.enqueue_job("run_vision_analysis", row["id"], _queue_name="arq:vision")
                 log.debug(
                     "social.ingest.vision_dispatched",
                     media_asset_id=row["id"],

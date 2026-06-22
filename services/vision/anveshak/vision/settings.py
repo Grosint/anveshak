@@ -45,6 +45,7 @@ class VisionSettings(BaseSettings):
     # Video keyframe extraction
     video_keyframe_interval_s: int = 5
     vision_max_video_size_mb: int = 500
+    video_max_analysis_frames: int = 30  # cap frames for YOLO/CLIP on long videos
 
     # pHash reverse lookup
     phash_duplicate_threshold: int = 8

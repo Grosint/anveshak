@@ -141,10 +141,31 @@ async def run_vision_analysis(ctx: dict, media_asset_id: str) -> dict:
 
         is_video = is_video_path(storage_path)
 
+        # STEP 1b: For video — extract frames once, reuse across all steps
+        frames: list[bytes] = []
+        if is_video:
+            from pathlib import Path as _Path
+            frames = await extract_keyframes(_Path(storage_path))
+            if not frames:
+                log.error("vision.job.video_no_frames", media_asset_id=media_asset_id)
+                return {"error": "video_no_frames", "media_asset_id": media_asset_id}
+            max_frames = settings.video_max_analysis_frames
+            if len(frames) > max_frames:
+                step = len(frames) / max_frames
+                frames = [frames[int(i * step)] for i in range(max_frames)]
+                log.info(
+                    "vision.video.frames_capped",
+                    original_count=len(frames),
+                    capped=max_frames,
+                )
+
         # STEP 2: EXIF + pHash (criteria 4.5, 4.6)
         exif_data: dict = {}
         phash_val: Optional[int] = None
-        if not is_video:
+        if is_video:
+            # pHash on first frame as representative; EXIF not applicable to video
+            phash_val = await asyncio.to_thread(compute_phash, frames[0])
+        else:
             exif_data = await asyncio.to_thread(
                 extract_exif, image_bytes, settings.exif_backend
             ) or {}
@@ -155,7 +176,11 @@ async def run_vision_analysis(ctx: dict, media_asset_id: str) -> dict:
         # STEP 3: YOLO detection (criteria 4.7–4.11)
         yolo_detections: list[dict] = []
         high_interest: list[str] = []
-        if not is_video:
+        if is_video:
+            yolo_detections, high_interest = await _aggregate_yolo_frames(
+                frames, media_asset_id
+            )
+        else:
             try:
                 yolo = _get_yolo()
                 detections = await asyncio.to_thread(yolo.detect, image_bytes)
@@ -170,9 +195,10 @@ async def run_vision_analysis(ctx: dict, media_asset_id: str) -> dict:
         synthetic_probability: Optional[float] = None
 
         if is_video:
-            deepfake_score, deepfake_model_name = await _analyse_video(
-                storage_path, media_asset_id
+            deepfake_score, deepfake_model_name = await _deepfake_video_frames(
+                frames, media_asset_id
             )
+            synthetic_probability = deepfake_score
         else:
             deepfake_score, deepfake_model_name = await _analyse_image(
                 image_bytes, media_asset_id
@@ -181,15 +207,20 @@ async def run_vision_analysis(ctx: dict, media_asset_id: str) -> dict:
 
         # STEP 5: CLIP classification (criteria 4.22–4.24)
         clip_labels: list[dict] = []
-        if topic_id and not is_video:
+        if topic_id:
             try:
                 categories = await get_topic_clip_categories(conn, topic_id)
                 if categories:
-                    clip = _get_clip()
-                    clip_results = await asyncio.to_thread(
-                        clip.classify, image_bytes, categories
-                    )
-                    clip_labels = clip.to_jsonb(clip_results)
+                    if is_video:
+                        clip_labels = await _aggregate_clip_frames(
+                            frames, categories, media_asset_id
+                        )
+                    else:
+                        clip = _get_clip()
+                        clip_results = await asyncio.to_thread(
+                            clip.classify, image_bytes, categories
+                        )
+                        clip_labels = clip.to_jsonb(clip_results)
             except Exception as exc:
                 log.warning("vision.clip.failed", media_asset_id=media_asset_id, error=str(exc))
 
@@ -275,19 +306,11 @@ async def _analyse_image(image_bytes: bytes, media_asset_id: str) -> tuple[float
         return None, "error"
 
 
-async def _analyse_video(storage_path: str, media_asset_id: str) -> tuple[float | None, str]:
-    """Extract keyframes and propagate worst-case deepfake score."""
+async def _deepfake_video_frames(
+    frames: list[bytes], media_asset_id: str
+) -> tuple[float | None, str]:
+    """Score pre-extracted video frames for deepfake, return worst-case."""
     try:
-        from pathlib import Path
-        frames = await extract_keyframes(Path(storage_path))
-        if not frames:
-            log.error(
-                "vision.deepfake_video.no_frames",
-                media_asset_id=media_asset_id,
-                storage_path=storage_path,
-            )
-            return None, "no_frames"
-
         video_detector = _get_deepfake_video_detector()
         frame_scores: list[float] = []
         for frame_bytes in frames:
@@ -297,7 +320,7 @@ async def _analyse_video(storage_path: str, media_asset_id: str) -> tuple[float 
         score = worst_case_score(frame_scores)
         model_name = f"{settings.vision_deepfake_video_model}:video:{len(frames)}frames"
         log.info(
-            "vision.video.analysed",
+            "vision.video.deepfake_analysed",
             frame_count=len(frames),
             worst_score=score,
         )
@@ -309,6 +332,57 @@ async def _analyse_video(storage_path: str, media_asset_id: str) -> tuple[float 
             error=str(exc),
         )
         return None, "error"
+
+
+async def _aggregate_yolo_frames(
+    frames: list[bytes], media_asset_id: str
+) -> tuple[list[dict], list[str]]:
+    """Run YOLO on video frames, union detections deduplicated by label."""
+    try:
+        yolo = _get_yolo()
+        best_per_label: dict[str, Any] = {}  # label -> YOLODetection (highest confidence)
+
+        for frame_bytes in frames:
+            detections = await asyncio.to_thread(yolo.detect, frame_bytes)
+            for d in detections:
+                if d.label not in best_per_label or d.confidence > best_per_label[d.label].confidence:
+                    best_per_label[d.label] = d
+
+        deduped = list(best_per_label.values())
+        yolo_detections = yolo.to_jsonb(deduped)
+        high_interest = yolo.high_interest_labels(deduped)
+        return yolo_detections, high_interest
+    except Exception as exc:
+        log.warning("vision.yolo.video_failed", media_asset_id=media_asset_id, error=str(exc))
+        return [], []
+
+
+async def _aggregate_clip_frames(
+    frames: list[bytes],
+    categories: list[str],
+    media_asset_id: str,
+) -> list[dict]:
+    """Run CLIP on video frames, return best score per category across frames."""
+    try:
+        if not categories:
+            return []
+        clip = _get_clip()
+        best_scores: dict[str, float] = {cat: 0.0 for cat in categories}
+
+        for frame_bytes in frames:
+            results = await asyncio.to_thread(clip.classify, frame_bytes, categories)
+            for r in results:
+                if r.score > best_scores[r.label]:
+                    best_scores[r.label] = r.score
+
+        clip_labels = [
+            {"label": cat, "score": round(score, 4)}
+            for cat, score in sorted(best_scores.items(), key=lambda x: x[1], reverse=True)
+        ]
+        return clip_labels
+    except Exception as exc:
+        log.warning("vision.clip.video_failed", media_asset_id=media_asset_id, error=str(exc))
+        return []
 
 
 # ---------------------------------------------------------------------------
