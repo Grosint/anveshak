@@ -288,11 +288,67 @@ async def poll_social_topic(ctx: dict, topic_id: str, include_x: bool = True) ->
 
 
 # ---------------------------------------------------------------------------
+# ARQ job: fetch_source_metadata — on-demand profile metadata for assessments
+# ---------------------------------------------------------------------------
+
+async def fetch_source_metadata(
+    ctx: dict,
+    platform: str,
+    handle: str,
+    assessment_id: str,
+) -> dict | None:
+    """Fetch platform profile metadata and store in source_assessments.platform_metadata.
+
+    Called from API service when creating a source assessment.
+    Looks up the adapter by platform, calls fetch_profile_metadata(handle),
+    then UPDATEs the assessment row with the result.
+    """
+    # Find adapter for this platform
+    adapter = None
+    for a in _ADAPTERS.values():
+        if a.platform == platform:
+            adapter = a
+            break
+
+    if adapter is None:
+        log.info(
+            "social.fetch_metadata.no_adapter",
+            platform=platform,
+            reason="adapter not enabled or not authenticated",
+        )
+        return None
+
+    metadata = await adapter.fetch_profile_metadata(handle)
+    if metadata is None:
+        log.info("social.fetch_metadata.empty", platform=platform, handle=handle)
+        return None
+
+    # Store in assessment row
+    import json
+    pool = ctx.get("db_pool")
+    if pool:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE source_assessments SET platform_metadata = $1, updated_at = NOW() WHERE id = $2",
+                json.dumps(metadata, default=str),
+                assessment_id,
+            )
+        log.info(
+            "social.fetch_metadata.stored",
+            platform=platform,
+            handle=handle,
+            assessment_id=assessment_id,
+        )
+
+    return metadata
+
+
+# ---------------------------------------------------------------------------
 # ARQ WorkerSettings
 # ---------------------------------------------------------------------------
 
 class WorkerSettings:
-    functions = [poll_social_topic]
+    functions = [poll_social_topic, fetch_source_metadata]
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = RedisSettings.from_dsn(settings.redis_url)

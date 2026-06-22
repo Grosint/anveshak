@@ -166,6 +166,87 @@ async def call_ollama(
     return data.get("response", "")
 
 
+# ---------------------------------------------------------------------------
+# Source Assessment Brief — Phase 2 output model
+# ---------------------------------------------------------------------------
+
+class AssessmentCitation(BaseModel):
+    """A factual claim with specific content_item_id references."""
+    model_config = ConfigDict(strict=True)
+
+    claim: str
+    content_item_ids: list[str]
+    labels: Labels
+
+
+class SourceAssessmentBrief(BaseModel):
+    """Validated LLM output for source assessment.
+
+    Every claim MUST cite specific content_item_ids.
+    CLAUDE.md rule 9: never store raw LLM output.
+    CLAUDE.md rule 2: labels is MANDATORY.
+    """
+    model_config = ConfigDict(strict=True)
+
+    source_characterization: str       # 2-3 sentences: what this source is
+    posting_behavior: str              # posting patterns, frequency, timing
+    key_themes: list[str]              # top 5 themes this source covers
+    narrative_role: str                # originator | amplifier | aggregator
+    intelligence_value: str            # HIGH | MEDIUM | LOW with justification
+    risk_indicators: list[str]         # red flags (disinfo, coordination, etc.)
+    cited_claims: list[AssessmentCitation]
+    confidence_level: float            # 0.0–1.0
+    labels: Labels
+
+
+def parse_assessment_response(raw: str) -> SourceAssessmentBrief:
+    """Parse and validate raw LLM string into SourceAssessmentBrief.
+
+    Raises ValueError / ValidationError on failure.
+    """
+    cleaned = _extract_json_from_text(raw)
+    data: dict[str, Any] = json.loads(cleaned)
+    return SourceAssessmentBrief(**data)
+
+
+async def call_ollama_for_assessment(
+    prompt: str,
+    settings: Any,
+    max_retries: int,
+) -> SourceAssessmentBrief | None:
+    """Attempt assessment brief generation with retries.
+
+    Same pattern as call_ollama_with_retry but uses SourceAssessmentBrief schema.
+    """
+    retry_prompt = prompt
+    for attempt in range(1, max_retries + 1):
+        try:
+            raw = await call_ollama(
+                prompt=retry_prompt,
+                model=settings.ollama_model,
+                host=settings.ollama_host,
+                timeout=settings.ollama_report_timeout_s,
+            )
+            result = parse_assessment_response(raw)
+            log.info("reporter.assessment_llm_success", attempt=attempt)
+            return result
+        except Exception as exc:
+            log.warning(
+                "reporter.assessment_llm_failed",
+                attempt=attempt,
+                max_retries=max_retries,
+                error=str(exc),
+            )
+            retry_prompt = (
+                prompt
+                + "\n\nIMPORTANT: Respond with ONLY the JSON object. "
+                "No preamble, no markdown, no explanation."
+            )
+
+    log.error("reporter.assessment_llm_all_retries_failed", max_retries=max_retries)
+    return None
+
+
 async def call_ollama_with_retry(
     prompt: str,
     settings: Any,

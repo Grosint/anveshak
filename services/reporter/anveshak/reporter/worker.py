@@ -28,9 +28,9 @@ configure_logging("reporter")
 
 from . import db as db
 from .geocoder import build_geojson, extract_locations_from_text, geocode_locations
-from .llm import call_ollama_with_retry
+from .llm import call_ollama_with_retry, call_ollama_for_assessment
 from .metrics import reporter_jobs_total, reporter_job_duration_seconds, reporter_ollama_errors_total, arq_jobs_failed_total
-from .prompt_templates import render_prompt
+from .prompt_templates import render_prompt, render_assessment_prompt
 from .rag import assemble_context, assemble_identifier_context, build_recommended_actions, generate_query_embedding
 from .settings import settings as _default_settings
 
@@ -441,6 +441,152 @@ async def check_source_warnings(ctx: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
+# ARQ job: generate_source_assessment — Phase 2
+# ---------------------------------------------------------------------------
+
+async def generate_source_assessment(ctx: dict, assessment_id: str) -> None:
+    """Generate an LLM-powered source assessment brief with per-claim citations.
+
+    Pipeline: fetch assessment → load content → render prompt → LLM → validate → store.
+    Idempotent via generated_at IS NULL guard.
+    """
+    settings = ctx.get("settings", _default_settings)
+    pool = ctx["db"]
+
+    # 1. Load assessment row
+    assessment = await db.fetch_assessment(pool, assessment_id)
+    if assessment is None:
+        log.warning("reporter.assessment.not_found", assessment_id=assessment_id)
+        return
+
+    # Skip if already generated
+    if assessment.get("generated_at") is not None:
+        log.info("reporter.assessment.already_generated", assessment_id=assessment_id)
+        return
+
+    topic_id = assessment["topic_id"]
+    source_id = assessment["source_id"]
+
+    # 2. Load topic info
+    topic = await db.fetch_topic(pool, topic_id)
+    if topic is None:
+        await db.set_assessment_failed(pool, assessment_id, "Topic not found")
+        return
+
+    # 3. Load source content (most recent, up to 30 items)
+    chunks = await db.fetch_source_content_for_brief(
+        pool, topic_id, source_id, limit=30
+    )
+    if not chunks:
+        await db.set_assessment_failed(pool, assessment_id, "No content items found for this source")
+        return
+
+    # 4. Assemble content context with content_item_ids for citation
+    context_parts = []
+    for chunk in chunks:
+        header = f"[ID: {chunk['id']} | URL: {chunk.get('url', 'N/A')} | Date: {chunk.get('captured_at', 'N/A')}]"
+        context_parts.append(f"{header}\n{chunk['clean_text'][:500]}")
+    context = "\n\n---\n\n".join(context_parts)
+
+    # 5. Parse stats summary for prompt context
+    stats_summary = ""
+    stats_raw = assessment.get("stats")
+    if stats_raw:
+        import json as _json
+        stats_data = _json.loads(stats_raw) if isinstance(stats_raw, str) else stats_raw
+        stats_summary = (
+            f"Total posts: {stats_data.get('total_posts', 'N/A')}\n"
+            f"Avg posts/day: {stats_data.get('avg_posts_per_day', 'N/A')}\n"
+            f"Engagement: {stats_data.get('engagement', {})}\n"
+            f"Sentiment: {stats_data.get('sentiment_distribution', {})}\n"
+            f"Languages: {[l.get('language') for l in stats_data.get('language_breakdown', [])]}\n"
+            f"Clusters: {len(stats_data.get('cluster_participation', []))}\n"
+            f"Identifiers overlapping other sources: {len(stats_data.get('identifier_overlap', []))}"
+        )
+
+    # 6. Parse platform metadata
+    platform_meta_str = ""
+    meta_raw = assessment.get("platform_metadata")
+    if meta_raw:
+        import json as _json
+        meta = _json.loads(meta_raw) if isinstance(meta_raw, str) else meta_raw
+        if meta:
+            platform_meta_str = "\n".join(f"{k}: {v}" for k, v in meta.items() if v is not None)
+
+    # 7. Get source info
+    source_row = await db.fetch_source_info(pool, source_id)
+
+    source_name = source_row["name"] if source_row else source_id
+    platform = source_row["platform"] if source_row else "unknown"
+
+    # 8. Render prompt
+    prompt = render_assessment_prompt(
+        source_name=source_name,
+        platform=platform,
+        topic_name=topic.get("name", ""),
+        keywords=topic.get("keywords", []),
+        context=context,
+        stats_summary=stats_summary,
+        platform_metadata=platform_meta_str,
+    )
+
+    # 9. Call LLM
+    brief = await call_ollama_for_assessment(
+        prompt=prompt,
+        settings=settings,
+        max_retries=settings.ollama_retry_max,
+    )
+
+    if brief is None:
+        await db.set_assessment_failed(pool, assessment_id, "LLM failed to generate valid assessment brief")
+        return
+
+    # 10. Validate citations — strip any content_item_ids not in our chunks
+    valid_ids = {c["id"] for c in chunks}
+    for claim in brief.cited_claims:
+        claim.content_item_ids = [cid for cid in claim.content_item_ids if cid in valid_ids]
+
+    # 11. Build markdown
+    md_parts = [
+        f"## Source Assessment: {source_name}",
+        f"\n**Characterization:** {brief.source_characterization}",
+        f"\n**Posting Behavior:** {brief.posting_behavior}",
+        f"\n**Key Themes:** {', '.join(brief.key_themes)}",
+        f"\n**Narrative Role:** {brief.narrative_role}",
+        f"\n**Intelligence Value:** {brief.intelligence_value}",
+    ]
+    if brief.risk_indicators:
+        md_parts.append("\n**Risk Indicators:**")
+        for ri in brief.risk_indicators:
+            md_parts.append(f"- {ri}")
+    if brief.cited_claims:
+        md_parts.append("\n**Cited Claims:**")
+        for claim in brief.cited_claims:
+            ids = ", ".join(claim.content_item_ids[:3])
+            md_parts.append(f"- {claim.claim} [Refs: {ids}]")
+    md_parts.append(f"\n**Confidence:** {brief.confidence_level:.2f}")
+    brief_md = "\n".join(md_parts)
+
+    # 12. Store — idempotent via generated_at IS NULL guard
+    stored = await db.set_assessment_brief(
+        pool,
+        assessment_id=assessment_id,
+        brief_md=brief_md,
+        confidence_score=brief.confidence_level,
+    )
+
+    if stored:
+        log.info(
+            "reporter.assessment.generated",
+            assessment_id=assessment_id,
+            source_id=source_id,
+            confidence=brief.confidence_level,
+        )
+    else:
+        log.info("reporter.assessment.already_set", assessment_id=assessment_id)
+
+
+# ---------------------------------------------------------------------------
 # ARQ WorkerSettings
 # ---------------------------------------------------------------------------
 
@@ -459,6 +605,7 @@ class WorkerSettings:
     functions = [
         # 8C.4 — generate_report: max_tries=2; retry safe via generated_at IS NULL guard (8C.7)
         arq.func(generate_report, max_tries=2),
+        arq.func(generate_source_assessment, max_tries=2),
     ]
     cron_jobs = [
         arq.cron(check_scheduled_reports, minute={0, 15, 30, 45}),
