@@ -78,7 +78,7 @@ class TestScrapeTopicEnqueuesAnalyse:
         async def _fetchrow(*args, **kwargs):
             call_count["n"] += 1
             if call_count["n"] == 1:
-                return {"id": "topic-1"}  # topic lookup
+                return {"id": "topic-1", "org_id": "org-1"}  # topic lookup
             return {"id": "content-item-1"}  # insert result
 
         mock_conn.fetchrow = AsyncMock(side_effect=_fetchrow)
@@ -118,7 +118,7 @@ class TestScrapeTopicEnqueuesAnalyse:
         async def _fetchrow(*args, **kwargs):
             call_count["n"] += 1
             if call_count["n"] == 1:
-                return {"id": "topic-1"}
+                return {"id": "topic-1", "org_id": "org-1"}
             return None  # dedup — ON CONFLICT DO NOTHING returns None
 
         mock_conn.fetchrow = AsyncMock(side_effect=_fetchrow)
@@ -156,7 +156,7 @@ class TestScrapeTopicEnqueuesAnalyse:
         async def _fetchrow(*args, **kwargs):
             call_count["n"] += 1
             if call_count["n"] == 1:
-                return {"id": "topic-1"}
+                return {"id": "topic-1", "org_id": "org-1"}
             return {"id": "content-item-1"}
 
         mock_conn.fetchrow = AsyncMock(side_effect=_fetchrow)
@@ -194,7 +194,7 @@ class TestRSSEnqueuesAnalyse:
         mock_conn = AsyncMock()
         mock_conn.fetchrow = AsyncMock(
             side_effect=[
-                {"id": "topic-1"},       # topic lookup
+                {"id": "topic-1", "org_id": "org-1"},       # topic lookup
                 {"id": "rss-item-1"},    # insert result
             ]
         )
@@ -238,7 +238,7 @@ class TestDarkwebEnqueuesAnalyse:
         async def _fetchrow(*args, **kwargs):
             call_count["n"] += 1
             if call_count["n"] == 1:
-                return {"id": "topic-1"}
+                return {"id": "topic-1", "org_id": "org-1"}
             return {"id": "dw-item-1"}
 
         mock_conn.fetchrow = AsyncMock(side_effect=_fetchrow)

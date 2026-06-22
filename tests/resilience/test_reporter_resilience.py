@@ -167,6 +167,8 @@ class TestReportIdentifierDBFailure:
              patch("anveshak.reporter.worker.assemble_context") as mock_ctx, \
              patch("anveshak.reporter.worker.render_prompt") as mock_prompt, \
              patch("anveshak.reporter.worker.call_ollama_with_retry", new_callable=AsyncMock) as mock_llm, \
+             patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_bluf, \
+             patch("anveshak.reporter.worker.render_bluf_prompt") as mock_bluf_prompt, \
              patch("anveshak.reporter.worker.geocode_locations") as mock_geo, \
              patch("anveshak.reporter.worker.build_geojson") as mock_geojson, \
              patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract:
@@ -176,6 +178,11 @@ class TestReportIdentifierDBFailure:
             })
             mock_db.fetch_topic = AsyncMock(return_value={
                 "id": "t1", "name": "Test", "keywords": [],
+                "topic_relevance_threshold": None,
+            })
+            mock_db.fetch_report_data_bundle = AsyncMock(return_value={
+                "topic_stats": {"content_count": 1, "source_count": 1, "cluster_count": 0, "signal_count": 0},
+                "clusters": [],
             })
             mock_db.fetch_rag_chunks = AsyncMock(return_value=chunks)
             # Simulate DB error on identifier fetch
@@ -190,6 +197,8 @@ class TestReportIdentifierDBFailure:
             mock_ctx.return_value = ("context", 1, "2026-06-01")
             mock_prompt.return_value = "prompt"
             mock_llm.return_value = rc
+            mock_bluf.return_value = None  # triggers fallback BLUF
+            mock_bluf_prompt.return_value = "bluf prompt"
             mock_geo.return_value = []
             mock_geojson.return_value = {"type": "FeatureCollection", "features": []}
             mock_extract.return_value = []

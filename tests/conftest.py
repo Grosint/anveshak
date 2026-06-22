@@ -88,8 +88,26 @@ async def redis_conn():
 # Factory fixtures — create test data with auto-cleanup
 # ---------------------------------------------------------------------------
 
+TEST_ORG_ID = "org-integration-test"
+
+
 @pytest.fixture
-async def make_topic(db_pool):
+async def ensure_org(db_pool):
+    """Ensure a test organization exists for integration tests."""
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO organizations (id, name, slug, created_at, updated_at, labels)
+            VALUES ($1, 'Integration Test Org', 'integration-test', NOW(), NOW(), $2)
+            ON CONFLICT (id) DO NOTHING
+            """,
+            TEST_ORG_ID, LABELS_JSON,
+        )
+    return TEST_ORG_ID
+
+
+@pytest.fixture
+async def make_topic(db_pool, ensure_org):
     """Async factory fixture: create throwaway topics with auto-cleanup.
 
     Usage:
@@ -102,6 +120,7 @@ async def make_topic(db_pool):
         keywords: list[str] | None = None,
         signal_threshold: int = 2,
         status: str = "active",
+        org_id: str = TEST_ORG_ID,
     ) -> str:
         topic_id = str(uuid.uuid4())
         now = datetime.now(UTC)
@@ -109,11 +128,11 @@ async def make_topic(db_pool):
             await conn.execute(
                 """
                 INSERT INTO topics (id, name, keywords, signal_threshold, status,
-                                    created_at, updated_at, labels)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                                    org_id, created_at, updated_at, labels)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 """,
                 topic_id, name, keywords or ["test", "integration"],
-                signal_threshold, status, now, now, LABELS_JSON,
+                signal_threshold, status, org_id, now, now, LABELS_JSON,
             )
         created.append(topic_id)
         return topic_id
@@ -169,7 +188,7 @@ async def make_topic(db_pool):
 
 
 @pytest.fixture
-async def make_source(db_pool):
+async def make_source(db_pool, ensure_org):
     """Async factory fixture: create throwaway sources with auto-cleanup.
 
     Usage:
@@ -182,6 +201,7 @@ async def make_source(db_pool):
         url_or_handle: str | None = None,
         platform: str = "web",
         credibility_score: float = 75.0,
+        org_id: str = TEST_ORG_ID,
     ) -> str:
         source_id = str(uuid.uuid4())
         now = datetime.now(UTC)
@@ -191,11 +211,11 @@ async def make_source(db_pool):
                 """
                 INSERT INTO sources (
                     id, name, url_or_handle, platform, credibility_score,
-                    created_at, updated_at, labels
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    org_id, created_at, updated_at, labels
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 """,
                 source_id, name, handle, platform, credibility_score,
-                now, now, LABELS_JSON,
+                org_id, now, now, LABELS_JSON,
             )
         created.append(source_id)
         return source_id
@@ -223,6 +243,7 @@ async def insert_content_item(
     embedding: list[float] | None = None,
     language: str = "en",
     cluster_id: str | None = None,
+    org_id: str = TEST_ORG_ID,
 ) -> str:
     """Insert a content_item directly (simulates scraper output).
 
@@ -243,8 +264,8 @@ async def insert_content_item(
                 id, topic_id, source_id, raw_text, clean_text, language,
                 content_hash, url, captured_at, credibility_score_at_capture,
                 {embedding_col}narrative_cluster_id,
-                created_at, updated_at, labels
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,{embedding_val}$11,$12,$13,$14)
+                org_id, created_at, updated_at, labels
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,{embedding_val}$11,$12,$13,$14,$15)
             ON CONFLICT(content_hash) DO NOTHING
         """
         if embedding is not None:
@@ -259,6 +280,6 @@ async def insert_content_item(
             sql,
             item_id, topic_id, source_id, text, text, language,
             content_hash, url, now, 75.0,
-            cluster_id, now, now, LABELS_JSON,
+            cluster_id, org_id, now, now, LABELS_JSON,
         )
     return item_id

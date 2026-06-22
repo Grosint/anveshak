@@ -312,11 +312,11 @@ class TestSentimentIncludesBackfilled:
                 await conn.execute(
                     """INSERT INTO content_items (id, topic_id, source_id, raw_text, clean_text,
                        language, content_hash, url, captured_at, credibility_score_at_capture,
-                       created_at, updated_at, labels)
-                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)""",
+                       created_at, updated_at, labels, org_id)
+                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)""",
                     item_id, topic_b, source, f"positive article {i}", f"positive article {i}",
                     "en", content_hash, f"https://example.com/{item_id[:8]}",
-                    now, 75.0, now, now, labels,
+                    now, 75.0, now, now, labels, "org-integration-test",
                 )
 
         # Topic A's items: negative sentiment, backfilled to Topic B
@@ -329,11 +329,11 @@ class TestSentimentIncludesBackfilled:
                 await conn.execute(
                     """INSERT INTO content_items (id, topic_id, source_id, raw_text, clean_text,
                        language, content_hash, url, captured_at, credibility_score_at_capture,
-                       created_at, updated_at, labels)
-                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)""",
+                       created_at, updated_at, labels, org_id)
+                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)""",
                     item_id, topic_a, source, f"negative article {i}", f"negative article {i}",
                     "en", content_hash, f"https://example.com/{item_id[:8]}",
-                    now, 75.0, now, now, labels,
+                    now, 75.0, now, now, labels, "org-integration-test",
                 )
             backfilled_ids.append(item_id)
             await _backfill_item(db_pool, topic_b, item_id)

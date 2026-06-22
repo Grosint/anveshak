@@ -42,11 +42,11 @@ async def test_deepfake_amplifier_reduces_source_credibility(db_pool, make_topic
         ci_hash = hashlib.sha256(f"deepfake_test_{ci_id}".encode()).hexdigest()
         await conn.execute("""
             INSERT INTO content_items (id, topic_id, source_id, raw_text, clean_text,
-                                       content_hash, url, labels)
+                                       content_hash, url, labels, org_id)
             VALUES ($1, $2, $3, 'deepfake test content', 'deepfake test content',
                     $4, 'http://deepfake-test.example.com/post',
-                    $5::jsonb)
-        """, ci_id, topic_id, source_id, ci_hash, LABELS_JSON)
+                    $5::jsonb, $6)
+        """, ci_id, topic_id, source_id, ci_hash, LABELS_JSON, "org-integration-test")
 
         # Create a media_asset linked to this content_item
         ma_id = str(uuid.uuid4())

@@ -102,13 +102,14 @@ async def insert_item_with_embedding(
             INSERT INTO content_items (
                 id, topic_id, source_id, raw_text, clean_text, language,
                 content_hash, url, captured_at, credibility_score_at_capture,
-                embedding, created_at, updated_at, labels
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::vector,$12,$13,$14)
+                embedding, created_at, updated_at, labels, org_id
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::vector,$12,$13,$14,$15)
             ON CONFLICT(content_hash) DO NOTHING
         """,
             item_id, topic_id, source_id, text, text, "en",
             content_hash, url, now, 70.0, embedding_str, now, now,
             '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}',
+            "org-integration-test",
         )
     return item_id
 

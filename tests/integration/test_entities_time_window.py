@@ -50,11 +50,11 @@ class TestEntitiesTimeWindow:
             await conn.execute(
                 """INSERT INTO content_items (id, topic_id, source_id, raw_text, clean_text,
                    language, content_hash, url, captured_at, credibility_score_at_capture,
-                   created_at, updated_at, labels)
-                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)""",
+                   created_at, updated_at, labels, org_id)
+                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)""",
                 recent_id, topic_id, source_id, "recent article about PLA", "recent article about PLA",
                 "en", recent_hash, f"https://example.com/{recent_id[:8]}",
-                now, 75.0, now, now, labels,
+                now, 75.0, now, now, labels, "org-integration-test",
             )
             await conn.execute(
                 """INSERT INTO extracted_entities (id, content_item_id, entity_type, entity_text,
@@ -70,11 +70,11 @@ class TestEntitiesTimeWindow:
             await conn.execute(
                 """INSERT INTO content_items (id, topic_id, source_id, raw_text, clean_text,
                    language, content_hash, url, captured_at, credibility_score_at_capture,
-                   created_at, updated_at, labels)
-                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)""",
+                   created_at, updated_at, labels, org_id)
+                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)""",
                 old_id, topic_id, source_id, "old article about DRDO", "old article about DRDO",
                 "en", old_hash, f"https://example.com/{old_id[:8]}",
-                old_date, 75.0, old_date, old_date, labels,
+                old_date, 75.0, old_date, old_date, labels, "org-integration-test",
             )
             await conn.execute(
                 """INSERT INTO extracted_entities (id, content_item_id, entity_type, entity_text,

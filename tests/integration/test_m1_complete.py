@@ -63,10 +63,10 @@ async def _insert_content_item_m1(
         await conn.execute("""
             INSERT INTO content_items
                 (id, topic_id, source_id, raw_text, clean_text, content_hash,
-                 narrative_cluster_id, captured_at, created_at, updated_at, labels)
-            VALUES ($1, $2, $3, 'test text', 'test text', $4, $5, NOW(), NOW(), NOW(), $6::jsonb)
+                 narrative_cluster_id, captured_at, created_at, updated_at, labels, org_id)
+            VALUES ($1, $2, $3, 'test text', 'test text', $4, $5, NOW(), NOW(), NOW(), $6::jsonb, $7)
             ON CONFLICT (content_hash) DO NOTHING
-        """, item_id, topic_id, source_id, content_hash, cluster_id, LABELS_JSON)
+        """, item_id, topic_id, source_id, content_hash, cluster_id, LABELS_JSON, "org-integration-test")
 
 
 # ---------------------------------------------------------------------------

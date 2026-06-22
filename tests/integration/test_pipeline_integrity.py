@@ -40,13 +40,21 @@ async def pipeline_topic(db_pool):
     async with db_pool.acquire() as conn:
         await conn.execute(
             """
+            INSERT INTO organizations (id, name, slug, created_at, updated_at, labels)
+            VALUES ('org-integration-test', 'Integration Test Org', 'integration-test', NOW(), NOW(),
+                    '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb)
+            ON CONFLICT (id) DO NOTHING
+            """,
+        )
+        await conn.execute(
+            """
             INSERT INTO topics (id, name, keywords, signal_threshold, status,
-                                created_at, updated_at, labels)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                                created_at, updated_at, labels, org_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             """,
             topic_id, "Pipeline Integrity Test",
             ["defence", "military", "IAF"],
-            2, "active", now, now, LABELS_JSON,
+            2, "active", now, now, LABELS_JSON, "org-integration-test",
         )
     yield topic_id
     async with db_pool.acquire() as conn:
@@ -73,10 +81,10 @@ async def pipeline_sources(db_pool):
             await conn.execute(
                 """
                 INSERT INTO sources (id, name, url_or_handle, platform, credibility_score,
-                                     created_at, updated_at, labels)
-                VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), $6::jsonb)
+                                     created_at, updated_at, labels, org_id)
+                VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), $6::jsonb, $7)
                 """,
-                sid, f"Pipeline Source {platform}", handle, platform, 75.0, LABELS_JSON,
+                sid, f"Pipeline Source {platform}", handle, platform, 75.0, LABELS_JSON, "org-integration-test",
             )
         ids[platform] = sid
     yield ids
@@ -103,13 +111,13 @@ async def _insert_raw_content(
             INSERT INTO content_items (
                 id, topic_id, source_id, raw_text, clean_text, language,
                 content_hash, url, captured_at, credibility_score_at_capture,
-                embedding, created_at, updated_at, labels
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'{embedding_str}'::vector,$11,$12,$13)
+                embedding, created_at, updated_at, labels, org_id
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'{embedding_str}'::vector,$11,$12,$13,$14)
             ON CONFLICT(content_hash) DO NOTHING
             """,
             item_id, topic_id, source_id, text, text, "en",
             content_hash, f"https://example.com/pipeline/{item_id[:8]}",
-            now, 75.0, now, now, LABELS_JSON,
+            now, 75.0, now, now, LABELS_JSON, "org-integration-test",
         )
     return item_id
 
@@ -234,13 +242,13 @@ async def test_content_dedup_prevents_double_counting(db_pool, pipeline_topic, p
                 INSERT INTO content_items (
                     id, topic_id, source_id, raw_text, clean_text, language,
                     content_hash, url, captured_at, credibility_score_at_capture,
-                    created_at, updated_at, labels
-                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+                    created_at, updated_at, labels, org_id
+                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
                 ON CONFLICT(content_hash) DO NOTHING
                 """,
                 item_id, pipeline_topic, source_id, text, text, "en",
                 content_hash, f"https://example.com/dedup/{uuid.uuid4()}",
-                now, 75.0, now, now, LABELS_JSON,
+                now, 75.0, now, now, LABELS_JSON, "org-integration-test",
             )
 
     async with db_pool.acquire() as conn:

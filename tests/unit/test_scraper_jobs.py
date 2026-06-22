@@ -123,7 +123,7 @@ class TestScrapeTopic:
     async def test_returns_zero_when_no_sources(self):
         """Topic exists but no sources → returns 0."""
         mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(return_value={"id": "topic-1"})
+        mock_conn.fetchrow = AsyncMock(return_value={"id": "topic-1", "org_id": "org-1"})
         mock_conn.fetch = AsyncMock(return_value=[])
 
         mock_pool = _make_pool_mock(mock_conn)
@@ -156,7 +156,7 @@ class TestScrapeTopic:
         async def _fetchrow_side_effect(*args, **kwargs):
             call_count["n"] += 1
             if call_count["n"] == 1:
-                return {"id": "topic-1"}  # topic lookup
+                return {"id": "topic-1", "org_id": "org-1"}  # topic lookup
             # insert returns a row (new insert)
             return {"id": "content-item-1"}
 
@@ -196,7 +196,7 @@ class TestScrapeTopic:
         async def _fetchrow_side_effect(*args, **kwargs):
             call_count["n"] += 1
             if call_count["n"] == 1:
-                return {"id": "topic-1"}  # topic lookup
+                return {"id": "topic-1", "org_id": "org-1"}  # topic lookup
             # Insert returns None (ON CONFLICT DO NOTHING — duplicate)
             return None
 
@@ -244,7 +244,7 @@ class TestLanguageDetection:
         async def _fetchrow_side_effect(*args, **kwargs):
             call_count["n"] += 1
             if call_count["n"] == 1:
-                return {"id": "topic-1"}
+                return {"id": "topic-1", "org_id": "org-1"}
             return {"id": "content-item-1"}
 
         mock_conn.fetchrow = AsyncMock(side_effect=_fetchrow_side_effect)
@@ -314,7 +314,7 @@ class TestSourcePageNotStored:
         async def _fetchrow_side_effect(*args, **kwargs):
             call_count["n"] += 1
             if call_count["n"] == 1:
-                return {"id": "topic-1"}  # topic lookup
+                return {"id": "topic-1", "org_id": "org-1"}  # topic lookup
             return {"id": "content-item-1"}  # article insert
 
         mock_conn.fetchrow = AsyncMock(side_effect=_fetchrow_side_effect)
@@ -376,7 +376,7 @@ class TestSourcePageNotStored:
         async def _fetchrow_side_effect(*args, **kwargs):
             call_count["n"] += 1
             if call_count["n"] == 1:
-                return {"id": "topic-1"}
+                return {"id": "topic-1", "org_id": "org-1"}
             return {"id": "content-item-1"}
 
         mock_conn.fetchrow = AsyncMock(side_effect=_fetchrow_side_effect)
@@ -429,7 +429,7 @@ class TestUrlSeenTracking:
         })
 
         mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(side_effect=[{"id": "topic-1"}])
+        mock_conn.fetchrow = AsyncMock(side_effect=[{"id": "topic-1", "org_id": "org-1"}])
         mock_conn.fetch = AsyncMock(return_value=[source])
 
         mock_pool = _make_pool_mock(mock_conn)
@@ -489,7 +489,7 @@ class TestUrlSeenTracking:
         async def _fetchrow_side_effect(*args, **kwargs):
             call_count["n"] += 1
             if call_count["n"] == 1:
-                return {"id": "topic-1"}
+                return {"id": "topic-1", "org_id": "org-1"}
             return {"id": "content-item-1"}
 
         mock_conn.fetchrow = AsyncMock(side_effect=_fetchrow_side_effect)
@@ -551,7 +551,7 @@ class TestRateDelay:
         async def _fetchrow_side_effect(*args, **kwargs):
             call_count["n"] += 1
             if call_count["n"] == 1:
-                return {"id": "topic-1"}
+                return {"id": "topic-1", "org_id": "org-1"}
             return {"id": "content-item-1"}
 
         mock_conn.fetchrow = AsyncMock(side_effect=_fetchrow_side_effect)

@@ -100,9 +100,11 @@ class TestReporterE2E:
         ctx = {"db": db_pool, "settings": settings}
 
         with patch("anveshak.reporter.worker.call_ollama_with_retry", new_callable=AsyncMock) as mock_llm, \
-             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed:
+             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed, \
+             patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_bluf:
             mock_llm.return_value = rc
             mock_embed.return_value = emb  # use same embedding as query vector
+            mock_bluf.return_value = None  # trigger fallback BLUF
 
             await generate_report(ctx, report_id)
 
@@ -111,8 +113,8 @@ class TestReporterE2E:
         assert report_after is not None
         assert report_after.get("generated_at") is not None, "generated_at must be set"
         assert report_after.get("content_md") is not None, "content_md must be set"
-        assert "Executive Summary" in report_after["content_md"]
-        assert report_after.get("confidence_score") == 0.75
+        assert "Bottom Line Up Front" in report_after["content_md"]
+        assert report_after.get("confidence_score") == 0.0  # fallback BLUF (no LLM)
         assert report_after.get("content_item_count") == 2
         assert report_after.get("source_snapshot") is not None
 
@@ -156,9 +158,11 @@ class TestReporterE2E:
         ctx = {"db": db_pool, "settings": settings}
 
         with patch("anveshak.reporter.worker.call_ollama_with_retry", new_callable=AsyncMock) as mock_llm, \
-             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed:
+             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed, \
+             patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_bluf:
             mock_llm.return_value = rc
             mock_embed.return_value = emb
+            mock_bluf.return_value = None  # trigger fallback BLUF
 
             # First run — should generate
             await generate_report(ctx, report_id)

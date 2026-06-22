@@ -43,6 +43,7 @@ SQL_DEEPFAKE_AMPLIFIERS = """
         s.id          AS source_id,
         s.name        AS source_name,
         s.credibility_score,
+        s.org_id,
         COUNT(vr.id)  AS deepfake_count
     FROM sources s
     JOIN content_items ci ON ci.source_id = s.id
@@ -52,7 +53,7 @@ SQL_DEEPFAKE_AMPLIFIERS = """
       AND vr.processed_at > NOW() - INTERVAL '7 days'
       AND s.auto_score_enabled = TRUE
       AND s.credibility_score > 0
-    GROUP BY s.id, s.name, s.credibility_score
+    GROUP BY s.id, s.name, s.credibility_score, s.org_id
 """
 
 SQL_UPDATE_SOURCE_SCORE = """
@@ -76,7 +77,8 @@ SQL_CROSS_VERIFY_SOURCES = """
     SELECT DISTINCT ON (s.id)
         s.id              AS source_id,
         s.name            AS source_name,
-        s.credibility_score
+        s.credibility_score,
+        s.org_id
     FROM content_items ci
     JOIN sources s            ON s.id  = ci.source_id
     JOIN narrative_clusters nc ON nc.id = ci.narrative_cluster_id
@@ -95,6 +97,7 @@ SQL_CONTRADICTION_SOURCES = """
         s.id              AS source_id,
         s.name            AS source_name,
         s.credibility_score,
+        s.org_id,
         COUNT(*) FILTER (WHERE ci.narrative_cluster_id IS NULL) AS noise_count,
         COUNT(*)                                                 AS total_count
     FROM content_items ci
@@ -107,7 +110,7 @@ SQL_CONTRADICTION_SOURCES = """
       AND s.auto_score_enabled = TRUE
       AND s.credibility_score  > 0
       AND ci.captured_at > NOW() - INTERVAL '7 days'
-    GROUP BY s.id, s.name, s.credibility_score
+    GROUP BY s.id, s.name, s.credibility_score, s.org_id
     HAVING COUNT(*) >= $2
 """
 
@@ -214,6 +217,7 @@ async def run_credibility_update(pool: asyncpg.Pool) -> int:
             source_id: str = row["source_id"]
             old_score: float = row["credibility_score"]
             deepfake_count: int = row["deepfake_count"]
+            org_id: str | None = row.get("org_id")
 
             new_score = compute_new_score(old_score, deepfake_count)
 
@@ -234,6 +238,7 @@ async def run_credibility_update(pool: asyncpg.Pool) -> int:
                     new_score=new_score,
                     reason=reason,
                     now=now,
+                    org_id=org_id,
                 )
 
             updated += 1
@@ -271,6 +276,7 @@ async def run_cross_verification_update(pool: asyncpg.Pool, topic_id: str) -> in
         for row in rows:
             source_id: str = row["source_id"]
             old_score: float = row["credibility_score"]
+            org_id: str | None = row.get("org_id")
             new_score = clamp_score(old_score + settings.credibility_cross_verify_boost)
 
             if abs(new_score - old_score) < settings.credibility_min_auto_boost:
@@ -290,6 +296,7 @@ async def run_cross_verification_update(pool: asyncpg.Pool, topic_id: str) -> in
                     new_score=new_score,
                     reason=reason,
                     now=now,
+                    org_id=org_id,
                 )
 
             updated += 1
@@ -329,6 +336,7 @@ async def run_contradiction_update(pool: asyncpg.Pool) -> int:
         for row in rows:
             source_id: str = row["source_id"]
             old_score: float = row["credibility_score"]
+            org_id: str | None = row.get("org_id")
             noise_count: int = row["noise_count"]
             total_count: int = row["total_count"]
 
@@ -357,6 +365,7 @@ async def run_contradiction_update(pool: asyncpg.Pool) -> int:
                     new_score=new_score,
                     reason=reason,
                     now=now,
+                    org_id=org_id,
                 )
 
             updated += 1

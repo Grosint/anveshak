@@ -48,14 +48,21 @@ async def vector_topic(db_pool):
     topic_id = str(uuid.uuid4())
     async with db_pool.acquire() as conn:
         await conn.execute("""
+            INSERT INTO organizations (id, name, slug, created_at, updated_at, labels)
+            VALUES ('org-integration-test', 'Integration Test Org', 'integration-test', NOW(), NOW(),
+                    '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb)
+            ON CONFLICT (id) DO NOTHING
+        """)
+        await conn.execute("""
             INSERT INTO topics (id, name, keywords, signal_threshold, status,
-                                created_at, updated_at, labels)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                                created_at, updated_at, labels, org_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         """,
             topic_id, "Vector Pipeline Test", ["vector", "dedup"],
             3, "active",
             datetime.now(UTC), datetime.now(UTC),
             '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}',
+            "org-integration-test",
         )
     yield topic_id
     async with db_pool.acquire() as conn:
@@ -76,12 +83,13 @@ async def sources_three(db_pool):
         async with db_pool.acquire() as conn:
             await conn.execute("""
                 INSERT INTO sources (id, name, url_or_handle, platform, credibility_score,
-                                     created_at, updated_at, labels)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                                     created_at, updated_at, labels, org_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             """,
                 sid, f"VecTest {platform}", handle, platform, 70.0,
                 datetime.now(UTC), datetime.now(UTC),
                 '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}',
+                "org-integration-test",
             )
         ids[platform] = sid
     yield ids
@@ -105,14 +113,15 @@ async def insert_item(pool, topic_id, source_id, text, embedding, captured_at=No
             INSERT INTO content_items (
                 id, topic_id, source_id, raw_text, clean_text, language,
                 content_hash, url, captured_at, credibility_score_at_capture,
-                embedding, created_at, updated_at, labels
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::vector,$12,$13,$14)
+                embedding, created_at, updated_at, labels, org_id
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::vector,$12,$13,$14,$15)
             ON CONFLICT(content_hash) DO NOTHING
         """,
             item_id, topic_id, source_id, text, text, "en",
             content_hash, f"https://example.com/{item_id}", now, 70.0,
             embedding_str, now, now,
             '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}',
+            "org-integration-test",
         )
     return item_id
 
@@ -253,13 +262,14 @@ async def test_cross_topic_convergence(db_pool, sources_three):
         async with db_pool.acquire() as conn:
             await conn.execute("""
                 INSERT INTO topics (id, name, keywords, signal_threshold, status,
-                                    created_at, updated_at, labels)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                                    created_at, updated_at, labels, org_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             """,
                 tid, name, ["convergence", "test"],
                 3, "active",
                 datetime.now(UTC), datetime.now(UTC),
                 '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}',
+                "org-integration-test",
             )
         topic_ids.append(tid)
 

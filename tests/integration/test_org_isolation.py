@@ -196,13 +196,15 @@ class TestOrganizationCRUD:
         """Create an org and retrieve it."""
         from anveshak.api.db.organizations import create_organization, get_organization
 
-        slug = f"test-{uuid.uuid4().hex[:6]}"
-        org_id = await create_organization(db_conn, "Test Org", slug)
+        suffix = uuid.uuid4().hex[:6]
+        slug = f"test-{suffix}"
+        name = f"Test Org {suffix}"
+        org_id = await create_organization(db_conn, name, slug)
         assert org_id is not None
 
         org = await get_organization(db_conn, org_id)
         assert org is not None
-        assert org["name"] == "Test Org"
+        assert org["name"] == name
         assert org["slug"] == slug
         assert org["is_active"] is True
 
@@ -211,7 +213,7 @@ class TestOrganizationCRUD:
         from anveshak.api.db.organizations import create_organization, list_organizations
 
         slug = f"list-{uuid.uuid4().hex[:6]}"
-        await create_organization(db_conn, "List Test Org", slug)
+        await create_organization(db_conn, f"List Test Org {slug}", slug)
 
         orgs = await list_organizations(db_conn)
         slugs = {o["slug"] for o in orgs}
@@ -224,7 +226,7 @@ class TestOrganizationCRUD:
         )
 
         slug = f"upd-{uuid.uuid4().hex[:6]}"
-        org_id = await create_organization(db_conn, "Original Name", slug)
+        org_id = await create_organization(db_conn, f"Original Name {slug}", slug)
 
         await update_organization(db_conn, org_id, name="Updated Name", is_active=False)
 

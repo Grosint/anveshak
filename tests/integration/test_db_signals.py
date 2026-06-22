@@ -34,11 +34,19 @@ async def _setup_signal(conn, topic_id: str, cluster_id: str, signal_id: str) ->
     """Insert a topic, cluster, and signal for testing."""
     await conn.execute(
         """
-        INSERT INTO topics (id, name, keywords, signal_threshold, created_at, updated_at, labels)
-        VALUES ($1, $2, '{}', 2, NOW(), NOW(), $3::jsonb)
+        INSERT INTO organizations (id, name, slug, created_at, updated_at, labels)
+        VALUES ('org-integration-test', 'Integration Test Org', 'integration-test', NOW(), NOW(),
+                '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb)
         ON CONFLICT (id) DO NOTHING
         """,
-        topic_id, f"Signal Test {topic_id[:8]}", LABELS_JSON,
+    )
+    await conn.execute(
+        """
+        INSERT INTO topics (id, name, keywords, signal_threshold, created_at, updated_at, labels, org_id)
+        VALUES ($1, $2, '{}', 2, NOW(), NOW(), $3::jsonb, $4)
+        ON CONFLICT (id) DO NOTHING
+        """,
+        topic_id, f"Signal Test {topic_id[:8]}", LABELS_JSON, "org-integration-test",
     )
     await conn.execute(
         """

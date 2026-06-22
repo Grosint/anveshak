@@ -26,6 +26,7 @@ def _make_source_row(
         "source_id": source_id,
         "source_name": source_name,
         "credibility_score": credibility_score,
+        "org_id": "org-unit-test",
         "noise_count": noise_count,
         "total_count": total_count,
     }

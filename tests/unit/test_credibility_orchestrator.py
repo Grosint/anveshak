@@ -44,6 +44,7 @@ def _amplifier_row(source_id: str, credibility_score: float, deepfake_count: int
         "source_id": source_id,
         "source_name": f"source-{source_id}",
         "credibility_score": credibility_score,
+        "org_id": "org-unit-test",
         "deepfake_count": deepfake_count,
     }
 
@@ -53,6 +54,7 @@ def _cross_verify_row(source_id: str, credibility_score: float):
         "source_id": source_id,
         "source_name": f"source-{source_id}",
         "credibility_score": credibility_score,
+        "org_id": "org-unit-test",
     }
 
 

@@ -21,7 +21,7 @@ from anveshak.api.db.topics import (
     get_topic_entities,
 )
 
-from tests.conftest import LABELS_JSON
+from tests.conftest import LABELS_JSON, TEST_ORG_ID
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
@@ -41,7 +41,7 @@ async def _cleanup_topic(conn, topic_id: str) -> None:
 # Tests
 # ---------------------------------------------------------------------------
 
-async def test_insert_and_get_topic(db_pool):
+async def test_insert_and_get_topic(db_pool, ensure_org):
     """INSERT a topic then SELECT it — all fields must match."""
     topic_id = str(uuid.uuid4())
     now = datetime.now(UTC)
@@ -50,6 +50,7 @@ async def test_insert_and_get_topic(db_pool):
         await insert_topic(
             conn, topic_id, "Defence Intel Test", ["defence", "IAF"],
             ["en"], 30.0, 3, [], None, None, now, LABELS_JSON,
+            org_id=TEST_ORG_ID,
         )
         result = await get_topic(conn, topic_id)
 
@@ -71,7 +72,7 @@ async def test_get_topic_returns_none_for_missing(db_pool):
     assert result is None
 
 
-async def test_topic_exists_true_and_false(db_pool):
+async def test_topic_exists_true_and_false(db_pool, ensure_org):
     """topic_exists returns True for existing, False for missing."""
     topic_id = str(uuid.uuid4())
     now = datetime.now(UTC)
@@ -80,6 +81,7 @@ async def test_topic_exists_true_and_false(db_pool):
         await insert_topic(
             conn, topic_id, "Exists Test", ["test"],
             ["en"], 30.0, 2, [], None, None, now, LABELS_JSON,
+            org_id=TEST_ORG_ID,
         )
         assert await topic_exists(conn, topic_id) is True
         assert await topic_exists(conn, "nonexistent-id") is False
@@ -87,7 +89,7 @@ async def test_topic_exists_true_and_false(db_pool):
         await _cleanup_topic(conn, topic_id)
 
 
-async def test_update_topic_status(db_pool):
+async def test_update_topic_status(db_pool, ensure_org):
     """update_topic_status changes status in DB."""
     topic_id = str(uuid.uuid4())
     now = datetime.now(UTC)
@@ -96,6 +98,7 @@ async def test_update_topic_status(db_pool):
         await insert_topic(
             conn, topic_id, "Status Test", ["test"],
             ["en"], 30.0, 2, [], None, None, now, LABELS_JSON,
+            org_id=TEST_ORG_ID,
         )
         await update_topic_status(conn, topic_id, "paused", now)
         result = await get_topic(conn, topic_id)
@@ -107,7 +110,7 @@ async def test_update_topic_status(db_pool):
             await _cleanup_topic(conn, topic_id)
 
 
-async def test_list_topics_includes_counts(db_pool):
+async def test_list_topics_includes_counts(db_pool, ensure_org):
     """list_topics returns content_count and signal_count from JOINs."""
     topic_id = str(uuid.uuid4())
     now = datetime.now(UTC)
@@ -116,6 +119,7 @@ async def test_list_topics_includes_counts(db_pool):
         await insert_topic(
             conn, topic_id, "List Test", ["test"],
             ["en"], 30.0, 2, [], None, None, now, LABELS_JSON,
+            org_id=TEST_ORG_ID,
         )
         result = await list_topics(conn)
 
@@ -131,7 +135,7 @@ async def test_list_topics_includes_counts(db_pool):
             await _cleanup_topic(conn, topic_id)
 
 
-async def test_get_topic_entities_empty(db_pool):
+async def test_get_topic_entities_empty(db_pool, ensure_org):
     """Topic with no content → empty entities list."""
     topic_id = str(uuid.uuid4())
     now = datetime.now(UTC)
@@ -140,6 +144,7 @@ async def test_get_topic_entities_empty(db_pool):
         await insert_topic(
             conn, topic_id, "Entities Test", ["test"],
             ["en"], 30.0, 2, [], None, None, now, LABELS_JSON,
+            org_id=TEST_ORG_ID,
         )
         result = await get_topic_entities(conn, topic_id)
 

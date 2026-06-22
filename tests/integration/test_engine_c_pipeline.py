@@ -181,17 +181,17 @@ class TestIdentifierSignalsToDB:
                        (id, topic_id, source_id, raw_text, clean_text,
                         content_hash, url, captured_at, language,
                         credibility_score_at_capture,
-                        created_at, updated_at, labels)
-                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)""",
+                        created_at, updated_at, labels, org_id)
+                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)""",
                     item_id, topic_id, source_id, "test", "test",
                     str(uuid.uuid4()), f"https://test/{item_id[:8]}",
-                    now, "en", 75.0, now, now, LABELS_JSON,
+                    now, "en", 75.0, now, now, LABELS_JSON, "org-integration-test",
                 )
                 await conn.execute(
                     """INSERT INTO identifier_cluster_items
-                       (id, identifier_cluster_id, content_item_id, source_id, labels)
-                       VALUES ($1, $2, $3, $4, $5)""",
-                    str(uuid.uuid4()), cluster_id, item_id, source_id, LABELS_JSON,
+                       (identifier_cluster_id, content_item_id, source_id)
+                       VALUES ($1, $2, $3)""",
+                    cluster_id, item_id, source_id,
                 )
 
         # Run signal check

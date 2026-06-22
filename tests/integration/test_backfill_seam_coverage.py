@@ -72,12 +72,12 @@ async def _insert_content_with_labels(pool, topic_id, source_id, text, embedding
             """INSERT INTO content_items (
                 id, topic_id, source_id, raw_text, clean_text, language,
                 content_hash, url, captured_at, credibility_score_at_capture,
-                embedding, created_at, updated_at, labels
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::vector,$12,$13,$14)
+                embedding, created_at, updated_at, labels, org_id
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::vector,$12,$13,$14,$15)
             ON CONFLICT(content_hash) DO NOTHING""",
             item_id, topic_id, source_id, text, text, "en",
             content_hash, url, now, 75.0,
-            embedding_str, now, now, labels_str,
+            embedding_str, now, now, labels_str, "org-integration-test",
         )
     return item_id
 
@@ -395,7 +395,7 @@ class TestScraperToAnalystSeam:
         emb = _random_embedding(seed=800)
         embedding_str = "[" + ",".join(f"{x:.8f}" for x in emb) + "]"
 
-        # Insert using scraper's exact SQL (16 params including content_quality, clean_hash, title)
+        # Insert using scraper's exact SQL (17 params including content_quality, clean_hash, title, org_id)
         async with db_pool.acquire() as conn:
             result = await conn.fetchrow(
                 SQL_INSERT_CONTENT,
@@ -415,6 +415,7 @@ class TestScraperToAnalystSeam:
                 "good",          # $14: content_quality
                 clean_hash,      # $15: clean_hash
                 "Test Article",  # $16: title
+                "org-integration-test",  # $17: org_id
             )
             assert result is not None, "Scraper INSERT returned nothing (content_hash conflict?)"
 
@@ -472,7 +473,7 @@ class TestSocialToAnalystSeam:
         emb = _random_embedding(seed=810)
         embedding_str = "[" + ",".join(f"{x:.8f}" for x in emb) + "]"
 
-        # Insert using social's exact SQL (13 params — no content_quality/clean_hash/title)
+        # Insert using social's exact SQL (16 params — includes forwarded_from + org_id)
         async with db_pool.acquire() as conn:
             result = await conn.fetchrow(
                 SOCIAL_INSERT,
@@ -489,6 +490,9 @@ class TestSocialToAnalystSeam:
                 now,          # $11: created_at
                 now,          # $12: updated_at
                 labels,       # $13: labels
+                None,         # $14: forwarded_from_channel_id
+                None,         # $15: forwarded_from_channel_name
+                "org-integration-test",  # $16: org_id
             )
             assert result is not None, "Social INSERT returned nothing"
 

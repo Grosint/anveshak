@@ -74,7 +74,7 @@ class TestPollRssSources:
         from anveshak.scraper.jobs import poll_rss_sources
 
         pool, conn = _make_pool_and_conn()
-        conn.fetchrow.return_value = {"id": "topic-1"}  # topic exists
+        conn.fetchrow.return_value = {"id": "topic-1", "org_id": "org-1"}  # topic exists
         conn.fetch.return_value = []  # no RSS sources
         ctx = {"db_pool": pool, "redis": MagicMock()}
 
@@ -107,7 +107,7 @@ class TestPollRssSources:
 
         # First call setup: topic lookup + sources lookup on the outer conn
         outer_pool, outer_conn = _make_pool_and_conn()
-        outer_conn.fetchrow.return_value = {"id": "topic-1"}
+        outer_conn.fetchrow.return_value = {"id": "topic-1", "org_id": "org-1"}
         outer_conn.fetch.return_value = [_source_row("s1", "https://feed.com/rss")]
 
         # Inner conn for per-item inserts: first returns a row (inserted), second returns None (dedup)
@@ -169,7 +169,7 @@ class TestPollRssSources:
 
         # Outer conn for topic + sources
         outer_pool, outer_conn = _make_pool_and_conn()
-        outer_conn.fetchrow.return_value = {"id": "topic-1"}
+        outer_conn.fetchrow.return_value = {"id": "topic-1", "org_id": "org-1"}
         outer_conn.fetch.return_value = [_source_row("s1", "https://feed.com/rss")]
 
         # Inner conn for per-item inserts — returns a row each time (successful insert)

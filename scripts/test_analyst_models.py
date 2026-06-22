@@ -36,18 +36,25 @@ def _result(test: str, passed: bool, detail: str, elapsed: float) -> dict[str, A
 # Test helpers
 # ---------------------------------------------------------------------------
 
+SQL_ENSURE_ORG = """
+    INSERT INTO organizations (id, name, slug, created_at, updated_at, labels)
+    VALUES ('org-test', 'Test Org', 'test-org', NOW(), NOW(),
+            '{"classification":"OPEN","domain":"test","owner_org":"anveshak"}'::jsonb)
+    ON CONFLICT (id) DO NOTHING
+"""
+
 SQL_INSERT = """
     INSERT INTO content_items (
         id, topic_id, source_id, raw_text, clean_text, language,
         content_hash, url, captured_at, credibility_score_at_capture,
-        created_at, updated_at, labels, content_quality, clean_hash, title
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        created_at, updated_at, labels, content_quality, clean_hash, title, org_id
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'org-test')
     RETURNING id
 """
 
 SQL_ENSURE_TOPIC = """
-    INSERT INTO topics (id, name, keywords, labels, created_at, updated_at)
-    VALUES ($1, $2, $3,
+    INSERT INTO topics (id, name, keywords, org_id, labels, created_at, updated_at)
+    VALUES ($1, $2, $3, 'org-test',
             '{"classification":"OPEN","domain":"test","owner_org":"anveshak"}'::jsonb,
             NOW(), NOW())
     ON CONFLICT (id) DO NOTHING
@@ -55,8 +62,8 @@ SQL_ENSURE_TOPIC = """
 
 SQL_ENSURE_SOURCE = """
     INSERT INTO sources (id, name, url_or_handle, platform,
-                         credibility_score, is_active, labels, created_at, updated_at)
-    VALUES ($1, $2, $3, $4, $5, TRUE,
+                         credibility_score, is_active, org_id, labels, created_at, updated_at)
+    VALUES ($1, $2, $3, $4, $5, TRUE, 'org-test',
             '{"classification":"OPEN","domain":"test","owner_org":"anveshak"}'::jsonb,
             NOW(), NOW())
     ON CONFLICT (id) DO NOTHING
@@ -74,6 +81,7 @@ TEST_SOURCE_ID = "test-analyst-models-source"
 async def _setup(pool):
     """Create test topic and source if they don't exist."""
     async with pool.acquire() as conn:
+        await conn.execute(SQL_ENSURE_ORG)
         await conn.execute(SQL_ENSURE_TOPIC, TEST_TOPIC_ID, "Analyst Model Tests",
                            ["test", "integration"])
         await conn.execute(SQL_ENSURE_SOURCE, TEST_SOURCE_ID, "test-source",

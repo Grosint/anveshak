@@ -31,12 +31,12 @@ async def test_media_asset_insert_dedup(db_pool, make_topic, make_source):
         await conn.execute("""
             INSERT INTO content_items (
                 id, topic_id, source_id, raw_text, clean_text, content_hash,
-                url, labels
+                url, labels, org_id
             )
             VALUES ($1, $2, $3, 'test content', 'test content', $4, 'http://test.example.com',
-                    '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb)
+                    '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb, $5)
             ON CONFLICT (content_hash) DO NOTHING
-        """, ci_id, topic_id, source_id, ci_hash)
+        """, ci_id, topic_id, source_id, ci_hash, "org-integration-test")
 
         # Insert media_asset twice with same content_hash — second should be ignored
         ma_id_1 = str(uuid.uuid4())
