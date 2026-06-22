@@ -143,7 +143,7 @@ async def apply_credibility_drop(
     new_score: float,
     reason: str,
     now: datetime,
-    org_id: str | None = None,
+    org_id: str,
 ) -> None:
     """Atomically update score and write audit log in the caller's transaction.
 
@@ -171,7 +171,7 @@ async def apply_credibility_boost(
     new_score: float,
     reason: str,
     now: datetime,
-    org_id: str | None = None,
+    org_id: str,
 ) -> None:
     """Atomically boost score and write audit log in the caller's transaction.
 
@@ -217,7 +217,7 @@ async def run_credibility_update(pool: asyncpg.Pool) -> int:
             source_id: str = row["source_id"]
             old_score: float = row["credibility_score"]
             deepfake_count: int = row["deepfake_count"]
-            org_id: str | None = row.get("org_id")
+            org_id: str = row["org_id"]
 
             new_score = compute_new_score(old_score, deepfake_count)
 
@@ -276,7 +276,7 @@ async def run_cross_verification_update(pool: asyncpg.Pool, topic_id: str) -> in
         for row in rows:
             source_id: str = row["source_id"]
             old_score: float = row["credibility_score"]
-            org_id: str | None = row.get("org_id")
+            org_id: str = row["org_id"]
             new_score = clamp_score(old_score + settings.credibility_cross_verify_boost)
 
             if abs(new_score - old_score) < settings.credibility_min_auto_boost:
@@ -336,7 +336,7 @@ async def run_contradiction_update(pool: asyncpg.Pool) -> int:
         for row in rows:
             source_id: str = row["source_id"]
             old_score: float = row["credibility_score"]
-            org_id: str | None = row.get("org_id")
+            org_id: str = row["org_id"]
             noise_count: int = row["noise_count"]
             total_count: int = row["total_count"]
 
