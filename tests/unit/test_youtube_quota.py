@@ -205,7 +205,8 @@ class TestYouTubeSettings:
         assert hasattr(s, "youtube_max_comments_per_video")
         assert hasattr(s, "youtube_backfill_count")
 
-    def test_youtube_defaults(self):
+    def test_youtube_defaults(self, monkeypatch):
+        monkeypatch.delenv("YOUTUBE_ADAPTER_ENABLED", raising=False)
         from anveshak.social.settings import SocialSettings
         s = SocialSettings()
         assert s.youtube_adapter_enabled is False

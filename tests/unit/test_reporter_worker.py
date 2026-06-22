@@ -74,6 +74,14 @@ def _make_chunk(source_id="src-1"):
     }
 
 
+def _make_data_bundle():
+    return {
+        "topic_stats": {"name": "Test Topic", "content_count": 10, "source_count": 3, "cluster_count": 2, "signal_count": 1},
+        "sources": [], "clusters": [], "signals": [], "entities": [],
+        "sentiment_trend": [], "keywords": [], "evidence_items": [], "language_breakdown": [],
+    }
+
+
 # ---------------------------------------------------------------------------
 # generate_report tests
 # ---------------------------------------------------------------------------
@@ -121,6 +129,7 @@ class TestGenerateReport:
              patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed:
             mock_db.fetch_report = AsyncMock(return_value=_make_report_row())
             mock_db.fetch_topic = AsyncMock(return_value=_make_topic_row())
+            mock_db.fetch_report_data_bundle = AsyncMock(return_value=_make_data_bundle())
             mock_db.fetch_rag_chunks = AsyncMock(return_value=[])
             mock_db.set_report_failed = AsyncMock()
             mock_embed.return_value = [0.1] * 384
@@ -133,51 +142,65 @@ class TestGenerateReport:
             assert "no scraped content" in error_msg.lower() or "sources" in error_msg.lower()
 
     @pytest.mark.asyncio
-    async def test_generate_report_llm_failure(self):
-        """call_ollama_with_retry returns None -> set_report_failed."""
+    async def test_generate_report_llm_failure_uses_fallback(self):
+        """call_ollama_for_bluf returns None -> fallback BLUF, report still succeeds."""
         ctx = _make_ctx()
         chunks = [_make_chunk()]
 
         with patch("anveshak.reporter.worker.db") as mock_db, \
              patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed, \
-             patch("anveshak.reporter.worker.assemble_context") as mock_ctx, \
-             patch("anveshak.reporter.worker.render_prompt") as mock_prompt, \
-             patch("anveshak.reporter.worker.call_ollama_with_retry", new_callable=AsyncMock) as mock_llm:
+             patch("anveshak.reporter.worker.render_bluf_prompt") as mock_prompt, \
+             patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_llm, \
+             patch("anveshak.reporter.worker.geocode_locations") as mock_geo, \
+             patch("anveshak.reporter.worker.build_geojson") as mock_geojson, \
+             patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract:
             mock_db.fetch_report = AsyncMock(return_value=_make_report_row())
             mock_db.fetch_topic = AsyncMock(return_value=_make_topic_row())
+            mock_db.fetch_report_data_bundle = AsyncMock(return_value=_make_data_bundle())
             mock_db.fetch_rag_chunks = AsyncMock(return_value=chunks)
             mock_db.fetch_topic_identifiers = AsyncMock(return_value=[])
             mock_db.fetch_topic_template_matches = AsyncMock(return_value=[])
-            mock_db.set_report_failed = AsyncMock()
+            mock_db.fetch_sources_for_snapshot = AsyncMock(return_value={})
+            mock_db.fetch_topic_location_entities = AsyncMock(return_value=[])
+            mock_db.set_report_generated = AsyncMock(return_value=True)
+            mock_db.update_job_status = AsyncMock()
             mock_embed.return_value = [0.1] * 384
-            mock_ctx.return_value = ("context text", 3, "2026-01-01 to 2026-01-07")
             mock_prompt.return_value = "prompt"
-            mock_llm.return_value = None
+            mock_llm.return_value = None  # LLM fails
+            mock_geo.return_value = []
+            mock_geojson.return_value = {"type": "FeatureCollection", "features": []}
+            mock_extract.return_value = []
 
             from anveshak.reporter.worker import generate_report
             await generate_report(ctx, "report-1")
 
-            mock_db.set_report_failed.assert_awaited_once()
-            error_msg = mock_db.set_report_failed.call_args[0][-1]
-            assert "llm" in error_msg.lower() or "ollama" in error_msg.lower()
+            # v2 uses fallback BLUF — report succeeds, not failed
+            mock_db.set_report_generated.assert_awaited_once()
+            call_kwargs = mock_db.set_report_generated.call_args[1]
+            assert call_kwargs["confidence_score"] == 0.0  # fallback confidence
 
     @pytest.mark.asyncio
     async def test_generate_report_idempotent(self):
         """set_report_generated returns False -> logs 'already_generated', no crash."""
         ctx = _make_ctx()
         chunks = [_make_chunk()]
-        rc = _make_report_content()
+
+        from anveshak.reporter.llm import BlufContent
+        bluf = BlufContent(
+            bluf="Test summary.", confidence_level=0.85,
+            labels={"classification": "OPEN", "domain": "report", "owner_org": "anveshak"},
+        )
 
         with patch("anveshak.reporter.worker.db") as mock_db, \
              patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed, \
-             patch("anveshak.reporter.worker.assemble_context") as mock_ctx, \
-             patch("anveshak.reporter.worker.render_prompt") as mock_prompt, \
-             patch("anveshak.reporter.worker.call_ollama_with_retry", new_callable=AsyncMock) as mock_llm, \
+             patch("anveshak.reporter.worker.render_bluf_prompt") as mock_prompt, \
+             patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_llm, \
              patch("anveshak.reporter.worker.geocode_locations") as mock_geo, \
              patch("anveshak.reporter.worker.build_geojson") as mock_geojson, \
              patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract:
             mock_db.fetch_report = AsyncMock(return_value=_make_report_row())
             mock_db.fetch_topic = AsyncMock(return_value=_make_topic_row())
+            mock_db.fetch_report_data_bundle = AsyncMock(return_value=_make_data_bundle())
             mock_db.fetch_rag_chunks = AsyncMock(return_value=chunks)
             mock_db.fetch_sources_for_snapshot = AsyncMock(return_value={})
             mock_db.fetch_topic_location_entities = AsyncMock(return_value=[])
@@ -186,9 +209,8 @@ class TestGenerateReport:
             mock_db.set_report_generated = AsyncMock(return_value=False)  # already generated
             mock_db.update_job_status = AsyncMock()
             mock_embed.return_value = [0.1] * 384
-            mock_ctx.return_value = ("context", 3, "2026-01-01 to 2026-01-07")
             mock_prompt.return_value = "prompt"
-            mock_llm.return_value = rc
+            mock_llm.return_value = bluf
             mock_geo.return_value = []
             mock_geojson.return_value = {"type": "FeatureCollection", "features": []}
             mock_extract.return_value = []
@@ -207,18 +229,23 @@ class TestGenerateReport:
         """Full pipeline success: set_report_generated called with correct params."""
         ctx = _make_ctx()
         chunks = [_make_chunk("src-1"), _make_chunk("src-2")]
-        rc = _make_report_content()
+
+        from anveshak.reporter.llm import BlufContent
+        bluf = BlufContent(
+            bluf="Test summary.", confidence_level=0.85,
+            labels={"classification": "OPEN", "domain": "report", "owner_org": "anveshak"},
+        )
 
         with patch("anveshak.reporter.worker.db") as mock_db, \
              patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed, \
-             patch("anveshak.reporter.worker.assemble_context") as mock_ctx, \
-             patch("anveshak.reporter.worker.render_prompt") as mock_prompt, \
-             patch("anveshak.reporter.worker.call_ollama_with_retry", new_callable=AsyncMock) as mock_llm, \
+             patch("anveshak.reporter.worker.render_bluf_prompt") as mock_prompt, \
+             patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_llm, \
              patch("anveshak.reporter.worker.geocode_locations") as mock_geo, \
              patch("anveshak.reporter.worker.build_geojson") as mock_geojson, \
              patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract:
             mock_db.fetch_report = AsyncMock(return_value=_make_report_row())
             mock_db.fetch_topic = AsyncMock(return_value=_make_topic_row())
+            mock_db.fetch_report_data_bundle = AsyncMock(return_value=_make_data_bundle())
             mock_db.fetch_rag_chunks = AsyncMock(return_value=chunks)
             mock_db.fetch_sources_for_snapshot = AsyncMock(return_value={"src-1": {"credibility_score": 80}})
             mock_db.fetch_topic_location_entities = AsyncMock(return_value=["Delhi"])
@@ -227,9 +254,8 @@ class TestGenerateReport:
             mock_db.set_report_generated = AsyncMock(return_value=True)
             mock_db.update_job_status = AsyncMock()
             mock_embed.return_value = [0.1] * 384
-            mock_ctx.return_value = ("context", 3, "2026-01-01 to 2026-01-07")
             mock_prompt.return_value = "prompt"
-            mock_llm.return_value = rc
+            mock_llm.return_value = bluf
             mock_geo.return_value = [{"name": "Delhi", "lat": 28.6, "lon": 77.2}]
             mock_geojson.return_value = {"type": "FeatureCollection", "features": []}
             mock_extract.return_value = []
@@ -242,7 +268,7 @@ class TestGenerateReport:
             assert call_kwargs["report_id"] == "report-1"
             assert call_kwargs["confidence_score"] == 0.85
             assert call_kwargs["content_item_count"] == 2
-            assert "## Executive Summary" in call_kwargs["content_md"]
+            assert "<!-- report-v2 -->" in call_kwargs["content_md"]
             mock_db.update_job_status.assert_awaited_once_with(
                 ctx["db"], "report-1", "complete"
             )

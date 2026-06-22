@@ -85,6 +85,14 @@ class TestAssembleContext:
         assert count == 0
 
 
+def _data_bundle():
+    return {
+        "topic_stats": {"name": "Test", "content_count": 5, "source_count": 2, "cluster_count": 1, "signal_count": 0},
+        "sources": [], "clusters": [], "signals": [], "entities": [],
+        "sentiment_trend": [], "keywords": [], "evidence_items": [], "language_breakdown": [],
+    }
+
+
 class TestRAGCredibilityFiltering:
     """Verify credibility_min parameter is threaded to fetch_rag_chunks."""
 
@@ -92,6 +100,7 @@ class TestRAGCredibilityFiltering:
     async def test_credibility_min_passed_to_fetch_rag_chunks(self):
         """generate_report passes report's credibility_min_filter to fetch_rag_chunks."""
         from anveshak.reporter.worker import generate_report
+        from anveshak.reporter.llm import BlufContent
 
         report = {
             "id": "report-1",
@@ -101,12 +110,6 @@ class TestRAGCredibilityFiltering:
         }
         topic = {"id": "topic-1", "name": "Test", "keywords": ["test"]}
         chunks = [{"id": "c1", "source_id": "s1", "clean_text": "text", "url": "https://x.com"}]
-        rc = MagicMock()
-        rc.executive_summary = "Summary"
-        rc.key_findings = ["F1"]
-        rc.recommendations = ["R1"]
-        rc.source_citations = ["https://x.com"]
-        rc.confidence_level = 0.9
 
         ctx = {"db": AsyncMock(), "settings": MagicMock(
             rag_top_k=10, rag_max_context_tokens=4000,
@@ -117,25 +120,27 @@ class TestRAGCredibilityFiltering:
 
         with patch("anveshak.reporter.worker.db") as mock_db, \
              patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed, \
-             patch("anveshak.reporter.worker.assemble_context") as mock_ctx, \
-             patch("anveshak.reporter.worker.render_prompt") as mock_prompt, \
-             patch("anveshak.reporter.worker.call_ollama_with_retry", new_callable=AsyncMock) as mock_llm, \
+             patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_llm, \
+             patch("anveshak.reporter.worker.render_bluf_prompt", return_value="bluf prompt"), \
              patch("anveshak.reporter.worker.geocode_locations") as mock_geo, \
              patch("anveshak.reporter.worker.build_geojson") as mock_geojson, \
              patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract:
             mock_db.fetch_report = AsyncMock(return_value=report)
             mock_db.fetch_topic = AsyncMock(return_value=topic)
+            mock_db.fetch_report_data_bundle = AsyncMock(return_value=_data_bundle())
             mock_db.fetch_rag_chunks = AsyncMock(return_value=chunks)
             mock_db.fetch_sources_for_snapshot = AsyncMock(return_value={})
             mock_db.fetch_topic_location_entities = AsyncMock(return_value=[])
             mock_db.fetch_topic_identifiers = AsyncMock(return_value=[])
             mock_db.fetch_topic_template_matches = AsyncMock(return_value=[])
             mock_db.set_report_generated = AsyncMock(return_value=True)
+            mock_db.set_report_failed = AsyncMock()
             mock_db.update_job_status = AsyncMock()
             mock_embed.return_value = [0.1] * 384
-            mock_ctx.return_value = ("context", 1, "2026-01-01")
-            mock_prompt.return_value = "prompt"
-            mock_llm.return_value = rc
+            mock_llm.return_value = BlufContent(
+                bluf="Test.", confidence_level=0.8,
+                labels={"classification": "OPEN", "domain": "report", "owner_org": "anveshak"},
+            )
             mock_geo.return_value = []
             mock_geojson.return_value = {"type": "FeatureCollection", "features": []}
             mock_extract.return_value = []
@@ -173,6 +178,7 @@ class TestRAGCredibilityFiltering:
              patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed:
             mock_db.fetch_report = AsyncMock(return_value=report)
             mock_db.fetch_topic = AsyncMock(return_value=topic)
+            mock_db.fetch_report_data_bundle = AsyncMock(return_value=_data_bundle())
             mock_db.fetch_rag_chunks = AsyncMock(return_value=[])  # empty → will return early
             mock_db.set_report_failed = AsyncMock()
             mock_embed.return_value = [0.1] * 384

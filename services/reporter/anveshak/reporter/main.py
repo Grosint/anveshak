@@ -188,18 +188,51 @@ async def get_report_pdf(report_id: str) -> FileResponse:
             )
 
     # Generate PDF on demand
-    report_data = {
-        "id": report_id,
-        "report_type": report.get("report_type", "intelligence_brief"),
-        "topic_name": report.get("topic_name", "Intelligence Report"),
-        "generated_at": str(report.get("generated_at", "")),
-        "confidence_score": report.get("confidence_score", 0.0),
-        "content_item_count": report.get("content_item_count", 0),
-        "labels": _parse_labels(report.get("labels")),
-    }
+    content_md = report.get("content_md") or ""
+    is_v2 = content_md.startswith("<!-- report-v2 -->")
 
-    # Parse content_md for key fields if available
-    _enrich_report_data_from_md(report_data, report.get("content_md"))
+    if is_v2:
+        # v2: data-driven report — fetch structured data from DB
+        topic_id = report.get("topic_id")
+        data_bundle = await db_module.fetch_report_data_bundle(
+            app.state.db_pool, topic_id
+        )
+        identifiers = await db_module.fetch_topic_identifiers(app.state.db_pool, topic_id)
+        template_matches = await db_module.fetch_topic_template_matches(app.state.db_pool, topic_id)
+
+        # Extract BLUF text from content_md
+        bluf_text = ""
+        for line in content_md.split("\n"):
+            stripped = line.strip()
+            if stripped and not stripped.startswith(("#", "<!--", "**", "*", "|", "---", "-")):
+                bluf_text = stripped
+                break
+
+        report_data = {
+            "id": report_id,
+            "report_type": report.get("report_type", "intelligence_brief"),
+            "topic_name": data_bundle["topic_stats"].get("name", "Intelligence Report"),
+            "generated_at": str(report.get("generated_at", "")),
+            "confidence_score": report.get("confidence_score", 0.0),
+            "content_item_count": report.get("content_item_count", 0),
+            "labels": _parse_labels(report.get("labels")),
+            "bluf": bluf_text,
+            **data_bundle,
+            "identifiers": identifiers,
+            "template_matches": template_matches,
+        }
+    else:
+        # v1: legacy LLM-dependent report
+        report_data = {
+            "id": report_id,
+            "report_type": report.get("report_type", "intelligence_brief"),
+            "topic_name": report.get("topic_name", "Intelligence Report"),
+            "generated_at": str(report.get("generated_at", "")),
+            "confidence_score": report.get("confidence_score", 0.0),
+            "content_item_count": report.get("content_item_count", 0),
+            "labels": _parse_labels(report.get("labels")),
+        }
+        _enrich_report_data_from_md(report_data, content_md)
 
     pdf_path = await generate_pdf(report_id, report_data, settings.pdf_output_dir)
 

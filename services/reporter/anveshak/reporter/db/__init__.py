@@ -441,6 +441,252 @@ async def fetch_topic_template_matches(
 
 
 # ---------------------------------------------------------------------------
+# Data-Driven Report — v2 SQL queries
+# ---------------------------------------------------------------------------
+
+SQL_REPORT_TOPIC_STATS = """
+    SELECT t.name,
+           (SELECT COUNT(*) FROM content_items ci
+            WHERE ci.topic_id = t.id
+               OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = t.id)
+           ) AS content_count,
+           (SELECT COUNT(*) FROM topic_sources ts WHERE ts.topic_id = t.id
+           ) AS source_count,
+           (SELECT COUNT(*) FROM narrative_clusters nc
+            WHERE nc.topic_id = t.id AND nc.archived_at IS NULL
+           ) AS cluster_count,
+           (SELECT COUNT(*) FROM signals sig
+            WHERE sig.topic_id = t.id AND sig.status = 'new'
+           ) AS signal_count
+    FROM topics t
+    WHERE t.id = $1
+"""
+
+SQL_REPORT_TOPIC_SOURCES = """
+    SELECT s.name, s.platform, s.credibility_score,
+           COUNT(ci.id) AS item_count
+    FROM sources s
+    JOIN topic_sources ts ON ts.source_id = s.id
+    LEFT JOIN content_items ci ON ci.source_id = s.id
+        AND (ci.topic_id = $1
+             OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
+    WHERE ts.topic_id = $1
+    GROUP BY s.id, s.name, s.platform, s.credibility_score
+    ORDER BY item_count DESC
+"""
+
+SQL_REPORT_TOPIC_CLUSTERS = """
+    SELECT id, label, item_count, independent_source_count, executive_summary, created_at
+    FROM narrative_clusters
+    WHERE topic_id = $1 AND archived_at IS NULL
+    ORDER BY item_count DESC
+"""
+
+SQL_REPORT_SIGNALS = """
+    SELECT sig.id, sig.description, sig.status, sig.created_at,
+           nc.label AS cluster_label
+    FROM signals sig
+    LEFT JOIN narrative_clusters nc ON nc.id = sig.cluster_id
+    WHERE sig.topic_id = $1
+    ORDER BY sig.created_at DESC
+    LIMIT 50
+"""
+
+SQL_REPORT_ENTITIES = """
+    SELECT ee.entity_type, ee.entity_text,
+           COUNT(*) AS mention_count,
+           AVG(ee.confidence) AS avg_confidence
+    FROM extracted_entities ee
+    JOIN content_items ci ON ee.content_item_id = ci.id
+    WHERE (ci.topic_id = $1
+       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
+      AND ee.confidence >= 0.75
+      AND ee.entity_type NOT IN ('CARDINAL', 'ORDINAL', 'QUANTITY', 'DATE', 'TIME', 'PERCENT', 'MONEY')
+    GROUP BY ee.entity_type, ee.entity_text
+    ORDER BY COUNT(*) DESC
+    LIMIT 30
+"""
+
+SQL_REPORT_SENTIMENT_TREND = """
+    SELECT DATE(ci.captured_at) AS date,
+           AVG((ci.labels->>'sentiment_compound')::float) AS avg_sentiment,
+           COUNT(*) AS item_count
+    FROM content_items ci
+    WHERE (ci.topic_id = $1
+       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
+      AND ci.labels->>'sentiment_compound' IS NOT NULL
+      AND ci.captured_at >= NOW() - INTERVAL '30 days'
+    GROUP BY DATE(ci.captured_at)
+    ORDER BY DATE(ci.captured_at)
+"""
+
+SQL_REPORT_KEYWORDS = """
+    SELECT kw AS keyword, COUNT(*) AS frequency
+    FROM content_items ci,
+         jsonb_array_elements_text(ci.labels->'keywords') AS kw
+    WHERE (ci.topic_id = $1
+       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
+      AND ci.labels->'keywords' IS NOT NULL
+      AND ci.captured_at >= NOW() - INTERVAL '7 days'
+    GROUP BY kw
+    ORDER BY COUNT(*) DESC
+    LIMIT 20
+"""
+
+SQL_REPORT_EVIDENCE_ITEMS = """
+    SELECT DISTINCT ON (ci.url)
+           ci.title,
+           ci.url,
+           s.name AS source_name,
+           s.platform,
+           ci.captured_at,
+           ci.credibility_score_at_capture,
+           LEFT(COALESCE(ci.translated_text, ci.clean_text), 200) AS snippet
+    FROM content_items ci
+    LEFT JOIN sources s ON s.id = ci.source_id
+    WHERE (ci.topic_id = $1
+       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
+      AND ci.clean_text IS NOT NULL
+    ORDER BY ci.url, ci.captured_at DESC
+    LIMIT 50
+"""
+
+SQL_REPORT_LANGUAGE_BREAKDOWN = """
+    SELECT ci.language, COUNT(*) AS count
+    FROM content_items ci
+    WHERE (ci.topic_id = $1
+       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
+      AND ci.language IS NOT NULL
+    GROUP BY ci.language
+    ORDER BY COUNT(*) DESC
+"""
+
+
+# ---------------------------------------------------------------------------
+# Data-Driven Report — v2 fetch functions
+# ---------------------------------------------------------------------------
+
+async def fetch_report_topic_stats(
+    pool: asyncpg.Pool, topic_id: str
+) -> dict[str, Any]:
+    """Return topic name + aggregate counts for stats boxes."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(SQL_REPORT_TOPIC_STATS, topic_id)
+    if row is None:
+        return {"name": "Unknown", "content_count": 0, "source_count": 0,
+                "cluster_count": 0, "signal_count": 0}
+    return dict(row)
+
+
+async def fetch_report_topic_sources(
+    pool: asyncpg.Pool, topic_id: str
+) -> list[dict[str, Any]]:
+    """Return source inventory for report data sheet."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(SQL_REPORT_TOPIC_SOURCES, topic_id)
+    return [dict(r) for r in rows]
+
+
+async def fetch_report_topic_clusters(
+    pool: asyncpg.Pool, topic_id: str
+) -> list[dict[str, Any]]:
+    """Return active narrative clusters."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(SQL_REPORT_TOPIC_CLUSTERS, topic_id)
+    return [dict(r) for r in rows]
+
+
+async def fetch_report_signals(
+    pool: asyncpg.Pool, topic_id: str
+) -> list[dict[str, Any]]:
+    """Return recent signals with cluster labels."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(SQL_REPORT_SIGNALS, topic_id)
+    return [dict(r) for r in rows]
+
+
+async def fetch_report_entities(
+    pool: asyncpg.Pool, topic_id: str
+) -> list[dict[str, Any]]:
+    """Return top entities by mention count."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(SQL_REPORT_ENTITIES, topic_id)
+    return [dict(r) for r in rows]
+
+
+async def fetch_report_sentiment_trend(
+    pool: asyncpg.Pool, topic_id: str
+) -> list[dict[str, Any]]:
+    """Return daily sentiment aggregation for last 30 days."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(SQL_REPORT_SENTIMENT_TREND, topic_id)
+    return [dict(r) for r in rows]
+
+
+async def fetch_report_keywords(
+    pool: asyncpg.Pool, topic_id: str
+) -> list[dict[str, Any]]:
+    """Return trending keywords from last 7 days."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(SQL_REPORT_KEYWORDS, topic_id)
+    return [dict(r) for r in rows]
+
+
+async def fetch_report_evidence_items(
+    pool: asyncpg.Pool, topic_id: str
+) -> list[dict[str, Any]]:
+    """Return content items for evidence appendix."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(SQL_REPORT_EVIDENCE_ITEMS, topic_id)
+    return [dict(r) for r in rows]
+
+
+async def fetch_report_language_breakdown(
+    pool: asyncpg.Pool, topic_id: str
+) -> list[dict[str, Any]]:
+    """Return language distribution across topic content."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(SQL_REPORT_LANGUAGE_BREAKDOWN, topic_id)
+    return [dict(r) for r in rows]
+
+
+async def fetch_report_data_bundle(
+    pool: asyncpg.Pool, topic_id: str
+) -> dict[str, Any]:
+    """Fetch all structured data for a data-driven report.
+
+    Runs all queries concurrently via asyncio.gather for performance.
+    Returns dict with keys: topic_stats, sources, clusters, signals,
+    entities, sentiment_trend, keywords, evidence_items, language_breakdown.
+    """
+    import asyncio
+
+    results = await asyncio.gather(
+        fetch_report_topic_stats(pool, topic_id),
+        fetch_report_topic_sources(pool, topic_id),
+        fetch_report_topic_clusters(pool, topic_id),
+        fetch_report_signals(pool, topic_id),
+        fetch_report_entities(pool, topic_id),
+        fetch_report_sentiment_trend(pool, topic_id),
+        fetch_report_keywords(pool, topic_id),
+        fetch_report_evidence_items(pool, topic_id),
+        fetch_report_language_breakdown(pool, topic_id),
+    )
+
+    return {
+        "topic_stats": results[0],
+        "sources": results[1],
+        "clusters": results[2],
+        "signals": results[3],
+        "entities": results[4],
+        "sentiment_trend": results[5],
+        "keywords": results[6],
+        "evidence_items": results[7],
+        "language_breakdown": results[8],
+    }
+
+
+# ---------------------------------------------------------------------------
 # Source Assessment — Phase 2
 # ---------------------------------------------------------------------------
 

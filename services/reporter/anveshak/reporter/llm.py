@@ -247,6 +247,78 @@ async def call_ollama_for_assessment(
     return None
 
 
+# ---------------------------------------------------------------------------
+# BLUF (Bottom Line Up Front) — minimal v2 model
+# ---------------------------------------------------------------------------
+
+class BlufContent(BaseModel):
+    """Minimal LLM output for data-driven reports.
+
+    Only a 2-3 sentence BLUF paragraph + confidence. Everything else is SQL.
+    CLAUDE.md rule 2: labels is MANDATORY.
+    CLAUDE.md rule 9: validated before storage.
+    """
+    model_config = ConfigDict(strict=True)
+
+    bluf: str
+    confidence_level: float
+    labels: Labels
+
+
+def parse_bluf_response(raw: str) -> BlufContent:
+    """Parse and validate raw LLM string into BlufContent.
+
+    Raises:
+        ValueError: if the string cannot be decoded as JSON.
+        pydantic.ValidationError: if the JSON does not match BlufContent schema.
+    """
+    cleaned = _extract_json_from_text(raw)
+    try:
+        data: dict[str, Any] = json.loads(cleaned)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON from LLM: {exc}") from exc
+    return BlufContent(**data)
+
+
+async def call_ollama_for_bluf(
+    prompt: str,
+    settings: Any,
+    max_retries: int,
+) -> BlufContent | None:
+    """Attempt BLUF generation with retries.
+
+    Same pattern as call_ollama_with_retry but uses BlufContent schema (much simpler).
+    Returns None if all retries are exhausted.
+    """
+    retry_prompt = prompt
+    for attempt in range(1, max_retries + 1):
+        try:
+            raw = await call_ollama(
+                prompt=retry_prompt,
+                model=settings.ollama_model,
+                host=settings.ollama_host,
+                timeout=settings.ollama_report_timeout_s,
+            )
+            result = parse_bluf_response(raw)
+            log.info("reporter.bluf_llm_success", attempt=attempt)
+            return result
+        except Exception as exc:
+            log.warning(
+                "reporter.bluf_llm_failed",
+                attempt=attempt,
+                max_retries=max_retries,
+                error=str(exc),
+            )
+            retry_prompt = (
+                prompt
+                + "\n\nIMPORTANT: Respond with ONLY the JSON object. "
+                "No preamble, no markdown, no explanation."
+            )
+
+    log.error("reporter.bluf_llm_all_retries_failed", max_retries=max_retries)
+    return None
+
+
 async def call_ollama_with_retry(
     prompt: str,
     settings: Any,

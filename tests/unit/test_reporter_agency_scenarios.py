@@ -63,12 +63,38 @@ def _make_chunk(source_id="src-1"):
     }
 
 
-def _patch_worker(mock_db, mock_embed, mock_ctx, mock_prompt, mock_llm,
-                   mock_geo, mock_geojson, mock_extract, mock_id_ctx,
-                   *, report_row, topic_row, chunks, rc, identifiers, template_matches):
-    """Wire up all worker mocks for a generate_report call."""
+def _make_data_bundle(topic_name="Test Topic"):
+    """Return a minimal data bundle for v2 pipeline mocking."""
+    return {
+        "topic_stats": {"name": topic_name, "content_count": 10, "source_count": 3, "cluster_count": 2, "signal_count": 1},
+        "sources": [],
+        "clusters": [],
+        "signals": [],
+        "entities": [],
+        "sentiment_trend": [],
+        "keywords": [],
+        "evidence_items": [],
+        "language_breakdown": [],
+    }
+
+
+def _make_bluf_content():
+    """Return a mock BlufContent for v2 pipeline."""
+    from anveshak.reporter.llm import BlufContent
+    return BlufContent(
+        bluf="Test BLUF summary for report.",
+        confidence_level=0.75,
+        labels={"classification": "OPEN", "domain": "report", "owner_org": "anveshak"},
+    )
+
+
+def _patch_worker(mock_db, mock_embed, mock_bluf_llm,
+                   mock_geo, mock_geojson, mock_extract,
+                   *, report_row, topic_row, chunks, identifiers, template_matches):
+    """Wire up all worker mocks for a v2 generate_report call."""
     mock_db.fetch_report = AsyncMock(return_value=report_row)
     mock_db.fetch_topic = AsyncMock(return_value=topic_row)
+    mock_db.fetch_report_data_bundle = AsyncMock(return_value=_make_data_bundle(topic_row.get("name", "Test")))
     mock_db.fetch_rag_chunks = AsyncMock(return_value=chunks)
     mock_db.fetch_sources_for_snapshot = AsyncMock(return_value={})
     mock_db.fetch_topic_location_entities = AsyncMock(return_value=[])
@@ -76,14 +102,12 @@ def _patch_worker(mock_db, mock_embed, mock_ctx, mock_prompt, mock_llm,
     mock_db.fetch_topic_template_matches = AsyncMock(return_value=template_matches)
     mock_db.set_report_generated = AsyncMock(return_value=True)
     mock_db.update_job_status = AsyncMock()
+    mock_db.set_report_failed = AsyncMock()
     mock_embed.return_value = [0.1] * 384
-    mock_ctx.return_value = ("context", 3, "2026-06-01 to 2026-06-10")
-    mock_prompt.return_value = "prompt"
-    mock_llm.return_value = rc
+    mock_bluf_llm.return_value = _make_bluf_content()
     mock_geo.return_value = []
     mock_geojson.return_value = {"type": "FeatureCollection", "features": []}
     mock_extract.return_value = []
-    mock_id_ctx.return_value = "IDENTIFIED INDICATORS..."
 
 
 async def _run_generate_report(ctx, report_id, *, report_row, topic_row,
@@ -91,18 +115,18 @@ async def _run_generate_report(ctx, report_id, *, report_row, topic_row,
     """Execute generate_report with full mock wiring, return content_md."""
     with patch("anveshak.reporter.worker.db") as mock_db, \
          patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed, \
-         patch("anveshak.reporter.worker.assemble_context") as mock_ctx, \
-         patch("anveshak.reporter.worker.render_prompt") as mock_prompt, \
-         patch("anveshak.reporter.worker.call_ollama_with_retry", new_callable=AsyncMock) as mock_llm, \
+         patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_bluf_llm, \
+         patch("anveshak.reporter.worker.render_bluf_prompt") as mock_bluf_prompt, \
          patch("anveshak.reporter.worker.geocode_locations") as mock_geo, \
          patch("anveshak.reporter.worker.build_geojson") as mock_geojson, \
-         patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract, \
-         patch("anveshak.reporter.worker.assemble_identifier_context") as mock_id_ctx:
+         patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract:
 
-        _patch_worker(mock_db, mock_embed, mock_ctx, mock_prompt, mock_llm,
-                      mock_geo, mock_geojson, mock_extract, mock_id_ctx,
+        mock_bluf_prompt.return_value = "bluf prompt"
+
+        _patch_worker(mock_db, mock_embed, mock_bluf_llm,
+                      mock_geo, mock_geojson, mock_extract,
                       report_row=report_row, topic_row=topic_row,
-                      chunks=chunks, rc=rc,
+                      chunks=chunks,
                       identifiers=identifiers,
                       template_matches=template_matches)
 
@@ -413,7 +437,5 @@ class TestMEAScenario:
             identifiers=_MEA_IDENTIFIERS,
             template_matches=_MEA_TEMPLATES,
         )
-        assert "## Executive Summary" in md
-        assert "## Key Findings" in md
-        assert "## Recommendations" in md
-        assert "## Source Citations" in md
+        assert "<!-- report-v2 -->" in md
+        assert "## Bottom Line Up Front" in md

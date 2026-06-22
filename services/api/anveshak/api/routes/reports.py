@@ -199,7 +199,7 @@ async def get_report_pdf(
             content="Report generation pending",
         )
 
-    # Serve cached PDF if it exists
+    # Serve cached PDF — generated eagerly by report-worker at generation time
     pdf_path: Optional[str] = row.get("pdf_path")
     if pdf_path and os.path.exists(pdf_path):
         return FileResponse(
@@ -208,16 +208,10 @@ async def get_report_pdf(
             filename=f"report_{report_id}.pdf",
         )
 
-    # PDF not yet generated — enqueue generation job and return 202
-    try:
-        arq_pool = await arq_create_pool(RedisSettings.from_dsn(settings.redis_url))
-        await arq_pool.enqueue_job("generate_report_pdf", report_id, _queue_name="arq:reporter")
-        await arq_pool.close()
-    except Exception as exc:
-        log.warning("reports.pdf_enqueue_failed", report_id=report_id, error=str(exc))
-
-    return Response(
-        status_code=202,
-        headers={"Retry-After": "15"},
-        content="PDF generation queued",
+    # PDF not on disk — report was generated but PDF failed or pre-dates eager generation.
+    # Regenerate the report to get a PDF (analyst action).
+    raise HTTPException(
+        status_code=404,
+        detail="PDF not available. The report was generated before PDF-at-generation was enabled. "
+               "Generate a new report to get a PDF.",
     )

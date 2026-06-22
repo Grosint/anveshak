@@ -318,6 +318,53 @@ def render_prompt(
 
 
 # ---------------------------------------------------------------------------
+# BLUF prompt — v2 data-driven reports (minimal LLM)
+# ---------------------------------------------------------------------------
+
+_BLUF_TEMPLATE = """\
+You are an intelligence analyst. Write a BLUF (Bottom Line Up Front) summary.
+
+Summarise the situation in 2-3 sentences based on the stats and cluster data below.
+Be factual. Do not speculate. State only what the data shows.
+
+<topic>{{ topic_name }}</topic>
+
+<stats>
+{{ stats_summary }}
+</stats>
+
+<clusters>
+{{ cluster_summary }}
+</clusters>
+
+You MUST respond with ONLY a JSON object matching this schema (no other text):
+{
+  "bluf": "<string: 2-3 sentence bottom-line summary>",
+  "confidence_level": <float 0.0-1.0>,
+  "labels": {"classification": "OPEN", "domain": "report", "owner_org": "anveshak"}
+}
+"""
+
+
+def render_bluf_prompt(
+    topic_name: str,
+    stats_summary: str,
+    cluster_summary: str,
+) -> str:
+    """Render a short BLUF prompt for data-driven reports.
+
+    User-controlled topic_name is wrapped in XML boundary markers
+    per CLAUDE.md security rule (prompt injection prevention).
+    """
+    tmpl = _env.from_string(_BLUF_TEMPLATE)
+    return tmpl.render(
+        topic_name=topic_name,
+        stats_summary=stats_summary,
+        cluster_summary=cluster_summary,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Source Assessment prompt — Phase 2
 # ---------------------------------------------------------------------------
 

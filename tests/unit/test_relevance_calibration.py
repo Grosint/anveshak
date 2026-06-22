@@ -220,6 +220,12 @@ class TestCalibrateTopicThresholds:
 class TestReporterRAGRelevanceFilter:
     """Verify relevance_threshold is threaded to fetch_rag_chunks."""
 
+    _FAKE_DATA_BUNDLE = {
+        "topic_stats": {"name": "Test", "content_count": 5, "source_count": 2, "cluster_count": 1, "signal_count": 0},
+        "sources": [], "clusters": [], "signals": [], "entities": [],
+        "sentiment_trend": [], "keywords": [], "evidence_items": [], "language_breakdown": [],
+    }
+
     @pytest.mark.asyncio
     async def test_per_topic_threshold_passed_to_rag(self):
         """When topic has topic_relevance_threshold, it's passed to fetch_rag_chunks."""
@@ -241,6 +247,7 @@ class TestReporterRAGRelevanceFilter:
              patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed:
             mock_db.fetch_report = AsyncMock(return_value=report)
             mock_db.fetch_topic = AsyncMock(return_value=topic)
+            mock_db.fetch_report_data_bundle = AsyncMock(return_value=self._FAKE_DATA_BUNDLE)
             mock_db.fetch_rag_chunks = AsyncMock(return_value=[])
             mock_db.set_report_failed = AsyncMock()
             mock_embed.return_value = [0.1] * 384
@@ -270,6 +277,7 @@ class TestReporterRAGRelevanceFilter:
              patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed:
             mock_db.fetch_report = AsyncMock(return_value=report)
             mock_db.fetch_topic = AsyncMock(return_value=topic)
+            mock_db.fetch_report_data_bundle = AsyncMock(return_value=self._FAKE_DATA_BUNDLE)
             mock_db.fetch_rag_chunks = AsyncMock(return_value=[])
             mock_db.set_report_failed = AsyncMock()
             mock_embed.return_value = [0.1] * 384

@@ -14,6 +14,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 # 8C.7 / 8C.10 — generate_report retry guard
 # ---------------------------------------------------------------------------
 
+_FAKE_DATA_BUNDLE = {
+    "topic_stats": {"name": "Test", "content_count": 5, "source_count": 2, "cluster_count": 1, "signal_count": 0},
+    "sources": [], "clusters": [], "signals": [], "entities": [],
+    "sentiment_trend": [], "keywords": [], "evidence_items": [], "language_breakdown": [],
+}
+
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_generate_report_idempotent_skip():
@@ -24,6 +31,7 @@ async def test_generate_report_idempotent_skip():
     """
     from anveshak.reporter import db as db_module
     from anveshak.reporter import worker as worker_module
+    from anveshak.reporter.llm import BlufContent
 
     fake_report = {
         "id": "rep-1",
@@ -46,18 +54,10 @@ async def test_generate_report_idempotent_skip():
     async def fake_ollama(*args, **kwargs):
         nonlocal ollama_call_count
         ollama_call_count += 1
-        # Return a minimal valid ReportContent-like object
-        from types import SimpleNamespace
-        return SimpleNamespace(
-            executive_summary="Summary",
-            key_findings=["Finding 1"],
-            recommendations=["Rec 1"],
-            source_citations=["Src 1"],
-            confidence_level=0.75,
-            threats_identified=[],
-            time_period="72h",
-            legal_sections=[],
-            three_lens=None,
+        return BlufContent(
+            bluf="Test.",
+            confidence_level=0.85,
+            labels={"classification": "OPEN", "domain": "report", "owner_org": "anveshak"},
         )
 
     async def fake_set_report_generated_first(*args, **kwargs):
@@ -79,6 +79,7 @@ async def test_generate_report_idempotent_skip():
     with (
         patch.object(db_module, "fetch_report", AsyncMock(return_value=fake_report)),
         patch.object(db_module, "fetch_topic", AsyncMock(return_value=fake_topic)),
+        patch.object(db_module, "fetch_report_data_bundle", AsyncMock(return_value=_FAKE_DATA_BUNDLE)),
         patch.object(db_module, "fetch_rag_chunks", AsyncMock(return_value=[
             {"source_id": "s1", "clean_text": "text", "url": "http://example.com",
              "credibility_score": 80.0, "captured_at": "2026-01-01T00:00:00Z"}
@@ -88,10 +89,10 @@ async def test_generate_report_idempotent_skip():
         patch.object(db_module, "fetch_topic_template_matches", AsyncMock(return_value=[])),
         patch.object(db_module, "update_job_status", AsyncMock()),
         patch.object(db_module, "set_report_generated", AsyncMock(side_effect=fake_set_report_generated_first)),
-        patch("anveshak.reporter.worker.call_ollama_with_retry", fake_ollama),
+        patch.object(db_module, "set_report_failed", AsyncMock()),
+        patch("anveshak.reporter.worker.call_ollama_for_bluf", fake_ollama),
         patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock, return_value=[0.1] * 384),
-        patch("anveshak.reporter.worker.assemble_context", return_value=("context text", 1, "2026-01-01")),
-        patch("anveshak.reporter.worker.render_prompt", return_value="prompt"),
+        patch("anveshak.reporter.worker.render_bluf_prompt", return_value="bluf prompt"),
         patch("anveshak.reporter.worker.extract_locations_from_text", return_value=[]),
         patch("anveshak.reporter.worker.geocode_locations", return_value=[]),
         patch("anveshak.reporter.worker.build_geojson", return_value={"type": "FeatureCollection", "features": []}),
@@ -103,6 +104,7 @@ async def test_generate_report_idempotent_skip():
     with (
         patch.object(db_module, "fetch_report", AsyncMock(return_value=fake_report)),
         patch.object(db_module, "fetch_topic", AsyncMock(return_value=fake_topic)),
+        patch.object(db_module, "fetch_report_data_bundle", AsyncMock(return_value=_FAKE_DATA_BUNDLE)),
         patch.object(db_module, "fetch_rag_chunks", AsyncMock(return_value=[
             {"source_id": "s1", "clean_text": "text", "url": "http://example.com",
              "credibility_score": 80.0, "captured_at": "2026-01-01T00:00:00Z"}
@@ -112,10 +114,10 @@ async def test_generate_report_idempotent_skip():
         patch.object(db_module, "fetch_topic_template_matches", AsyncMock(return_value=[])),
         patch.object(db_module, "update_job_status", AsyncMock()),
         patch.object(db_module, "set_report_generated", AsyncMock(side_effect=fake_set_report_generated_second)),
-        patch("anveshak.reporter.worker.call_ollama_with_retry", fake_ollama),
+        patch.object(db_module, "set_report_failed", AsyncMock()),
+        patch("anveshak.reporter.worker.call_ollama_for_bluf", fake_ollama),
         patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock, return_value=[0.1] * 384),
-        patch("anveshak.reporter.worker.assemble_context", return_value=("context text", 1, "2026-01-01")),
-        patch("anveshak.reporter.worker.render_prompt", return_value="prompt"),
+        patch("anveshak.reporter.worker.render_bluf_prompt", return_value="bluf prompt"),
         patch("anveshak.reporter.worker.extract_locations_from_text", return_value=[]),
         patch("anveshak.reporter.worker.geocode_locations", return_value=[]),
         patch("anveshak.reporter.worker.build_geojson", return_value={"type": "FeatureCollection", "features": []}),

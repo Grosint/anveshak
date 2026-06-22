@@ -389,22 +389,22 @@ Registered ARQ jobs:
 
 ### Reporter (`reporter`)
 
-**What it does:** Provides the report management API — creating report stubs, listing reports, and serving generated PDFs and GeoJSON.
-
-**Why it's needed:** Separates the lightweight API (create report request, check status, download PDF) from the heavy LLM generation work that runs in the worker. The API returns immediately with a job ID; the frontend polls until generation completes.
+**What it does:** Report management is handled by the API service. The reporter container exists only as the ARQ worker (`report-worker`) — there is no separate reporter HTTP API. PDFs are generated eagerly by the worker and served by the API from a shared Docker volume.
 
 **Key details:**
 
-- FastAPI app on port 8005
 - Report types: `intelligence_brief`, `research_summary`, `weekly_digest`
+- Reports are data-driven (v2): 90% SQL-computed stats/tables, 10% LLM BLUF summary
+- PDF generated at report creation time by `report-worker` (WeasyPrint, GROSINT-branded template)
+- API serves cached PDFs from `reporter_output` shared volume — no on-demand generation
 - Cron-based scheduled reports evaluated every 15 minutes
-- Generated PDFs stored in `reporter_output` volume
+- Report immutability enforced via `WHERE generated_at IS NULL` guard
 
 **Connects to:**
 
-- `postgres` — report CRUD, source snapshot storage
-- `redis` — enqueues `generate_report` ARQ jobs
-- `ollama` — health check only (actual inference in worker)
+- `postgres` — report CRUD, data bundle queries, source snapshot storage
+- `redis` — receives `generate_report` ARQ jobs
+- `ollama` — minimal LLM inference for BLUF summary only
 
 ---
 
@@ -440,19 +440,21 @@ Workers are separate container processes that execute heavy background jobs disp
 
 ### Reporter Worker (`reporter-worker`)
 
-**What it does:** Executes the LLM report generation pipeline.
+**What it does:** Executes the data-driven report generation pipeline. Reports are 90% SQL-computed data (stats, source inventory, clusters, entities, signals) and 10% LLM (a 2-3 sentence BLUF summary). PDF is generated eagerly at report creation time and stored on a shared volume for the API to serve.
 
 **Jobs:**
 
-- `generate_report` — the full pipeline:
-  1. RAG retrieval: pgvector cosine search over topic content → top-k context chunks
-  2. Context enrichment: each chunk gets a header with source URL, credibility score, date
-  3. Prompt rendering: few-shot template with grounding rules
-  4. Ollama inference: qwen2:7b generates structured report (max timeout: 540s)
-  5. Pydantic validation: LLM output parsed and validated before storage
+- `generate_report` — the full v2 pipeline:
+  1. Data bundle fetch: 9 concurrent SQL queries (topic stats, sources, clusters, signals, entities, sentiment, keywords, evidence items, language breakdown)
+  2. RAG retrieval: pgvector cosine search over topic content → top-k context chunks
+  3. BLUF prompt: minimal prompt with pre-computed stats + cluster summaries
+  4. Ollama inference: qwen2:7b generates only a 2-3 sentence BLUF (with template fallback if LLM fails)
+  5. Pydantic validation: LLM output parsed via `BlufContent` model before storage
   6. Geocoding: extract locations → GeoJSON for map display
-  7. PDF generation: Markdown → HTML → PDF
+  7. Content markdown: `_build_content_md_v2()` assembles data-driven markdown with tables, stats, evidence cards
   8. `generated_at` set ONCE (report becomes immutable)
+  9. PDF generation: GROSINT-branded HTML template (WeasyPrint) → PDF stored on `reporter_output` volume
+  10. `pdf_path` stored in DB — API serves the cached file directly (no separate PDF generation job)
 - `check_scheduled_reports` — every 15 min, evaluates cron expressions on topics and auto-generates due reports
 - `check_source_warnings` — every 6 hours, checks if any source cited in a report has been downgraded since generation, writes `report_source_warnings`
 
@@ -738,7 +740,7 @@ Workers are separate container processes that execute heavy background jobs disp
 
 **Key design decisions:**
 
-- **No service-to-service HTTP calls** (except api→reporter for PDF proxy). Services communicate through the database and Redis queue. This eliminates tight coupling and allows any service to restart independently.
+- **No service-to-service HTTP calls** (except reporter-worker→analyst for query embedding). Services communicate through the database and Redis queue. PDFs are served by the API from a shared Docker volume — no HTTP proxy to the reporter. This eliminates tight coupling and allows any service to restart independently.
 - **All LLM calls go through ARQ.** The API never calls Ollama directly. This prevents slow LLM inference from blocking HTTP requests.
 - **WebSocket is API-only.** The analyst service writes signals to the database. The API's background loop picks them up and pushes to connected clients. The analyst never talks to the frontend.
 
@@ -824,28 +826,30 @@ Step 7: Signal delivered to analyst (within ~10 seconds)
   → UPDATE signals SET delivered_at = NOW()
 
 Step 8: Analyst requests report
-  frontend → POST /api/v1/reports → api → reporter
-  → reporter creates report stub (generated_at = NULL)
-  → enqueues generate_report ARQ job
+  frontend → POST /api/v1/reports → api
+  → api creates report stub (generated_at = NULL)
+  → enqueues generate_report ARQ job on arq:reporter queue
   → returns report_id immediately
 
-Step 9: Report generation (30-300 seconds)
+Step 9: Report generation (v2 data-driven, 10-90 seconds)
   reporter-worker picks up job
-  → pgvector cosine search: top-k content chunks for topic
-  → enriches chunks with credibility scores and dates
-  → renders prompt with few-shot example + grounding rules
-  → Ollama qwen2:7b generates structured report
-  → Pydantic validates LLM output
+  → 9 concurrent SQL queries: stats, sources, clusters, signals, entities, sentiment, keywords, evidence, languages
+  → pgvector cosine search: top-k content chunks for evidence appendix
+  → renders minimal BLUF prompt with pre-computed stats + cluster summaries
+  → Ollama qwen2:7b generates 2-3 sentence BLUF only (template fallback if LLM fails)
+  → Pydantic validates BlufContent output
   → geocoding: extracts locations → GeoJSON
-  → generates PDF
+  → _build_content_md_v2: assembles data-driven markdown (stats, tables, evidence cards)
   → UPDATE reports SET content_md=..., generated_at=NOW(), source_snapshot=...
   → Report is now IMMUTABLE
+  → WeasyPrint generates GROSINT-branded PDF → stored on reporter_output volume
+  → UPDATE reports SET pdf_path=... (API serves this directly)
 
 Step 10: Analyst reads report
   frontend polls GET /api/v1/reports/{id}
-  → once generated_at is set, displays report
+  → once generated_at is set, displays data-driven markdown (tables, stats, evidence)
   → map shows GeoJSON locations
-  → PDF download available
+  → PDF download served from shared volume (no on-demand generation)
 ```
 
 ---
@@ -1633,57 +1637,62 @@ new → acknowledged → dismissed
 
 ## Report Generation Pipeline
 
-Reports are Anveshak's court-admissible output. They are **immutable** — once generated, they are never modified.
+Reports are Anveshak's auditable, traceable output. They are **immutable** — once generated, they are never modified. Reports are **data-driven** (v2): 90% SQL-computed stats, tables, and evidence cards; 10% LLM-generated BLUF summary.
 
 ```
                     ┌─────────────────────────┐
-                    │  1. RAG Retrieval        │
+                    │  1. Data Bundle Fetch    │
+                    │  9 concurrent SQL queries│
+                    │  stats, sources, clusters│
+                    │  signals, entities, etc. │
+                    └──────────┬──────────────┘
+                               │
+                    ┌──────────▼──────────────┐
+                    │  2. RAG Retrieval        │
                     │  pgvector cosine search  │
                     │  top-k content chunks    │
                     └──────────┬──────────────┘
                                │
                     ┌──────────▼──────────────┐
-                    │  2. Context Enrichment   │
-                    │  + Source URL            │
-                    │  + Credibility score     │
-                    │  + Publication date      │
-                    │  + Source count & range   │
-                    └──────────┬──────────────┘
-                               │
-                    ┌──────────▼──────────────┐
-                    │  3. Prompt Rendering     │
-                    │  Few-shot example        │
-                    │  7 grounding rules       │
-                    │  Role-based instruction  │
+                    │  3. BLUF Prompt          │
+                    │  Minimal prompt with     │
+                    │  pre-computed stats +    │
+                    │  cluster summaries       │
                     └──────────┬──────────────┘
                                │
                     ┌──────────▼──────────────┐
                     │  4. LLM Inference        │
                     │  Ollama qwen2:7b         │
-                    │  Timeout: 540s           │
+                    │  2-3 sentence BLUF only  │
+                    │  (template fallback)     │
                     └──────────┬──────────────┘
                                │
                     ┌──────────▼──────────────┐
                     │  5. Validation           │
-                    │  Pydantic model parse    │
-                    │  Reject malformed output │
+                    │  BlufContent model parse │
                     └──────────┬──────────────┘
                                │
                     ┌──────────▼──────────────┐
                     │  6. Geocoding + GeoJSON  │
-                    │  Extract locations       │
-                    │  Build FeatureCollection │
                     └──────────┬──────────────┘
                                │
                     ┌──────────▼──────────────┐
-                    │  7. PDF Generation       │
-                    │  Markdown → HTML → PDF   │
+                    │  7. Markdown Assembly    │
+                    │  _build_content_md_v2    │
+                    │  Stats + tables + cards  │
                     └──────────┬──────────────┘
                                │
                     ┌──────────▼──────────────┐
                     │  8. Storage (immutable)   │
                     │  generated_at set ONCE   │
                     │  source_snapshot frozen   │
+                    └──────────┬──────────────┘
+                               │
+                    ┌──────────▼──────────────┐
+                    │  9. PDF Generation       │
+                    │  GROSINT-branded HTML    │
+                    │  WeasyPrint → PDF        │
+                    │  Stored on shared volume │
                     └──────────────────────────┘
 ```
 
@@ -2009,7 +2018,7 @@ These rules are enforced by code, tests, and CI. They are non-negotiable.
 | `redis_data` | redis | RDB snapshots |
 | `ollama_models` | ollama | Downloaded LLM weights (~4.4 GB for qwen2:7b) |
 | `analyst_models` | analyst | spaCy, NLLB, sentence-transformer models (~3 GB) |
-| `reporter_output` | reporter, reporter-worker | Generated PDFs and report artifacts |
+| `reporter_output` | report-worker, api | Generated PDFs (eagerly created at report generation time, served by API) |
 | `vision_models` | vision-init, vision, vision-worker | YOLO, CLIP, deepfake ONNX models (~700 MB) |
 | `vision_media` | vision, vision-worker | Uploaded images and videos for analysis |
 | `media_store` | scraper-worker | Downloaded images and videos |

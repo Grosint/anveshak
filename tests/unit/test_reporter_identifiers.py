@@ -109,6 +109,14 @@ def _make_report_content():
     return rc
 
 
+def _data_bundle():
+    return {
+        "topic_stats": {"name": "Test", "content_count": 5, "source_count": 2, "cluster_count": 1, "signal_count": 0},
+        "sources": [], "clusters": [], "signals": [], "entities": [],
+        "sentiment_trend": [], "keywords": [], "evidence_items": [], "language_breakdown": [],
+    }
+
+
 # ---------------------------------------------------------------------------
 # DB function tests
 # ---------------------------------------------------------------------------
@@ -543,19 +551,18 @@ class TestGenerateReportWithIdentifiers:
     @pytest.mark.asyncio
     async def test_happy_path_with_identifiers(self):
         """Full pipeline: identifiers + template matches included in content_md."""
+        from anveshak.reporter.llm import BlufContent
+
         ctx = _make_ctx()
         chunks = [{"id": "c1", "source_id": "src-1", "clean_text": "fraud text", "url": "https://ex.com"}]
-        rc = _make_report_content()
 
         with patch("anveshak.reporter.worker.db") as mock_db, \
              patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed, \
-             patch("anveshak.reporter.worker.assemble_context") as mock_ctx, \
-             patch("anveshak.reporter.worker.render_prompt") as mock_prompt, \
-             patch("anveshak.reporter.worker.call_ollama_with_retry", new_callable=AsyncMock) as mock_llm, \
+             patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_llm, \
+             patch("anveshak.reporter.worker.render_bluf_prompt", return_value="bluf prompt"), \
              patch("anveshak.reporter.worker.geocode_locations") as mock_geo, \
              patch("anveshak.reporter.worker.build_geojson") as mock_geojson, \
-             patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract, \
-             patch("anveshak.reporter.worker.assemble_identifier_context") as mock_id_ctx:
+             patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract:
             mock_db.fetch_report = AsyncMock(return_value={
                 "id": "report-1", "topic_id": "topic-1",
                 "report_type": "intelligence_brief", "credibility_min_filter": 30.0,
@@ -563,21 +570,23 @@ class TestGenerateReportWithIdentifiers:
             mock_db.fetch_topic = AsyncMock(return_value={
                 "id": "topic-1", "name": "Cyber Fraud", "keywords": ["fraud"],
             })
+            mock_db.fetch_report_data_bundle = AsyncMock(return_value=_data_bundle())
             mock_db.fetch_rag_chunks = AsyncMock(return_value=chunks)
             mock_db.fetch_sources_for_snapshot = AsyncMock(return_value={})
             mock_db.fetch_topic_location_entities = AsyncMock(return_value=[])
             mock_db.fetch_topic_identifiers = AsyncMock(return_value=_make_identifiers())
             mock_db.fetch_topic_template_matches = AsyncMock(return_value=_make_template_matches())
             mock_db.set_report_generated = AsyncMock(return_value=True)
+            mock_db.set_report_failed = AsyncMock()
             mock_db.update_job_status = AsyncMock()
             mock_embed.return_value = [0.1] * 384
-            mock_ctx.return_value = ("context", 3, "2026-06-01 to 2026-06-10")
-            mock_prompt.return_value = "prompt"
-            mock_llm.return_value = rc
+            mock_llm.return_value = BlufContent(
+                bluf="Test.", confidence_level=0.8,
+                labels={"classification": "OPEN", "domain": "report", "owner_org": "anveshak"},
+            )
             mock_geo.return_value = []
             mock_geojson.return_value = {"type": "FeatureCollection", "features": []}
             mock_extract.return_value = []
-            mock_id_ctx.return_value = "IDENTIFIED INDICATORS..."
 
             from anveshak.reporter.worker import generate_report
             await generate_report(ctx, "report-1")
@@ -592,21 +601,18 @@ class TestGenerateReportWithIdentifiers:
             assert "## Identified Indicators" in content_md
             assert "## Scam Template Matches" in content_md
 
-            # Identifier context passed to prompt
-            mock_id_ctx.assert_called_once()
-
     @pytest.mark.asyncio
     async def test_no_identifiers_graceful(self):
         """No identifiers found → sections omitted, no crash."""
+        from anveshak.reporter.llm import BlufContent
+
         ctx = _make_ctx()
         chunks = [{"id": "c1", "source_id": "src-1", "clean_text": "text", "url": "https://ex.com"}]
-        rc = _make_report_content()
 
         with patch("anveshak.reporter.worker.db") as mock_db, \
              patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed, \
-             patch("anveshak.reporter.worker.assemble_context") as mock_ctx, \
-             patch("anveshak.reporter.worker.render_prompt") as mock_prompt, \
-             patch("anveshak.reporter.worker.call_ollama_with_retry", new_callable=AsyncMock) as mock_llm, \
+             patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_llm, \
+             patch("anveshak.reporter.worker.render_bluf_prompt", return_value="bluf prompt"), \
              patch("anveshak.reporter.worker.geocode_locations") as mock_geo, \
              patch("anveshak.reporter.worker.build_geojson") as mock_geojson, \
              patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract:
@@ -617,17 +623,20 @@ class TestGenerateReportWithIdentifiers:
             mock_db.fetch_topic = AsyncMock(return_value={
                 "id": "topic-1", "name": "Clean Topic", "keywords": ["safe"],
             })
+            mock_db.fetch_report_data_bundle = AsyncMock(return_value=_data_bundle())
             mock_db.fetch_rag_chunks = AsyncMock(return_value=chunks)
             mock_db.fetch_sources_for_snapshot = AsyncMock(return_value={})
             mock_db.fetch_topic_location_entities = AsyncMock(return_value=[])
             mock_db.fetch_topic_identifiers = AsyncMock(return_value=[])
             mock_db.fetch_topic_template_matches = AsyncMock(return_value=[])
             mock_db.set_report_generated = AsyncMock(return_value=True)
+            mock_db.set_report_failed = AsyncMock()
             mock_db.update_job_status = AsyncMock()
             mock_embed.return_value = [0.1] * 384
-            mock_ctx.return_value = ("context", 3, "2026-06-01")
-            mock_prompt.return_value = "prompt"
-            mock_llm.return_value = rc
+            mock_llm.return_value = BlufContent(
+                bluf="Test.", confidence_level=0.8,
+                labels={"classification": "OPEN", "domain": "report", "owner_org": "anveshak"},
+            )
             mock_geo.return_value = []
             mock_geojson.return_value = {"type": "FeatureCollection", "features": []}
             mock_extract.return_value = []

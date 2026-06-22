@@ -28,9 +28,9 @@ configure_logging("reporter")
 
 from . import db as db
 from .geocoder import build_geojson, extract_locations_from_text, geocode_locations
-from .llm import call_ollama_with_retry, call_ollama_for_assessment
+from .llm import BlufContent, call_ollama_with_retry, call_ollama_for_assessment, call_ollama_for_bluf
 from .metrics import reporter_jobs_total, reporter_job_duration_seconds, reporter_ollama_errors_total, arq_jobs_failed_total
-from .prompt_templates import render_prompt, render_assessment_prompt
+from .prompt_templates import render_prompt, render_assessment_prompt, render_bluf_prompt
 from .rag import assemble_context, assemble_identifier_context, build_recommended_actions, generate_query_embedding
 from .settings import settings as _default_settings
 
@@ -98,30 +98,24 @@ async def generate_report(ctx: dict, report_id: str) -> None:
     credibility_min: float = float(report.get("credibility_min_filter", 30.0))
     report_type: str = report.get("report_type", "intelligence_brief")
 
-    # --- 2. Generate query embedding ---
+    # --- 2. Fetch data bundle (all structured data from SQL) ---
+    data_bundle = await db.fetch_report_data_bundle(pool, topic_id)
+    log.info("reporter.data_bundle_fetched", report_id=report_id, topic_id=topic_id)
+
+    # --- 3. Generate query embedding (still needed for RAG chunks) ---
     query_embedding = await generate_query_embedding(topic_name, keywords)
 
-    # --- 3. Fetch RAG chunks ---
+    # --- 4. Fetch RAG chunks ---
     tracker_id = report.get("tracker_id")
     if tracker_id:
-        # Tracker-scoped: use only confirmed tracker content
         chunks = await db.fetch_tracker_rag_chunks(
-            pool,
-            tracker_id,
-            query_embedding,
-            credibility_min,
-            s.rag_top_k,
+            pool, tracker_id, query_embedding, credibility_min, s.rag_top_k,
         )
         log.info("reporter.tracker_scoped_rag", tracker_id=tracker_id, chunks=len(chunks))
     else:
-        # Topic-scoped: standard RAG
         relevance_threshold = float(topic["topic_relevance_threshold"]) if topic.get("topic_relevance_threshold") is not None else s.topic_relevance_threshold
         chunks = await db.fetch_rag_chunks(
-            pool,
-            topic_id,
-            query_embedding,
-            credibility_min,
-            s.rag_top_k,
+            pool, topic_id, query_embedding, credibility_min, s.rag_top_k,
             relevance_threshold=relevance_threshold,
         )
 
@@ -134,9 +128,7 @@ async def generate_report(ctx: dict, report_id: str) -> None:
         )
         return
 
-    # --- 4. Fetch identifier intelligence (Engine C Step 9) ---
-    # Fail-open: identifier data enhances reports but is not required.
-    # DB errors here must not block report generation.
+    # --- 5. Fetch identifier intelligence (Engine C Step 9) ---
     try:
         identifiers = await db.fetch_topic_identifiers(pool, topic_id)
         template_matches = await db.fetch_topic_template_matches(pool, topic_id)
@@ -144,51 +136,42 @@ async def generate_report(ctx: dict, report_id: str) -> None:
         log.warning("reporter.identifier_fetch_failed", report_id=report_id, topic_id=topic_id)
         identifiers = []
         template_matches = []
-    identifier_ctx = assemble_identifier_context(identifiers)
 
-    # --- 5. Assemble context and render prompt ---
-    context, source_count, date_range = assemble_context(chunks, max_tokens=s.rag_max_context_tokens)
-    # Legal mapping and three-lens evaluation controlled by settings
-    include_legal = getattr(s, "include_legal_mapping", True)
-    include_three_lens = getattr(s, "include_three_lens", False)
-    prompt = render_prompt(
-        report_type, topic_name, keywords, context,
-        source_count=source_count, date_range=date_range,
-        include_legal_mapping=include_legal,
-        include_three_lens=include_three_lens,
-        identifier_context=identifier_ctx,
+    # --- 6. Render BLUF prompt and call LLM (minimal — 2-3 sentences only) ---
+    stats = data_bundle.get("topic_stats", {})
+    clusters = data_bundle.get("clusters", [])
+    stats_summary = (
+        f"{stats.get('content_count', 0)} items, "
+        f"{stats.get('source_count', 0)} sources, "
+        f"{stats.get('cluster_count', 0)} clusters, "
+        f"{stats.get('signal_count', 0)} signals"
     )
+    cluster_summary = ", ".join(
+        f"{c.get('label', 'Unnamed')} ({c.get('item_count', 0)} items)"
+        for c in clusters[:5]
+    ) or "No clusters formed yet."
+    bluf_prompt = render_bluf_prompt(topic_name, stats_summary, cluster_summary)
+    bluf = await call_ollama_for_bluf(bluf_prompt, s, max_retries=s.ollama_retry_max)
 
-    # --- 6. Call LLM ---
-    report_content = await call_ollama_with_retry(prompt, s, max_retries=s.ollama_retry_max)
-
-    if report_content is None:
-        reporter_ollama_errors_total.labels(error_type="no_valid_output").inc()
-        reporter_jobs_total.labels(status="failed").inc()
-        reporter_job_duration_seconds.observe(_time.monotonic() - _t0)
-        log.error("reporter.llm_failed", report_id=report_id)
-        await db.set_report_failed(
-            pool, report_id,
-            "LLM returned no valid output. Check that Ollama is running and the configured model is loaded "
-            f"(model: {s.ollama_model})."
+    if bluf is None:
+        # Fallback: generate a template-driven BLUF (no LLM needed)
+        bluf = BlufContent(
+            bluf=f"Monitoring of '{topic_name}' collected {stats.get('content_count', 0)} items "
+                 f"from {stats.get('source_count', 0)} sources, forming "
+                 f"{stats.get('cluster_count', 0)} narrative clusters with "
+                 f"{stats.get('signal_count', 0)} active signals.",
+            confidence_level=0.0,
+            labels={"classification": "OPEN", "domain": "report", "owner_org": "anveshak"},
         )
-        return
+        log.info("reporter.bluf_fallback_used", report_id=report_id)
 
     # --- 7. Build source snapshot ---
     source_ids = list({c["source_id"] for c in chunks if c.get("source_id")})
     sources = await db.fetch_sources_for_snapshot(pool, source_ids)
 
-    # --- 8. Geocode locations (3-layer: NER entities → regex fallback → custom overlay) ---
-    # Layer 1: High-quality NER entities from the analyst pipeline
+    # --- 8. Geocode locations ---
     ner_entities = await db.fetch_topic_location_entities(pool, topic_id)
-    # Layer 2: Regex extraction from LLM output (catches synthesized locations)
-    combined_text = " ".join(
-        [report_content.executive_summary]
-        + report_content.key_findings
-        + report_content.recommendations
-    )
-    regex_names = extract_locations_from_text(combined_text)
-    # Merge (NER first, regex adds any extras) — dedup by lowercase key
+    regex_names = extract_locations_from_text(bluf.bluf)
     seen_lower: set[str] = set()
     location_names: list[str] = []
     for name in ner_entities + regex_names:
@@ -196,15 +179,16 @@ async def generate_report(ctx: dict, report_id: str) -> None:
         if key not in seen_lower:
             seen_lower.add(key)
             location_names.append(name)
-    # Layer 3: custom overlay is handled inside geocode_locations()
     locations = geocode_locations(location_names)
     geojson = build_geojson(locations)
 
-    # --- 9. Build content_md (Markdown format) ---
-    content_md = _build_content_md(
-        report_content,
+    # --- 9. Build content_md (v2 data-driven markdown) ---
+    content_md = _build_content_md_v2(
+        bluf=bluf,
+        data_bundle=data_bundle,
         identifiers=identifiers,
         template_matches=template_matches,
+        report_type=report_type,
     )
 
     # --- 10. Store (idempotent via generated_at IS NULL guard) ---
@@ -212,24 +196,50 @@ async def generate_report(ctx: dict, report_id: str) -> None:
         pool,
         report_id=report_id,
         content_md=content_md,
-        confidence_score=report_content.confidence_level,
+        confidence_score=bluf.confidence_level,
         geojson=geojson,
         source_snapshot=sources,
         content_item_count=len(chunks),
     )
 
     if stored:
+        # --- 11. Generate PDF eagerly (so API can serve it immediately) ---
+        try:
+            from .pdf import generate_pdf
+            pdf_data = {
+                "id": report_id,
+                "report_type": report_type,
+                "topic_name": topic_name,
+                "generated_at": str(datetime.now(UTC)),
+                "confidence_score": bluf.confidence_level,
+                "content_item_count": len(chunks),
+                "labels": {"classification": "OPEN", "domain": "report", "owner_org": "anveshak"},
+                "bluf": bluf.bluf,
+                **data_bundle,
+                "identifiers": identifiers,
+                "template_matches": template_matches,
+            }
+            pdf_path = await generate_pdf(report_id, pdf_data, s.pdf_output_dir)
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    "UPDATE reports SET pdf_path = $1, updated_at = NOW() WHERE id = $2",
+                    pdf_path, report_id,
+                )
+            log.info("reporter.pdf_generated", report_id=report_id, path=pdf_path)
+        except Exception as exc:
+            # PDF failure is non-fatal — report content is still stored
+            log.warning("reporter.pdf_generation_failed", report_id=report_id, error=str(exc))
+
         reporter_jobs_total.labels(status="success").inc()
         reporter_job_duration_seconds.observe(_time.monotonic() - _t0)
         log.info(
             "reporter.report_generated",
             report_id=report_id,
             chunks=len(chunks),
-            confidence=report_content.confidence_level,
+            confidence=bluf.confidence_level,
         )
         await db.update_job_status(pool, report_id, "complete")
     else:
-        # set_report_generated returned False → already generated (race or duplicate job)
         log.info("reporter.report_already_generated", report_id=report_id)
 
 
@@ -319,6 +329,180 @@ def _build_content_md(
             for action in actions:
                 lines.append(f"- {action}")
             lines.append("")
+
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# _build_content_md_v2 — data-driven markdown (v2 reports)
+# ---------------------------------------------------------------------------
+
+def _build_content_md_v2(
+    bluf: BlufContent,
+    data_bundle: dict[str, Any],
+    identifiers: list[dict[str, Any]] | None = None,
+    template_matches: list[dict[str, Any]] | None = None,
+    report_type: str = "intelligence_brief",
+) -> str:
+    """Build data-driven markdown report from SQL data with minimal LLM narrative.
+
+    Sections included vary by report_type:
+    - intelligence_brief: compact (top 10 sources/entities, active signals, no evidence appendix)
+    - research_summary: full (all sources, top 30 entities, evidence appendix, methodology)
+    - weekly_digest: medium (top 10, trend focus, new signals)
+    """
+    stats = data_bundle.get("topic_stats", {})
+    sources = data_bundle.get("sources", [])
+    clusters = data_bundle.get("clusters", [])
+    signals = data_bundle.get("signals", [])
+    entities = data_bundle.get("entities", [])
+    keywords = data_bundle.get("keywords", [])
+    evidence_items = data_bundle.get("evidence_items", [])
+    language_breakdown = data_bundle.get("language_breakdown", [])
+
+    is_full = report_type == "research_summary"
+    source_limit = None if is_full else 10
+    entity_limit = 30 if is_full else 10
+
+    lines: list[str] = ["<!-- report-v2 -->"]
+
+    # --- BLUF ---
+    lines.append("## Bottom Line Up Front\n")
+    lines.append(f"**{stats.get('content_count', 0)}** items | "
+                 f"**{stats.get('source_count', 0)}** sources | "
+                 f"**{stats.get('cluster_count', 0)}** clusters | "
+                 f"**{stats.get('signal_count', 0)}** signals\n")
+    lines.append(f"{bluf.bluf}\n")
+    lines.append(f"*Confidence: {bluf.confidence_level:.0%}*\n")
+
+    # --- Part I: Data Sheet ---
+    lines.append("---\n## Part I: Data Sheet\n")
+
+    # Source Inventory
+    display_sources = sources[:source_limit] if source_limit else sources
+    if display_sources:
+        lines.append("### Source Inventory\n")
+        lines.append("| Source | Platform | Credibility | Items |")
+        lines.append("|--------|----------|-------------|-------|")
+        for src in display_sources:
+            lines.append(f"| {src.get('name', '')} | {src.get('platform', '')} | "
+                         f"{src.get('credibility_score', 0):.0f} | {src.get('item_count', 0)} |")
+        lines.append("")
+
+    # Narrative Clusters
+    if clusters:
+        lines.append("### Narrative Clusters\n")
+        lines.append("| Cluster | Items | Independent Sources | Summary |")
+        lines.append("|---------|-------|--------------------:|---------|")
+        for cl in clusters:
+            summary = (cl.get("executive_summary") or "")[:80]
+            lines.append(f"| {cl.get('label', '')} | {cl.get('item_count', 0)} | "
+                         f"{cl.get('independent_source_count', 0)} | {summary} |")
+        lines.append("")
+
+    # Top Entities
+    display_entities = entities[:entity_limit]
+    if display_entities:
+        lines.append("### Top Entities\n")
+        lines.append("| Entity | Type | Mentions |")
+        lines.append("|--------|------|----------|")
+        for ent in display_entities:
+            lines.append(f"| {ent.get('entity_text', '')} | {ent.get('entity_type', '')} | "
+                         f"{ent.get('mention_count', 0)} |")
+        lines.append("")
+
+    # Trending Keywords
+    if keywords:
+        lines.append("### Trending Keywords\n")
+        kw_display = ", ".join(f"**{kw.get('keyword', '')}** ({kw.get('frequency', 0)})" for kw in keywords[:15])
+        lines.append(kw_display + "\n")
+
+    # Language Breakdown
+    if language_breakdown and is_full:
+        lines.append("### Language Breakdown\n")
+        lines.append("| Language | Items |")
+        lines.append("|----------|-------|")
+        for lang in language_breakdown:
+            lines.append(f"| {lang.get('language', 'unknown')} | {lang.get('count', 0)} |")
+        lines.append("")
+
+    # --- Part II: Investigative Annex ---
+    has_annex = signals or identifiers or template_matches
+    if has_annex:
+        lines.append("---\n## Part II: Investigative Annex\n")
+
+        # Signals
+        if signals:
+            display_signals = signals
+            if report_type == "intelligence_brief":
+                display_signals = [s for s in signals if s.get("status") == "new"]
+            if display_signals:
+                lines.append("### Signals\n")
+                lines.append("| Signal | Cluster | Status | Date |")
+                lines.append("|--------|---------|--------|------|")
+                for sig in display_signals[:20]:
+                    desc = (sig.get("description") or "")[:120]
+                    lines.append(f"| {desc} | {sig.get('cluster_label', '')} | "
+                                 f"{sig.get('status', '')} | {str(sig.get('created_at', ''))[:10]} |")
+                lines.append("")
+
+        # Identifiers
+        if identifiers:
+            lines.append("### Identified Indicators\n")
+            lines.append("| Type | Value | Sources | Items |")
+            lines.append("|------|-------|---------|-------|")
+            for ident in identifiers:
+                lines.append(f"| {ident.get('identifier_type', '')} | "
+                             f"{ident.get('identifier_value', '')} | "
+                             f"{ident.get('source_count', 0)} | "
+                             f"{ident.get('content_item_count', 0)} |")
+            lines.append("")
+
+        # Template Matches
+        if template_matches:
+            lines.append("### Scam Template Matches\n")
+            for match in template_matches:
+                display = match.get("template_display", match.get("template_name", ""))
+                severity = match.get("severity", "")
+                confidence = float(match.get("confidence", 0) or 0)
+                count = match.get("match_count", 0)
+                lines.append(f"**{display}** — Severity: {severity}, "
+                             f"Confidence: {confidence:.0%}, Matches: {count}")
+            lines.append("")
+
+            # Recommended Actions (derived from template matches)
+            actions = build_recommended_actions(template_matches)
+            if actions:
+                lines.append("## Recommended Actions\n")
+                for action in actions:
+                    lines.append(f"- {action}")
+                lines.append("")
+
+    # --- Part III: Evidence Appendix (research_summary only) ---
+    if is_full and evidence_items:
+        lines.append("---\n## Part III: Evidence Appendix\n")
+        for item in evidence_items[:30]:
+            title = item.get("title") or item.get("snippet", "")[:50] or "Untitled"
+            lines.append(f"### {title}\n")
+            lines.append(f"- **Source:** {item.get('source_name', 'Unknown')} ({item.get('platform', '')})")
+            lines.append(f"- **URL:** {item.get('url', 'N/A')}")
+            lines.append(f"- **Date:** {str(item.get('captured_at', ''))[:10]}")
+            lines.append(f"- **Credibility:** {item.get('credibility_score_at_capture', 0):.0f}")
+            if item.get("snippet"):
+                lines.append(f"\n> {item['snippet']}\n")
+            lines.append("")
+
+    # --- Part IV: Methodology (research_summary only) ---
+    if is_full:
+        lines.append("---\n## Part IV: Methodology\n")
+        lines.append("**Data acquisition:** Automated open-source collection via Anveshak platform.\n")
+        lines.append(f"**Analysis period:** {stats.get('content_count', 0)} items from "
+                     f"{stats.get('source_count', 0)} sources.\n")
+        lines.append("**Limitations:** This report is a point-in-time snapshot. "
+                     "Source credibility scores may have changed since generation. "
+                     "LLM-generated summaries require analyst verification.\n")
+        lines.append("**Confidence calibration:** Confidence level reflects the fraction "
+                     "of narrative clusters corroborated by 2+ independent sources.\n")
 
     return "\n".join(lines)
 

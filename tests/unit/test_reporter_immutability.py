@@ -14,6 +14,14 @@ import pytest
 pytestmark = pytest.mark.unit
 
 
+def _data_bundle():
+    return {
+        "topic_stats": {"name": "Test", "content_count": 5, "source_count": 2, "cluster_count": 1, "signal_count": 0},
+        "sources": [], "clusters": [], "signals": [], "entities": [],
+        "sentiment_trend": [], "keywords": [], "evidence_items": [], "language_breakdown": [],
+    }
+
+
 def _make_ctx(settings=None) -> dict:
     """Build a minimal ARQ job context dict."""
     if settings is None:
@@ -51,6 +59,7 @@ class TestGenerateReportIdempotency:
     async def test_second_call_is_noop_when_already_generated(self):
         """If set_report_generated returns False, job silently exits."""
         from anveshak.reporter.worker import generate_report
+        from anveshak.reporter.llm import BlufContent
 
         ctx = _make_ctx()
         mock_topic = {
@@ -80,31 +89,33 @@ class TestGenerateReportIdempotency:
 
         with (
             patch("anveshak.reporter.worker.db") as mock_db_mod,
-            patch("anveshak.reporter.worker.call_ollama_with_retry", new_callable=AsyncMock) as mock_llm,
+            patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_llm,
             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock, return_value=[0.1] * 384),
-            patch("anveshak.reporter.worker.assemble_context", return_value=("context text", 1, "2026-04-10")),
-            patch("anveshak.reporter.worker.render_prompt", return_value="prompt text"),
+            patch("anveshak.reporter.worker.render_bluf_prompt", return_value="bluf prompt"),
         ):
             mock_db_mod.fetch_report = AsyncMock(return_value=mock_report)
+            mock_db_mod.fetch_report_data_bundle = AsyncMock(return_value=_data_bundle())
             mock_db_mod.fetch_topic = AsyncMock(return_value=mock_topic)
             mock_db_mod.fetch_rag_chunks = AsyncMock(return_value=mock_chunks)
             mock_db_mod.fetch_sources_for_snapshot = AsyncMock(return_value={})
             mock_db_mod.fetch_topic_location_entities = AsyncMock(return_value=[])
             mock_db_mod.fetch_topic_identifiers = AsyncMock(return_value=[])
             mock_db_mod.fetch_topic_template_matches = AsyncMock(return_value=[])
-            # Return False → already generated (WHERE generated_at IS NULL guard failed)
+            # Return False -> already generated (WHERE generated_at IS NULL guard failed)
             mock_db_mod.set_report_generated = AsyncMock(return_value=False)
+            mock_db_mod.set_report_failed = AsyncMock()
             mock_db_mod.update_job_status = AsyncMock()
 
-            from anveshak.reporter.llm import ReportContent
-            from anveshak.models.base import Labels
-            mock_llm.return_value = ReportContent(
-                **VALID_REPORT_CONTENT
+            bluf = BlufContent(
+                bluf="Test summary.",
+                confidence_level=0.85,
+                labels={"classification": "OPEN", "domain": "report", "owner_org": "anveshak"},
             )
+            mock_llm.return_value = bluf
 
             await generate_report(ctx, "report-1")
 
-        # LLM should have been called but set_report_generated returned False → no crash
+        # LLM should have been called but set_report_generated returned False -> no crash
         # The key assertion: no exception raised, job completed gracefully
 
     @pytest.mark.asyncio
@@ -134,6 +145,7 @@ class TestGenerateReportIdempotency:
             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock, return_value=[0.1] * 384),
         ):
             mock_db_mod.fetch_report = AsyncMock(return_value=mock_report)
+            mock_db_mod.fetch_report_data_bundle = AsyncMock(return_value=_data_bundle())
             mock_db_mod.fetch_topic = AsyncMock(return_value=mock_topic)
             mock_db_mod.fetch_rag_chunks = AsyncMock(return_value=[])  # empty!
             mock_db_mod.update_job_status = AsyncMock()
@@ -150,8 +162,8 @@ class TestGenerateReportIdempotency:
         assert "report-1" in str(call_args)
 
     @pytest.mark.asyncio
-    async def test_llm_returning_none_sets_failed_status(self):
-        """generate_report with LLM returning None must set status=failed."""
+    async def test_llm_returning_none_uses_fallback_bluf(self):
+        """generate_report with LLM returning None uses fallback BLUF — report still succeeds."""
         from anveshak.reporter.worker import generate_report
 
         ctx = _make_ctx()
@@ -182,12 +194,15 @@ class TestGenerateReportIdempotency:
 
         with (
             patch("anveshak.reporter.worker.db") as mock_db_mod,
-            patch("anveshak.reporter.worker.call_ollama_with_retry", new_callable=AsyncMock) as mock_llm,
+            patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_llm,
             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock, return_value=[0.1] * 384),
-            patch("anveshak.reporter.worker.assemble_context", return_value=("context text", 1, "2026-04-10")),
-            patch("anveshak.reporter.worker.render_prompt", return_value="prompt text"),
+            patch("anveshak.reporter.worker.render_bluf_prompt", return_value="bluf prompt"),
+            patch("anveshak.reporter.worker.geocode_locations", return_value=[]),
+            patch("anveshak.reporter.worker.extract_locations_from_text", return_value=[]),
+            patch("anveshak.reporter.worker.build_geojson", return_value={"type": "FeatureCollection", "features": []}),
         ):
             mock_db_mod.fetch_report = AsyncMock(return_value=mock_report)
+            mock_db_mod.fetch_report_data_bundle = AsyncMock(return_value=_data_bundle())
             mock_db_mod.fetch_topic = AsyncMock(return_value=mock_topic)
             mock_db_mod.fetch_rag_chunks = AsyncMock(return_value=mock_chunks)
             mock_db_mod.fetch_sources_for_snapshot = AsyncMock(return_value={})
@@ -195,24 +210,20 @@ class TestGenerateReportIdempotency:
             mock_db_mod.fetch_topic_identifiers = AsyncMock(return_value=[])
             mock_db_mod.fetch_topic_template_matches = AsyncMock(return_value=[])
             mock_db_mod.update_job_status = AsyncMock()
-            mock_db_mod.set_report_generated = AsyncMock()
+            mock_db_mod.set_report_generated = AsyncMock(return_value=True)
             mock_db_mod.set_report_failed = AsyncMock()
             mock_llm.return_value = None  # LLM failed all retries
 
             await generate_report(ctx, "report-1")
 
-        # Must NOT have stored an empty report
-        mock_db_mod.set_report_generated.assert_not_called()
-        # Must have set failed via set_report_failed
-        mock_db_mod.set_report_failed.assert_called_once()
-        call_args = mock_db_mod.set_report_failed.call_args
-        assert "report-1" in str(call_args)
+        # v2: fallback BLUF used, report still generated successfully
+        mock_db_mod.set_report_generated.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_successful_generation_stores_report(self):
-        """Happy path: valid LLM output → set_report_generated called once."""
+        """Happy path: valid LLM output -> set_report_generated called once."""
         from anveshak.reporter.worker import generate_report
-        from anveshak.reporter.llm import ReportContent
+        from anveshak.reporter.llm import BlufContent
 
         ctx = _make_ctx()
         mock_topic = {
@@ -242,15 +253,15 @@ class TestGenerateReportIdempotency:
 
         with (
             patch("anveshak.reporter.worker.db") as mock_db_mod,
-            patch("anveshak.reporter.worker.call_ollama_with_retry", new_callable=AsyncMock) as mock_llm,
+            patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_llm,
             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock, return_value=[0.1] * 384),
-            patch("anveshak.reporter.worker.assemble_context", return_value=("context text", 1, "2026-04-10")),
-            patch("anveshak.reporter.worker.render_prompt", return_value="prompt text"),
+            patch("anveshak.reporter.worker.render_bluf_prompt", return_value="bluf prompt"),
             patch("anveshak.reporter.worker.geocode_locations", return_value={}),
             patch("anveshak.reporter.worker.extract_locations_from_text", return_value=[]),
             patch("anveshak.reporter.worker.build_geojson", return_value={"type": "FeatureCollection", "features": []}),
         ):
             mock_db_mod.fetch_report = AsyncMock(return_value=mock_report)
+            mock_db_mod.fetch_report_data_bundle = AsyncMock(return_value=_data_bundle())
             mock_db_mod.fetch_topic = AsyncMock(return_value=mock_topic)
             mock_db_mod.fetch_rag_chunks = AsyncMock(return_value=mock_chunks)
             mock_db_mod.fetch_sources_for_snapshot = AsyncMock(return_value={"src-1": {"name": "Reuters", "credibility_score": 80.0}})
@@ -258,9 +269,15 @@ class TestGenerateReportIdempotency:
             mock_db_mod.fetch_topic_identifiers = AsyncMock(return_value=[])
             mock_db_mod.fetch_topic_template_matches = AsyncMock(return_value=[])
             mock_db_mod.set_report_generated = AsyncMock(return_value=True)
+            mock_db_mod.set_report_failed = AsyncMock()
             mock_db_mod.update_job_status = AsyncMock()
 
-            mock_llm.return_value = ReportContent(**VALID_REPORT_CONTENT)
+            bluf = BlufContent(
+                bluf="Test summary.",
+                confidence_level=0.85,
+                labels={"classification": "OPEN", "domain": "report", "owner_org": "anveshak"},
+            )
+            mock_llm.return_value = bluf
 
             await generate_report(ctx, "report-1")
 
