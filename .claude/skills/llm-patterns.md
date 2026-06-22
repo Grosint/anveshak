@@ -3,6 +3,9 @@
 ## When to load: any task involving Ollama, report generation, or LLM inference
 
 > See also: `learned/phase-check-pitfalls.md` — transient LLM-output Pydantic models and the labels rule
+> See also: `learned/data-driven-reports-over-llm.md` — 90% SQL data + 10% LLM BLUF; BlufContent model; template fallback when LLM fails
+> See also: `learned/eager-pdf-on-shared-volume.md` — generate PDF at report time, store on shared volume; env var mismatch pitfall; datetime not subscriptable in Jinja2
+> See also: `learned/entity-type-noise-filter.md` — exclude CARDINAL/ORDINAL/DATE/TIME/MONEY from entity tables; confidence 0.75
 > See also: `learned/stats-first-llm-second.md` — deterministic SQL stats as Phase 0, LLM brief as Phase 2 with separate endpoint
 > See also: `learned/generated-at-null-for-stats-only.md` — generated_at must stay NULL until LLM brief is stored; setting at Phase 0 breaks idempotency guard
 > See also: `learned/sql-param-count-caller-mismatch.md` — adding $N to SQL constant requires updating ALL callers; grep for the constant name
