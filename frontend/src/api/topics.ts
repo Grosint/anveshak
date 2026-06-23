@@ -30,6 +30,23 @@ export interface Cluster {
   executive_summary: string | null
   sources: ClusterSource[]
   created_at: string
+  similarity_score?: number | null
+  relevance_tier?: 'high' | 'medium' | 'low' | 'keyword'
+}
+
+export interface ClusterContentItem {
+  id: string
+  url: string
+  title?: string | null
+  clean_text: string
+  translated_text?: string | null
+  language: string
+  captured_at: string
+  credibility_score_at_capture: number
+  source_name?: string
+  platform?: string
+  similarity_score?: number | null
+  relevance_tier?: string
 }
 
 export interface CreateTopicPayload {
@@ -98,5 +115,18 @@ export const topicsApi = {
     api.patch<{ topic_id: string; scheduled_report_cron: string | null; scheduled_report_type: string | null }>(
       `/api/v1/topics/${topicId}/schedule`,
       { scheduled_report_cron: cron, scheduled_report_type: reportType },
+    ).then((r) => r.data),
+
+  searchClusters: (topicId: string, q: string, limit = 20) =>
+    api.get<Cluster[]>(`/api/v1/topics/${topicId}/clusters/search`, {
+      params: { q, limit },
+    }).then((r) => r.data),
+
+  getClusterContent: (topicId: string, clusterId: string, params?: {
+    q?: string; sort?: 'time' | 'relevance'; limit?: number; offset?: number
+  }) =>
+    api.get<ClusterContentItem[]>(
+      `/api/v1/topics/${topicId}/clusters/${clusterId}/content`,
+      { params },
     ).then((r) => r.data),
 }

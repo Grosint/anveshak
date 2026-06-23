@@ -105,6 +105,75 @@ SQL_CLUSTER_SOURCES = """
     ORDER BY src.id, src.credibility_score DESC
 """
 
+# ---------------------------------------------------------------------------
+# Cluster search — centroid semantic search + ILIKE fallback + drill-down
+# ---------------------------------------------------------------------------
+
+SQL_CLUSTER_CENTROID_SEARCH = """
+    SELECT nc.id, nc.label, nc.item_count, nc.independent_source_count,
+           nc.executive_summary, nc.created_at,
+           1 - (nc.embedding_centroid <=> $1::vector) AS similarity_score
+    FROM narrative_clusters nc
+    WHERE nc.topic_id = $2
+      AND nc.archived_at IS NULL
+      AND nc.embedding_centroid IS NOT NULL
+      AND 1 - (nc.embedding_centroid <=> $1::vector) >= $3
+    ORDER BY nc.embedding_centroid <=> $1::vector
+    LIMIT $4
+"""
+
+SQL_CLUSTER_LABEL_SEARCH = """
+    SELECT nc.id, nc.label, nc.item_count, nc.independent_source_count,
+           nc.executive_summary, nc.created_at,
+           NULL::float AS similarity_score
+    FROM narrative_clusters nc
+    WHERE nc.topic_id = $1
+      AND nc.archived_at IS NULL
+      AND (
+          nc.label ILIKE '%' || $2 || '%'
+          OR nc.executive_summary ILIKE '%' || $2 || '%'
+      )
+    ORDER BY nc.item_count DESC
+    LIMIT $3
+"""
+
+SQL_CLUSTER_CONTENT_BY_RELEVANCE = """
+    SELECT ci.id, ci.url, ci.title,
+           LEFT(ci.clean_text, 500) AS clean_text,
+           LEFT(ci.translated_text, 500) AS translated_text,
+           ci.language, ci.captured_at,
+           ci.credibility_score_at_capture,
+           s.name AS source_name, s.platform,
+           1 - (ci.embedding <=> $1::vector) AS similarity_score
+    FROM content_items ci
+    LEFT JOIN sources s ON s.id = ci.source_id
+    WHERE ci.narrative_cluster_id = $2
+      AND ci.embedding IS NOT NULL
+      AND COALESCE(ci.content_quality, 'good') != 'low_quality'
+    ORDER BY ci.embedding <=> $1::vector
+    LIMIT $3 OFFSET $4
+"""
+
+SQL_CLUSTER_CONTENT_BY_TIME = """
+    SELECT ci.id, ci.url, ci.title,
+           LEFT(ci.clean_text, 500) AS clean_text,
+           LEFT(ci.translated_text, 500) AS translated_text,
+           ci.language, ci.captured_at,
+           ci.credibility_score_at_capture,
+           s.name AS source_name, s.platform,
+           NULL::float AS similarity_score
+    FROM content_items ci
+    LEFT JOIN sources s ON s.id = ci.source_id
+    WHERE ci.narrative_cluster_id = $1
+      AND COALESCE(ci.content_quality, 'good') != 'low_quality'
+    ORDER BY ci.captured_at DESC
+    LIMIT $2 OFFSET $3
+"""
+
+SQL_VERIFY_CLUSTER_TOPIC = """
+    SELECT topic_id FROM narrative_clusters WHERE id = $1
+"""
+
 _CONTENT_SELECT = """
     SELECT ci.id,
            ci.url,
@@ -458,3 +527,117 @@ async def get_topic_clusters(
         ]
         clusters.append(c)
     return clusters
+
+
+# ---------------------------------------------------------------------------
+# Cluster search — centroid semantic search + ILIKE fallback + drill-down
+# ---------------------------------------------------------------------------
+
+_MIN_CLUSTER_SIMILARITY = 0.15  # MiniLM-L6 query-to-centroid scores are lower than inter-cluster
+
+
+def _relevance_tier(score: float | None) -> str:
+    """Convert raw cosine similarity to analyst-friendly tier.
+
+    Calibrated for all-MiniLM-L6-v2 (384d) query-to-centroid scores,
+    which are significantly lower than document-to-document scores.
+    """
+    if score is None:
+        return "keyword"
+    if score >= 0.45:
+        return "high"
+    if score >= 0.30:
+        return "medium"
+    return "low"
+
+
+async def _enrich_clusters(
+    conn: asyncpg.Connection,
+    rows: list[asyncpg.Record],
+) -> list[dict[str, Any]]:
+    """Add source breakdown and relevance tier to cluster rows."""
+    clusters = []
+    for r in rows:
+        c = dict(r)
+        c["relevance_tier"] = _relevance_tier(c.get("similarity_score"))
+        if c.get("similarity_score") is not None:
+            c["similarity_score"] = round(float(c["similarity_score"]), 4)
+        source_rows = await conn.fetch(SQL_CLUSTER_SOURCES, c["id"])
+        c["sources"] = [
+            {
+                "source_name": sr["source_name"],
+                "platform": sr["platform"],
+                "credibility_score": float(sr["credibility_score"]),
+            }
+            for sr in source_rows
+        ]
+        clusters.append(c)
+    return clusters
+
+
+async def search_clusters_by_centroid(
+    conn: asyncpg.Connection,
+    query_vec_str: str,
+    topic_id: str,
+    min_similarity: float = _MIN_CLUSTER_SIMILARITY,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """Semantic search: rank clusters by centroid cosine similarity."""
+    rows = await conn.fetch(
+        SQL_CLUSTER_CENTROID_SEARCH,
+        query_vec_str, topic_id, min_similarity, limit,
+    )
+    return await _enrich_clusters(conn, rows)
+
+
+async def search_clusters_by_label(
+    conn: asyncpg.Connection,
+    query_text: str,
+    topic_id: str,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """ILIKE fallback: search cluster labels and executive summaries."""
+    rows = await conn.fetch(
+        SQL_CLUSTER_LABEL_SEARCH,
+        topic_id, query_text, limit,
+    )
+    return await _enrich_clusters(conn, rows)
+
+
+async def get_cluster_content(
+    conn: asyncpg.Connection,
+    cluster_id: str,
+    sort: str = "time",
+    query_vec_str: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    """Return content items within a cluster, optionally ranked by query similarity."""
+    if sort == "relevance" and query_vec_str:
+        rows = await conn.fetch(
+            SQL_CLUSTER_CONTENT_BY_RELEVANCE,
+            query_vec_str, cluster_id, limit, offset,
+        )
+    else:
+        rows = await conn.fetch(
+            SQL_CLUSTER_CONTENT_BY_TIME,
+            cluster_id, limit, offset,
+        )
+    results = []
+    for r in rows:
+        d = dict(r)
+        if d.get("similarity_score") is not None:
+            d["similarity_score"] = round(float(d["similarity_score"]), 4)
+            d["relevance_tier"] = _relevance_tier(d["similarity_score"])
+        results.append(d)
+    return results
+
+
+async def verify_cluster_belongs_to_topic(
+    conn: asyncpg.Connection,
+    cluster_id: str,
+    topic_id: str,
+) -> bool:
+    """Verify cluster exists and belongs to the given topic (multi-tenancy guard)."""
+    row = await conn.fetchrow(SQL_VERIFY_CLUSTER_TOPIC, cluster_id)
+    return row is not None and row["topic_id"] == topic_id

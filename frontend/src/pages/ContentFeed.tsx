@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { topicsApi } from '../api/topics'
+import { topicsApi, Cluster, ClusterContentItem } from '../api/topics'
 import { ManageSourcesModal } from '../components/topics/ManageSourcesModal'
 import { SourceDiscoveryTab } from '../components/discovery/SourceDiscoveryTab'
 import { contentApi, ContentFilters, ContentItem } from '../api/content'
@@ -20,6 +20,28 @@ import { lazy, Suspense } from 'react'
 const Identifiers = lazy(() => import('./Identifiers'))
 const TemplateManager = lazy(() => import('../components/topics/TemplateManager'))
 
+type SearchMode = 'content' | 'narratives'
+
+const TIER_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  high:    { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'High' },
+  medium:  { bg: 'bg-amber-500/20',   text: 'text-amber-400',   label: 'Medium' },
+  low:     { bg: 'bg-red-500/20',     text: 'text-red-400',     label: 'Low' },
+  keyword: { bg: 'bg-blue-500/20',    text: 'text-blue-400',    label: 'Keyword' },
+}
+
+function RelevanceBadge({ tier }: { tier?: string | null }) {
+  if (!tier) return null
+  const style = TIER_STYLES[tier] ?? TIER_STYLES.low
+  return (
+    <span
+      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold ${style.bg} ${style.text}`}
+      title="Topic similarity — indicates shared subject matter, not operational linkage"
+    >
+      {style.label}
+    </span>
+  )
+}
+
 export default function ContentFeed() {
   const { topicId } = useParams<{ topicId: string }>()
   const navigate = useNavigate()
@@ -29,11 +51,15 @@ export default function ContentFeed() {
   const [selectedId, setSelectedId]     = useState<string | null>(null)
   const [searchQ, setSearchQ]           = useState('')
   const [searchActive, setSearchActive] = useState(false)
+  const [searchMode, setSearchMode]     = useState<SearchMode>('content')
   const [showSources, setShowSources]   = useState(false)
   const [showDiscovery, setShowDiscovery] = useState(false)
   const [showAnalytics, setShowAnalytics] = useState(false)
   const [showIdentifiers, setShowIdentifiers] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
+  // Cluster drill-down state
+  const [expandedClusterId, setExpandedClusterId] = useState<string | null>(null)
+  const [drilldownSort, setDrilldownSort] = useState<'time' | 'relevance'>('time')
 
   // Topic meta
   const { data: topic } = useQuery({
@@ -42,19 +68,38 @@ export default function ContentFeed() {
     enabled: !!topicId,
   })
 
-  // Clusters (for cluster view)
+  // Clusters (for cluster view — either browsing or narrative search results)
   const { data: clusters = [] } = useQuery({
     queryKey: ['clusters', topicId],
     queryFn: () => topicsApi.listClusters(topicId!),
-    enabled: !!topicId && clusterView,
+    enabled: !!topicId && clusterView && !(searchActive && searchMode === 'narratives'),
   })
 
-  // Semantic search
-  const { data: searchResults = [], isFetching: isSearching } = useQuery({
+  // Narrative search — cluster centroid search
+  const { data: narrativeResults = [], isFetching: isNarrativeSearching } = useQuery({
+    queryKey: ['cluster-search', topicId, searchQ],
+    queryFn: () => topicsApi.searchClusters(topicId!, searchQ),
+    enabled: searchActive && searchMode === 'narratives' && !!searchQ && !!topicId,
+    staleTime: 60_000,
+  })
+
+  // Content semantic search
+  const { data: searchResults = [], isFetching: isContentSearching } = useQuery({
     queryKey: ['search', topicId, searchQ],
     queryFn: () => contentApi.search(searchQ, topicId!),
-    enabled: searchActive && !!searchQ && !!topicId,
+    enabled: searchActive && searchMode === 'content' && !!searchQ && !!topicId,
     staleTime: 60_000,
+  })
+
+  // Cluster drill-down — content within expanded cluster
+  const { data: clusterContent = [], isFetching: isDrilldownLoading } = useQuery({
+    queryKey: ['cluster-content', topicId, expandedClusterId, drilldownSort, searchActive ? searchQ : ''],
+    queryFn: () => topicsApi.getClusterContent(topicId!, expandedClusterId!, {
+      q: searchActive ? searchQ : undefined,
+      sort: searchActive && searchQ ? drilldownSort : 'time',
+      limit: 50,
+    }),
+    enabled: !!topicId && !!expandedClusterId,
   })
 
   // Infinite feed
@@ -65,10 +110,241 @@ export default function ContentFeed() {
 
   if (!topicId) return null
 
+  const isSearching = isContentSearching || isNarrativeSearching
+
+  // Which clusters to display — search results or browsing list
+  const displayClusters: Cluster[] = (searchActive && searchMode === 'narratives')
+    ? narrativeResults
+    : clusters
+
   // SearchResult lacks 'backfilled' — cast to ContentItem for unified rendering
-  const displayItems: ContentItem[] = searchActive
+  const displayItems: ContentItem[] = (searchActive && searchMode === 'content')
     ? searchResults.map((r) => ({ ...r, backfilled: false }))
     : items
+
+  const handleSearch = () => {
+    if (!searchQ.trim()) return
+    setSearchActive(true)
+    // Auto-switch to cluster view when searching narratives
+    if (searchMode === 'narratives') setClusterView(true)
+  }
+
+  const handleClearSearch = () => {
+    setSearchActive(false)
+    setSearchQ('')
+    setExpandedClusterId(null)
+  }
+
+  const handleClusterClick = (clusterId: string) => {
+    if (expandedClusterId === clusterId) {
+      setExpandedClusterId(null)
+    } else {
+      setExpandedClusterId(clusterId)
+      // Default to relevance sort when searching, time sort when browsing
+      setDrilldownSort(searchActive && searchQ ? 'relevance' : 'time')
+    }
+  }
+
+  // Color scale for cluster cards
+  const accentColors = [
+    { bar: '#3b82f6', border: 'rgba(59,130,246,0.35)', glow: 'rgba(59,130,246,0.08)' },
+    { bar: '#8b5cf6', border: 'rgba(139,92,246,0.30)', glow: 'rgba(139,92,246,0.06)' },
+    { bar: '#06b6d4', border: 'rgba(6,182,212,0.30)',  glow: 'rgba(6,182,212,0.06)' },
+    { bar: '#10b981', border: 'rgba(16,185,129,0.25)', glow: 'rgba(16,185,129,0.05)' },
+    { bar: '#f59e0b', border: 'rgba(245,158,11,0.25)', glow: 'rgba(245,158,11,0.05)' },
+  ]
+
+  const renderClusterCard = (cluster: Cluster, idx: number) => {
+    const maxItems = Math.max(...displayClusters.map((c) => c.item_count), 1)
+    const barPct = Math.max(6, (cluster.item_count / maxItems) * 100)
+    const label = cluster.label ?? 'Unclassified cluster'
+    const sources = cluster.sources ?? []
+    const isc = cluster.independent_source_count
+    const accent = accentColors[idx % accentColors.length]
+    const isTop = idx < 3
+    const isExpanded = expandedClusterId === cluster.id
+
+    return (
+      <div key={cluster.id}>
+        <article
+          className={`relative overflow-hidden rounded-lg border transition-all duration-300 cursor-pointer group hover:scale-[1.008] hover:shadow-lg ${
+            isExpanded ? 'ring-1 ring-anveshak-accent' : ''
+          }`}
+          style={{ borderColor: accent.border, backgroundColor: accent.glow }}
+          onClick={() => handleClusterClick(cluster.id)}
+        >
+          {/* Left accent bar */}
+          <div
+            className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg"
+            style={{ backgroundColor: accent.bar, opacity: isTop ? 0.9 : 0.5 }}
+          />
+
+          {/* Subtle top glow for top clusters */}
+          {isTop && (
+            <div
+              className="absolute top-0 left-0 right-0 h-px"
+              style={{
+                background: `linear-gradient(90deg, transparent 0%, ${accent.bar}60 30%, ${accent.bar}80 50%, ${accent.bar}60 70%, transparent 100%)`,
+              }}
+            />
+          )}
+
+          <div className="pl-4 pr-4 py-3.5">
+            {/* Top row: label + relevance badge + item count */}
+            <div className="flex items-start justify-between gap-3 mb-1">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <h3 className="text-[13px] font-semibold text-text-primary leading-snug group-hover:text-white transition-colors truncate">
+                  {label}
+                </h3>
+                <RelevanceBadge tier={cluster.relevance_tier} />
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
+                  style={{ backgroundColor: `${accent.bar}20`, color: accent.bar }}
+                >
+                  {cluster.item_count}
+                </span>
+                <span className="text-[10px] text-text-muted">
+                  {isc} src{isc !== 1 ? 's' : ''}
+                </span>
+                <svg
+                  viewBox="0 0 20 20" fill="currentColor"
+                  className={`w-3 h-3 text-text-muted transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                >
+                  <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Size bar */}
+            <div className="w-full h-[3px] bg-white/[0.04] rounded-full mb-2.5 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-700 ease-out"
+                style={{
+                  width: `${barPct}%`,
+                  background: `linear-gradient(90deg, ${accent.bar}90, ${accent.bar}40)`,
+                  boxShadow: isTop ? `0 0 8px ${accent.bar}40` : undefined,
+                }}
+              />
+            </div>
+
+            {/* Executive summary */}
+            {cluster.executive_summary && (
+              <p className="text-[11px] text-text-secondary/80 leading-relaxed line-clamp-2 mb-2">
+                {cluster.executive_summary}
+              </p>
+            )}
+
+            {/* Source chips */}
+            {sources.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {sources.map((src, i) => {
+                  const credColor =
+                    src.credibility_score >= 70 ? 'text-cred-high' :
+                    src.credibility_score >= 40 ? 'text-signal-med' :
+                    'text-signal-high'
+                  return (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] border border-white/[0.06]"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.03)' }}
+                    >
+                      <span className="font-bold text-text-muted">
+                        {src.platform.toUpperCase()}
+                      </span>
+                      <span className="text-text-muted/70 truncate max-w-[90px]">
+                        {src.source_name.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
+                      </span>
+                      <span className={`font-mono font-bold ${credColor}`}>
+                        {Math.round(src.credibility_score)}
+                      </span>
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </article>
+
+        {/* Drill-down: content items within this cluster */}
+        {isExpanded && (
+          <div className="ml-4 mt-1 mb-3 border-l-2 pl-4" style={{ borderColor: accent.bar + '40' }}>
+            {/* Sort controls */}
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[10px] text-text-muted">Sort:</span>
+              <button
+                className={`text-[10px] px-2 py-0.5 rounded ${drilldownSort === 'time' ? 'bg-anveshak-accent/20 text-anveshak-accent' : 'text-text-muted hover:text-text-primary'}`}
+                onClick={(e) => { e.stopPropagation(); setDrilldownSort('time') }}
+              >
+                Chronological
+              </button>
+              <button
+                className={`text-[10px] px-2 py-0.5 rounded ${drilldownSort === 'relevance' ? 'bg-anveshak-accent/20 text-anveshak-accent' : 'text-text-muted hover:text-text-primary'}`}
+                onClick={(e) => { e.stopPropagation(); setDrilldownSort('relevance') }}
+                disabled={!searchQ}
+                title={searchQ ? 'Rank by query similarity' : 'Enter a search query to enable relevance sort'}
+              >
+                Relevance
+              </button>
+            </div>
+
+            {isDrilldownLoading ? (
+              <div className="py-4 flex justify-center">
+                <Spinner size="sm" label="Loading items..." />
+              </div>
+            ) : clusterContent.length === 0 ? (
+              <p className="text-[11px] text-text-muted py-2">No content items in this cluster.</p>
+            ) : (
+              <div className="space-y-2">
+                {clusterContent.map((item: ClusterContentItem) => (
+                  <div
+                    key={item.id}
+                    className="bg-anveshak-card/50 border border-anveshak-border rounded-lg p-3 cursor-pointer hover:border-anveshak-accent/40 transition-colors"
+                    onClick={(e) => { e.stopPropagation(); setSelectedId(item.id) }}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {item.source_name && (
+                          <span className="text-[9px] font-bold text-text-muted shrink-0">
+                            {item.platform?.toUpperCase()}
+                          </span>
+                        )}
+                        <span className="text-[11px] text-text-muted truncate">
+                          {item.source_name?.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
+                        </span>
+                        <RelevanceBadge tier={item.relevance_tier} />
+                      </div>
+                      <span className="text-[9px] text-text-muted shrink-0">
+                        {new Date(item.captured_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                    {item.title && (
+                      <p className="text-[12px] font-medium text-text-primary mb-1 line-clamp-1">
+                        {item.title}
+                      </p>
+                    )}
+                    <p className="text-[11px] text-text-secondary/80 leading-relaxed line-clamp-3">
+                      {item.translated_text || item.clean_text}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <span className="text-[9px] text-text-muted">{item.language}</span>
+                      <span className={`text-[9px] font-mono font-bold ${
+                        item.credibility_score_at_capture >= 70 ? 'text-cred-high' :
+                        item.credibility_score_at_capture >= 40 ? 'text-signal-med' : 'text-signal-high'
+                      }`}>
+                        {Math.round(item.credibility_score_at_capture)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="h-full flex flex-col relative">
@@ -91,8 +367,10 @@ export default function ContentFeed() {
               </h1>
             </div>
             <p className="text-sm text-text-muted">
-              {searchActive
-                ? `${searchResults.length} semantic search results`
+              {searchActive && searchMode === 'narratives'
+                ? `${narrativeResults.length} narrative${narrativeResults.length !== 1 ? 's' : ''} found`
+                : searchActive && searchMode === 'content'
+                ? `${searchResults.length} search results`
                 : `${items.length} items loaded`}
             </p>
           </div>
@@ -163,33 +441,53 @@ export default function ContentFeed() {
         </div>
       </div>
 
-      {/* Search bar */}
-      <div className="px-6 py-3 border-b border-anveshak-border flex gap-2">
+      {/* Search bar with mode segmented control */}
+      <div className="px-6 py-3 border-b border-anveshak-border flex gap-2 items-center">
+        {/* Segmented control: Content | Narratives */}
+        <div className="flex bg-anveshak-card border border-anveshak-border rounded overflow-hidden shrink-0">
+          <button
+            className={`px-3 py-1.5 text-[11px] font-medium transition-colors ${
+              searchMode === 'content'
+                ? 'bg-anveshak-accent/20 text-anveshak-accent'
+                : 'text-text-muted hover:text-text-primary'
+            }`}
+            onClick={() => { setSearchMode('content'); if (searchActive) setSearchActive(false) }}
+          >
+            Content
+          </button>
+          <button
+            className={`px-3 py-1.5 text-[11px] font-medium transition-colors border-l border-anveshak-border ${
+              searchMode === 'narratives'
+                ? 'bg-anveshak-accent/20 text-anveshak-accent'
+                : 'text-text-muted hover:text-text-primary'
+            }`}
+            onClick={() => { setSearchMode('narratives'); if (searchActive) setSearchActive(false) }}
+          >
+            Narratives
+          </button>
+        </div>
+
         <input
           type="search"
           value={searchQ}
           onChange={(e) => setSearchQ(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && searchQ.trim()) setSearchActive(true)
-            if (e.key === 'Escape') { setSearchActive(false); setSearchQ('') }
+            if (e.key === 'Enter') handleSearch()
+            if (e.key === 'Escape') handleClearSearch()
           }}
-          placeholder="Semantic search (pgvector)…"
+          placeholder={searchMode === 'narratives' ? 'Search narratives...' : 'Semantic search (pgvector)...'}
           className="flex-1 bg-anveshak-card border border-anveshak-border rounded px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-anveshak-accent"
-          aria-label="Semantic search content"
+          aria-label={searchMode === 'narratives' ? 'Search narratives' : 'Semantic search content'}
         />
         {searchActive ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => { setSearchActive(false); setSearchQ('') }}
-          >
+          <Button variant="ghost" size="sm" onClick={handleClearSearch}>
             Clear
           </Button>
         ) : (
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => searchQ.trim() && setSearchActive(true)}
+            onClick={handleSearch}
             disabled={!searchQ.trim()}
           >
             Search
@@ -227,7 +525,7 @@ export default function ContentFeed() {
       {/* Identifiers panel (Engine C) */}
       {showIdentifiers && (
         <div className="px-6 py-4 border-b border-anveshak-border max-h-[60vh] overflow-y-auto">
-          <Suspense fallback={<Spinner label="Loading identifiers…" />}>
+          <Suspense fallback={<Spinner label="Loading identifiers..." />}>
             <Identifiers embedded topicId={topicId} />
           </Suspense>
         </div>
@@ -236,7 +534,7 @@ export default function ContentFeed() {
       {/* Template manager panel (Engine C) */}
       {showTemplates && (
         <div className="px-6 py-4 border-b border-anveshak-border max-h-[50vh] overflow-y-auto">
-          <Suspense fallback={<Spinner label="Loading templates…" />}>
+          <Suspense fallback={<Spinner label="Loading templates..." />}>
             <TemplateManager topicId={topicId} />
           </Suspense>
         </div>
@@ -246,7 +544,38 @@ export default function ContentFeed() {
       <div className="flex-1 overflow-y-auto p-6">
         {isLoading || isSearching ? (
           <div className="flex justify-center py-20">
-            <Spinner label={isSearching ? 'Searching…' : 'Loading content…'} />
+            <Spinner label={isSearching ? 'Searching...' : 'Loading content...'} />
+          </div>
+        ) : (clusterView || (searchActive && searchMode === 'narratives')) ? (
+          /* Cluster / Narrative view */
+          <div className="max-w-3xl space-y-3">
+            {displayClusters.length === 0 ? (
+              <EmptyState
+                icon="📊"
+                title={searchActive ? 'No matching narratives' : 'No clusters formed yet'}
+                description={
+                  searchActive
+                    ? 'Try different keywords or broaden your search.'
+                    : 'Clusters emerge when enough content is collected and analysed.'
+                }
+              />
+            ) : (
+              <>
+                {/* Summary bar */}
+                <div className="flex items-center gap-4 text-[11px] text-text-muted mb-2 px-1">
+                  <span>
+                    {searchActive
+                      ? `${displayClusters.length} matching narrative${displayClusters.length !== 1 ? 's' : ''}`
+                      : `${displayClusters.length} narrative cluster${displayClusters.length !== 1 ? 's' : ''}`
+                    }
+                  </span>
+                  <span className="text-anveshak-border">|</span>
+                  <span>{displayClusters.reduce((s, c) => s + c.item_count, 0)} total items</span>
+                </div>
+
+                {displayClusters.map((cluster, idx) => renderClusterCard(cluster, idx))}
+              </>
+            )}
           </div>
         ) : displayItems.length === 0 ? (
           <EmptyState
@@ -258,148 +587,8 @@ export default function ContentFeed() {
                 : 'Content will appear here once the scraper and social adapters collect items.'
             }
           />
-        ) : clusterView && !searchActive ? (
-          // Cluster view — military C2 aesthetic
-          <div className="max-w-3xl space-y-3">
-            {clusters.length === 0 ? (
-              <EmptyState
-                icon="📊"
-                title="No clusters formed yet"
-                description="Clusters emerge when enough content is collected and analysed."
-              />
-            ) : (
-              <>
-                {/* Summary bar */}
-                <div className="flex items-center gap-4 text-[11px] text-text-muted mb-2 px-1">
-                  <span>{clusters.length} narrative cluster{clusters.length !== 1 ? 's' : ''}</span>
-                  <span className="text-anveshak-border">|</span>
-                  <span>{clusters.reduce((s, c) => s + c.item_count, 0)} total items</span>
-                </div>
-
-                {(() => {
-                  const maxItems = Math.max(...clusters.map((c) => c.item_count), 1)
-                  // Color scale: top clusters get brighter accents
-                  const accentColors = [
-                    { bar: '#3b82f6', border: 'rgba(59,130,246,0.35)', glow: 'rgba(59,130,246,0.08)' },
-                    { bar: '#8b5cf6', border: 'rgba(139,92,246,0.30)', glow: 'rgba(139,92,246,0.06)' },
-                    { bar: '#06b6d4', border: 'rgba(6,182,212,0.30)', glow: 'rgba(6,182,212,0.06)' },
-                    { bar: '#10b981', border: 'rgba(16,185,129,0.25)', glow: 'rgba(16,185,129,0.05)' },
-                    { bar: '#f59e0b', border: 'rgba(245,158,11,0.25)', glow: 'rgba(245,158,11,0.05)' },
-                  ]
-
-                  return clusters.map((cluster, idx) => {
-                    const barPct = Math.max(6, (cluster.item_count / maxItems) * 100)
-                    const label = cluster.label ?? 'Unclassified cluster'
-                    const sources = cluster.sources ?? []
-                    const isc = cluster.independent_source_count
-                    const accent = accentColors[idx % accentColors.length]
-                    const isTop = idx < 3
-
-                    return (
-                      <article
-                        key={cluster.id}
-                        className="relative overflow-hidden rounded-lg border transition-all duration-300 cursor-pointer group hover:scale-[1.008] hover:shadow-lg"
-                        style={{
-                          borderColor: accent.border,
-                          backgroundColor: accent.glow,
-                        }}
-                        onClick={() => {/* TODO: expand to show items */}}
-                      >
-                        {/* Left accent bar */}
-                        <div
-                          className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg"
-                          style={{ backgroundColor: accent.bar, opacity: isTop ? 0.9 : 0.5 }}
-                        />
-
-                        {/* Subtle top glow for top clusters */}
-                        {isTop && (
-                          <div
-                            className="absolute top-0 left-0 right-0 h-px"
-                            style={{
-                              background: `linear-gradient(90deg, transparent 0%, ${accent.bar}60 30%, ${accent.bar}80 50%, ${accent.bar}60 70%, transparent 100%)`,
-                            }}
-                          />
-                        )}
-
-                        <div className="pl-4 pr-4 py-3.5">
-                          {/* Top row: label + item count badge */}
-                          <div className="flex items-start justify-between gap-3 mb-1">
-                            <h3 className="text-[13px] font-semibold text-text-primary leading-snug group-hover:text-white transition-colors flex-1 min-w-0">
-                              {label}
-                            </h3>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <span
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
-                                style={{
-                                  backgroundColor: `${accent.bar}20`,
-                                  color: accent.bar,
-                                }}
-                              >
-                                {cluster.item_count}
-                              </span>
-                              <span className="text-[10px] text-text-muted">
-                                {isc} src{isc !== 1 ? 's' : ''}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Size bar */}
-                          <div className="w-full h-[3px] bg-white/[0.04] rounded-full mb-2.5 overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all duration-700 ease-out"
-                              style={{
-                                width: `${barPct}%`,
-                                background: `linear-gradient(90deg, ${accent.bar}90, ${accent.bar}40)`,
-                                boxShadow: isTop ? `0 0 8px ${accent.bar}40` : undefined,
-                              }}
-                            />
-                          </div>
-
-                          {/* Executive summary */}
-                          {cluster.executive_summary && (
-                            <p className="text-[11px] text-text-secondary/80 leading-relaxed line-clamp-2 mb-2">
-                              {cluster.executive_summary}
-                            </p>
-                          )}
-
-                          {/* Source chips */}
-                          {sources.length > 0 && (
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {sources.map((src, i) => {
-                                const credColor =
-                                  src.credibility_score >= 70 ? 'text-cred-high' :
-                                  src.credibility_score >= 40 ? 'text-signal-med' :
-                                  'text-signal-high'
-                                return (
-                                  <span
-                                    key={i}
-                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] border border-white/[0.06]"
-                                    style={{ backgroundColor: 'rgba(255,255,255,0.03)' }}
-                                  >
-                                    <span className="font-bold text-text-muted">
-                                      {src.platform.toUpperCase()}
-                                    </span>
-                                    <span className="text-text-muted/70 truncate max-w-[90px]">
-                                      {src.source_name.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
-                                    </span>
-                                    <span className={`font-mono font-bold ${credColor}`}>
-                                      {Math.round(src.credibility_score)}
-                                    </span>
-                                  </span>
-                                )
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      </article>
-                    )
-                  })
-                })()}
-              </>
-            )}
-          </div>
         ) : (
-          // Feed view
+          /* Feed view */
           <div className="max-w-2xl space-y-3">
             {displayItems.map((item) => (
               <ContentCard
@@ -414,7 +603,7 @@ export default function ContentFeed() {
             )}
             {isFetchingNextPage && (
               <div className="flex justify-center py-4">
-                <Spinner size="sm" label="Loading more…" />
+                <Spinner size="sm" label="Loading more..." />
               </div>
             )}
           </div>

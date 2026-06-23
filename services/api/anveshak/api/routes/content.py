@@ -7,7 +7,6 @@ Criteria 1.24: similarity_score float in search results
 from __future__ import annotations
 
 import asyncpg
-import httpx
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -15,26 +14,10 @@ from ..auth.rbac import require_role
 from ..db.pool import get_db
 from ..db import content as content_db
 from ..db import topics as topics_db
-from ..settings import settings
+from ..embedding import embed_query as _embed_query
 
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["content"])
-
-
-# ---------------------------------------------------------------------------
-# Embedding via analyst service — avoids PyTorch dependency in API image
-# ---------------------------------------------------------------------------
-
-async def _embed_query(query: str) -> str:
-    """Encode a search query to pgvector literal string via analyst service."""
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(
-            f"{settings.analyst_service_url}/internal/embed",
-            json={"texts": [query]},
-        )
-        resp.raise_for_status()
-        vec = resp.json()["embeddings"][0]
-    return "[" + ",".join(f"{x:.8f}" for x in vec) + "]"
 
 
 # ---------------------------------------------------------------------------

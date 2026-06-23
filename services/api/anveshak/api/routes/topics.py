@@ -1,8 +1,9 @@
 """Topic management endpoints."""
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
 import asyncpg
+import structlog
 import uuid
 from datetime import datetime, UTC
 from arq import create_pool as arq_create_pool
@@ -14,6 +15,8 @@ from ..db import audit as audit_db
 from ..auth.rbac import require_role, is_super_admin, get_user_org
 from ..settings import settings
 from anveshak.models import Labels, Topic, TopicStatus
+
+log = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/topics", tags=["topics"])
 
@@ -243,6 +246,124 @@ async def get_topic_clusters(
 ):
     await topics_db.verify_topic_access(db, topic_id, user)
     return await topics_db.get_topic_clusters(db, topic_id)
+
+
+@router.get("/{topic_id}/clusters/search")
+async def search_topic_clusters(
+    topic_id: str,
+    q: str = Query(..., min_length=1, description="Search query text"),
+    limit: int = Query(20, ge=1, le=50),
+    request: Request = None,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+):
+    """Narrative search: rank clusters by centroid cosine similarity.
+
+    Falls back to ILIKE on label/executive_summary when embedding service
+    is unavailable. Every search is audit-logged for court readiness.
+    """
+    await topics_db.verify_topic_access(db, topic_id, user)
+
+    # Try semantic search via centroid embedding
+    try:
+        from ..embedding import embed_query
+        query_vec_str = await embed_query(q)
+        clusters = await topics_db.search_clusters_by_centroid(
+            db, query_vec_str, topic_id, limit=limit,
+        )
+    except Exception as exc:
+        log.warning(
+            "cluster_search.embed_fallback",
+            query=q, topic_id=topic_id, error=str(exc),
+        )
+        query_vec_str = None
+        clusters = await topics_db.search_clusters_by_label(
+            db, q, topic_id, limit=limit,
+        )
+
+    # Audit log — immutable record of every search
+    await audit_db.log_action(
+        db,
+        user["sub"],
+        "search.cluster",
+        "topic",
+        topic_id,
+        {
+            "query": q,
+            "mode": "centroid" if query_vec_str else "keyword",
+            "result_count": len(clusters),
+            "result_cluster_ids": [c["id"] for c in clusters],
+        },
+        request.client.host if request and request.client else "",
+    )
+
+    return clusters
+
+
+@router.get("/{topic_id}/clusters/{cluster_id}/content")
+async def get_cluster_content(
+    topic_id: str,
+    cluster_id: str,
+    q: Optional[str] = Query(None, description="Optional query for relevance ranking"),
+    sort: str = Query("time", description="time or relevance"),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    request: Request = None,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+):
+    """Drill-down: content items within a cluster, optionally ranked by query similarity.
+
+    Multi-tenancy guard: cluster must belong to the topic in the URL path,
+    and topic must belong to the user's org.
+    """
+    await topics_db.verify_topic_access(db, topic_id, user)
+
+    # Verify cluster belongs to this topic (prevents cross-org leak via UUID guessing)
+    if not await topics_db.verify_cluster_belongs_to_topic(db, cluster_id, topic_id):
+        raise HTTPException(status_code=404, detail="Cluster not found in this topic")
+
+    if sort not in ("time", "relevance"):
+        raise HTTPException(status_code=422, detail="sort must be time|relevance")
+
+    query_vec_str = None
+    if q and sort == "relevance":
+        try:
+            from ..embedding import embed_query
+            query_vec_str = await embed_query(q)
+        except Exception as exc:
+            log.warning(
+                "cluster_content.embed_failed",
+                query=q, cluster_id=cluster_id, error=str(exc),
+            )
+            # Fall back to time sort if embedding unavailable
+            sort = "time"
+
+    items = await topics_db.get_cluster_content(
+        db, cluster_id,
+        sort=sort,
+        query_vec_str=query_vec_str,
+        limit=limit,
+        offset=offset,
+    )
+
+    # Audit log
+    await audit_db.log_action(
+        db,
+        user["sub"],
+        "search.cluster_content",
+        "cluster",
+        cluster_id,
+        {
+            "topic_id": topic_id,
+            "query": q,
+            "sort": sort,
+            "result_count": len(items),
+        },
+        request.client.host if request and request.client else "",
+    )
+
+    return items
 
 
 @router.get("/{topic_id}/sources")
