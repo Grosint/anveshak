@@ -9,6 +9,7 @@ import { Spinner } from '../ui/Spinner'
 
 const ID_STYLES: Record<string, { bg: string; border: string; label: string; shape: string }> = {
   PHONE_IN:         { bg: '#22c55e', border: '#86efac', label: 'PHONE',     shape: 'ellipse' },
+  PHONE_INTL:       { bg: '#14b8a6', border: '#5eead4', label: 'INTL',      shape: 'ellipse' },
   UPI:              { bg: '#a855f7', border: '#d8b4fe', label: 'UPI',       shape: 'ellipse' },
   TELEGRAM_HANDLE:  { bg: '#0ea5e9', border: '#7dd3fc', label: 'TELEGRAM',  shape: 'ellipse' },
   CRYPTO_BTC:       { bg: '#f59e0b', border: '#fde68a', label: 'BTC',       shape: 'hexagon' },

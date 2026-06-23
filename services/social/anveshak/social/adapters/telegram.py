@@ -37,7 +37,7 @@ from ..settings import settings
 
 log = structlog.get_logger(__name__)
 
-_MEDIA_BASE = Path(os.environ.get("MEDIA_STORAGE_PATH", "/data/media"))
+_MEDIA_BASE = Path(os.environ.get("MEDIA_STORAGE_ROOT", "/app/media"))
 _MESSAGES_PER_CHANNEL = 50   # max messages per poll cycle per channel
 
 

@@ -54,6 +54,27 @@ _RE_PHONE_IN = re.compile(
     re.VERBOSE,
 )
 
+# PHONE_INTL: international phone with explicit country code prefix
+# Country codes → expected subscriber digit lengths
+_INTL_PHONE_CODES: dict[str, tuple[int, ...]] = {
+    "86":  (11,),        # China
+    "852": (8,),         # Hong Kong
+    "971": (9,),         # UAE
+    "92":  (10,),        # Pakistan
+    "977": (10,),        # Nepal
+    "880": (10,),        # Bangladesh
+    "95":  (7, 8, 9),    # Myanmar
+}
+
+_RE_PHONE_INTL = re.compile(
+    r"""
+    (?<!\d)
+    (\+(?:852|880|977|971|86|92|95)[\s.-]?\d[\d\s.-]{4,14}\d)
+    (?!\d)
+    """,
+    re.VERBOSE,
+)
+
 # UPI: user@bank where bank is a known UPI suffix
 _RE_UPI = re.compile(
     r"([a-zA-Z0-9._-]+@(?:" + "|".join(UPI_BANK_SUFFIXES) + r"))\b",
@@ -128,7 +149,7 @@ _RE_SEBI_REG = re.compile(
 
 # Phone context words — boost confidence when near phone number
 _PHONE_CONTEXT_WORDS = frozenset({
-    "call", "whatsapp", "phone", "mobile", "contact", "dial", "reach",
+    "call", "whatsapp", "ws", "phone", "mobile", "contact", "dial", "reach",
     "sms", "text", "msg", "telegram", "signal", "number", "helpline",
 })
 
@@ -177,6 +198,22 @@ def _normalize_domain(url: str) -> str:
     if domain.startswith("www."):
         domain = domain[4:]
     return domain.lower()
+
+
+def _normalize_phone_intl(raw: str) -> str | None:
+    """Normalize to E.164: +{country_code}{subscriber_digits}.
+
+    Returns None if the number doesn't match expected length for its country code.
+    """
+    digits = re.sub(r"[^\d]", "", raw)
+    # Match against known country codes (longest first to avoid prefix collision)
+    for code in sorted(_INTL_PHONE_CODES, key=len, reverse=True):
+        if digits.startswith(code):
+            subscriber = digits[len(code):]
+            if len(subscriber) in _INTL_PHONE_CODES[code]:
+                return f"+{digits}"
+            return None
+    return None
 
 
 def _has_prefix(text: str, match_start: int) -> bool:
@@ -262,6 +299,16 @@ def extract_identifiers(text: str, platform: str = "") -> list[IdentifierMatch]:
         else:
             confidence = 0.6
         _add("PHONE_IN", raw, digits, confidence)
+
+    # --- PHONE_INTL (international with explicit country code) ---
+    for m in _RE_PHONE_INTL.finditer(text):
+        raw = m.group(1)
+        normalized = _normalize_phone_intl(raw)
+        if normalized is None:
+            continue
+        has_context = _has_context(text, m.start(), _PHONE_CONTEXT_WORDS, window=60)
+        confidence = 0.95 if has_context else 0.85
+        _add("PHONE_INTL", raw, normalized, confidence)
 
     # --- CRYPTO_BTC ---
     for m in _RE_CRYPTO_BTC.finditer(text):

@@ -3,6 +3,7 @@ import { identifiersApi, TopIdentifier } from '../../api/identifiers'
 
 const TYPE_COLORS: Record<string, string> = {
   PHONE_IN: 'text-green-400',
+  PHONE_INTL: 'text-teal-400',
   UPI: 'text-purple-400',
   TELEGRAM_HANDLE: 'text-blue-400',
   CRYPTO_BTC: 'text-amber-400',
@@ -12,7 +13,7 @@ const TYPE_COLORS: Record<string, string> = {
 }
 
 const TYPE_SHORT: Record<string, string> = {
-  PHONE_IN: 'PH', UPI: 'UPI', TELEGRAM_HANDLE: 'TG', CRYPTO_BTC: 'BTC',
+  PHONE_IN: 'PH', PHONE_INTL: 'INTL', UPI: 'UPI', TELEGRAM_HANDLE: 'TG', CRYPTO_BTC: 'BTC',
   CRYPTO_ETH: 'ETH', EMAIL: 'EM', GSTIN: 'GST', URL_DOMAIN: 'URL',
   SEBI_REG: 'SEBI', INSTAGRAM_HANDLE: 'IG', PAN: 'PAN', IFSC: 'IFSC',
   BANK_ACCOUNT: 'BA',

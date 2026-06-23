@@ -2,6 +2,7 @@ import api from './client'
 
 export type IdentifierType =
   | 'PHONE_IN'
+  | 'PHONE_INTL'
   | 'UPI'
   | 'EMAIL'
   | 'CRYPTO_BTC'

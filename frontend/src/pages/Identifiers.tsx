@@ -7,6 +7,7 @@ import { format } from 'date-fns'
 
 const IDENTIFIER_TYPES: { value: IdentifierType; label: string }[] = [
   { value: 'PHONE_IN', label: 'Phone' },
+  { value: 'PHONE_INTL', label: 'Phone (Intl)' },
   { value: 'UPI', label: 'UPI' },
   { value: 'EMAIL', label: 'Email' },
   { value: 'CRYPTO_BTC', label: 'BTC' },
@@ -185,6 +186,7 @@ function TypeBadge({ type }: { type: string }) {
   const label = IDENTIFIER_TYPES.find((t) => t.value === type)?.label || type
   const colorMap: Record<string, string> = {
     PHONE_IN: 'bg-blue-500/20 text-blue-400',
+    PHONE_INTL: 'bg-teal-500/20 text-teal-400',
     UPI: 'bg-green-500/20 text-green-400',
     EMAIL: 'bg-purple-500/20 text-purple-400',
     CRYPTO_BTC: 'bg-orange-500/20 text-orange-400',
@@ -205,6 +207,42 @@ function formatDate(iso: string | null): string {
   if (!iso) return '-'
   try { return format(new Date(iso), 'dd MMM yy HH:mm') }
   catch { return iso }
+}
+
+const PHONE_COUNTRY: Record<string, string> = {
+  '+86': 'China', '+852': 'Hong Kong', '+971': 'UAE',
+  '+92': 'Pakistan', '+977': 'Nepal', '+880': 'Bangladesh', '+95': 'Myanmar',
+  '+91': 'India',
+}
+
+function getPhoneCountry(value: string): string | null {
+  for (const [prefix, name] of Object.entries(PHONE_COUNTRY)) {
+    if (value.startsWith(prefix)) return name
+  }
+  return null
+}
+
+function formatIdentifierValue(item: TopIdentifier): string {
+  if (item.identifier_type === 'TELEGRAM_HANDLE' || item.identifier_type === 'INSTAGRAM_HANDLE') {
+    return `@${item.identifier_value}`
+  }
+  return item.identifier_value
+}
+
+function IdentifierContext({ type, value }: { type: string; value: string }) {
+  let label = ''
+  let color = 'text-text-muted'
+
+  if (type === 'PHONE_INTL') {
+    const country = getPhoneCountry(value)
+    if (country) { label = country; color = 'text-teal-400/70' }
+  } else if (type === 'PHONE_IN') {
+    label = 'India'
+    color = 'text-blue-400/70'
+  }
+
+  if (!label) return null
+  return <span className={`ml-2 text-[10px] ${color}`}>{label}</span>
 }
 
 function TopIdentifiersTable({ items }: { items: TopIdentifier[] }) {
@@ -231,11 +269,20 @@ function TopIdentifiersTable({ items }: { items: TopIdentifier[] }) {
               className="border-b border-anveshak-border/50 hover:bg-anveshak-muted/50 transition-colors"
             >
               <td className="py-2 px-3"><TypeBadge type={item.identifier_type} /></td>
-              <td className="py-2 px-3 font-mono text-text-primary text-xs">{item.identifier_value}</td>
+              <td className="py-2 px-3">
+                <span className="font-mono text-text-primary text-xs">{formatIdentifierValue(item)}</span>
+                <IdentifierContext type={item.identifier_type} value={item.identifier_value} />
+              </td>
               <td className="py-2 px-3 text-right">
-                <span className={`font-bold ${item.source_count >= 3 ? 'text-signal-high' : 'text-text-primary'}`}>
+                <span className={`font-bold ${item.source_count >= 3 ? 'text-signal-high' : item.source_count >= 2 ? 'text-green-400' : 'text-text-primary'}`}>
                   {item.source_count}
                 </span>
+                {item.source_count >= 2 && (
+                  <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">Multi</span>
+                )}
+                {item.source_count === 1 && item.content_item_count >= 2 && (
+                  <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">Repeated</span>
+                )}
               </td>
               <td className="py-2 px-3 text-right text-text-secondary">{item.content_item_count}</td>
               <td className="py-2 px-3 text-text-muted text-xs">{formatDate(item.first_seen_at)}</td>

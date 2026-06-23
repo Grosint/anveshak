@@ -254,20 +254,21 @@ class TestSearchIdentifiers:
 # ===========================================================================
 
 class TestGetTopIdentifiers:
-    """DB function: most frequent identifiers by source_count."""
+    """DB function: most frequent identifiers from extracted_entities (grouped)."""
 
     @pytest.mark.asyncio
-    async def test_returns_sorted_by_source_count(self):
+    async def test_returns_sorted_by_item_count(self):
         conn = AsyncMock()
         rows = [
-            _fake_top_row(identifier_value="9876543210", source_count=5),
-            _fake_top_row(identifier_value="easy@ybl", source_count=3),
+            _fake_top_row(identifier_value="9876543210", source_count=5, content_item_count=12),
+            _fake_top_row(identifier_value="easy@ybl", source_count=1, content_item_count=8),
         ]
         conn.fetch.return_value = rows
 
         result = await get_top_identifiers(conn, topic_id=TOPIC_ID)
         assert len(result) == 2
-        assert result[0]["source_count"] >= result[1]["source_count"]
+        # Should return both — not just multi-source clusters
+        assert result[0]["content_item_count"] >= result[1]["content_item_count"]
 
     @pytest.mark.asyncio
     async def test_filters_by_type(self):
@@ -278,7 +279,7 @@ class TestGetTopIdentifiers:
             conn, topic_id=TOPIC_ID, identifier_type="PHONE_IN",
         )
         sql = conn.fetch.call_args[0][0]
-        assert "identifier_type" in sql
+        assert "entity_type" in sql or "identifier_type" in sql
 
     @pytest.mark.asyncio
     async def test_respects_limit(self):
@@ -296,6 +297,49 @@ class TestGetTopIdentifiers:
 
         result = await get_top_identifiers(conn, topic_id="empty-topic")
         assert result == []
+
+    @pytest.mark.asyncio
+    async def test_queries_extracted_entities_not_clusters(self):
+        """Top should query extracted_entities directly, not identifier_clusters."""
+        from anveshak.api.db.identifiers import SQL_TOP_IDENTIFIERS
+        sql = SQL_TOP_IDENTIFIERS.lower()
+        assert "extracted_entities" in sql
+        assert "identifier_clusters" not in sql
+
+    @pytest.mark.asyncio
+    async def test_groups_by_type_and_value(self):
+        """SQL must GROUP BY to aggregate across content items."""
+        from anveshak.api.db.identifiers import SQL_TOP_IDENTIFIERS
+        sql = SQL_TOP_IDENTIFIERS.lower()
+        assert "group by" in sql
+
+    @pytest.mark.asyncio
+    async def test_accepts_min_items_param(self):
+        """Should accept min_items to filter noise."""
+        conn = AsyncMock()
+        conn.fetch.return_value = []
+
+        await get_top_identifiers(conn, topic_id=TOPIC_ID, min_items=2)
+        args = conn.fetch.call_args[0]
+        assert 2 in args
+
+    @pytest.mark.asyncio
+    async def test_single_source_identifiers_included(self):
+        """Identifiers from 1 source but multiple items should appear."""
+        conn = AsyncMock()
+        conn.fetch.return_value = [
+            _fake_top_row(
+                identifier_type="PHONE_INTL",
+                identifier_value="+85253385012",
+                source_count=1,
+                content_item_count=5,
+            ),
+        ]
+
+        result = await get_top_identifiers(conn, topic_id=TOPIC_ID)
+        assert len(result) == 1
+        assert result[0]["identifier_type"] == "PHONE_INTL"
+        assert result[0]["source_count"] == 1
 
 
 # ===========================================================================
@@ -544,10 +588,12 @@ class TestSQLConstants:
         # Must use ILIKE or trigram for partial match
         assert "ilike" in sql or "%" in sql or "similarity" in sql
 
-    def test_top_sql_orders_by_source_count(self):
+    def test_top_sql_queries_extracted_entities(self):
         from anveshak.api.db.identifiers import SQL_TOP_IDENTIFIERS
-        assert "source_count" in SQL_TOP_IDENTIFIERS.lower()
-        assert "desc" in SQL_TOP_IDENTIFIERS.lower()
+        sql = SQL_TOP_IDENTIFIERS.lower()
+        assert "extracted_entities" in sql
+        assert "group by" in sql
+        assert "desc" in sql
 
     def test_clusters_sql_scopes_to_topic(self):
         from anveshak.api.db.identifiers import SQL_LIST_CLUSTERS

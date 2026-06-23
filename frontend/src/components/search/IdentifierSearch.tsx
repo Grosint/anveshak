@@ -6,6 +6,7 @@ import { Spinner } from '../ui/Spinner'
 
 const IDENTIFIER_TYPES: { value: IdentifierType; label: string }[] = [
   { value: 'PHONE_IN', label: 'Phone' },
+  { value: 'PHONE_INTL', label: 'Phone (Intl)' },
   { value: 'UPI', label: 'UPI' },
   { value: 'EMAIL', label: 'Email' },
   { value: 'CRYPTO_BTC', label: 'BTC' },
@@ -204,6 +205,7 @@ function TypeBadge({ type }: { type: string }) {
   const label = IDENTIFIER_TYPES.find((t) => t.value === type)?.label || type
   const colorMap: Record<string, string> = {
     PHONE_IN: 'bg-blue-500/20 text-blue-400',
+    PHONE_INTL: 'bg-teal-500/20 text-teal-400',
     UPI: 'bg-green-500/20 text-green-400',
     EMAIL: 'bg-purple-500/20 text-purple-400',
     CRYPTO_BTC: 'bg-orange-500/20 text-orange-400',

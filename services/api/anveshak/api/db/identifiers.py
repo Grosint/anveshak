@@ -15,28 +15,26 @@ import asyncpg
 # ---------------------------------------------------------------------------
 
 IDENTIFIER_TYPES = (
-    "PHONE_IN", "UPI", "EMAIL", "CRYPTO_BTC", "CRYPTO_ETH",
+    "PHONE_IN", "PHONE_INTL", "UPI", "EMAIL", "CRYPTO_BTC", "CRYPTO_ETH",
     "CRYPTO_TRC20", "TELEGRAM_HANDLE", "INSTAGRAM_HANDLE",
     "URL_DOMAIN", "GSTIN", "UDYAM", "PAN", "IFSC",
     "BANK_ACCOUNT", "SEBI_REG",
 )
 
+# SQL fragment generated from IDENTIFIER_TYPES — single source of truth
+_ID_TYPES_SQL = ", ".join(f"'{t}'" for t in IDENTIFIER_TYPES)
+
 # ---------------------------------------------------------------------------
 # SQL constants
 # ---------------------------------------------------------------------------
 
-SQL_SEARCH_IDENTIFIERS = """
+SQL_SEARCH_IDENTIFIERS = f"""
     SELECT ee.entity_type, ee.entity_text, ee.confidence,
            ee.content_item_id, ci.url AS content_url, ci.topic_id
     FROM extracted_entities ee
     JOIN content_items ci ON ee.content_item_id = ci.id
     WHERE ci.topic_id = $1
-      AND ee.entity_type IN (
-          'PHONE_IN', 'UPI', 'EMAIL', 'CRYPTO_BTC', 'CRYPTO_ETH',
-          'CRYPTO_TRC20', 'TELEGRAM_HANDLE', 'INSTAGRAM_HANDLE',
-          'URL_DOMAIN', 'GSTIN', 'UDYAM', 'PAN', 'IFSC',
-          'BANK_ACCOUNT', 'SEBI_REG'
-      )
+      AND ee.entity_type IN ({_ID_TYPES_SQL})
       AND ee.entity_text ILIKE $2
     ORDER BY ee.confidence DESC
     LIMIT $3
@@ -54,25 +52,38 @@ SQL_SEARCH_IDENTIFIERS_WITH_TYPE = """
     LIMIT $4
 """
 
-SQL_TOP_IDENTIFIERS = """
-    SELECT identifier_type, identifier_value,
-           source_count, content_item_count,
-           first_seen_at, last_seen_at
-    FROM identifier_clusters
-    WHERE topic_id = $1
-    ORDER BY source_count DESC
-    LIMIT $2
+SQL_TOP_IDENTIFIERS = f"""
+    SELECT ee.entity_type AS identifier_type,
+           ee.entity_text AS identifier_value,
+           COUNT(DISTINCT ci.source_id) AS source_count,
+           COUNT(DISTINCT ee.content_item_id) AS content_item_count,
+           MIN(ci.captured_at) AS first_seen_at,
+           MAX(ci.captured_at) AS last_seen_at
+    FROM extracted_entities ee
+    JOIN content_items ci ON ee.content_item_id = ci.id
+    WHERE ci.topic_id = $1
+      AND ee.entity_type IN ({_ID_TYPES_SQL})
+    GROUP BY ee.entity_type, ee.entity_text
+    HAVING COUNT(DISTINCT ee.content_item_id) >= $2
+    ORDER BY COUNT(DISTINCT ee.content_item_id) DESC
+    LIMIT $3
 """
 
 SQL_TOP_IDENTIFIERS_WITH_TYPE = """
-    SELECT identifier_type, identifier_value,
-           source_count, content_item_count,
-           first_seen_at, last_seen_at
-    FROM identifier_clusters
-    WHERE topic_id = $1
-      AND identifier_type = $2
-    ORDER BY source_count DESC
-    LIMIT $3
+    SELECT ee.entity_type AS identifier_type,
+           ee.entity_text AS identifier_value,
+           COUNT(DISTINCT ci.source_id) AS source_count,
+           COUNT(DISTINCT ee.content_item_id) AS content_item_count,
+           MIN(ci.captured_at) AS first_seen_at,
+           MAX(ci.captured_at) AS last_seen_at
+    FROM extracted_entities ee
+    JOIN content_items ci ON ee.content_item_id = ci.id
+    WHERE ci.topic_id = $1
+      AND ee.entity_type = $2
+    GROUP BY ee.entity_type, ee.entity_text
+    HAVING COUNT(DISTINCT ee.content_item_id) >= $3
+    ORDER BY COUNT(DISTINCT ee.content_item_id) DESC
+    LIMIT $4
 """
 
 SQL_LIST_CLUSTERS = """
@@ -115,7 +126,7 @@ SQL_CLUSTER_ITEMS = """
     ORDER BY ci.captured_at DESC
 """
 
-SQL_EXPORT_IDENTIFIERS = """
+SQL_EXPORT_IDENTIFIERS = f"""
     SELECT ee.entity_type, ee.entity_text, ee.confidence,
            ee.content_item_id, ci.url AS content_url,
            s.name AS source_name, s.platform AS source_platform,
@@ -124,12 +135,7 @@ SQL_EXPORT_IDENTIFIERS = """
     JOIN content_items ci ON ee.content_item_id = ci.id
     JOIN sources s ON ci.source_id = s.id
     WHERE ci.topic_id = $1
-      AND ee.entity_type IN (
-          'PHONE_IN', 'UPI', 'EMAIL', 'CRYPTO_BTC', 'CRYPTO_ETH',
-          'CRYPTO_TRC20', 'TELEGRAM_HANDLE', 'INSTAGRAM_HANDLE',
-          'URL_DOMAIN', 'GSTIN', 'UDYAM', 'PAN', 'IFSC',
-          'BANK_ACCOUNT', 'SEBI_REG'
-      )
+      AND ee.entity_type IN ({_ID_TYPES_SQL})
     ORDER BY ee.entity_type, ee.entity_text
     LIMIT $2
 """
@@ -251,16 +257,19 @@ async def get_top_identifiers(
     *,
     topic_id: str,
     identifier_type: Optional[str] = None,
+    min_items: int = 1,
     limit: int = 20,
 ) -> list[dict[str, Any]]:
-    """Top identifiers by source_count from identifier_clusters."""
+    """Top identifiers by item count, grouped from extracted_entities."""
     if identifier_type:
         rows = await conn.fetch(
             SQL_TOP_IDENTIFIERS_WITH_TYPE,
-            topic_id, identifier_type, limit,
+            topic_id, identifier_type, min_items, limit,
         )
     else:
-        rows = await conn.fetch(SQL_TOP_IDENTIFIERS, topic_id, limit)
+        rows = await conn.fetch(
+            SQL_TOP_IDENTIFIERS, topic_id, min_items, limit,
+        )
     return [dict(r) for r in rows]
 
 

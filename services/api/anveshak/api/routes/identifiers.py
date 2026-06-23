@@ -117,14 +117,16 @@ async def search_identifiers(
 async def get_top_identifiers(
     topic_id: str = Query(..., description="Topic ID"),
     type: Optional[str] = Query(None, description="Filter by identifier type"),
+    min_items: int = Query(1, ge=1, le=100, description="Min content items to include"),
     limit: int = Query(20, ge=1, le=100, description="Max results"),
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ) -> list[dict[str, Any]]:
-    """Most frequently appearing identifiers, sorted by source_count descending."""
+    """Most frequently appearing identifiers, grouped from extracted_entities."""
     await topics_db.verify_topic_access(db, topic_id, user)
     return await identifiers_db.get_top_identifiers(
-        db, topic_id=topic_id, identifier_type=type, limit=limit,
+        db, topic_id=topic_id, identifier_type=type,
+        min_items=min_items, limit=limit,
     )
 
 

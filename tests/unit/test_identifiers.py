@@ -1,7 +1,7 @@
 """Unit tests for Engine C identifier extraction (Step 1).
 
-Tests 15 identifier types:
-  Part 1: PHONE_IN, UPI, EMAIL, CRYPTO_BTC, CRYPTO_ETH, CRYPTO_TRC20,
+Tests 16 identifier types:
+  Part 1: PHONE_IN, PHONE_INTL, UPI, EMAIL, CRYPTO_BTC, CRYPTO_ETH, CRYPTO_TRC20,
            TELEGRAM_HANDLE, INSTAGRAM_HANDLE
   Part 2: URL_DOMAIN, GSTIN, UDYAM, PAN, IFSC, BANK_ACCOUNT, SEBI_REG
 
@@ -103,6 +103,115 @@ class TestPhoneIN:
         phones = _values(results, "PHONE_IN")
         assert "9876543210" in phones
         assert "8765432109" in phones
+
+
+# ===========================================================================
+# PHONE_INTL — International phone numbers (E.164)
+# ===========================================================================
+
+
+class TestPhoneINTL:
+    """International phone number extraction."""
+
+    def test_china_phone(self):
+        text = "WS: +86 19164436279"
+        results = extract_identifiers(text)
+        assert "PHONE_INTL" in _types(results)
+        assert "+8619164436279" in _values(results, "PHONE_INTL")
+
+    def test_hong_kong_phone(self):
+        text = "Call +852 70330813"
+        results = extract_identifiers(text)
+        assert "+85270330813" in _values(results, "PHONE_INTL")
+
+    def test_uae_phone(self):
+        text = "Contact: +971 501234567"
+        results = extract_identifiers(text)
+        assert "+971501234567" in _values(results, "PHONE_INTL")
+
+    def test_pakistan_phone(self):
+        text = "WhatsApp +92 3001234567"
+        results = extract_identifiers(text)
+        assert "+923001234567" in _values(results, "PHONE_INTL")
+
+    def test_nepal_phone(self):
+        text = "Phone: +977 9801234567"
+        results = extract_identifiers(text)
+        assert "+9779801234567" in _values(results, "PHONE_INTL")
+
+    def test_bangladesh_phone(self):
+        text = "Mobile +880 1712345678"
+        results = extract_identifiers(text)
+        assert "+8801712345678" in _values(results, "PHONE_INTL")
+
+    def test_myanmar_phone(self):
+        text = "Call +95 912345678"
+        results = extract_identifiers(text)
+        assert "+95912345678" in _values(results, "PHONE_INTL")
+
+    def test_e164_normalization(self):
+        """Spaces, dashes, dots stripped to E.164."""
+        text = "WS: +86-191-6443-6279"
+        results = extract_identifiers(text)
+        assert "+8619164436279" in _values(results, "PHONE_INTL")
+
+    def test_requires_plus_prefix(self):
+        """Bare digits matching intl format but without + should NOT match."""
+        text = "Reference: 8619164436279"
+        results = extract_identifiers(text)
+        assert "PHONE_INTL" not in _types(results)
+
+    def test_no_overlap_with_phone_in(self):
+        """+91 numbers should be PHONE_IN, never PHONE_INTL."""
+        text = "Call +919876543210"
+        results = extract_identifiers(text)
+        assert "PHONE_IN" in _types(results)
+        assert "PHONE_INTL" not in _types(results)
+
+    def test_rejects_wrong_length(self):
+        """China code +86 with wrong subscriber length should not match."""
+        text = "Number: +86 12345"
+        results = extract_identifiers(text)
+        assert "PHONE_INTL" not in _types(results)
+
+    def test_confidence_with_context(self):
+        """Near WhatsApp/WS context word => 0.95 confidence."""
+        text = "WhatsApp: +86 19164436279"
+        results = extract_identifiers(text)
+        phones = [r for r in results if r.identifier_type == "PHONE_INTL"]
+        assert len(phones) == 1
+        assert phones[0].confidence >= 0.95
+
+    def test_confidence_without_context(self):
+        """Without context word => 0.85 (still has + prefix)."""
+        text = "Some ref +86 19164436279 in data"
+        results = extract_identifiers(text)
+        phones = [r for r in results if r.identifier_type == "PHONE_INTL"]
+        assert len(phones) == 1
+        assert 0.80 <= phones[0].confidence <= 0.90
+
+    def test_multiple_intl_phones(self):
+        text = "+86 19164436279 and +852 70330813"
+        results = extract_identifiers(text)
+        vals = _values(results, "PHONE_INTL")
+        assert "+8619164436279" in vals
+        assert "+85270330813" in vals
+
+    def test_real_telegram_mule_content(self):
+        """Real scraped mule marketplace content."""
+        text = (
+            "\u2708\ufe0fTG: @YPY_100    \U0001f4dews: +86 19164436279\n"
+            "\u2708\ufe0fTG: @YPY99999   \U0001f4dews: +852 70330813\n"
+            "\u2708\ufe0fTG: @YPY_135John \U0001f4dews: +86 19164435603\n"
+        )
+        results = extract_identifiers(text, platform="telegram")
+        types = _types(results)
+        assert "PHONE_INTL" in types
+        assert "TELEGRAM_HANDLE" in types
+        intl_vals = _values(results, "PHONE_INTL")
+        assert "+8619164436279" in intl_vals
+        assert "+85270330813" in intl_vals
+        assert "+8619164435603" in intl_vals
 
 
 # ===========================================================================
@@ -867,10 +976,11 @@ class TestSEBIReg:
 class TestCrossCuttingPart2:
     """Cross-type tests including Part 2 types."""
 
-    def test_all_15_types_extractable(self):
-        """Single text with all 15 identifier types."""
+    def test_all_16_types_extractable(self):
+        """Single text with all 16 identifier types."""
         text = """
         Call +919876543210 or WhatsApp.
+        WS: +86 19164436279
         Pay user@ybl or email admin@example.com
         BTC: 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa
         ETH: 0x742d35Cc6634C0532925a3b844Bc9e7595f2bD28
@@ -887,9 +997,9 @@ class TestCrossCuttingPart2:
         results = extract_identifiers(text, platform="telegram")
         types = _types(results)
         expected = {
-            "PHONE_IN", "UPI", "EMAIL", "CRYPTO_BTC", "CRYPTO_ETH",
-            "CRYPTO_TRC20", "TELEGRAM_HANDLE", "URL_DOMAIN", "GSTIN",
-            "UDYAM", "PAN", "IFSC", "BANK_ACCOUNT", "SEBI_REG",
+            "PHONE_IN", "PHONE_INTL", "UPI", "EMAIL", "CRYPTO_BTC",
+            "CRYPTO_ETH", "CRYPTO_TRC20", "TELEGRAM_HANDLE", "URL_DOMAIN",
+            "GSTIN", "UDYAM", "PAN", "IFSC", "BANK_ACCOUNT", "SEBI_REG",
         }
         missing = expected - types
         assert not missing, f"Missing types: {missing}"
