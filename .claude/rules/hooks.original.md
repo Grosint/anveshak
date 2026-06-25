@@ -1,7 +1,8 @@
 ---
 # Hooks Configuration
 
-Configured in .claude/settings.json. Run on file events.
+Hooks are configured in .claude/settings.json.
+They run automatically on file events.
 
 Active hooks:
 - PostFileWrite(services/**): triggers security-auditor
@@ -10,4 +11,4 @@ Active hooks:
 - PostFileWrite(services/reporter/**): triggers llm-safety-reviewer
 - PostFileWrite(services/analyst/**): triggers llm-safety-reviewer
 
-Never disable without explicit user instruction.
+Do not disable hooks without explicit user instruction.

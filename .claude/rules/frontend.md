@@ -1,94 +1,83 @@
 # Frontend Patterns
 
-Consolidated from 10 learned instincts. These apply to the React + TypeScript analyst workbench.
+10 instincts. React + TypeScript analyst workbench.
 
 ## Theming
 
-- Dark-first: all colors as CSS custom properties on `:root`, light mode via `html.light` class
-  Tailwind reads values via `var(--...)`. ThemeProvider context with localStorage persistence.
-  Never use Tailwind `dark:` prefixes — use CSS variable swapping instead
+- Dark-first: colors as CSS custom properties on `:root`, light mode via `html.light` class
+  Tailwind reads via `var(--...)`. ThemeProvider context w/ localStorage persistence.
+  Never Tailwind `dark:` prefixes — CSS variable swapping instead
   See: `learned/css-variable-theming.md`
 
-- Recharts `fill`/`stroke` props don't resolve CSS `var(--...)` — hardcode hex values in a
-  const object with comments noting which CSS variable each mirrors
+- Recharts `fill`/`stroke` props don't resolve CSS `var(--...)` — hardcode hex in const object w/ comments noting which CSS variable each mirrors
   See: `learned/recharts-css-variable-limitation.md`
 
 ## Auth Lifecycle
 
-- JWT expiry countdown: 1-second timer warns analysts 5 minutes before token expiry
+- JWT expiry countdown: 1s timer warns 5min before expiry
   Decode JWT without libraries, auto-logout at expiry, rollback pending mutations
-  Toast warning rendered inside AuthProvider for persistent visibility
-  Validate on initial load — reject already-expired tokens immediately
+  Toast inside AuthProvider for persistent visibility
+  Validate on load — reject expired tokens immediately
   See: `learned/jwt-expiry-countdown.md`
 
 ## Data Mutations
 
-- Optimistic UI: cancel in-flight queries, snapshot current state, apply update immediately,
-  restore snapshot on error, always refetch on settled
-  Guard buttons with `isPending` to prevent double-submit
-  Covers both remove operations (dismiss/delete) and field updates (acknowledge)
+- Optimistic UI: cancel in-flight queries, snapshot state, apply immediately, restore on error, refetch on settled
+  Guard buttons w/ `isPending` — prevent double-submit
+  Covers remove ops (dismiss/delete) and field updates (acknowledge)
   See: `learned/optimistic-ui-mutations.md`
 
 ## Performance
 
-- Lazy-load libraries >100KB gzipped behind tabs/modals with `React.lazy()` + `Suspense`
-  MapLibre, chart libraries, PDF renderers — only fetched when user navigates to them
-  Gate React Query `enabled` conditions to prevent premature API calls
+- Lazy-load >100KB libs behind tabs/modals w/ `React.lazy()` + `Suspense`
+  MapLibre, charts, PDF renderers — fetched on navigate only
+  Gate React Query `enabled` to prevent premature API calls
   See: `learned/react-lazy-heavy-chunks.md`
 
 ## Pagination & Filtering
 
-- Infinite scroll: `useInfiniteQuery` + `IntersectionObserver` with `threshold: 0.1`
-  Client-side filtering applied after fetch — `queryKey` excludes filters to avoid refetch storms
-  Use server-side filtering instead for large datasets or low cardinality filters
+- Infinite scroll: `useInfiniteQuery` + `IntersectionObserver` w/ `threshold: 0.1`
+  Client-side filtering after fetch — `queryKey` excludes filters to avoid refetch storms
+  Server-side filtering for large datasets or low cardinality
   See: `learned/react-infinite-scroll-hook.md`
 
-- Time filtering: preset chips (Today/7d/30d) + custom date range inputs
-  Always use `T00:00:00Z`/`T23:59:59Z` suffix when converting `YYYY-MM-DD`
-  Include derived UTC ISO strings in React Query key for per-range caching
-  Use prefix match for WebSocket invalidation, full key for optimistic mutations
+- Time filtering: preset chips (Today/7d/30d) + custom date range
+  Always `T00:00:00Z`/`T23:59:59Z` suffix when converting `YYYY-MM-DD`
+  Derived UTC ISO strings in React Query key for per-range caching
+  Prefix match for WebSocket invalidation, full key for optimistic mutations
   See: `learned/time-filter-bar-pattern.md`
 
 ## Component Reuse
 
-- Embedded prop pattern: add `embedded?: boolean` (default `false`) to page components
-  that need to render inside another page (e.g. Settings tabs). When embedded, skip the
-  page-level header/h1; parent provides its own. Functional content stays identical.
+- Embedded prop: `embedded?: boolean` (default `false`) on page components rendering inside another page. When embedded, skip page header/h1; parent provides own. Content identical.
   See: `learned/embedded-prop-page-reuse.md`
 
-- Kill standalone route for topic-scoped pages that require a UUID to show anything.
-  Keep the embedded tab in TopicWorkspace, add a global action (search button, command
-  palette) in Layout sidebar for cross-topic access. Don't add a topic picker dropdown.
+- Kill standalone route for topic-scoped pages needing UUID. Keep embedded tab in TopicWorkspace, add global action (search button, command palette) in Layout sidebar. No topic picker dropdown.
   See: `learned/kill-standalone-add-global-action.md`
 
 ## Cross-Page Modal Communication
 
-- URL-param modal trigger: open a Layout-level modal from any child page via
-  `?search=X` query param. Layout reads param, opens modal with prefilled state,
-  clears param with `{ replace: true }`. Modal needs `initialQuery` prop for prefill.
+- URL-param modal trigger: open Layout-level modal from child page via `?search=X` query param. Layout reads param, opens modal prefilled, clears w/ `{ replace: true }`. Modal needs `initialQuery` prop.
   See: `learned/url-param-modal-trigger.md`
 
 ## Domain Logic Extraction
 
-- Extract business logic (severity inference, credibility labels, confidence variants)
-  into pure functions in `lib/domain.ts` — testable without React rendering
-  Keep components thin: render + call domain functions, never inline business rules
+- Extract business logic (severity, credibility labels, confidence variants) into pure functions in `lib/domain.ts` — testable without React
+  Components thin: render + call domain functions, never inline business rules
   See: `learned/frontend-domain-logic-extraction.md`
 
 ## Seam Testing
 
-- Test React Query cache boundaries: verify `queryKey` prefix matching for WebSocket
-  invalidation, full key for optimistic mutations, and `enabled` gate conditions
-  Mock API factories must return unwrapped shape (arrays/objects) matching `.then(r => r.data)`
-  Test both desktop sidebar and mobile bottom nav assertions (jsdom sees both)
+- Test React Query cache boundaries: `queryKey` prefix matching for WebSocket invalidation, full key for optimistic mutations, `enabled` gate conditions
+  Mock API factories return unwrapped shape matching `.then(r => r.data)`
+  Test both desktop sidebar and mobile bottom nav (jsdom sees both)
   See: `learned/frontend-seam-testing.md`
 
 ## Testing
 
 - jsdom renders both desktop sidebar and mobile bottom nav (no CSS media queries).
-  Use `getAllByRole` not `getByRole` for nav link assertions to handle duplicates.
+  Use `getAllByRole` not `getByRole` for nav links — handles duplicates.
   See: `learned/jsdom-dual-nav-testing.md`
 
-- `vi.useFakeTimers()` + React Query: queries fire on mount, use `vi.advanceTimersByTime`
-  to let them settle. Don't mix real and fake timers in the same test.
+- `vi.useFakeTimers()` + React Query: queries fire on mount, use `vi.advanceTimersByTime` to settle. Never mix real and fake timers in same test.
   See: `learned/fake-timers-react-query-trap.md`

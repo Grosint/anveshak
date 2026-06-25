@@ -1,16 +1,14 @@
 # ANVESHAK — AI-POWERED OSINT ANALYSIS PLATFORM
 
-Read this before touching anything. These rules are non-negotiable.
+Read before touching. Rules non-negotiable.
 
 ## WHAT ANVESHAK IS
 
-Anveshak is a standalone, sovereign AI-OSINT analysis and monitoring platform built
-for defence forces and law enforcement agencies (LEAs). Originally developed under
-iDEX ADITI 4.0 PS-18. It is a separate product from Drishti.
+Standalone sovereign AI-OSINT analysis+monitoring platform for defence forces and LEAs. Built under iDEX ADITI 4.0 PS-18. Separate product from Drishti.
 
-**Product strategy:** Sell Anveshak first. Drishti is the upsell.
-Anveshak deploys standalone — no Redpanda, no AGE, no Vault required.
-Every intelligence officer should be able to run it on one machine.
+**Product strategy:** Sell Anveshak first. Drishti = upsell.
+Deploys standalone — no Redpanda, no AGE, no Vault.
+One machine per intelligence officer.
 
 ## TECH STACK — CANONICAL (DO NOT DEVIATE)
 
@@ -30,43 +28,29 @@ Every intelligence officer should be able to run it on one machine.
 
 ## ARCHITECTURAL RULES — ALWAYS ENFORCE
 
-1. **Standalone-first.** Every service starts with ANVESHAK_DRISHTI_BRIDGE=false.
-   Anveshak NEVER requires Drishti to run.
+1. **Standalone-first.** Every service starts with ANVESHAK_DRISHTI_BRIDGE=false. Anveshak NEVER requires Drishti.
 
-2. **Labels are mandatory.** Every Pydantic model MUST have a `labels: Labels` field.
-   Labels are NEVER Optional. Never create a model without them.
+2. **Labels mandatory.** Every Pydantic model MUST have `labels: Labels`. NEVER Optional. Never create model without.
 
-3. **Content deduplication is mandatory.** Every ContentItem MUST have a `content_hash`
-   (SHA-256 of normalised clean_text). All inserts use ON CONFLICT(content_hash) DO NOTHING.
+3. **Content dedup mandatory.** Every ContentItem MUST have `content_hash` (SHA-256 normalised clean_text). All inserts use ON CONFLICT(content_hash) DO NOTHING.
 
-4. **Reports are immutable.** Once `generated_at` is set, it is NEVER updated.
-   A report is a point-in-time snapshot. If content changes, generate a new report.
-   `source_snapshot` captures credibility scores at generation time.
+4. **Reports immutable.** Once `generated_at` set, NEVER updated. Point-in-time snapshot. Content changes → new report. `source_snapshot` captures credibility at gen time.
 
-5. **All LLM calls are async.** FastAPI routes NEVER call Ollama directly.
-   All LLM inference is dispatched as ARQ background jobs and polled by the client.
+5. **All LLM calls async.** FastAPI routes NEVER call Ollama directly. All LLM inference dispatched as ARQ jobs, polled by client.
 
-6. **Hardware independence is mandatory.** No model name, device string ("cpu"/"cuda"),
-   batch size, or ML parameter may be hardcoded in service code. All come from settings.py
-   which reads from environment variables. See hardware.md for the full upgrade matrix.
+6. **Hardware independence mandatory.** No model name, device string ("cpu"/"cuda"), batch size, ML param hardcoded in service code. All from settings.py via env vars. See hardware.md.
 
-7. **Deepfake scores are probabilities, never booleans.** Always return float 0.0–1.0.
-   Never store or return `is_deepfake: bool`. The analyst decides the threshold.
+7. **Deepfake scores = probabilities, never booleans.** Return float 0.0–1.0. Never `is_deepfake: bool`. Analyst decides threshold.
 
-8. **Credibility changes are audit-logged.** Every change to source credibility_score
-   MUST insert a row into credibility_audit_log. No silent updates.
+8. **Credibility changes audit-logged.** Every credibility_score change MUST insert row into credibility_audit_log. No silent updates.
 
-9. **LLM output is validated before use.** All LLM responses are parsed through a
-   Pydantic model before storage or display. Never trust raw LLM string output.
+9. **LLM output validated before use.** All LLM responses parsed through Pydantic model before storage/display. Never trust raw LLM string.
 
-10. **No cloud LLM with real data.** Ollama must be localhost or internal Docker network.
-    Sovereign requirement — intelligence data never leaves the deployment boundary.
+10. **No cloud LLM with real data.** Ollama = localhost or internal Docker network. Sovereign — intel data never leaves deployment boundary.
 
-11. **X/Twitter spend guard.** XAdapter checks monthly read count against
-    X_MONTHLY_READ_CAP before every API call. Never exceed budget silently.
+11. **X/Twitter spend guard.** XAdapter checks monthly read count against X_MONTHLY_READ_CAP before every API call. Never exceed budget silently.
 
-12. **Drishti bridge is strictly one-directional.** Anveshak emits entities TO Drishti
-    via source.envelopes.v1. Anveshak NEVER reads from Drishti. No circular dependency.
+12. **Drishti bridge one-directional.** Anveshak emits entities TO Drishti via source.envelopes.v1. NEVER reads from Drishti. No circular dependency.
 
 ## FIVE MODULES — PS-18 SCOPE (NOTHING MORE)
 
@@ -78,11 +62,11 @@ Every intelligence officer should be able to run it on one machine.
 | M4 | vision | YOLO, CLIP, deepfake (image+video), EXIF, pHash reverse lookup |
 | M5 | reporter | LLM report gen (RAG), GIS output, PDF export, scheduled reports |
 
-Cross-cutting: Signals engine (threshold-based notifications), real-time topic monitoring.
+Cross-cutting: Signals engine (threshold notifications), real-time topic monitoring.
 
 ## SOURCE-TOPIC ASSOCIATION — MANDATORY
 
-Sources are linked to topics via the `topic_sources` join table:
+Sources linked to topics via `topic_sources` join table:
 
 ```
 topics ──┬── topic_sources ──┬── sources
@@ -90,36 +74,34 @@ topics ──┬── topic_sources ──┬── sources
          └── content_items ──┘
 ```
 
-- **Sources are global entities** but must be explicitly assigned to topics.
-- The scraper ONLY scrapes sources linked to a topic via `topic_sources`.
-- `SQL_GET_WEB_SOURCES` and `SQL_GET_RSS_SOURCES` MUST filter by topic_id
-  through a JOIN on `topic_sources`.
-- When a source is created with a `topic_id`, it is auto-linked.
-- API: `POST /api/v1/topics/{id}/sources/{source_id}` to link,
-       `DELETE /api/v1/topics/{id}/sources/{source_id}` to unlink.
+- **Sources = global entities** but must be explicitly assigned to topics.
+- Scraper ONLY scrapes sources linked via `topic_sources`.
+- `SQL_GET_WEB_SOURCES` and `SQL_GET_RSS_SOURCES` MUST filter by topic_id through JOIN on `topic_sources`.
+- Source created with `topic_id` → auto-linked.
+- API: `POST /api/v1/topics/{id}/sources/{source_id}` to link, `DELETE /api/v1/topics/{id}/sources/{source_id}` to unlink.
 - Migration 007 backfills existing associations from content_items.
 
 ## WHAT ANVESHAK IS NOT
 
-- Not an entity resolution platform (that is Drishti's job)
-- Not a cross-domain fusion engine (that is Drishti's job)
-- Not a graph database (flat PostgreSQL relationships only)
+- Not entity resolution platform (Drishti's job)
+- Not cross-domain fusion engine (Drishti's job)
+- Not graph database (flat PostgreSQL only)
 - Not dependent on Kafka/Redpanda/AGE/Vault/Keycloak
 
 ## HARDWARE INDEPENDENCE RULE
 
-Every hardware-sensitive choice MUST be in settings.py reading from env vars.
-When adding any new ML component, immediately add its upgrade path to hardware.md.
-Tests MUST pass on CPU with default medium/nano/cpu configuration.
-See hardware.md for full current vs upgrade matrix.
+Every hardware-sensitive choice MUST be in settings.py from env vars.
+New ML component → immediately add upgrade path to hardware.md.
+Tests MUST pass on CPU with default medium/nano/cpu config.
+See hardware.md for full matrix.
 
 ## SECURITY RULES
 
-- NEVER hardcode secrets — use environment variables
+- NEVER hardcode secrets — use env vars
 - NEVER log raw scraped content — log content_hash and URL only
-- NEVER call cloud LLM with real intelligence data
+- NEVER call cloud LLM with real intel data
 - NEVER trust LLM output without Pydantic validation
-- NEVER embed user input directly in LLM prompts — sanitise and wrap in boundary markers
+- NEVER embed user input directly in LLM prompts — sanitise + boundary markers
 - Every Pydantic model uses model_config = ConfigDict(strict=True)
 
 ## NAMING CONVENTIONS
@@ -133,26 +115,26 @@ See hardware.md for full current vs upgrade matrix.
 
 ## TESTING RULES
 
-- Every new source adapter MUST pass the SourceAdapterConformanceSuite
-- Every new Pydantic model MUST have a test asserting labels is non-Optional
+- New source adapter MUST pass SourceAdapterConformanceSuite
+- New Pydantic model MUST have test asserting labels non-Optional
 - Tests run on CPU — never assume GPU
-- Integration tests use Docker Compose — no mocking of PostgreSQL or Redis
-- 80%+ coverage on all new service code
+- Integration tests use Docker Compose — no mocking PostgreSQL/Redis
+- 80%+ coverage on new service code
 
 ## SIGNAL ENGINE RULES
 
 - Signals fire when narrative_clusters.independent_source_count >= topic.signal_threshold
-- independent_source_count counts distinct source.platform values in a cluster
-- Signals are delivered via WebSocket push to connected analyst sessions
-- Signal status transitions: new → acknowledged → dismissed
+- independent_source_count = distinct source.platform values in cluster
+- Delivered via WebSocket push to connected analyst sessions
+- Status transitions: new → acknowledged → dismissed
 
 ## REPORT IMMUTABILITY — EVIDENCE CHAIN
 
-Reports are Anveshak's auditable, traceable output. Immutability is non-negotiable:
-- generated_at is set ONCE on first write
-- source_snapshot captures credibility scores AT generation time
-- If a source is later downgraded: report_source_warnings is inserted — report itself is NOT modified
-- A new report must be generated if the analyst wants updated content
+Reports = auditable, traceable output. Immutability non-negotiable:
+- generated_at set ONCE on first write
+- source_snapshot captures credibility scores AT gen time
+- Source later downgraded → report_source_warnings inserted — report NOT modified
+- Updated content needed → generate new report
 
 ## PROJECT LAYOUT
 
@@ -180,7 +162,7 @@ anveshak/
 
 ## WHAT TO DO WHEN UNCERTAIN
 
-- If a design decision involves entity resolution or cross-domain linking: STOP — that is Drishti's job
-- If a schema change might break backward compat: STOP and flag explicitly
-- If adding a new ML model: check hardware.md first, document upgrade path
-- If a security decision is ambiguous: FAIL CLOSED and document why
+- Design involves entity resolution or cross-domain linking: STOP — Drishti's job
+- Schema change might break backward compat: STOP and flag
+- Adding new ML model: check hardware.md first, document upgrade path
+- Security decision ambiguous: FAIL CLOSED and document why

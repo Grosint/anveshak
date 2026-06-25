@@ -1,24 +1,21 @@
 # Infrastructure Pitfalls
 
-Consolidated from 3 learned instincts. Non-obvious failure modes in Docker, auth, and nginx.
+3 instincts. Non-obvious failures in Docker, auth, nginx.
 
 ## Migration Files Invisible in Running Containers
 
-Alembic migration files written on host are NOT visible inside running containers.
-`alembic upgrade head` runs zero migrations with no error — file doesn't exist in
-container filesystem. Services use `COPY` in Dockerfile, not volume mounts.
+Alembic migrations on host NOT visible in running containers.
+`alembic upgrade head` runs zero migrations, no error — file missing in container filesystem. Services use `COPY` in Dockerfile, not volume mounts.
 
-Fix: rebuild image (`docker compose build api`) then run migration inside container.
-Or use `docker cp` for quick iteration.
+Fix: rebuild image (`docker compose build api`) then run migration in container.
+Or `docker cp` for quick iteration.
 See: `learned/migration-not-visible-in-container.md`
 
 ## passlib + bcrypt>=4.0 Incompatibility
 
-passlib 1.7.x breaks with bcrypt>=4.0. bcrypt 4.0 removed `__about__` and changed
-internal API. `CryptContext(schemes=["bcrypt"])` raises ValueError on first use —
-all login endpoints return HTTP 500.
+passlib 1.7.x breaks w/ bcrypt>=4.0. bcrypt 4.0 removed `__about__`, changed internal API. `CryptContext(schemes=["bcrypt"])` raises ValueError — all login endpoints HTTP 500.
 
-Fix: replace passlib entirely with direct bcrypt wrapper:
+Fix: replace passlib w/ direct bcrypt wrapper:
 ```python
 import bcrypt as _bcrypt
 class _BcryptContext:
@@ -32,8 +29,7 @@ See: `learned/passlib-bcrypt-incompatibility.md`
 
 ## Nginx Dynamic DNS for Docker Services
 
-Nginx resolves upstream hostnames once at startup and caches forever. When a backend
-container restarts (new IP), nginx sends to old IP → 502 Bad Gateway.
+Nginx resolves upstream hostnames once at startup, caches forever. Backend container restarts (new IP) → nginx sends to old IP → 502.
 
 Fix: `resolver` + `set $upstream` pattern:
 ```nginx
@@ -43,6 +39,6 @@ location /api/ {
     proxy_pass $upstream_api;
 }
 ```
-Both parts needed: `resolver` for DNS TTL, `set $upstream` to force per-request resolution.
+Both needed: `resolver` for DNS TTL, `set $upstream` forces per-request resolution.
 Apply to WebSocket locations too.
 See: `learned/nginx-dynamic-dns-resolver.md`
