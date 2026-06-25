@@ -37,6 +37,27 @@ Consolidated from 14 learned instincts. These apply to all PostgreSQL/asyncpg co
 - Seed SQL must match actual schema — silent `ROLLBACK` occurs on column name drift;
   always check output for `ERROR:` or `ROLLBACK`
 
+## Silent Migration Failures
+
+After any migration that adds a NOT NULL column, update ALL of these:
+1. **conftest.py factory fixtures** — `make_topic`, `make_source`, `insert_content_item`
+2. **Inline SQL in integration tests** — `grep -r 'INSERT INTO <table>' tests/`
+3. **Container test scripts** — `scripts/test_analyst_models.py`, etc.
+4. **Unit test mock rows** — grep `{"id": "topic-1"}` across `tests/unit/`
+5. **Service code audit rows** — every INSERT path includes the new column
+6. **Seed SQL** — `scripts/seed_demo*.sql`
+
+Checklist shortcut: `grep -r 'INSERT INTO <table>' tests/ scripts/ | grep -v <new_column>`
+
+Why this is invisible: unit tests with mocked DB pass fine (column isn't checked).
+Integration tests fail but are often skipped in quick CI. Service code catches
+`KeyError` in generic `except Exception` blocks — produces zero output, not a crash.
+See: `learned/migration-breaks-all-test-fixtures.md`, `learned/seed-sql-schema-sync.md`
+
+When adding a new role value, update the CHECK constraint in the SAME migration,
+BEFORE any INSERT that uses the new role. Use `DROP CONSTRAINT IF EXISTS` + `ADD CONSTRAINT`.
+See: `learned/role-constraint-migration-order.md`
+
 ## Testing
 
 - When adding a new async DB function, grep all tests mocking that module and add
@@ -63,6 +84,20 @@ Consolidated from 14 learned instincts. These apply to all PostgreSQL/asyncpg co
 - Use database constraints and SQL atomicity for critical paths
   `ON CONFLICT`, `WHERE sentinel IS NULL`, Redis INCR (not GET→SET)
   See: `learned/redis-atomic-budget-guard.md`, `learned/immutable-write-idempotency.md`
+
+## SQL Correctness Checklist
+
+- When JOINing tables with same column name (`labels`, `id`), always qualify:
+  `ci.labels`, not `labels`. PostgreSQL raises "ambiguous column" at runtime.
+  See: `learned/sql-ambiguous-labels-join.md`
+- When adding `$N` parameter to a SQL constant, grep ALL callers and add the param.
+  Missing param → `asyncpg.exceptions.DataError` at runtime, not compile time.
+  See: `learned/sql-param-count-caller-mismatch.md`
+- Use `EXISTS (SELECT 1 FROM ...)` for boolean flags on list queries instead of
+  N+1 API calls from the frontend. EXISTS short-circuits, no GROUP BY needed.
+  See: `learned/has-vision-exists-subquery.md`
+- `ON CONFLICT` requires a conflict target: `ON CONFLICT (id) DO NOTHING`, not bare
+  `ON CONFLICT DO NOTHING` (PostgreSQL accepts it but behavior is undefined).
 
 ## Pitfalls
 
