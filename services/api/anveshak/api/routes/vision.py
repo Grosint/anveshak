@@ -5,6 +5,7 @@ Criteria:
   4.28:      POST /api/v1/vision/analyse — multipart upload → ARQ job → job_id
   4.29:      GET  /api/v1/vision/jobs/{job_id} — poll status + results
   4.30:      GET  /api/v1/content/{id}/vision — all vision_results for a content_item
+  4.31:      GET  /api/v1/media/{asset_id} — serve media file for frontend display
 
 All heavy ML work dispatched as ARQ jobs (CLAUDE.md rule 5: never block routes).
 """
@@ -12,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import mimetypes
 import uuid
 from datetime import datetime, UTC
 from pathlib import Path
@@ -21,10 +23,12 @@ import asyncpg
 import structlog
 from arq import ArqRedis
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi.responses import FileResponse
 
 from ..auth.rbac import require_role
 from ..db.pool import get_db
 from ..db import vision as vision_db
+from ..db import topics as topics_db
 from ..settings import settings
 
 log = structlog.get_logger(__name__)
@@ -368,3 +372,47 @@ async def get_vision_for_content(
         }
         for r in rows
     ]
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/media/{asset_id} — serve media file for frontend display
+# ---------------------------------------------------------------------------
+
+SQL_GET_MEDIA_ASSET_PATH = """
+    SELECT ma.storage_path, ma.asset_type, ma.content_hash,
+           ci.topic_id
+    FROM media_assets ma
+    JOIN content_items ci ON ci.id = ma.content_item_id
+    WHERE ma.id = $1
+"""
+
+
+@content_vision_router.get("/media/{asset_id}")
+async def serve_media(
+    asset_id: str,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+):
+    """Serve a media asset file for frontend display.
+
+    Auth required — verifies user has access via JWT.
+    Returns the image/video file with correct content-type.
+    """
+    row = await db.fetchrow(SQL_GET_MEDIA_ASSET_PATH, asset_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Media asset not found")
+
+    # Org isolation: verify user has access to the topic owning this media
+    await topics_db.verify_topic_access(db, row["topic_id"], user)
+
+    storage_path = Path(row["storage_path"])
+    if not storage_path.is_file():
+        log.warning("media.serve.file_missing", asset_id=asset_id, path=str(storage_path))
+        raise HTTPException(status_code=404, detail="Media file not found on disk")
+
+    content_type = mimetypes.guess_type(str(storage_path))[0] or "application/octet-stream"
+    return FileResponse(
+        path=str(storage_path),
+        media_type=content_type,
+        filename=f"{row['content_hash']}{storage_path.suffix}",
+    )

@@ -1,4 +1,5 @@
 import api from './client'
+import type { VisionResult } from './vision'
 
 export interface SentimentScore {
   compound: number
@@ -25,6 +26,8 @@ export interface ContentItem {
   // Engine C: scam template match
   scam_template?: string | null
   template_confidence?: number | null
+  // Vision analysis indicator (from content list SQL)
+  has_vision?: boolean
   // Detail-only fields (GET /api/v1/content/{id})
   source_name?: string
   platform?: string
@@ -71,6 +74,6 @@ export const contentApi = {
   search: (q: string, topicId: string) =>
     api.get<SearchResult[]>('/api/v1/search', { params: { q, topic_id: topicId } }).then((r) => r.data),
 
-  getVision: (contentId: string) =>
-    api.get(`/api/v1/content/${contentId}/vision`).then((r) => r.data),
+  getVision: (contentId: string): Promise<VisionResult[]> =>
+    api.get<VisionResult[]>(`/api/v1/content/${contentId}/vision`).then((r) => r.data),
 }

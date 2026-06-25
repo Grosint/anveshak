@@ -78,6 +78,14 @@ export function ContentCard({ item, onClick }: ContentCardProps) {
             {Math.round(item.topic_relevance_score * 100)}% match
           </span>
         )}
+        {item.has_vision && (
+          <span
+            className="text-[10px] font-medium text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 rounded px-1.5 py-0.5"
+            title="Media analysis available"
+          >
+            📷 Media
+          </span>
+        )}
       </div>
 
       {/* Title — primary display */}

@@ -425,7 +425,12 @@ async def get_topic_content(
         SELECT id, url, title, clean_text, translated_text,
                language, credibility_score_at_capture, captured_at,
                source_name, platform, backfilled, duplicate_count, labels,
-               topic_relevance_score
+               topic_relevance_score,
+               EXISTS (
+                   SELECT 1 FROM media_assets ma
+                   JOIN vision_results vr ON vr.media_asset_id = ma.id
+                   WHERE ma.content_item_id = with_counts.id
+               ) AS has_vision
         FROM with_counts
         {order_clause}
         LIMIT $2 OFFSET $3
@@ -441,6 +446,7 @@ async def get_topic_content(
         d["keywords"] = labels.get("keywords", [])
         d["scam_template"] = labels.get("scam_template")
         d["template_confidence"] = labels.get("template_confidence")
+        d["has_vision"] = d.get("has_vision", False)
         # Round relevance score to 2 decimals for display
         raw_rel = d.get("topic_relevance_score")
         d["topic_relevance_score"] = round(raw_rel, 2) if raw_rel is not None else None

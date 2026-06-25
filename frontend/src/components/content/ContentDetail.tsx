@@ -5,10 +5,12 @@
  */
 import { useQuery } from '@tanstack/react-query'
 import { contentApi, Entity } from '../../api/content'
+import { visionApi } from '../../api/vision'
 import { CredibilityBadge } from './CredibilityBadge'
 import { PlatformBadge } from './PlatformBadge'
 import { Badge } from '../ui/Badge'
 import { Spinner } from '../ui/Spinner'
+import { DeepfakeMeter } from '../vision/DeepfakeMeter'
 import { format, formatDistanceToNow } from 'date-fns'
 
 // ── Entity color map ───────────────────────────────────────────────────
@@ -75,6 +77,21 @@ export function ContentDetail({ contentId, onClose }: ContentDetailProps) {
   const { data: item, isLoading } = useQuery({
     queryKey: ['content', contentId],
     queryFn: () => contentApi.get(contentId),
+  })
+
+  // Fetch vision data — returns empty array quickly if no media assets
+  const { data: visionResults } = useQuery({
+    queryKey: ['vision', contentId],
+    queryFn: () => contentApi.getVision(contentId),
+    enabled: !!contentId,
+  })
+
+  // pHash reverse search for the first vision result with a phash
+  const firstPhash = visionResults?.find((v) => v.phash)?.phash ?? null
+  const { data: pHashDuplicates } = useQuery({
+    queryKey: ['phash-dupes', firstPhash],
+    queryFn: () => visionApi.reverseSearch(firstPhash!, 10),
+    enabled: !!firstPhash,
   })
 
   // Group and dedupe entities
@@ -220,6 +237,91 @@ export function ContentDetail({ contentId, onClose }: ContentDetailProps) {
                   })}
                 </div>
               </div>
+            )}
+
+            {/* ── Media analysis (collapsible) ─────────────────────────── */}
+            {visionResults && visionResults.length > 0 && (
+              <details className="px-5 py-4 border-b border-anveshak-border/30">
+                <summary className="text-[10px] font-bold text-text-muted uppercase tracking-widest cursor-pointer hover:text-text-secondary transition-colors flex items-center gap-2">
+                  <span>📷 Media Analysis</span>
+                  <span className="text-[9px] font-normal text-cyan-400">
+                    {visionResults.length} asset{visionResults.length > 1 ? 's' : ''}
+                  </span>
+                </summary>
+
+                <div className="mt-3 space-y-4">
+                  {visionResults.map((vr) => (
+                    <div key={vr.vision_result_id} className="space-y-3">
+                      {/* Media thumbnail */}
+                      {vr.asset_type === 'image' && (
+                        <img
+                          src={`/api/v1/content/media/${vr.media_asset_id}`}
+                          alt="Analysed media"
+                          className="w-full max-h-48 object-contain rounded border border-anveshak-border/30 bg-black/30"
+                          loading="lazy"
+                        />
+                      )}
+
+                      {/* Deepfake meter */}
+                      {vr.deepfake_score != null && (
+                        <DeepfakeMeter score={vr.deepfake_score} modelName={vr.deepfake_model} />
+                      )}
+
+                      {/* YOLO detection summary (text only, no canvas) */}
+                      {vr.yolo_detections && vr.yolo_detections.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-text-muted uppercase mb-1">
+                            Objects Detected
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {vr.yolo_detections.map((d, i) => (
+                              <span
+                                key={i}
+                                className="text-[10px] text-text-secondary bg-white/[0.04] border border-white/[0.08] rounded px-1.5 py-0.5"
+                              >
+                                {d.label} {Math.round(d.confidence * 100)}%
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Processed timestamp */}
+                      <p className="text-[9px] text-text-muted">
+                        Analysed locally · {vr.processed_at && format(new Date(vr.processed_at), 'dd MMM yyyy, HH:mm')}
+                      </p>
+                    </div>
+                  ))}
+
+                  {/* pHash near-duplicates */}
+                  {pHashDuplicates && pHashDuplicates.length > 1 && (
+                    <div className="bg-cyan-500/[0.04] border border-cyan-500/15 rounded-md px-3 py-2">
+                      <p className="text-[10px] font-semibold text-cyan-400">
+                        This image also appears in {pHashDuplicates.length - 1} other content item{pHashDuplicates.length > 2 ? 's' : ''}
+                      </p>
+                      <div className="mt-1 space-y-0.5">
+                        {pHashDuplicates
+                          .filter((d) => d.content_item_id !== contentId)
+                          .slice(0, 5)
+                          .map((d) => (
+                            <p key={d.media_asset_id} className="text-[9px] text-text-muted truncate">
+                              {d.url || d.content_item_id} (distance: {d.hamming_distance})
+                            </p>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Link to full analysis */}
+                  <a
+                    href="/image-analysis"
+                    className="inline-block text-[10px] font-medium text-anveshak-accent hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    View full analysis →
+                  </a>
+                </div>
+              </details>
             )}
 
             {/* ── Content text ─────────────────────────────────────────── */}

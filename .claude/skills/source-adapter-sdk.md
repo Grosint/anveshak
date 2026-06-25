@@ -50,6 +50,9 @@
 > See also: `learned/pytest-exit-safety-guard.md` — pytest.exit() to hard-block tests from running against production DB
 > See also: `learned/arq-queue-name-all-callers.md` — every enqueue_job must match target worker's queue_name; grep ALL callers
 > See also: `learned/compose-worker-for-every-arq-scheduler.md` — every service calling enqueue_job needs a matching worker container in compose
+> See also: `learned/local-file-media-downloader.md` — download_media_asset() local file support; path validation pitfalls; volume permission issues
+> See also: `learned/sidecar-bridge-redis-buffer.md` — Node.js sidecar → RPUSH Redis → Python LPOP pattern for cross-language adapters
+> See also: `learned/baileys-405-version-override.md` — Baileys 405 Connection Failure fix; version array [2,3000,1033893291] override
 
 ---
 
