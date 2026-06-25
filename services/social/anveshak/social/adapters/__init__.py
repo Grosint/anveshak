@@ -8,6 +8,7 @@ from .base import (
 )
 
 from .youtube_adapter import YouTubeAdapter
+from .whatsapp import WhatsAppAdapter
 
 __all__ = [
     "SourceAdapterBase",
@@ -16,4 +17,5 @@ __all__ = [
     "AdapterRateLimitError",
     "AdapterDegradedError",
     "YouTubeAdapter",
+    "WhatsAppAdapter",
 ]

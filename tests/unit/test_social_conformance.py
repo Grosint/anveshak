@@ -26,6 +26,7 @@ from anveshak.social.adapters.reddit import RedditAdapter
 from anveshak.social.adapters.bluesky import BlueskyAdapter
 from anveshak.social.adapters.telegram import TelegramAdapter
 from anveshak.social.adapters.x_adapter import XPollingAdapter, XStreamAdapter
+from anveshak.social.adapters.whatsapp import WhatsAppAdapter
 
 
 # ---------------------------------------------------------------------------
@@ -42,7 +43,7 @@ class SourceAdapterConformanceSuite:
     def assert_platform_defined(self, adapter: SourceAdapterBase) -> None:
         assert hasattr(adapter, "platform"), "adapter must define platform"
         assert isinstance(adapter.platform, str) and adapter.platform
-        assert adapter.platform in {"telegram", "reddit", "bluesky", "twitter", "web", "instagram", "youtube"}
+        assert adapter.platform in {"telegram", "reddit", "bluesky", "twitter", "web", "instagram", "youtube", "whatsapp"}
 
     # 2 — RawItem.content_hash() is deterministic and a valid SHA-256 hex string
     def assert_content_hash_deterministic(self, raw: RawItem) -> None:
@@ -259,6 +260,45 @@ class TestXAdapterConformance(SourceAdapterConformanceSuite):
         ttl = _seconds_until_month_end()
         assert ttl > 0
         assert ttl <= 31 * 24 * 3600   # never more than ~31 days
+
+
+class TestWhatsAppAdapterConformance(SourceAdapterConformanceSuite):
+    @pytest.fixture
+    def adapter(self):
+        return WhatsAppAdapter()
+
+    @pytest.fixture
+    def raw(self):
+        return _make_raw("whatsapp", "120363001234567890@g.us")
+
+    def test_platform_defined(self, adapter):
+        self.assert_platform_defined(adapter)
+
+    def test_platform_is_whatsapp(self, adapter):
+        assert adapter.platform == "whatsapp"
+
+    def test_content_hash_deterministic(self, raw):
+        self.assert_content_hash_deterministic(raw)
+
+    def test_url_non_empty(self, raw):
+        self.assert_url_non_empty(raw)
+
+    def test_captured_at_timezone_aware(self, raw):
+        self.assert_captured_at_timezone_aware(raw)
+
+    def test_raw_item_platform_matches(self, adapter, raw):
+        self.assert_raw_item_platform_matches(raw, adapter)
+
+    def test_engagement_is_none(self, raw):
+        # WhatsApp has no public engagement counters
+        self.assert_engagement_is_dict_or_none(raw)
+
+    def test_adapter_id_format(self, adapter):
+        assert adapter.adapter_id == "whatsapp-v1"
+        assert "-" in adapter.adapter_id
+
+    def test_disabled_adapter_has_no_redis(self, adapter):
+        assert adapter._redis is None
 
 
 # ---------------------------------------------------------------------------

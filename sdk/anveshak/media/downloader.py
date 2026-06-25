@@ -100,6 +100,64 @@ def _extension_from_content_type(content_type: str, url: str) -> str:
     return url_ext if url_ext in _SUPPORTED_EXTENSIONS else ".bin"
 
 
+async def _handle_local_file(
+    path_str: str,
+    topic_id: str,
+    storage_root: Path,
+) -> Optional[MediaDownloadResult]:
+    """Handle media already on disk (Telegram adapter, WhatsApp bridge).
+
+    Validates path is inside media storage volume to prevent path traversal.
+    Reads bytes, computes hash, copies to canonical storage path if needed.
+    """
+    local = Path(path_str)
+
+    # SECURITY: validate path is inside media storage volume
+    # storage_root is already the media volume root (e.g. /app/media)
+    try:
+        local.resolve().relative_to(storage_root.resolve())
+    except ValueError:
+        log.warning("media.local_path_outside_volume", path=path_str, allowed=str(storage_root))
+        return None
+
+    if not local.is_file():
+        log.warning("media.local_file_not_found", path=path_str)
+        return None
+
+    data = await asyncio.to_thread(local.read_bytes)
+    if not data:
+        return None
+
+    content_type = mimetypes.guess_type(path_str)[0] or "application/octet-stream"
+    asset_type = _infer_asset_type(content_type, path_str)
+    if asset_type is None:
+        log.debug("media.local_unsupported_type", path=path_str, content_type=content_type)
+        return None
+
+    content_hash = hashlib.sha256(data).hexdigest()
+    ext = local.suffix or ".bin"
+    dest = _storage_path(storage_root, topic_id, content_hash, ext)
+
+    if dest.resolve() != local.resolve():
+        await asyncio.to_thread(_write_file, dest, data)
+
+    log.info(
+        "media.local_file_ingested",
+        path=path_str,
+        content_hash=content_hash,
+        asset_type=asset_type,
+        size_bytes=len(data),
+    )
+    return MediaDownloadResult(
+        content_hash=content_hash,
+        storage_path=str(dest),
+        asset_type=asset_type,
+        file_size_bytes=len(data),
+        original_url=path_str,
+        content_type=content_type,
+    )
+
+
 async def download_media_asset(
     url: str,
     topic_id: str,
@@ -107,17 +165,23 @@ async def download_media_asset(
     max_size_mb: int = 50,
     timeout_s: int = 30,
 ) -> Optional[MediaDownloadResult]:
-    """Download a media asset from URL and persist to disk.
+    """Download a media asset from URL or read from local path, persist to disk.
+
+    Handles both HTTP URLs (scraper) and local file paths (Telegram, WhatsApp).
 
     Returns None if:
-    - HTTP fetch fails
+    - HTTP fetch fails / local file not found
     - Content type is not a supported media type (image/video/document)
     - File size exceeds max_size_mb
-    - URL already present in storage (content_hash collision → dedup at caller)
+    - Local path is outside media storage volume (path traversal protection)
 
     Does NOT insert into DB — caller is responsible for the media_assets INSERT
     and enqueuing the vision ARQ job. This keeps the SDK free of DB dependencies.
     """
+    # Local file path — pre-downloaded by adapter/bridge
+    if url.startswith("/"):
+        return await _handle_local_file(url, topic_id, storage_root)
+
     try:
         async with httpx.AsyncClient(
             timeout=timeout_s,

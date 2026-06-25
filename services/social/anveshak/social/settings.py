@@ -48,6 +48,12 @@ class SocialSettings(BaseSettings):
     youtube_backfill_count: int = 50          # initial videos to fetch when channel added
     youtube_max_video_size_mb: int = 500      # on-demand video download limit
 
+    # WhatsApp (Baileys bridge sidecar — QR auth, no API keys)
+    whatsapp_adapter_enabled: bool = False
+    whatsapp_bridge_url: str = "http://whatsapp-bridge:3002"
+    whatsapp_bridge_token: str = ""  # Bearer token for bridge endpoint auth
+    whatsapp_buffer_drain_max: int = 100
+
     poll_interval_s: int = 900  # default for all adapters
 
     # Circuit breaker — per-adapter failure tracking

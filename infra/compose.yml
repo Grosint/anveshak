@@ -297,6 +297,10 @@ services:
       SOCIAL_RATE_LIMIT_RPM: ${SOCIAL_RATE_LIMIT_RPM:-60}
       MEDIA_STORAGE_ROOT: /app/media
       MEDIA_MAX_SIZE_MB: ${MEDIA_MAX_SIZE_MB:-50}
+      WHATSAPP_ADAPTER_ENABLED: ${WHATSAPP_ADAPTER_ENABLED:-false}
+      WHATSAPP_BRIDGE_URL: ${WHATSAPP_BRIDGE_URL:-http://whatsapp-bridge:3002}
+      WHATSAPP_BRIDGE_TOKEN: ${WHATSAPP_BRIDGE_TOKEN:-}
+      WHATSAPP_BUFFER_DRAIN_MAX: ${WHATSAPP_BUFFER_DRAIN_MAX:-100}
     volumes:
       - vision_media:/app/media
     ports:
@@ -313,7 +317,7 @@ services:
       - anveshak-net
 
   # ARQ worker for poll_social_topic jobs enqueued by scrape-social-scheduler.
-  # Same image, different entrypoint. Handles Telegram, X, Reddit, Bluesky, Instagram.
+  # Same image, different entrypoint. Handles Telegram, X, Reddit, Bluesky, Instagram, WhatsApp.
   # Telethon session limits this to 1 replica.
   scrape-social-worker:
     image: anveshak-social:latest
@@ -350,6 +354,10 @@ services:
       YOUTUBE_BACKFILL_COUNT: ${YOUTUBE_BACKFILL_COUNT:-50}
       MEDIA_STORAGE_ROOT: /app/media
       MEDIA_MAX_SIZE_MB: ${MEDIA_MAX_SIZE_MB:-50}
+      WHATSAPP_ADAPTER_ENABLED: ${WHATSAPP_ADAPTER_ENABLED:-false}
+      WHATSAPP_BRIDGE_URL: ${WHATSAPP_BRIDGE_URL:-http://whatsapp-bridge:3002}
+      WHATSAPP_BRIDGE_TOKEN: ${WHATSAPP_BRIDGE_TOKEN:-}
+      WHATSAPP_BUFFER_DRAIN_MAX: ${WHATSAPP_BUFFER_DRAIN_MAX:-100}
     volumes:
       - vision_media:/app/media
     depends_on:
@@ -363,6 +371,37 @@ services:
     networks:
       - anveshak-net
     command: ["python", "-m", "arq", "anveshak.social.jobs.WorkerSettings"]
+
+  # WhatsApp bridge sidecar — Baileys (Node.js) connects to WhatsApp Web,
+  # pushes group messages to Redis buffer for the Python adapter to drain.
+  # Opt-in via Docker profile: docker compose --profile whatsapp up -d
+  whatsapp-bridge:
+    build:
+      context: ..
+      dockerfile: services/whatsapp-bridge/Dockerfile
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      WHATSAPP_BRIDGE_PORT: "3002"
+      WHATSAPP_BRIDGE_TOKEN: ${WHATSAPP_BRIDGE_TOKEN:-}
+      WHATSAPP_PHONE_NUMBER: ${WHATSAPP_PHONE_NUMBER:-}
+      WHATSAPP_AUTH_DIR: /app/auth
+      WHATSAPP_MEDIA_DIR: /app/media
+      WHATSAPP_BUFFER_MAX: ${WHATSAPP_BUFFER_MAX:-10000}
+    volumes:
+      - whatsapp_auth:/app/auth
+      - vision_media:/app/media
+    ports:
+      - "${WHATSAPP_BRIDGE_PORT:-3002}:3002"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3002/health || exit 1"]
+      <<: *healthcheck-defaults
+    networks:
+      - anveshak-net
 
   # Analyse layer: scheduler (lightweight loops) + worker (ARQ ML pipeline).
   # Scheduler: clustering, signals, convergence, orphan sweep — 512 MB, no ML models.
@@ -827,4 +866,6 @@ volumes:
   vision_models:
     driver: local
   vision_media:
+    driver: local
+  whatsapp_auth:
     driver: local

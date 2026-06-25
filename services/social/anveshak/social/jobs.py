@@ -7,8 +7,11 @@ poll_social_topic: polls all enabled adapters for a given topic.
 from __future__ import annotations
 
 import asyncio
+import json
+import uuid
 import structlog
 import asyncpg
+from datetime import datetime, UTC
 from arq import ArqRedis
 from arq.connections import RedisSettings
 
@@ -73,6 +76,7 @@ _REQUIRED_CREDENTIALS: dict[str, list[tuple[str, str]]] = {
     "youtube": [
         ("youtube_api_key", "YOUTUBE_API_KEY"),
     ],
+    "whatsapp": [],  # QR-based auth via bridge — no env var credentials
 }
 
 
@@ -111,6 +115,7 @@ async def startup(ctx: dict) -> None:
         INSTAGRAM_CIRCUIT_BREAKER_THRESHOLD, INSTAGRAM_CIRCUIT_BREAKER_COOLDOWN_S,
     )
     from .adapters.youtube_adapter import YouTubeAdapter, YouTubeQuotaGuard
+    from .adapters.whatsapp import WhatsAppAdapter
 
     candidates: list = []
 
@@ -129,6 +134,9 @@ async def startup(ctx: dict) -> None:
         )),
         (settings.youtube_adapter_enabled, "youtube", lambda: YouTubeAdapter(
             quota_guard=YouTubeQuotaGuard(ctx["arq_pool"], settings.youtube_daily_quota_cap)
+        )),
+        (settings.whatsapp_adapter_enabled, "whatsapp", lambda: WhatsAppAdapter(
+            redis=ctx["arq_pool"]
         )),
     ]
 
@@ -177,6 +185,47 @@ async def startup(ctx: dict) -> None:
 
 async def shutdown(ctx: dict) -> None:
     await ctx["db_pool"].close()
+
+
+# ---------------------------------------------------------------------------
+# Adapter logout signal — alerts analysts via WebSocket
+# ---------------------------------------------------------------------------
+
+SQL_INSERT_ADAPTER_ALERT_SIGNAL = """
+    INSERT INTO signals (
+        id, topic_id, cluster_id, signal_type, description, evidence,
+        status, created_at, updated_at, labels
+    ) VALUES ($1, $2, NULL, 'adapter_logout', $3, $4::jsonb, 'new', $5, $5,
+              '{"classification":"SYSTEM_ALERT","domain":"social","owner_org":"anveshak"}'::jsonb)
+    ON CONFLICT (id) DO NOTHING
+"""
+
+
+async def _fire_adapter_logout_signal(
+    pool: asyncpg.Pool,
+    adapter_id: str,
+    platform: str,
+    topic_id: str,
+    reason: str,
+) -> None:
+    """Insert a signal so analysts see the logout in their topic dashboard."""
+    signal_id = str(uuid.uuid4())
+    now = datetime.now(UTC)
+    description = f"{platform.title()} adapter logged out — re-scan QR to resume monitoring"
+    evidence = json.dumps({
+        "adapter_id": adapter_id,
+        "platform": platform,
+        "reason": reason,
+    })
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                SQL_INSERT_ADAPTER_ALERT_SIGNAL,
+                signal_id, topic_id, description, evidence, now,
+            )
+        log.warning("social.adapter_logout_signal_fired", topic_id=topic_id, adapter_id=adapter_id)
+    except Exception as exc:
+        log.error("social.adapter_logout_signal_failed", error=str(exc))
 
 
 # ---------------------------------------------------------------------------
@@ -254,8 +303,18 @@ async def poll_social_topic(ctx: dict, topic_id: str, include_x: bool = True) ->
             refreshed = await adapter.refresh_credentials()
             if refreshed:
                 log.info("social.credentials_refreshed", adapter_id=adapter_id)
-            elif cb:
-                await cb.record_failure()
+            else:
+                if cb:
+                    await cb.record_failure()
+                # Fire logout signal for WhatsApp (QR-based auth cannot be refreshed)
+                if "logged out" in str(exc).lower():
+                    await _fire_adapter_logout_signal(
+                        pool=db_pool,
+                        adapter_id=adapter_id,
+                        platform=platform,
+                        topic_id=topic_id,
+                        reason=str(exc),
+                    )
         except AdapterRateLimitError as exc:
             log.warning("social.rate_limited", adapter_id=adapter_id, error=str(exc))
             social_rate_limit_total.labels(platform=platform).inc()

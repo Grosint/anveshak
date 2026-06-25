@@ -10,7 +10,7 @@ class Source(AuditedModel):
     """A registered OSINT source (news site, social account, RSS feed, etc.)"""
     name: str
     url_or_handle: str
-    platform: str                          # web|telegram|twitter|reddit|bluesky|rss|upload
+    platform: str                          # web|telegram|twitter|reddit|bluesky|rss|upload|whatsapp
     credibility_score: float = 50.0       # 0–100, starts at 50 for new sources
     auto_score_enabled: bool = True        # allow system to auto-update credibility
     last_checked_at: Optional[datetime] = None

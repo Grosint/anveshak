@@ -1,0 +1,20 @@
+{
+  "name": "anveshak-whatsapp-bridge",
+  "version": "1.0.0",
+  "description": "WhatsApp Web bridge sidecar for Anveshak OSINT platform",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "6.6.0",
+    "ioredis": "5.4.2",
+    "express": "4.21.2",
+    "qrcode": "1.5.4",
+    "pino": "9.6.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "private": true
+}
