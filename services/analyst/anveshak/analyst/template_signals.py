@@ -301,10 +301,11 @@ async def check_template_signals(
             extracted_identifiers: dict = {}
             if latest and latest["item_labels"]:
                 try:
-                    labels = json.loads(latest["item_labels"])
+                    raw = latest["item_labels"]
+                    labels = json.loads(raw) if isinstance(raw, str) else raw
                     matched_keywords = labels.get("matched_keywords", [])
                     extracted_identifiers = labels.get("extracted_identifiers", {})
-                except (json.JSONDecodeError, TypeError):
+                except (json.JSONDecodeError, TypeError, AttributeError):
                     pass
 
             signal_id = await fire_template_signal(

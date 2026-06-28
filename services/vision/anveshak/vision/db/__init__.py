@@ -108,7 +108,8 @@ SQL_CLEAR_MEDIA_STORAGE_PATH = """
 # ---------------------------------------------------------------------------
 
 async def create_pool() -> asyncpg.Pool:
-    return await asyncpg.create_pool(settings.postgres_url, min_size=2, max_size=5)
+    from anveshak.db import create_db_pool
+    return await create_db_pool(settings.postgres_url)
 
 
 async def get_media_asset(conn: asyncpg.Connection, media_asset_id: str) -> Optional[asyncpg.Record]:

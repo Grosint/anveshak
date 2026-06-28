@@ -24,9 +24,8 @@ async def main():
              timeout_s=settings.scraper_request_timeout_s,
              poll_interval_s=settings.scraper_poll_interval_s)
 
-    db_pool = await asyncpg.create_pool(
-        settings.postgres_url, min_size=2, max_size=5
-    )
+    from anveshak.db import create_db_pool
+    db_pool = await create_db_pool(settings.postgres_url)
     redis = await arq_create_pool(RedisSettings.from_dsn(settings.redis_url))
     log.info("scraper.ready")
 

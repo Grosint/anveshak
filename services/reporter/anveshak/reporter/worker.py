@@ -569,7 +569,7 @@ async def check_scheduled_reports(ctx: dict) -> None:
 
             arq_pool = ctx.get("arq_pool")
             if arq_pool:
-                await arq_pool.enqueue_job("generate_report", report_id)
+                await arq_pool.enqueue_job("generate_report", report_id, _queue_name="arq:reporter")
                 log.info(
                     "reporter.scheduled_report_enqueued",
                     topic_id=topic["id"],

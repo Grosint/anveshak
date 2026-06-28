@@ -145,7 +145,7 @@ async def create_assessment(
                 source_row["platform"],
                 source_row["url_or_handle"],
                 assessment_id,
-                _queue_name="arq:queue",  # social worker uses default queue
+                _queue_name="arq:social",
             )
             await arq_pool.close()
     except Exception as exc:

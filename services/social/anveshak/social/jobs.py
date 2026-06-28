@@ -100,9 +100,8 @@ def _validate_adapter_credentials(adapter_name: str, s) -> list[str]:
 
 async def startup(ctx: dict) -> None:
     """Initialise DB pool, ARQ pool, and authenticate all enabled adapters."""
-    ctx["db_pool"] = await asyncpg.create_pool(
-        settings.postgres_url, min_size=2, max_size=5
-    )
+    from anveshak.db import create_db_pool
+    ctx["db_pool"] = await create_db_pool(settings.postgres_url)
     ctx["arq_pool"] = ctx["redis"]   # ARQ passes redis connection in ctx["redis"]
 
     # Import adapters here to avoid circular imports
@@ -407,6 +406,7 @@ async def fetch_source_metadata(
 # ---------------------------------------------------------------------------
 
 class WorkerSettings:
+    queue_name = "arq:social"  # Isolated queue — avoids cross-worker job theft
     functions = [poll_social_topic, fetch_source_metadata]
     on_startup = startup
     on_shutdown = shutdown

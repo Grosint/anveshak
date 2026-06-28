@@ -111,7 +111,7 @@ async def create_report(req: GenerateReportRequest) -> dict:
         credibility_min=req.credibility_min,
     )
 
-    arq_job = await app.state.arq_pool.enqueue_job("generate_report", report_id)
+    arq_job = await app.state.arq_pool.enqueue_job("generate_report", report_id, _queue_name="arq:reporter")
     arq_job_id = arq_job.job_id if arq_job else None
 
     log.info(

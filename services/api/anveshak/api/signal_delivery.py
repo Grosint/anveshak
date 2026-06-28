@@ -45,10 +45,14 @@ def _build_ws_payload(row: asyncpg.Record) -> dict:
     """Build the WebSocket push message from a signals row (criterion 2.19 schema)."""
     evidence: dict = {}
     if row["evidence"]:
-        try:
-            evidence = json.loads(row["evidence"])
-        except (ValueError, TypeError):
-            pass
+        raw = row["evidence"]
+        if isinstance(raw, str):
+            try:
+                evidence = json.loads(raw)
+            except (ValueError, TypeError):
+                pass
+        elif isinstance(raw, dict):
+            evidence = raw
 
     isc = evidence.get("independent_source_count", 0)
     severity = "HIGH" if isc >= 3 else "MEDIUM"

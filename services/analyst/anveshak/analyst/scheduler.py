@@ -776,7 +776,8 @@ async def effectiveness_loop(pool: asyncpg.Pool) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start scheduler loops as background tasks."""
-    pool = await asyncpg.create_pool(settings.postgres_url, min_size=2, max_size=5)
+    from anveshak.db import create_db_pool
+    pool = await create_db_pool(settings.postgres_url)
     redis = await create_redis_pool(RedisSettings.from_dsn(settings.redis_url))
 
     log.info("scheduler.ready")

@@ -62,7 +62,8 @@ async def main() -> None:
                  "YOUTUBE_ADAPTER_ENABLED=true, or WHATSAPP_ADAPTER_ENABLED=true",
         )
 
-    db_pool = await asyncpg.create_pool(settings.postgres_url, min_size=1, max_size=3)
+    from anveshak.db import create_db_pool
+    db_pool = await create_db_pool(settings.postgres_url, min_size=1, max_size=3)
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
     arq_pool = await create_pool(redis_settings)
 
@@ -122,7 +123,7 @@ async def enqueue_topic_polls(
         return
 
     for topic in topics:
-        await arq_pool.enqueue_job("poll_social_topic", topic["id"], include_x=include_x)
+        await arq_pool.enqueue_job("poll_social_topic", topic["id"], include_x=include_x, _queue_name="arq:social")
         log.debug("social.topic_enqueued", topic_id=topic["id"], include_x=include_x)
 
     log.info("social.topics_enqueued", count=len(topics), include_x=include_x)

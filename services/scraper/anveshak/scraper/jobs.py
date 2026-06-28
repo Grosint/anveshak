@@ -733,9 +733,8 @@ async def check_all_source_health(ctx: dict) -> int:
 
 
 async def on_startup(ctx: dict) -> None:
-    ctx["db_pool"] = await asyncpg.create_pool(
-        settings.postgres_url, min_size=2, max_size=5
-    )
+    from anveshak.db import create_db_pool
+    ctx["db_pool"] = await create_db_pool(settings.postgres_url)
     log.info("scraper_worker.ready", concurrency=settings.scraper_concurrency)
 
 

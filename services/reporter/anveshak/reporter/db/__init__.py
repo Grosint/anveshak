@@ -174,9 +174,9 @@ SQL_FETCH_TOPIC_TEMPLATE_MATCHES = """
 # ---------------------------------------------------------------------------
 
 async def get_pool(postgres_url: str) -> asyncpg.Pool:
-    """Create and return an asyncpg connection pool."""
-    url = postgres_url.replace("+asyncpg", "")
-    pool = await asyncpg.create_pool(url, min_size=2, max_size=5)
+    """Create and return an asyncpg connection pool with JSONB codec."""
+    from anveshak.db import create_db_pool
+    pool = await create_db_pool(postgres_url)
     log.info("reporter.db_pool_created")
     return pool
 
