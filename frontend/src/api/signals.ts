@@ -45,6 +45,11 @@ export interface SignalConnections {
   edges: GraphEdge[]
 }
 
+export interface DailyCount {
+  date: string // YYYY-MM-DD
+  count: number
+}
+
 export const signalsApi = {
   list: (status: SignalStatus = 'new', since?: string, until?: string) =>
     api.get<Signal[]>('/api/v1/signals', {
@@ -64,4 +69,9 @@ export const signalsApi = {
 
   connections: (signalId: string) =>
     api.get<SignalConnections>(`/api/v1/signals/${signalId}/connections`).then((r) => r.data),
+
+  dailyCounts: (status: SignalStatus = 'new', since: string, until: string) =>
+    api.get<DailyCount[]>('/api/v1/signals/daily-counts', {
+      params: { status, since, until },
+    }).then((r) => r.data),
 }

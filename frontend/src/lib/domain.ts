@@ -22,7 +22,7 @@ export function inferSeverity(signal: Signal): string {
   if (t.includes('HIGH') || t.includes('CRITICAL')) return 'HIGH'
   if (t.includes('MED')) return 'MEDIUM'
   if (t.includes('LOW')) return 'LOW'
-  return 'HIGH'
+  return 'LOW'
 }
 
 // ── Confidence badge ────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ export function deepfakeLabel(score: number): DeepfakeInfo {
 
 // ── Time range resolution ───────────────────────────────────────────────
 
-export type TimePreset = 'today' | '7d' | '30d' | 'custom'
+export type TimePreset = 'today' | '7d' | '14d' | '30d' | 'day' | 'custom'
 
 export function resolveTimeRange(
   preset: TimePreset,
@@ -78,12 +78,24 @@ export function resolveTimeRange(
 
   if (preset === 'today') {
     const startOfDay = new Date(now)
-    startOfDay.setUTCHours(0, 0, 0, 0) // BUG R8: uses UTC, not local time
+    startOfDay.setUTCHours(0, 0, 0, 0)
     return { since: startOfDay.toISOString(), until }
+  }
+  if (preset === 'day') {
+    // Single day mode — customFrom holds the YYYY-MM-DD
+    if (!customFrom) return resolveTimeRange('today', '', '')
+    const dayStart = new Date(customFrom + 'T00:00:00Z')
+    const dayEnd = new Date(customFrom + 'T23:59:59Z')
+    return { since: dayStart.toISOString(), until: dayEnd.toISOString() }
   }
   if (preset === '7d') {
     const d = new Date(now)
     d.setUTCDate(d.getUTCDate() - 7)
+    return { since: d.toISOString(), until }
+  }
+  if (preset === '14d') {
+    const d = new Date(now)
+    d.setUTCDate(d.getUTCDate() - 14)
     return { since: d.toISOString(), until }
   }
   if (preset === '30d') {

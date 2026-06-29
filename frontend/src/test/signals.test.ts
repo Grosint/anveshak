@@ -50,11 +50,23 @@ describe('inferSeverity', () => {
     expect(inferSeverity({ ...baseSignal, independent_source_count: 1, signal_type: 'low_volume_mention' })).toBe('LOW')
   })
 
-  it('BUG R2: defaults to HIGH for unknown signal types — should arguably be LOW', () => {
-    expect(inferSeverity({ ...baseSignal, independent_source_count: 1, signal_type: 'narrative_spike' })).toBe('HIGH')
+  it('defaults to LOW for unknown signal types', () => {
+    expect(inferSeverity({ ...baseSignal, independent_source_count: 1, signal_type: 'narrative_spike' })).toBe('LOW')
   })
 
-  it('BUG R2: null independent_source_count coerces to 0, falls through to string match', () => {
-    expect(inferSeverity({ ...baseSignal, independent_source_count: null, signal_type: 'narrative_spike' })).toBe('HIGH')
+  it('null independent_source_count coerces to 0, unknown type defaults to LOW', () => {
+    expect(inferSeverity({ ...baseSignal, independent_source_count: null, signal_type: 'narrative_spike' })).toBe('LOW')
+  })
+
+  it('returns HIGH for IDENTIFIER_CONVERGENCE (Engine C)', () => {
+    expect(inferSeverity({ ...baseSignal, independent_source_count: 1, signal_type: 'IDENTIFIER_CONVERGENCE' })).toBe('HIGH')
+  })
+
+  it('returns MEDIUM for SCAM_TEMPLATE_MATCH (Engine C)', () => {
+    expect(inferSeverity({ ...baseSignal, independent_source_count: 1, signal_type: 'SCAM_TEMPLATE_MATCH' })).toBe('MEDIUM')
+  })
+
+  it('returns HIGH for MULTI_SOURCE_CONVERGENCE (Engine C)', () => {
+    expect(inferSeverity({ ...baseSignal, independent_source_count: 1, signal_type: 'MULTI_SOURCE_CONVERGENCE' })).toBe('HIGH')
   })
 })

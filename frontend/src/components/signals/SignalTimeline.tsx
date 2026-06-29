@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Signal } from '../../api/signals'
+import { inferSeverity } from '../../lib/domain'
 import { SignalCard } from './SignalCard'
 import { Badge } from '../ui/Badge'
 import { format } from 'date-fns'
@@ -8,6 +9,9 @@ import { format } from 'date-fns'
 
 const DOTS_PER_ROW = 12
 const DOT_SIZE = 14
+const MAX_VISIBLE_SIGNALS = 36 // 3 snake rows
+const AUTO_COLLAPSE_THRESHOLD = 20
+const COLLAPSE_STORAGE_KEY = 'anveshak_signal_collapse'
 
 const severityColor: Record<string, string> = {
   HIGH: 'var(--signal-high, #ef4444)',
@@ -17,11 +21,18 @@ const severityColor: Record<string, string> = {
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
-function inferSeverity(signal: Signal): string {
-  const isc = signal.independent_source_count ?? 0
-  if (isc >= 3) return 'HIGH'
-  if (isc >= 2) return 'MEDIUM'
-  return 'HIGH'
+function getCollapsePrefs(): Record<string, boolean> {
+  try {
+    return JSON.parse(localStorage.getItem(COLLAPSE_STORAGE_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+
+function setCollapsePref(topicId: string, collapsed: boolean): void {
+  const prefs = getCollapsePrefs()
+  prefs[topicId] = collapsed
+  localStorage.setItem(COLLAPSE_STORAGE_KEY, JSON.stringify(prefs))
 }
 
 interface TopicGroup {
@@ -225,7 +236,12 @@ function TopicLane({
   isActioning: boolean
   onShowGraph: (id: string) => void
 }) {
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => {
+    const prefs = getCollapsePrefs()
+    if (group.topic_id in prefs) return prefs[group.topic_id]
+    return group.signals.length > AUTO_COLLAPSE_THRESHOLD
+  })
+  const [showAll, setShowAll] = useState(false)
   const color = TOPIC_COLORS[colorIndex % TOPIC_COLORS.length]
 
   // Sort signals by time
@@ -234,26 +250,38 @@ function TopicLane({
     [group.signals],
   )
 
-  // Global time range across all signals in this topic
+  // Cap visible signals — show latest N unless "Show all" toggled
+  const visibleSignals = useMemo(
+    () => showAll ? sorted : sorted.slice(-MAX_VISIBLE_SIGNALS),
+    [sorted, showAll],
+  )
+
+  // Time range across visible signals
   const timeRange = useMemo(() => {
-    const times = sorted.map((s) => new Date(s.created_at).getTime())
+    const times = visibleSignals.map((s) => new Date(s.created_at).getTime())
     return { min: Math.min(...times), max: Math.max(...times) }
-  }, [sorted])
+  }, [visibleSignals])
 
   // Break into rows (snake segments)
   const rows: Signal[][] = []
-  for (let i = 0; i < sorted.length; i += DOTS_PER_ROW) {
-    rows.push(sorted.slice(i, i + DOTS_PER_ROW))
+  for (let i = 0; i < visibleSignals.length; i += DOTS_PER_ROW) {
+    rows.push(visibleSignals.slice(i, i + DOTS_PER_ROW))
   }
 
-  const selectedSignals = sorted.filter((s) => selectedIds.has(s.id))
+  const selectedSignals = visibleSignals.filter((s) => selectedIds.has(s.id))
+
+  const isEven = colorIndex % 2 === 0
 
   return (
-    <div className="mb-4">
+    <div className={`mb-3 rounded-lg px-3 py-2 overflow-hidden ${isEven ? 'bg-white/[0.03]' : 'bg-white/[0.07]'}`}>
       {/* Topic header */}
       <button
         className="flex items-center gap-2 mb-1 px-1 w-full text-left group/lane"
-        onClick={() => setCollapsed(!collapsed)}
+        onClick={() => {
+          const next = !collapsed
+          setCollapsed(next)
+          setCollapsePref(group.topic_id, next)
+        }}
       >
         <span
           className="w-3 h-3 rounded-sm shrink-0"
@@ -272,7 +300,18 @@ function TopicLane({
 
       {/* Timeline rows (snake pattern) */}
       {!collapsed && (
-        <div className="pl-5">
+        <div className="pl-5 overflow-hidden">
+          {sorted.length > MAX_VISIBLE_SIGNALS && (
+            <button
+              className="mb-1 text-[10px] text-anveshak-accent hover:underline"
+              onClick={() => setShowAll((v) => !v)}
+            >
+              {showAll
+                ? `Show latest ${MAX_VISIBLE_SIGNALS}`
+                : `Show all ${sorted.length} signals (${sorted.length - MAX_VISIBLE_SIGNALS} hidden)`}
+            </button>
+          )}
+          <div className="max-h-[400px] overflow-y-auto overflow-x-hidden pr-1">
           {rows.map((rowSignals, idx) => (
             <SnakeRow
               key={idx}
@@ -286,6 +325,7 @@ function TopicLane({
             />
           ))}
 
+          </div>
           {/* Expanded signal details (all selected) */}
           {selectedSignals.length > 0 && (
             <div className="mt-2 mb-3 animate-fade-in space-y-2">

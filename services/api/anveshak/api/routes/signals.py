@@ -152,6 +152,19 @@ async def list_signals(
     return await signals_db.list_signals_by_org(db, status, org_id)
 
 
+@router.get("/daily-counts")
+async def daily_signal_counts(
+    status: str = Query(default="new", pattern="^(new|acknowledged|dismissed)$"),
+    since: datetime = Query(..., description="ISO datetime — start of range"),
+    until: datetime = Query(..., description="ISO datetime — end of range"),
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("viewer", "analyst", "admin")),
+):
+    """Return per-day signal counts for the calendar strip (no LIMIT, lightweight)."""
+    org_id = None if is_super_admin(user) else get_user_org(user)
+    return await signals_db.daily_signal_counts(db, status, since, until, org_id=org_id)
+
+
 @router.get("/{signal_id}/connections")
 async def get_signal_connections(
     signal_id: str,

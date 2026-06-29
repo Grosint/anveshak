@@ -47,17 +47,17 @@ describe('inferSeverity', () => {
     })
   })
 
-  describe('BUG R2: unknown signal types default to HIGH', () => {
-    it('narrative_spike (no HIGH/MED/LOW keyword) → HIGH', () => {
-      expect(inferSeverity(makeSignal({ independent_source_count: 1, signal_type: 'narrative_spike' }))).toBe('HIGH')
+  describe('unknown signal types default to LOW', () => {
+    it('narrative_spike (no HIGH/MED/LOW keyword) → LOW', () => {
+      expect(inferSeverity(makeSignal({ independent_source_count: 1, signal_type: 'narrative_spike' }))).toBe('LOW')
     })
 
-    it('null isc coerces to 0, falls through to string match', () => {
-      expect(inferSeverity(makeSignal({ independent_source_count: null, signal_type: 'narrative_spike' }))).toBe('HIGH')
+    it('null isc coerces to 0, unknown type → LOW', () => {
+      expect(inferSeverity(makeSignal({ independent_source_count: null, signal_type: 'narrative_spike' }))).toBe('LOW')
     })
 
-    it('isc = 0 with unknown type → HIGH', () => {
-      expect(inferSeverity(makeSignal({ independent_source_count: 0, signal_type: 'new_activity_burst' }))).toBe('HIGH')
+    it('isc = 0 with unknown type → LOW', () => {
+      expect(inferSeverity(makeSignal({ independent_source_count: 0, signal_type: 'new_activity_burst' }))).toBe('LOW')
     })
   })
 

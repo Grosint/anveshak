@@ -6,6 +6,7 @@ import { useWS } from '../contexts/WSContext'
 import { SignalCard } from '../components/signals/SignalCard'
 import { SignalTimeline } from '../components/signals/SignalTimeline'
 import { SignalGraph } from '../components/signals/SignalGraph'
+import { CalendarStrip } from '../components/signals/CalendarStrip'
 import { Spinner } from '../components/ui/Spinner'
 import { EmptyState } from '../components/ui/EmptyState'
 import { resolveTimeRange, type TimePreset } from '../lib/domain'
@@ -17,30 +18,28 @@ const TABS: { key: SignalStatus; label: string }[] = [
   { key: 'dismissed',    label: 'Dismissed' },
 ]
 
-const TIME_PRESETS: { key: TimePreset; label: string }[] = [
-  { key: 'today', label: 'Today' },
-  { key: '7d',    label: 'Last 7 days' },
-  { key: '30d',   label: 'Last 30 days' },
-  { key: 'custom', label: 'Custom' },
+const RANGE_PRESETS: { key: TimePreset; label: string; days: number }[] = [
+  { key: '7d',  label: '7 days',  days: 7  },
+  { key: '14d', label: '14 days', days: 14 },
+  { key: '30d', label: '30 days', days: 30 },
 ]
-
-// ── Helpers ──────────────────────────────────────────────────────────────
-
-function toISODate(d: Date): string {
-  return d.toISOString().slice(0, 10)
-}
 
 // ── Component ────────────────────────────────────────────────────────────
 
 export default function SignalsInbox() {
   const [activeTab, setActiveTab]     = useState<SignalStatus>('new')
   const [newCount, setNewCount]       = useState(0)
-  const [preset, setPreset]           = useState<TimePreset>('30d')
-  const [customFrom, setCustomFrom]   = useState('')
-  const [customTo, setCustomTo]       = useState(() => toISODate(new Date()))
+  const [preset, setPreset]           = useState<TimePreset>('7d')
+  const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const [viewMode, setViewMode]       = useState<ViewMode>('timeline')
   const [graphSignalId, setGraphSignalId] = useState<string | null>(null)
   const [activeTopicsOnly, setActiveTopicsOnly] = useState(true)
+
+  // Calendar strip window size (days)
+  const windowDays = useMemo(() => {
+    const found = RANGE_PRESETS.find((p) => p.key === preset)
+    return found?.days ?? 7
+  }, [preset])
 
   const qc = useQueryClient()
   const { subscribe } = useWS()
@@ -57,18 +56,30 @@ export default function SignalsInbox() {
     [topics],
   )
 
+  // Time range: day selected → single day, otherwise range preset
   const { since, until } = useMemo(
-    () => resolveTimeRange(preset, customFrom, customTo),
-    [preset, customFrom, customTo],
+    () => selectedDay
+      ? resolveTimeRange('day', selectedDay, '')
+      : resolveTimeRange(preset, '', ''),
+    [selectedDay, preset],
   )
 
-  const rangeReady = preset !== 'custom' || (customFrom !== '' && customTo !== '')
+  // Daily counts for the full range (calendar strip — no LIMIT, lightweight)
+  const { since: rangeSince, until: rangeUntil } = useMemo(
+    () => resolveTimeRange(preset, '', ''),
+    [preset],
+  )
+
+  const { data: dailyCounts = [] } = useQuery({
+    queryKey: ['signal-daily-counts', activeTab, rangeSince, rangeUntil],
+    queryFn: () => signalsApi.dailyCounts(activeTab, rangeSince, rangeUntil),
+    refetchInterval: 60_000,
+  })
 
   const { data: signals = [], isLoading } = useQuery({
     queryKey: ['signals', activeTab, since, until],
-    queryFn: () => (rangeReady ? signalsApi.list(activeTab, since, until) : Promise.resolve([])),
+    queryFn: () => signalsApi.list(activeTab, since, until),
     refetchInterval: 30_000,
-    enabled: rangeReady,
   })
 
   // Real-time: WS push → invalidate
@@ -76,6 +87,7 @@ export default function SignalsInbox() {
     return subscribe((msg) => {
       if (msg.type === 'signal' || msg.type === 'signal_replay') {
         qc.invalidateQueries({ queryKey: ['signals'] })
+        qc.invalidateQueries({ queryKey: ['signal-daily-counts'] })
         if (activeTab !== 'new') setNewCount((n) => n + 1)
       }
     })
@@ -130,12 +142,25 @@ export default function SignalsInbox() {
 
   const isActioning = acknowledge.isPending || dismiss.isPending
 
+  // Total signal count from daily-counts (true count, no LIMIT)
+  const totalSignalCount = useMemo(
+    () => dailyCounts.reduce((sum, dc) => sum + dc.count, 0),
+    [dailyCounts],
+  )
+
   return (
     <div className="h-full flex flex-col">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="px-6 pt-6 pb-4 border-b border-anveshak-border flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-text-primary">Signals Intelligence</h1>
+          <h1 className="text-xl font-semibold text-text-primary">
+            Signals Intelligence
+            {totalSignalCount > 0 && (
+              <span className="ml-2 text-sm font-normal text-text-muted">
+                {totalSignalCount.toLocaleString()} {activeTab}
+              </span>
+            )}
+          </h1>
           <p className="text-sm text-text-muted mt-0.5">
             Real-time intelligence alerts from monitored sources
           </p>
@@ -187,12 +212,16 @@ export default function SignalsInbox() {
       </div>
 
       {/* ── Time filter bar ────────────────────────────────────────────────── */}
-      <div className="px-6 py-3 border-b border-anveshak-border bg-anveshak-bg/40">
+      <div className="px-6 py-3 border-b border-anveshak-border bg-anveshak-bg/40 space-y-2">
+        {/* Range chips + active topics toggle */}
         <div className="flex flex-wrap items-center gap-2">
-          {TIME_PRESETS.map((p) => (
+          {RANGE_PRESETS.map((p) => (
             <button
               key={p.key}
-              onClick={() => setPreset(p.key)}
+              onClick={() => {
+                setPreset(p.key)
+                setSelectedDay(null) // clear day selection when range changes
+              }}
               className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                 preset === p.key
                   ? 'bg-anveshak-accent text-white'
@@ -202,6 +231,12 @@ export default function SignalsInbox() {
               {p.label}
             </button>
           ))}
+
+          {selectedDay && (
+            <span className="text-xs text-anveshak-accent font-medium ml-1">
+              → {selectedDay}
+            </span>
+          )}
 
           <span className="mx-1 text-anveshak-border">|</span>
 
@@ -221,34 +256,13 @@ export default function SignalsInbox() {
           </button>
         </div>
 
-        {preset === 'custom' && (
-          <div className="flex flex-wrap items-center gap-3 mt-2.5">
-            <label className="flex items-center gap-1.5 text-xs text-text-muted">
-              From
-              <input
-                type="date"
-                value={customFrom}
-                max={customTo || toISODate(new Date())}
-                onChange={(e) => setCustomFrom(e.target.value)}
-                className="ml-1 px-2 py-1 rounded bg-anveshak-card border border-anveshak-border text-text-primary text-xs focus:outline-none focus:border-anveshak-accent"
-              />
-            </label>
-            <label className="flex items-center gap-1.5 text-xs text-text-muted">
-              To
-              <input
-                type="date"
-                value={customTo}
-                min={customFrom || undefined}
-                max={toISODate(new Date())}
-                onChange={(e) => setCustomTo(e.target.value)}
-                className="ml-1 px-2 py-1 rounded bg-anveshak-card border border-anveshak-border text-text-primary text-xs focus:outline-none focus:border-anveshak-accent"
-              />
-            </label>
-            {!rangeReady && (
-              <span className="text-xs text-text-muted italic">Select a start date to apply filter</span>
-            )}
-          </div>
-        )}
+        {/* Calendar strip */}
+        <CalendarStrip
+          dailyCounts={dailyCounts}
+          windowDays={windowDays}
+          selectedDay={selectedDay}
+          onSelectDay={setSelectedDay}
+        />
       </div>
 
       {/* ── Content ────────────────────────────────────────────────────────── */}

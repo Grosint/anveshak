@@ -57,7 +57,7 @@ SQL_LIST_SIGNALS_SINCE = """
       AND s.created_at >= $2
       AND s.created_at <= $3
     ORDER BY s.created_at DESC
-    LIMIT 500
+    LIMIT 5000
 """
 
 SQL_LIST_SIGNALS_SINCE_BY_ORG = """
@@ -76,7 +76,7 @@ SQL_LIST_SIGNALS_SINCE_BY_ORG = """
       AND s.created_at <= $3
       AND t.org_id = $4
     ORDER BY s.created_at DESC
-    LIMIT 500
+    LIMIT 5000
 """
 
 SQL_LIST_SIGNALS_SINCE_BY_TOPIC = """
@@ -131,6 +131,27 @@ SQL_SIGNAL_TIMELINE = """
            MAX(ci.captured_at) AS last_seen
     FROM content_items ci
     WHERE ci.narrative_cluster_id = $1
+"""
+
+# Batch enrichment: 2 queries for ALL signals instead of 2 per signal
+SQL_BATCH_SOURCES = """
+    SELECT ci.narrative_cluster_id AS cluster_id,
+           src.url_or_handle AS source_name,
+           src.platform,
+           src.credibility_score
+    FROM content_items ci
+    JOIN sources src ON src.id = ci.source_id
+    WHERE ci.narrative_cluster_id = ANY($1::text[])
+    ORDER BY ci.narrative_cluster_id, src.credibility_score DESC
+"""
+
+SQL_BATCH_TIMELINE = """
+    SELECT ci.narrative_cluster_id AS cluster_id,
+           MIN(ci.captured_at) AS first_seen,
+           MAX(ci.captured_at) AS last_seen
+    FROM content_items ci
+    WHERE ci.narrative_cluster_id = ANY($1::text[])
+    GROUP BY ci.narrative_cluster_id
 """
 
 SQL_ACKNOWLEDGE = """
@@ -234,12 +255,35 @@ SQL_MISSED_SIGNALS = """
     LIMIT 100
 """
 
+SQL_DAILY_COUNTS = """
+    SELECT DATE(s.created_at) AS signal_date, COUNT(*) AS count
+    FROM signals s
+    JOIN topics t ON t.id = s.topic_id
+    WHERE s.status = $1
+      AND s.created_at >= $2
+      AND s.created_at <= $3
+    GROUP BY DATE(s.created_at)
+    ORDER BY signal_date
+"""
+
+SQL_DAILY_COUNTS_BY_ORG = """
+    SELECT DATE(s.created_at) AS signal_date, COUNT(*) AS count
+    FROM signals s
+    JOIN topics t ON t.id = s.topic_id
+    WHERE s.status = $1
+      AND s.created_at >= $2
+      AND s.created_at <= $3
+      AND t.org_id = $4
+    GROUP BY DATE(s.created_at)
+    ORDER BY signal_date
+"""
+
 # ---------------------------------------------------------------------------
 # Repository functions
 # ---------------------------------------------------------------------------
 
 async def _enrich_signal(conn: asyncpg.Connection, signal: dict) -> dict:
-    """Add source breakdown and timeline to a signal dict."""
+    """Add source breakdown and timeline to a signal dict (single-signal fallback)."""
     cluster_id = signal.get("cluster_id")
     if not cluster_id:
         signal["sources"] = []
@@ -247,7 +291,6 @@ async def _enrich_signal(conn: asyncpg.Connection, signal: dict) -> dict:
         signal["last_seen"] = None
         return signal
 
-    # Fetch source breakdown
     source_rows = await conn.fetch(SQL_SIGNAL_SOURCES, cluster_id)
     signal["sources"] = [
         {
@@ -258,7 +301,6 @@ async def _enrich_signal(conn: asyncpg.Connection, signal: dict) -> dict:
         for r in source_rows
     ]
 
-    # Fetch timeline
     timeline = await conn.fetchrow(SQL_SIGNAL_TIMELINE, cluster_id)
     if timeline:
         signal["first_seen"] = timeline["first_seen"].isoformat() if timeline["first_seen"] else None
@@ -270,6 +312,60 @@ async def _enrich_signal(conn: asyncpg.Connection, signal: dict) -> dict:
     return signal
 
 
+async def _batch_enrich(conn: asyncpg.Connection, signals: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Batch-enrich all signals with 2 queries total (instead of 2 per signal)."""
+    cluster_ids = list({s["cluster_id"] for s in signals if s.get("cluster_id")})
+
+    # Default empty enrichment for all signals
+    for s in signals:
+        s.setdefault("sources", [])
+        s.setdefault("first_seen", None)
+        s.setdefault("last_seen", None)
+
+    if not cluster_ids:
+        return signals
+
+    # Batch: 2 queries total
+    source_rows = await conn.fetch(SQL_BATCH_SOURCES, cluster_ids)
+    timeline_rows = await conn.fetch(SQL_BATCH_TIMELINE, cluster_ids)
+
+    # Index sources by cluster_id (dedup per source within cluster)
+    sources_by_cluster: dict[str, list[dict]] = {}
+    seen_sources: dict[str, set[str]] = {}
+    for r in source_rows:
+        cid = r["cluster_id"]
+        src_key = f"{r['source_name']}:{r['platform']}"
+        if cid not in seen_sources:
+            seen_sources[cid] = set()
+            sources_by_cluster[cid] = []
+        if src_key not in seen_sources[cid]:
+            seen_sources[cid].add(src_key)
+            sources_by_cluster[cid].append({
+                "source_name": r["source_name"],
+                "platform": r["platform"],
+                "credibility_score": float(r["credibility_score"]),
+            })
+
+    # Index timelines by cluster_id
+    timeline_by_cluster: dict[str, dict] = {}
+    for r in timeline_rows:
+        timeline_by_cluster[r["cluster_id"]] = {
+            "first_seen": r["first_seen"].isoformat() if r["first_seen"] else None,
+            "last_seen": r["last_seen"].isoformat() if r["last_seen"] else None,
+        }
+
+    # Apply to signals
+    for s in signals:
+        cid = s.get("cluster_id")
+        if cid:
+            s["sources"] = sources_by_cluster.get(cid, [])
+            tl = timeline_by_cluster.get(cid, {})
+            s["first_seen"] = tl.get("first_seen")
+            s["last_seen"] = tl.get("last_seen")
+
+    return signals
+
+
 async def list_signals(
     conn: asyncpg.Connection, status: str, topic_id: str | None = None
 ) -> list[dict[str, Any]]:
@@ -278,7 +374,7 @@ async def list_signals(
     else:
         rows = await conn.fetch(SQL_LIST_SIGNALS, status)
     signals = [dict(r) for r in rows]
-    return [await _enrich_signal(conn, s) for s in signals]
+    return await _batch_enrich(conn, signals)
 
 
 async def list_signals_by_org(
@@ -287,7 +383,7 @@ async def list_signals_by_org(
     """Return signals filtered by topic's org_id."""
     rows = await conn.fetch(SQL_LIST_SIGNALS_BY_ORG, status, org_id)
     signals = [dict(r) for r in rows]
-    return [await _enrich_signal(conn, s) for s in signals]
+    return await _batch_enrich(conn, signals)
 
 
 async def list_signals_filtered(
@@ -301,7 +397,7 @@ async def list_signals_filtered(
     else:
         rows = await conn.fetch(SQL_LIST_SIGNALS_SINCE, status, since, until)
     signals = [dict(r) for r in rows]
-    return [await _enrich_signal(conn, s) for s in signals]
+    return await _batch_enrich(conn, signals)
 
 
 async def acknowledge_signal(
@@ -471,6 +567,21 @@ def _build_topic_graph(rows: list, first: dict) -> dict[str, Any]:
                 edges.append({"source": ci_id, "target": src_id, "type": "from_source"})
 
     return {"nodes": list(nodes.values()), "edges": edges}
+
+
+async def daily_signal_counts(
+    conn: asyncpg.Connection, status: str, since: Any, until: Any,
+    *, org_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return per-day signal counts for the calendar strip."""
+    if org_id:
+        rows = await conn.fetch(SQL_DAILY_COUNTS_BY_ORG, status, since, until, org_id)
+    else:
+        rows = await conn.fetch(SQL_DAILY_COUNTS, status, since, until)
+    return [
+        {"date": r["signal_date"].isoformat(), "count": r["count"]}
+        for r in rows
+    ]
 
 
 async def get_missed_signals(
