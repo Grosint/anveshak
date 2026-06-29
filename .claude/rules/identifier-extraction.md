@@ -1,6 +1,14 @@
 # Identifier & Entity Extraction
 
-6 instincts. Engine C extraction + NER pipelines.
+7 instincts. Engine C extraction + NER pipelines.
+
+## Entity Name Normalization at Query Time
+
+spaCy stores raw entity text. Same entity = multiple variants ("India"/"india", "US"/"the United States").
+Fix at aggregation layer (not insert): SQL `GROUP BY LOWER(entity_text)` + Python alias merging.
+Mention count: SUM. Source count: MAX (overlap). Latest mention: MAX. Different entity_type: keep separate.
+Don't normalize at insert — raw text used by other features, migration would break backfill.
+See: `learned/entity-name-normalization.md`
 
 ## Regex First, ML Second
 

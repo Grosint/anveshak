@@ -1,6 +1,15 @@
 # Graph & Visualization Rendering
 
-4 instincts. Cytoscape, MapLibre, data visualization.
+5 instincts. Cytoscape, MapLibre, data visualization.
+
+## Sovereign Boundary Overlay
+
+Third-party tiles (CartoDB, OSM) show borders per UN standards — wrong for defence products.
+Fix: GeoJSON polygon overlay filled with exact tile land color (`#0e0e0e` for dark-matter) at 100% opacity.
+Layers: territory-fill → boundary-line → lac-line, all BELOW data point layers.
+Module-level cache for fetch. Graceful degradation via try/catch.
+Source boundary from datameet/maps (CC-0). Simplify with mapshaper to <100KB.
+See: `learned/sovereign-boundary-overlay.md`
 
 ## Render Guard: OR Not AND
 
