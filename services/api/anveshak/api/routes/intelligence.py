@@ -169,6 +169,12 @@ SQL_ENTITY_COOCCURRENCE = """
     WHERE ci.topic_id = $1
       AND e1.entity_type IN ('PERSON', 'ORG', 'FAC')
       AND e2.entity_type IN ('PERSON', 'ORG', 'FAC')
+      AND e1.entity_text NOT LIKE '%%<%%' AND e1.entity_text NOT LIKE '%%>%%'
+      AND e1.entity_text NOT LIKE '%%=%%' AND e1.entity_text NOT LIKE '%%href%%'
+      AND e2.entity_text NOT LIKE '%%<%%' AND e2.entity_text NOT LIKE '%%>%%'
+      AND e2.entity_text NOT LIKE '%%=%%' AND e2.entity_text NOT LIKE '%%href%%'
+      AND LENGTH(e1.entity_text) >= 2
+      AND LENGTH(e2.entity_text) >= 2
     GROUP BY e1.entity_text, e1.entity_type, e2.entity_text, e2.entity_type
     HAVING COUNT(DISTINCT e1.content_item_id) >= $2
     ORDER BY count DESC
