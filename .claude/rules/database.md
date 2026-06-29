@@ -98,6 +98,11 @@ See: `learned/role-constraint-migration-order.md`
   See: `learned/has-vision-exists-subquery.md`
 - `ON CONFLICT` requires conflict target: `ON CONFLICT (id) DO NOTHING`, not bare
   `ON CONFLICT DO NOTHING` (PostgreSQL accepts but behavior undefined).
+- Before writing multi-table SQL (JOINs, aggregates), run `\d tablename` for EACH
+  table. Column name assumptions wrong more often than expected (`is_active` vs
+  `status = 'active'`, `platform` on sources not content_items). Mocked unit tests
+  pass fine — error only at runtime after container rebuild.
+  See: `learned/aggregate-sql-schema-validation.md`
 
 ## Pitfalls
 

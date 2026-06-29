@@ -45,3 +45,12 @@ WebSocket signal broadcast filters by session org_id.
 Export endpoints verify topic ownership before executing.
 SQL param count must match all callers after adding org_id columns.
 See: `learned/sql-param-count-caller-mismatch.md`
+
+## Cross-Topic Aggregate Endpoints
+
+Aggregate endpoints (analytics dashboard, global stats) have NO single resource to verify.
+org_id must be baked into EVERY SQL sub-query — missing one leaks cross-org data.
+Tables without org_id (signals, reports) → JOIN through topics.org_id.
+Make org_id keyword-only param on repository function to prevent forgetting.
+Test: assert "org_id" in every SQL constant + assert org_id in every DB call args.
+See: `learned/cross-topic-aggregate-org-scoping.md`

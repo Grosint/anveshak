@@ -9,7 +9,6 @@ import TopicWorkspace from './pages/TopicWorkspace'
 import ImageAnalysis from './pages/ImageAnalysis'
 import SignalsInbox from './pages/SignalsInbox'
 import ReportBuilder from './pages/ReportBuilder'
-import AnalyticsDashboard from './pages/AnalyticsDashboard'
 import Settings from './pages/Settings'
 import Trackers from './pages/Trackers'
 import TrackerDetail from './pages/TrackerDetail'
@@ -90,7 +89,7 @@ export default function App() {
           <Route path="/trackers" element={<Trackers />} />
           <Route path="/trackers/:trackerId" element={<TrackerDetail />} />
           <Route path="/reports" element={<ReportBuilder />} />
-          <Route path="/analytics" element={<AnalyticsDashboard />} />
+          <Route path="/analytics" element={<Navigate to="/settings/dashboard" replace />} />
           <Route path="/settings/:tab" element={<Settings />} />
           <Route path="/settings" element={<Settings />} />
           {/* Redirects for old routes */}

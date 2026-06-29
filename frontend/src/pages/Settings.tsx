@@ -4,10 +4,12 @@ import SourceManager from './SourceManager'
 import UserManagement from './UserManagement'
 import OrganizationManagement from './OrganizationManagement'
 import AuditTrailPage from '../components/audit/AuditTrailPage'
+import AnalyticsDashboard from './AnalyticsDashboard'
 
-type SettingsTab = 'sources' | 'users' | 'organizations' | 'audit'
+type SettingsTab = 'sources' | 'users' | 'organizations' | 'audit' | 'dashboard'
 
 const ALL_TABS: { key: SettingsTab; label: string; adminOnly?: boolean; superAdminOnly?: boolean }[] = [
+  { key: 'dashboard',    label: 'Dashboard' },
   { key: 'sources',       label: 'Sources' },
   { key: 'users',         label: 'Users', adminOnly: true },
   { key: 'organizations', label: 'Organizations', superAdminOnly: true },
@@ -26,10 +28,12 @@ export default function Settings() {
     return true
   })
   const activeTab: SettingsTab =
-    tab === 'users' && isAdmin ? 'users'
+    tab === 'dashboard' ? 'dashboard'
+    : tab === 'users' && isAdmin ? 'users'
     : tab === 'organizations' && isSuperAdmin ? 'organizations'
     : tab === 'audit' ? 'audit'
-    : 'sources'
+    : tab === 'sources' ? 'sources'
+    : 'dashboard'
 
   return (
     <div className="h-full flex flex-col">
@@ -60,6 +64,7 @@ export default function Settings() {
 
       {/* Tab content */}
       <div className="flex-1 overflow-hidden">
+        {activeTab === 'dashboard' && <AnalyticsDashboard embedded />}
         {activeTab === 'sources' && <SourceManager embedded />}
         {activeTab === 'users' && <UserManagement embedded />}
         {activeTab === 'organizations' && <OrganizationManagement embedded />}

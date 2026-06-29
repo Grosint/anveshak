@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useQueries } from '@tanstack/react-query'
+import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts'
 import { sourcesApi, Source, CreateSourcePayload, UpdateSourcePayload, HealthStatus } from '../api/sources'
 import { AddSourceModal } from '../components/sources/AddSourceModal'
 import { AuditLogTable } from '../components/sources/AuditLogTable'
@@ -497,6 +498,131 @@ function DetailPanel({
   )
 }
 
+// ── Health overview charts ──────────────────────────────────────────────────
+
+const HEALTH_COLORS: Record<string, string> = {
+  healthy: '#10b981',    // --cred-high
+  degraded: '#f59e0b',   // amber
+  down: '#ef4444',       // --signal-high
+  unverified: '#6b7280', // --text-muted
+}
+
+const PLATFORM_BAR_COLOR = '#3b82f6' // blue accent
+
+function SmallChartTooltip({ active, payload, label }: {
+  active?: boolean; payload?: { name?: string; value?: number }[]; label?: string
+}) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-[#0f172a] border border-[#334155] rounded px-3 py-2 text-xs">
+      <p className="text-text-primary font-medium">{label || payload[0]?.name}</p>
+      <p className="text-text-muted">{payload[0]?.value}</p>
+    </div>
+  )
+}
+
+function SourceHealthOverview({ sources }: { sources: Source[] }) {
+  const [collapsed, setCollapsed] = useState(false)
+
+  const healthDistribution = useMemo(() => {
+    const counts: Record<string, number> = {}
+    sources.forEach((s) => {
+      counts[s.health_status] = (counts[s.health_status] ?? 0) + 1
+    })
+    return Object.entries(counts).map(([status, count]) => ({
+      name: status.charAt(0).toUpperCase() + status.slice(1),
+      value: count,
+      color: HEALTH_COLORS[status] ?? '#6b7280',
+    }))
+  }, [sources])
+
+  const platformDistribution = useMemo(() => {
+    const counts: Record<string, number> = {}
+    sources.forEach((s) => {
+      counts[s.platform] = (counts[s.platform] ?? 0) + 1
+    })
+    return Object.entries(counts)
+      .map(([platform, count]) => ({ name: platform, count }))
+      .sort((a, b) => b.count - a.count)
+  }, [sources])
+
+  if (sources.length === 0) return null
+
+  return (
+    <div className="border-b border-anveshak-border">
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="w-full flex items-center justify-between px-4 py-2 text-xs font-medium text-text-muted uppercase tracking-wide hover:text-text-secondary transition-colors"
+      >
+        <span>Health Overview ({sources.length} sources)</span>
+        <svg
+          className={`w-4 h-4 transition-transform ${collapsed ? '' : 'rotate-180'}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {!collapsed && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 px-4 pb-3">
+          {/* Health donut */}
+          <div className="bg-anveshak-card border border-anveshak-border rounded-lg p-3">
+            <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">
+              Health Distribution
+            </h3>
+            <div className="h-36">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={healthDistribution}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={35}
+                    outerRadius={55}
+                    paddingAngle={2}
+                    dataKey="value"
+                    nameKey="name"
+                  >
+                    {healthDistribution.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<SmallChartTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-1 justify-center">
+              {healthDistribution.map((entry) => (
+                <div key={entry.name} className="flex items-center gap-1 text-[10px] text-text-muted">
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
+                  {entry.name} ({entry.value})
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Platform bar chart */}
+          <div className="bg-anveshak-card border border-anveshak-border rounded-lg p-3">
+            <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">
+              Sources by Platform
+            </h3>
+            <div className="h-36">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={platformDistribution} layout="vertical" margin={{ left: 10, right: 20 }}>
+                  <XAxis type="number" tick={{ fontSize: 10, fill: '#94a3b8' }} allowDecimals={false} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8' }} width={65} />
+                  <Tooltip content={<SmallChartTooltip />} />
+                  <Bar dataKey="count" fill={PLATFORM_BAR_COLOR} radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SourceManager({ embedded = false }: { embedded?: boolean }) {
@@ -588,6 +714,9 @@ export default function SourceManager({ embedded = false }: { embedded?: boolean
         </div>
       </div>
       )}
+
+      {/* Health overview charts */}
+      <SourceHealthOverview sources={sources} />
 
       <div className="flex-1 flex overflow-hidden">
         {/* Source list */}

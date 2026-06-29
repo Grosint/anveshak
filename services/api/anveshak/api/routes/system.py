@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi import HTTPException
 
 from ..auth.rbac import require_role
+from ..db import analytics as analytics_db
 from ..db import system as system_db
 from ..db import audit as audit_db
 from ..db import failed_jobs as failed_jobs_db
@@ -66,6 +67,19 @@ async def get_audit_trail(
             raise HTTPException(status_code=403, detail="Analysts must filter by resource_id")
         await topics_db.verify_topic_access(db, resource_id, user)
     return await audit_db.get_audit_trail(db, resource_type, resource_id, limit, offset)
+
+
+@router.get("/analytics-dashboard")
+async def analytics_dashboard(
+    days: int = Query(30, ge=1, le=365),
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+):
+    """Cross-topic aggregate analytics for the intelligence dashboard, org-scoped."""
+    org_id = user.get("org_id", "")
+    data = await analytics_db.get_dashboard_data(db, days, org_id=org_id)
+    log.info("system.analytics_dashboard_queried", user=user.get("sub"), days=days, org_id=org_id)
+    return data
 
 
 @router.get("/failed-jobs")
