@@ -26,7 +26,19 @@ Checklist after adding any `enqueue_job` call:
 - If ratio < 50% → queue mismatch or worker down
 - ARQ queue depth > 0 on a queue with no worker → immediate flag
 
+## Extended (2026-06-28)
+
+Found 5 MORE instances of this bug class in same codebase:
+- Social WorkerSettings had NO queue_name (defaulted to arq:queue)
+- Scheduled report cron and reporter main.py had NO _queue_name on enqueue
+- Assessment endpoint used literal "arq:queue"
+
+All caught by `tests/contracts/test_service_contracts.py` source-scan contract tests.
+Every WorkerSettings MUST have explicit `queue_name`. Every `enqueue_job()` call
+MUST have explicit `_queue_name`. No service may rely on ARQ default queue.
+
 ## See also
 
+- `contract-test-source-scan.md` — source-scan detection pattern
 - `scheduler-worker-split.md` — correct queue usage pattern
 - `scraper-must-enqueue-not-rely-on-sweep.md` — every inserter must enqueue directly

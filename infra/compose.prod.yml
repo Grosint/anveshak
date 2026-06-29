@@ -1,0 +1,169 @@
+---
+# Anveshak — Production Compose Override
+# Usage: docker compose -p anveshak --env-file .env \
+#          -f infra/compose.yml -f infra/compose.prod.yml up -d
+#
+# Changes from dev:
+#   - Bind mounts to /data disk (not Docker volumes)
+#   - Ports restricted to 127.0.0.1 (host nginx proxies from 443)
+#   - GPU reservations for Ollama + Vision
+#   - PostgreSQL production tuning
+#   - Redis production tuning
+#   - Analyst worker bumped to 8GB for bge-large + NLLB-1.3B
+
+services:
+
+  # --- Data stores ---
+
+  postgres:
+    volumes:
+      - /data/postgres:/var/lib/postgresql/data
+      - ./configs/postgres/init-pgvector.sql:/docker-entrypoint-initdb.d/01-init-pgvector.sql:ro
+    ports: []
+    mem_limit: 2g
+    shm_size: 256m
+    command: >
+      postgres
+      -c shared_buffers=512MB
+      -c effective_cache_size=1536MB
+      -c work_mem=16MB
+      -c maintenance_work_mem=256MB
+      -c max_connections=200
+      -c wal_buffers=16MB
+      -c checkpoint_completion_target=0.9
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c max_wal_size=2GB
+      -c log_min_duration_statement=1000
+      -c log_checkpoints=on
+      -c log_connections=off
+      -c log_disconnections=off
+      -c log_lock_waits=on
+
+  redis:
+    volumes:
+      - /data/redis:/data
+    ports: []
+    mem_limit: 512m
+    command: >
+      redis-server
+      --maxmemory 400mb
+      --maxmemory-policy allkeys-lru
+      --save 300 10
+      --save 60 1000
+      --appendonly yes
+      --appendfsync everysec
+      --loglevel notice
+      --tcp-backlog 511
+      --timeout 300
+
+  # --- Inference (GPU) ---
+
+  ollama:
+    volumes:
+      - /data/ollama:/root/.ollama
+    ports: []
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # --- Application services (localhost-only ports) ---
+
+  api:
+    volumes:
+      - /data/media:/app/media
+      - /data/reports:/app/reports
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  frontend:
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  # --- Scrapers (no external ports) ---
+
+  scrape-web-scheduler:
+    volumes:
+      - /data/media:/app/media
+    ports: []
+
+  scrape-web-worker:
+    volumes:
+      - /data/media:/app/media
+
+  scrape-social-scheduler:
+    volumes:
+      - /data/media:/app/media
+    ports: []
+
+  scrape-social-worker:
+    volumes:
+      - /data/media:/app/media
+
+  # --- Analyst (bumped RAM for production models) ---
+
+  analyse-init:
+    volumes:
+      - /data/models:/app/models
+
+  analyse-scheduler:
+    volumes:
+      - /data/media:/app/media
+
+  analyse-worker:
+    volumes:
+      - /data/models:/app/models
+      - /data/media:/app/media
+    mem_limit: 8g
+
+  # --- Vision (GPU) ---
+
+  analyse-vision-init:
+    volumes:
+      - /data/vision-models:/app/models
+
+  analyse-vision-worker:
+    volumes:
+      - /data/vision-models:/app/models
+      - /data/media:/app/media
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # --- Reporter ---
+
+  report-worker:
+    volumes:
+      - /data/reports:/app/reports
+
+  # --- Observability (no external ports) ---
+
+  prometheus:
+    ports: []
+    volumes:
+      - /data/prometheus:/prometheus
+
+  alertmanager:
+    ports: []
+
+  loki:
+    ports: []
+    volumes:
+      - /data/loki:/loki
+
+  grafana:
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - /data/grafana:/var/lib/grafana
+
+  cadvisor:
+    ports: []
