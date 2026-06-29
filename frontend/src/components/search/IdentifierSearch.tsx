@@ -14,6 +14,8 @@ const IDENTIFIER_TYPES: { value: IdentifierType; label: string }[] = [
   { value: 'CRYPTO_TRC20', label: 'TRC-20' },
   { value: 'TELEGRAM_HANDLE', label: 'Telegram' },
   { value: 'INSTAGRAM_HANDLE', label: 'Instagram' },
+  { value: 'FACEBOOK_HANDLE', label: 'Facebook' },
+  { value: 'X_HANDLE', label: 'X/Twitter' },
   { value: 'URL_DOMAIN', label: 'URL' },
   { value: 'GSTIN', label: 'GSTIN' },
   { value: 'PAN', label: 'PAN' },
@@ -213,6 +215,8 @@ function TypeBadge({ type }: { type: string }) {
     CRYPTO_TRC20: 'bg-red-500/20 text-red-400',
     TELEGRAM_HANDLE: 'bg-cyan-500/20 text-cyan-400',
     INSTAGRAM_HANDLE: 'bg-pink-500/20 text-pink-400',
+    FACEBOOK_HANDLE: 'bg-blue-600/20 text-blue-400',
+    X_HANDLE: 'bg-slate-500/20 text-slate-400',
   }
   const color = colorMap[type] || 'bg-gray-500/20 text-gray-400'
   return (

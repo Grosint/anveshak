@@ -469,7 +469,8 @@ async def relevance_calibration_loop(pool: asyncpg.Pool) -> None:
 # Engine C identifier types (must match identifiers.py extraction output)
 _ENGINE_C_TYPES = (
     "PHONE_IN", "PHONE_INTL", "UPI", "EMAIL", "CRYPTO_BTC", "CRYPTO_ETH",
-    "CRYPTO_TRC20", "TELEGRAM_HANDLE", "INSTAGRAM_HANDLE", "URL_DOMAIN",
+    "CRYPTO_TRC20", "TELEGRAM_HANDLE", "INSTAGRAM_HANDLE",
+    "FACEBOOK_HANDLE", "X_HANDLE", "URL_DOMAIN",
     "GSTIN", "UDYAM", "PAN", "BANK_ACCOUNT", "SEBI_REG", "IFSC",
 )
 

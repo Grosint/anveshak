@@ -594,36 +594,53 @@ class TestCrossCutting:
 class TestURLDomain:
     """URL/domain extraction."""
 
+    # --- URL_DOMAIN: normalized_value = domain + path (not bare domain) ---
+
     def test_url_basic_http(self):
         text = "Visit http://example.com/page for details"
         results = extract_identifiers(text)
         assert "URL_DOMAIN" in _types(results)
         vals = _values(results, "URL_DOMAIN")
-        assert "example.com" in vals
+        assert "example.com/page" in vals
 
-    def test_url_https(self):
+    def test_url_https_full_path(self):
+        """normalized_value includes path, strips query params."""
         text = "Go to https://scam-site.xyz/offer?id=123"
         results = extract_identifiers(text)
-        assert "scam-site.xyz" in _values(results, "URL_DOMAIN")
+        assert "scam-site.xyz/offer" in _values(results, "URL_DOMAIN")
 
     def test_url_strips_www(self):
         """www prefix should be stripped from domain."""
         text = "Visit https://www.fraud-site.com/login"
         results = extract_identifiers(text)
-        assert "fraud-site.com" in _values(results, "URL_DOMAIN")
+        assert "fraud-site.com/login" in _values(results, "URL_DOMAIN")
 
     def test_url_subdomain_preserved(self):
         """Non-www subdomains should be preserved."""
         text = "https://api.phishing-site.net/hook"
         results = extract_identifiers(text)
-        assert "api.phishing-site.net" in _values(results, "URL_DOMAIN")
+        assert "api.phishing-site.net/hook" in _values(results, "URL_DOMAIN")
 
-    def test_url_dedup_same_domain(self):
-        """Multiple URLs with same domain → one extraction."""
+    def test_url_dedup_different_paths(self):
+        """Different paths on same domain → separate extractions."""
         text = "https://evil.com/page1 and https://evil.com/page2"
         results = extract_identifiers(text)
         vals = _values(results, "URL_DOMAIN")
-        assert vals.count("evil.com") == 1
+        assert "evil.com/page1" in vals
+        assert "evil.com/page2" in vals
+
+    def test_url_dedup_same_full_path(self):
+        """Identical URLs → single extraction."""
+        text = "https://evil.com/page1 and again https://evil.com/page1"
+        results = extract_identifiers(text)
+        vals = _values(results, "URL_DOMAIN")
+        assert vals.count("evil.com/page1") == 1
+
+    def test_url_domain_only_no_path(self):
+        """URL with no path → normalized_value is bare domain."""
+        text = "Visit https://example.com for details"
+        results = extract_identifiers(text)
+        assert "example.com" in _values(results, "URL_DOMAIN")
 
     def test_url_rejects_no_protocol(self):
         """Bare domain without http/https should NOT match."""
@@ -639,13 +656,15 @@ class TestURLDomain:
         assert urls[0].confidence >= 0.8
 
     def test_url_raw_value_full_url(self):
-        """raw_value should be the full URL, normalized_value is domain."""
+        """raw_value should be the full URL, normalized_value is domain+path."""
         text = "Visit https://fraud.com/page?q=1"
         results = extract_identifiers(text)
         urls = [r for r in results if r.identifier_type == "URL_DOMAIN"]
         assert len(urls) >= 1
         assert urls[0].raw_value.startswith("https://")
-        assert urls[0].normalized_value == "fraud.com"
+        assert urls[0].normalized_value == "fraud.com/page"
+
+    # --- Telegram URL → TELEGRAM_HANDLE (existing, unchanged) ---
 
     def test_telegram_url_extracts_handle_not_domain(self):
         """https://t.me/username should extract as TELEGRAM_HANDLE, NOT URL_DOMAIN."""
@@ -656,11 +675,11 @@ class TestURLDomain:
         assert "defencenews" in _values(results, "TELEGRAM_HANDLE"), \
             "Telegram URL path must be extracted as TELEGRAM_HANDLE"
 
-    def test_normal_url_still_extracts_domain(self):
-        """Non-Telegram URLs must still extract as URL_DOMAIN."""
+    def test_normal_url_still_extracts_url_domain(self):
+        """Non-social URLs must still extract as URL_DOMAIN with full path."""
         text = "Visit https://ndtv.com/article/123"
         results = extract_identifiers(text)
-        assert "ndtv.com" in _values(results, "URL_DOMAIN")
+        assert "ndtv.com/article/123" in _values(results, "URL_DOMAIN")
 
     def test_telegram_joinchat_url_skipped(self):
         """https://t.me/joinchat/abc is not a handle — skip it."""
@@ -673,6 +692,103 @@ class TestURLDomain:
         text = "Share via https://t.me/share/url?text=hello"
         results = extract_identifiers(text)
         assert "share" not in _values(results, "TELEGRAM_HANDLE")
+
+    # --- Facebook URL → FACEBOOK_HANDLE ---
+
+    def test_facebook_url_extracts_handle(self):
+        """https://facebook.com/scammerpage → FACEBOOK_HANDLE, not URL_DOMAIN."""
+        text = "Check https://facebook.com/scammerpage for evidence"
+        results = extract_identifiers(text)
+        assert "facebook.com" not in _values(results, "URL_DOMAIN"), \
+            "facebook.com must NOT appear as URL_DOMAIN"
+        assert "scammerpage" in _values(results, "FACEBOOK_HANDLE")
+
+    def test_facebook_www_url_extracts_handle(self):
+        """https://www.facebook.com/fraudster → FACEBOOK_HANDLE."""
+        text = "See https://www.facebook.com/fraudster"
+        results = extract_identifiers(text)
+        assert "fraudster" in _values(results, "FACEBOOK_HANDLE")
+
+    def test_fb_com_url_extracts_handle(self):
+        """https://fb.com/scammer → FACEBOOK_HANDLE."""
+        text = "Link https://fb.com/scammer"
+        results = extract_identifiers(text)
+        assert "scammer" in _values(results, "FACEBOOK_HANDLE")
+
+    def test_facebook_noise_paths_skipped(self):
+        """facebook.com/share, /login, /settings → no handle extracted."""
+        for noise in ("share", "sharer", "login", "help", "settings", "marketplace"):
+            text = f"https://facebook.com/{noise}"
+            results = extract_identifiers(text)
+            assert noise not in _values(results, "FACEBOOK_HANDLE"), \
+                f"Facebook noise path '{noise}' should not be extracted as handle"
+
+    def test_facebook_profile_subpath(self):
+        """facebook.com/profile.php?id=123 → skip (no clean handle)."""
+        text = "https://facebook.com/profile.php?id=100012345"
+        results = extract_identifiers(text)
+        # profile.php is not a handle — should not extract
+        assert "profile.php" not in _values(results, "FACEBOOK_HANDLE")
+
+    # --- X/Twitter URL → X_HANDLE ---
+
+    def test_twitter_url_extracts_handle(self):
+        """https://twitter.com/fraudster → X_HANDLE."""
+        text = "Follow https://twitter.com/fraudster for updates"
+        results = extract_identifiers(text)
+        assert "twitter.com" not in _values(results, "URL_DOMAIN"), \
+            "twitter.com must NOT appear as URL_DOMAIN"
+        assert "fraudster" in _values(results, "X_HANDLE")
+
+    def test_x_com_url_extracts_handle(self):
+        """https://x.com/scammer → X_HANDLE."""
+        text = "See https://x.com/scammer"
+        results = extract_identifiers(text)
+        assert "scammer" in _values(results, "X_HANDLE")
+
+    def test_x_noise_paths_skipped(self):
+        """x.com/intent, /login, /explore → no handle extracted."""
+        for noise in ("intent", "login", "explore", "search", "settings", "home"):
+            text = f"https://x.com/{noise}"
+            results = extract_identifiers(text)
+            assert noise not in _values(results, "X_HANDLE"), \
+                f"X noise path '{noise}' should not be extracted as handle"
+
+    def test_x_hashtag_path_skipped(self):
+        """x.com/hashtag/whatever → no handle."""
+        text = "https://twitter.com/hashtag/scam"
+        results = extract_identifiers(text)
+        assert "hashtag" not in _values(results, "X_HANDLE")
+
+    # --- Instagram URL → INSTAGRAM_HANDLE ---
+
+    def test_instagram_url_extracts_handle(self):
+        """https://instagram.com/fakeshop → INSTAGRAM_HANDLE."""
+        text = "Buy from https://instagram.com/fakeshop"
+        results = extract_identifiers(text)
+        assert "instagram.com" not in _values(results, "URL_DOMAIN"), \
+            "instagram.com must NOT appear as URL_DOMAIN"
+        assert "fakeshop" in _values(results, "INSTAGRAM_HANDLE")
+
+    def test_instagram_www_url_extracts_handle(self):
+        """https://www.instagram.com/seller → INSTAGRAM_HANDLE."""
+        text = "See https://www.instagram.com/seller"
+        results = extract_identifiers(text)
+        assert "seller" in _values(results, "INSTAGRAM_HANDLE")
+
+    def test_instagram_noise_paths_skipped(self):
+        """instagram.com/explore, /reels, /accounts → no handle."""
+        for noise in ("explore", "reels", "stories", "accounts", "about"):
+            text = f"https://instagram.com/{noise}"
+            results = extract_identifiers(text)
+            assert noise not in _values(results, "INSTAGRAM_HANDLE"), \
+                f"Instagram noise path '{noise}' should not be extracted as handle"
+
+    def test_instagram_post_path_skipped(self):
+        """instagram.com/p/ABC123 → skip (p is noise, not a handle)."""
+        text = "https://instagram.com/p/ABC123xyz"
+        results = extract_identifiers(text)
+        assert "p" not in _values(results, "INSTAGRAM_HANDLE")
 
 
 # ===========================================================================
@@ -976,8 +1092,8 @@ class TestSEBIReg:
 class TestCrossCuttingPart2:
     """Cross-type tests including Part 2 types."""
 
-    def test_all_16_types_extractable(self):
-        """Single text with all 16 identifier types."""
+    def test_all_18_types_extractable(self):
+        """Single text with all 18 identifier types."""
         text = """
         Call +919876543210 or WhatsApp.
         WS: +86 19164436279
@@ -987,6 +1103,8 @@ class TestCrossCuttingPart2:
         USDT: TJYeasTPa8dGTLi7rWCvFzEQdmGSMH4XsH
         Follow @easy_money_group
         Visit https://scam-site.com/offer
+        Check https://facebook.com/fraudpage
+        See https://x.com/scamaccount
         GSTIN: 27AABCU9603R1ZM
         UDYAM-MH-02-0012345
         PAN card: ABCDE1234F
@@ -999,6 +1117,7 @@ class TestCrossCuttingPart2:
         expected = {
             "PHONE_IN", "PHONE_INTL", "UPI", "EMAIL", "CRYPTO_BTC",
             "CRYPTO_ETH", "CRYPTO_TRC20", "TELEGRAM_HANDLE", "URL_DOMAIN",
+            "FACEBOOK_HANDLE", "X_HANDLE",
             "GSTIN", "UDYAM", "PAN", "IFSC", "BANK_ACCOUNT", "SEBI_REG",
         }
         missing = expected - types

@@ -200,6 +200,48 @@ def _normalize_domain(url: str) -> str:
     return domain.lower()
 
 
+def _normalize_url_path(url: str) -> str:
+    """Extract domain + path from URL (strip protocol, www, query, fragment)."""
+    parsed = urlparse(url)
+    domain = parsed.hostname or ""
+    if domain.startswith("www."):
+        domain = domain[4:]
+    domain = domain.lower()
+    path = parsed.path.rstrip("/")
+    if path:
+        return f"{domain}{path}"
+    return domain
+
+
+# Social platform domains → (identifier_type, noise_paths)
+# Path segment after domain = handle/page/profile name
+_SOCIAL_URL_DOMAINS: dict[str, tuple[str, frozenset[str]]] = {
+    "t.me": ("TELEGRAM_HANDLE", frozenset({
+        "s", "share", "joinchat", "addstickers",
+    })),
+    "facebook.com": ("FACEBOOK_HANDLE", frozenset({
+        "share", "sharer", "sharer.php", "dialog", "login", "help",
+        "privacy", "policies", "settings", "watch", "marketplace",
+        "groups", "events", "profile.php",
+    })),
+    "fb.com": ("FACEBOOK_HANDLE", frozenset({
+        "share", "sharer", "sharer.php", "dialog", "login", "help",
+    })),
+    "twitter.com": ("X_HANDLE", frozenset({
+        "share", "intent", "login", "i", "settings", "explore",
+        "search", "home", "tos", "privacy", "hashtag",
+    })),
+    "x.com": ("X_HANDLE", frozenset({
+        "share", "intent", "login", "i", "settings", "explore",
+        "search", "home", "tos", "privacy", "hashtag",
+    })),
+    "instagram.com": ("INSTAGRAM_HANDLE", frozenset({
+        "explore", "reels", "stories", "direct", "accounts",
+        "about", "legal", "p",
+    })),
+}
+
+
 def _normalize_phone_intl(raw: str) -> str | None:
     """Normalize to E.164: +{country_code}{subscriber_digits}.
 
@@ -338,8 +380,7 @@ def extract_identifiers(text: str, platform: str = "") -> list[IdentifierMatch]:
             confidence = 0.9 if platform_lower == "telegram" else 0.7
             _add("TELEGRAM_HANDLE", f"@{raw_handle}", norm, confidence)
 
-    # --- URL_DOMAIN ---
-    _TELEGRAM_NOISE_PATHS = {"s", "share", "joinchat", "addstickers"}
+    # --- URL_DOMAIN / social handle extraction ---
     for m in _RE_URL.finditer(text):
         raw = m.group(1)
         # Strip trailing punctuation that may have been captured
@@ -347,13 +388,16 @@ def extract_identifiers(text: str, platform: str = "") -> list[IdentifierMatch]:
         domain = _normalize_domain(raw)
         if not domain or "." not in domain:
             continue
-        # Telegram URLs → extract as TELEGRAM_HANDLE, not URL_DOMAIN
-        if domain == "t.me":
+        # Social platform URLs → extract as handle, not URL_DOMAIN
+        social = _SOCIAL_URL_DOMAINS.get(domain)
+        if social is not None:
+            id_type, noise_paths = social
             path = urlparse(raw).path.strip("/").split("/")[0]
-            if path and path.lower() not in _TELEGRAM_NOISE_PATHS:
-                _add("TELEGRAM_HANDLE", raw, path.lower(), 0.9)
+            if path and path.lower() not in noise_paths:
+                _add(id_type, raw, path.lower(), 0.9)
             continue
-        _add("URL_DOMAIN", raw, domain, 0.9)
+        # Generic URLs → full domain+path as normalized_value
+        _add("URL_DOMAIN", raw, _normalize_url_path(raw), 0.9)
 
     # --- GSTIN ---
     # Collect GSTIN normalized values to exclude PAN-like substrings later

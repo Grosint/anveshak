@@ -10,6 +10,8 @@ export type IdentifierType =
   | 'CRYPTO_TRC20'
   | 'TELEGRAM_HANDLE'
   | 'INSTAGRAM_HANDLE'
+  | 'FACEBOOK_HANDLE'
+  | 'X_HANDLE'
   | 'URL_DOMAIN'
   | 'GSTIN'
   | 'UDYAM'

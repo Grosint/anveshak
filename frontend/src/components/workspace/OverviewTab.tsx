@@ -21,14 +21,15 @@ const TYPE_COLORS: Record<string, string> = {
   PHONE_IN: 'text-green-400', PHONE_INTL: 'text-teal-400', UPI: 'text-purple-400', TELEGRAM_HANDLE: 'text-blue-400',
   CRYPTO_BTC: 'text-amber-400', EMAIL: 'text-cyan-400', GSTIN: 'text-orange-400',
   SEBI_REG: 'text-pink-400', URL_DOMAIN: 'text-violet-400',
-  INSTAGRAM_HANDLE: 'text-rose-400', PAN: 'text-text-muted', IFSC: 'text-text-muted',
+  INSTAGRAM_HANDLE: 'text-rose-400', FACEBOOK_HANDLE: 'text-blue-500', X_HANDLE: 'text-slate-400',
+  PAN: 'text-text-muted', IFSC: 'text-text-muted',
 }
 
 const TYPE_SHORT: Record<string, string> = {
   PHONE_IN: 'PHONE', PHONE_INTL: 'INTL', UPI: 'UPI', TELEGRAM_HANDLE: 'TELEGRAM', CRYPTO_BTC: 'BTC',
   CRYPTO_ETH: 'ETH', EMAIL: 'EMAIL', GSTIN: 'GSTIN', URL_DOMAIN: 'URL',
-  SEBI_REG: 'SEBI', INSTAGRAM_HANDLE: 'INSTA', PAN: 'PAN', IFSC: 'IFSC',
-  BANK_ACCOUNT: 'BANK',
+  SEBI_REG: 'SEBI', INSTAGRAM_HANDLE: 'INSTA', FACEBOOK_HANDLE: 'FB', X_HANDLE: 'X',
+  PAN: 'PAN', IFSC: 'IFSC', BANK_ACCOUNT: 'BANK',
 }
 
 interface OverviewTabProps {

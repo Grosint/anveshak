@@ -15,8 +15,8 @@ const TYPE_COLORS: Record<string, string> = {
 const TYPE_SHORT: Record<string, string> = {
   PHONE_IN: 'PH', PHONE_INTL: 'INTL', UPI: 'UPI', TELEGRAM_HANDLE: 'TG', CRYPTO_BTC: 'BTC',
   CRYPTO_ETH: 'ETH', EMAIL: 'EM', GSTIN: 'GST', URL_DOMAIN: 'URL',
-  SEBI_REG: 'SEBI', INSTAGRAM_HANDLE: 'IG', PAN: 'PAN', IFSC: 'IFSC',
-  BANK_ACCOUNT: 'BA',
+  SEBI_REG: 'SEBI', INSTAGRAM_HANDLE: 'IG', FACEBOOK_HANDLE: 'FB', X_HANDLE: 'X',
+  PAN: 'PAN', IFSC: 'IFSC', BANK_ACCOUNT: 'BA',
 }
 
 interface TopIdentifiersProps {

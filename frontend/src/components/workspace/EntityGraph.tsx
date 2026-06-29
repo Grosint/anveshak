@@ -19,6 +19,8 @@ const ID_STYLES: Record<string, { bg: string; border: string; label: string; sha
   SEBI_REG:         { bg: '#ec4899', border: '#f9a8d4', label: 'SEBI',      shape: 'ellipse' },
   URL_DOMAIN:       { bg: '#8b5cf6', border: '#c4b5fd', label: 'URL',       shape: 'ellipse' },
   INSTAGRAM_HANDLE: { bg: '#e11d48', border: '#fda4af', label: 'INSTA',     shape: 'ellipse' },
+  FACEBOOK_HANDLE:  { bg: '#3b82f6', border: '#93c5fd', label: 'FB',        shape: 'ellipse' },
+  X_HANDLE:         { bg: '#64748b', border: '#94a3b8', label: 'X',         shape: 'ellipse' },
 }
 
 const SRC_STYLE = { bg: '#059669', border: '#6ee7b7' }
