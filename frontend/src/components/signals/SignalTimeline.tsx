@@ -311,7 +311,7 @@ function TopicLane({
                 : `Show all ${sorted.length} signals (${sorted.length - MAX_VISIBLE_SIGNALS} hidden)`}
             </button>
           )}
-          <div className="max-h-[400px] overflow-y-auto overflow-x-hidden pr-1">
+          <div className="max-h-[400px] overflow-y-auto overflow-x-hidden">
           {rows.map((rowSignals, idx) => (
             <SnakeRow
               key={idx}

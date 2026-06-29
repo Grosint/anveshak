@@ -149,7 +149,7 @@ export default function SignalsInbox() {
   )
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="flex flex-col">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="px-6 pt-6 pb-4 border-b border-anveshak-border flex items-center justify-between">
         <div>
@@ -266,7 +266,7 @@ export default function SignalsInbox() {
       </div>
 
       {/* ── Content ────────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto p-6" role="tabpanel">
+      <div className="p-6" role="tabpanel">
         {isLoading ? (
           <div className="flex justify-center py-20">
             <Spinner label="Loading signals…" />
