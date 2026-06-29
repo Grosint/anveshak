@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { systemApi, AuditTrailEntry } from '../../api/system'
+import { topicsApi } from '../../api/topics'
+import { useAuth } from '../../contexts/AuthContext'
 
 /** Backend returns details as double-encoded JSON string — parse to object. */
 function parseDetails(raw: unknown): Record<string, unknown> {
@@ -59,10 +61,22 @@ interface Props {
 }
 
 export default function AuditTrailPage({ embedded = false }: Props) {
+  const { user } = useAuth()
+  const isAnalyst = user?.role === 'analyst'
   const [resourceType, setResourceType] = useState('')
   const [resourceId, setResourceId] = useState('')
   const [limit, setLimit] = useState(100)
   const [selectedEntry, setSelectedEntry] = useState<AuditTrailEntry | null>(null)
+
+  // Fetch topics for the resource picker (analysts need this to select a topic)
+  const { data: topics = [] } = useQuery({
+    queryKey: ['topics'],
+    queryFn: topicsApi.list,
+    staleTime: 60_000,
+  })
+
+  // Analysts must provide resource_id — don't fire query without it
+  const canQuery = !isAnalyst || resourceId.trim().length > 0
 
   const { data: entries = [], isLoading, error } = useQuery({
     queryKey: ['audit-trail', resourceType, resourceId, limit],
@@ -73,6 +87,7 @@ export default function AuditTrailPage({ embedded = false }: Props) {
         limit,
       }),
     refetchInterval: 30000,
+    enabled: canQuery,
   })
 
   return (
@@ -98,14 +113,32 @@ export default function AuditTrailPage({ embedded = false }: Props) {
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-text-muted uppercase tracking-wider">ID</label>
-          <input
-            type="text"
-            value={resourceId}
-            onChange={(e) => setResourceId(e.target.value)}
-            placeholder="Filter by resource ID..."
-            className={`${INPUT_CLASS} w-52`}
-          />
+          <label className="text-xs font-medium text-text-muted uppercase tracking-wider">
+            {isAnalyst ? 'Topic' : 'ID'}
+          </label>
+          {isAnalyst ? (
+            <select
+              value={resourceId}
+              onChange={(e) => {
+                setResourceId(e.target.value)
+                if (e.target.value) setResourceType('topic')
+              }}
+              className={`${INPUT_CLASS} w-64`}
+            >
+              <option value="">Select a topic...</option>
+              {topics.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              value={resourceId}
+              onChange={(e) => setResourceId(e.target.value)}
+              placeholder="Filter by resource ID..."
+              className={`${INPUT_CLASS} w-52`}
+            />
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -131,11 +164,19 @@ export default function AuditTrailPage({ embedded = false }: Props) {
 
         {error && (
           <p className="text-sm text-red-400 py-12 text-center">
-            Failed to load audit trail. Admin access required.
+            {(error as any)?.response?.status === 403
+              ? 'Select a resource type or ID above to view audit entries.'
+              : `Failed to load audit trail: ${(error as any)?.response?.data?.detail || (error as Error).message}`}
           </p>
         )}
 
-        {!isLoading && !error && entries.length === 0 && (
+        {!isLoading && !error && !canQuery && (
+          <p className="text-sm text-text-muted py-12 text-center">
+            Select a topic above to view its audit trail.
+          </p>
+        )}
+
+        {!isLoading && !error && canQuery && entries.length === 0 && (
           <p className="text-sm text-text-muted py-12 text-center">No audit entries found.</p>
         )}
 
