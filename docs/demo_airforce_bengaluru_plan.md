@@ -1,6 +1,6 @@
 # Air Force Bengaluru Demo — Seed Data Plan
 
-**Status:** PLANNED (not yet implemented)
+**Status:** IMPLEMENTED (2026-06-29)
 **Created:** 2026-06-28
 **Target file:** `scripts/seed_airforce_bengaluru_demo.sql`
 

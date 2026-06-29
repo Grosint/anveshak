@@ -87,7 +87,7 @@ _WORK  := $(_CYN)⟳$(_RST)
 
 .PHONY: all setup up up-vision up-bridge build build-nocache build-vision down restart \
         ps logs init pull-models download-models migrate migrate-status migrate-hnsw \
-        migrate-rollback seed-demo \
+        migrate-rollback seed-demo seed-demo-iaf \
         fresh fresh-all \
         test test-unit test-integration test-e2e test-full test-scrape \
         test-ci test-all test-nightly \
@@ -367,6 +367,14 @@ seed-demo-ec:
 	$(call success,Engine C demo loaded (MEA + Cyber + SEBI + NCB))
 	@printf "\n  Orgs: org_mea, org_cyber, org_sebi, org_ncb\n"
 	@printf "  Login: demo_{mea,cyber,sebi,ncb}@anveshak.local\n"
+	@printf "  Password: $(_BOLD)AnveshakDemo2024!$(_RST)\n\n"
+
+seed-demo-iaf:
+	$(call header,Loading IAF Bengaluru Demo — Air Force Intelligence)
+	@$(COMPOSE) exec -T postgres psql -U anveshak -d anveshak < scripts/seed_airforce_bengaluru_demo.sql 2>&1 | tail -1
+	$(call success,IAF demo loaded (3 topics — Chinese Air Power + Disinfo + PAF))
+	@printf "\n  Login at $(_CYN)http://localhost:3000$(_RST)\n"
+	@printf "  Username: $(_BOLD)demo_iaf@anveshak.local$(_RST)\n"
 	@printf "  Password: $(_BOLD)AnveshakDemo2024!$(_RST)\n\n"
 
 # ---------------------------------------------------------------------------
