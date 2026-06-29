@@ -1,4 +1,5 @@
 import api from './client'
+import type { PaginatedResponse } from './types'
 
 export interface Tracker {
   id: string
@@ -57,8 +58,8 @@ export interface TrackerAuditEntry {
 }
 
 export const trackersApi = {
-  list: (params?: { topic_id?: string; status?: string }) =>
-    api.get<Tracker[]>('/api/v1/trackers', { params }).then((r) => r.data),
+  list: (params?: { topic_id?: string; status?: string; limit?: number; offset?: number }) =>
+    api.get<PaginatedResponse<Tracker>>('/api/v1/trackers', { params }).then((r) => r.data),
 
   get: (id: string) =>
     api.get<Tracker>(`/api/v1/trackers/${id}`).then((r) => r.data),

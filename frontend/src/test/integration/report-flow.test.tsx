@@ -17,7 +17,7 @@ vi.mock('../../api/reports', () => ({
   reportsApi: {
     create: (...args: any[]) => mockReportCreate(...args),
     get: (...args: any[]) => mockReportGet(...args),
-    listForTopic: vi.fn().mockResolvedValue([]),
+    listForTopic: vi.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 50 }),
     getGeojson: vi.fn().mockResolvedValue({ type: 'FeatureCollection', features: [] }),
     downloadPdf: vi.fn(),
   },

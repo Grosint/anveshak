@@ -262,7 +262,7 @@ class TestSignalOrgIsolation:
                 sig_id, tid, LABELS,
             )
 
-        signals_a = await list_signals_by_org(db_conn, "new", org_a)
+        signals_a, total_a = await list_signals_by_org(db_conn, "new", org_a)
         signal_ids_a = {s["id"] for s in signals_a}
 
         assert sig_a in signal_ids_a

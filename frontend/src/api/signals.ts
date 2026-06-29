@@ -1,4 +1,5 @@
 import api from './client'
+import type { PaginatedResponse } from './types'
 
 export type SignalStatus = 'new' | 'acknowledged' | 'dismissed'
 
@@ -51,9 +52,9 @@ export interface DailyCount {
 }
 
 export const signalsApi = {
-  list: (status: SignalStatus = 'new', since?: string, until?: string) =>
-    api.get<Signal[]>('/api/v1/signals', {
-      params: { status, ...(since ? { since } : {}), ...(until ? { until } : {}) },
+  list: (status: SignalStatus = 'new', since?: string, until?: string, offset = 0, limit = 50) =>
+    api.get<PaginatedResponse<Signal>>('/api/v1/signals', {
+      params: { status, offset, limit, ...(since ? { since } : {}), ...(until ? { until } : {}) },
     }).then((r) => r.data),
 
   acknowledge: (signalId: string) =>
@@ -62,9 +63,9 @@ export const signalsApi = {
   dismiss: (signalId: string) =>
     api.patch<{ signal_id: string; status: string }>(`/api/v1/signals/${signalId}/dismiss`).then((r) => r.data),
 
-  listByTopic: (topicId: string, status: SignalStatus = 'new') =>
-    api.get<Signal[]>('/api/v1/signals', {
-      params: { topic_id: topicId, status },
+  listByTopic: (topicId: string, status: SignalStatus = 'new', offset = 0, limit = 50) =>
+    api.get<PaginatedResponse<Signal>>('/api/v1/signals', {
+      params: { topic_id: topicId, status, offset, limit },
     }).then((r) => r.data),
 
   connections: (signalId: string) =>

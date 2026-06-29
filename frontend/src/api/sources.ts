@@ -1,4 +1,5 @@
 import api from './client'
+import type { PaginatedResponse } from './types'
 
 export type Platform = 'web' | 'telegram' | 'twitter' | 'reddit' | 'bluesky' | 'rss' | 'upload' | 'darkweb'
 
@@ -50,8 +51,8 @@ export interface UpdateSourcePayload {
 }
 
 export const sourcesApi = {
-  list: () =>
-    api.get<Source[]>('/api/v1/sources').then((r) => r.data),
+  list: (offset = 0, limit = 50) =>
+    api.get<PaginatedResponse<Source>>('/api/v1/sources', { params: { offset, limit } }).then((r) => r.data),
 
   create: (payload: CreateSourcePayload) =>
     api.post<{ id: string; name: string }>('/api/v1/sources', payload).then((r) => r.data),

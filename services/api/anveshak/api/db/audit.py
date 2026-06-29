@@ -26,7 +26,8 @@ SQL_INSERT_AUDIT = """
 
 SQL_GET_AUDIT_TRAIL = """
     SELECT at.id, at.user_id, u.username, at.action, at.resource_type,
-           at.resource_id, at.details, at.ip_address, at.created_at
+           at.resource_id, at.details, at.ip_address, at.created_at,
+           COUNT(*) OVER() AS total
     FROM audit_trail at
     LEFT JOIN users u ON u.id = at.user_id
     WHERE at.resource_type = $1
@@ -36,7 +37,8 @@ SQL_GET_AUDIT_TRAIL = """
 
 SQL_GET_AUDIT_TRAIL_ALL = """
     SELECT at.id, at.user_id, u.username, at.action, at.resource_type,
-           at.resource_id, at.details, at.ip_address, at.created_at
+           at.resource_id, at.details, at.ip_address, at.created_at,
+           COUNT(*) OVER() AS total
     FROM audit_trail at
     LEFT JOIN users u ON u.id = at.user_id
     ORDER BY at.created_at DESC
@@ -45,7 +47,8 @@ SQL_GET_AUDIT_TRAIL_ALL = """
 
 SQL_GET_AUDIT_TRAIL_BY_RESOURCE = """
     SELECT at.id, at.user_id, u.username, at.action, at.resource_type,
-           at.resource_id, at.details, at.ip_address, at.created_at
+           at.resource_id, at.details, at.ip_address, at.created_at,
+           COUNT(*) OVER() AS total
     FROM audit_trail at
     LEFT JOIN users u ON u.id = at.user_id
     WHERE at.resource_type = $1 AND at.resource_id = $2
@@ -55,7 +58,8 @@ SQL_GET_AUDIT_TRAIL_BY_RESOURCE = """
 
 SQL_GET_AUDIT_TRAIL_BY_RESOURCE_ID = """
     SELECT at.id, at.user_id, u.username, at.action, at.resource_type,
-           at.resource_id, at.details, at.ip_address, at.created_at
+           at.resource_id, at.details, at.ip_address, at.created_at,
+           COUNT(*) OVER() AS total
     FROM audit_trail at
     LEFT JOIN users u ON u.id = at.user_id
     WHERE at.resource_id = $1
@@ -100,8 +104,11 @@ async def get_audit_trail(
     resource_id: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
-) -> list[dict[str, Any]]:
-    """Retrieve audit trail entries, optionally filtered by resource_type and resource_id."""
+) -> tuple[list[dict[str, Any]], int]:
+    """Retrieve audit trail entries, optionally filtered by resource_type and resource_id.
+
+    Returns (items, total) where total is the unfiltered count matching the WHERE clause.
+    """
     if resource_type and resource_id:
         rows = await conn.fetch(
             SQL_GET_AUDIT_TRAIL_BY_RESOURCE, resource_type, resource_id, limit, offset
@@ -114,4 +121,6 @@ async def get_audit_trail(
         rows = await conn.fetch(SQL_GET_AUDIT_TRAIL, resource_type, limit, offset)
     else:
         rows = await conn.fetch(SQL_GET_AUDIT_TRAIL_ALL, limit, offset)
-    return [dict(r) for r in rows]
+    total = rows[0]["total"] if rows else 0
+    items = [{k: v for k, v in dict(r).items() if k != "total"} for r in rows]
+    return items, total

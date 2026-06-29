@@ -13,16 +13,18 @@ def mock_conn():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_list_sources_returns_list(mock_conn):
+async def test_list_sources_returns_tuple(mock_conn):
     from anveshak.api.db.sources import list_sources  # type: ignore[import]
 
     mock_conn.fetch.return_value = [
         {"id": "s1", "name": "NDTV", "platform": "web", "credibility_score": 75.0,
-         "is_active": True, "last_checked_at": None}
+         "is_active": True, "last_checked_at": None, "total": 1}
     ]
-    result = await list_sources(mock_conn)
-    assert len(result) == 1
-    assert result[0]["name"] == "NDTV"
+    items, total = await list_sources(mock_conn)
+    assert len(items) == 1
+    assert items[0]["name"] == "NDTV"
+    assert "total" not in items[0]
+    assert total == 1
 
 
 @pytest.mark.unit

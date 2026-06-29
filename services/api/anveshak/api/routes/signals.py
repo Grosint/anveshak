@@ -14,6 +14,7 @@ from ..db.pool import get_db, get_pool
 from ..db import signals as signals_db
 from ..db import audit as audit_db
 from ..db import topics as topics_db
+from ..pagination import paginate_rows
 
 log = structlog.get_logger(__name__)
 
@@ -135,6 +136,8 @@ async def list_signals(
     topic_id: Optional[str] = Query(default=None, description="Filter signals to a specific topic"),
     since: Optional[datetime] = Query(default=None, description="ISO datetime — only return signals at or after this time"),
     until: Optional[datetime] = Query(default=None, description="ISO datetime — only return signals at or before this time"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ):
@@ -143,13 +146,17 @@ async def list_signals(
         _since = since or datetime.min.replace(tzinfo=UTC)
         _until = until or datetime.now(UTC)
         _org_id = None if is_super_admin(user) else get_user_org(user)
-        return await signals_db.list_signals_filtered(db, status, _since, _until, topic_id=topic_id, org_id=_org_id)
+        items = await signals_db.list_signals_filtered(db, status, _since, _until, topic_id=topic_id, org_id=_org_id)
+        return paginate_rows(items, len(items), 0, len(items) or limit)
     if topic_id:
-        return await signals_db.list_signals(db, status, topic_id=topic_id)
+        items, total = await signals_db.list_signals(db, status, limit, offset, topic_id=topic_id)
+        return paginate_rows(items, total, offset, limit)
     if is_super_admin(user):
-        return await signals_db.list_signals(db, status)
+        items, total = await signals_db.list_signals(db, status, limit, offset)
+        return paginate_rows(items, total, offset, limit)
     org_id = get_user_org(user)
-    return await signals_db.list_signals_by_org(db, status, org_id)
+    items, total = await signals_db.list_signals_by_org(db, status, org_id, limit, offset)
+    return paginate_rows(items, total, offset, limit)
 
 
 @router.get("/daily-counts")

@@ -29,19 +29,20 @@ class TestListSignalsTopicFilter:
         user = _fake_user()
 
         with patch("anveshak.api.routes.signals.signals_db") as mock_db:
-            mock_db.list_signals_by_org = AsyncMock(return_value=[])
-            mock_db.list_signals = AsyncMock(return_value=[])
+            mock_db.list_signals_by_org = AsyncMock(return_value=([], 0))
+            mock_db.list_signals = AsyncMock(return_value=([], 0))
 
             await list_signals(
                 status="new", topic_id="topic-123",
                 since=None, until=None,
+                limit=50, offset=0,
                 db=db, user=user,
             )
 
             # Must NOT call org-wide query
             mock_db.list_signals_by_org.assert_not_awaited()
             # Must call topic-scoped query
-            mock_db.list_signals.assert_awaited_once_with(db, "new", topic_id="topic-123")
+            mock_db.list_signals.assert_awaited_once_with(db, "new", 50, 0, topic_id="topic-123")
 
     @pytest.mark.asyncio
     async def test_org_user_without_topic_id_calls_org_scoped_query(self):
@@ -52,17 +53,18 @@ class TestListSignalsTopicFilter:
         user = _fake_user()
 
         with patch("anveshak.api.routes.signals.signals_db") as mock_db:
-            mock_db.list_signals_by_org = AsyncMock(return_value=[])
-            mock_db.list_signals = AsyncMock(return_value=[])
+            mock_db.list_signals_by_org = AsyncMock(return_value=([], 0))
+            mock_db.list_signals = AsyncMock(return_value=([], 0))
 
             await list_signals(
                 status="new", topic_id=None,
                 since=None, until=None,
+                limit=50, offset=0,
                 db=db, user=user,
             )
 
             # Org-scoped when no topic_id
-            mock_db.list_signals_by_org.assert_awaited_once_with(db, "new", "org_cyber")
+            mock_db.list_signals_by_org.assert_awaited_once_with(db, "new", "org_cyber", 50, 0)
             mock_db.list_signals.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -82,6 +84,7 @@ class TestListSignalsTopicFilter:
             await list_signals(
                 status="new", topic_id="topic-123",
                 since=since, until=until,
+                limit=50, offset=0,
                 db=db, user=user,
             )
 

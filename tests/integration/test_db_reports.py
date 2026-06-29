@@ -113,10 +113,11 @@ async def test_list_topic_reports_generation_status(db_pool):
             "UPDATE reports SET generated_at=$1 WHERE id=$2", now, report_complete
         )
 
-        result = await list_topic_reports(conn, topic_id)
+        result, total = await list_topic_reports(conn, topic_id)
 
     try:
         assert len(result) == 2, f"Expected 2 reports, got {len(result)}"
+        assert total == 2
         statuses = {r["id"]: r["generation_status"] for r in result}
         assert statuses[report_queued] == "queued"
         assert statuses[report_complete] == "complete"
@@ -130,9 +131,10 @@ async def test_list_topic_reports_empty_topic(db_pool):
     topic_id = str(uuid.uuid4())
     async with db_pool.acquire() as conn:
         await _create_topic(conn, topic_id)
-        result = await list_topic_reports(conn, topic_id)
+        result, total = await list_topic_reports(conn, topic_id)
     try:
         assert result == []
+        assert total == 0
     finally:
         async with db_pool.acquire() as conn:
             await _cleanup(conn, topic_id, [])

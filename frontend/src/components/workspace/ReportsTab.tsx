@@ -26,11 +26,12 @@ export default function ReportsTab({ topicId }: ReportsTabProps) {
   const [currentReportId, setCurrentReportId] = useState<string | null>(null)
 
   // Report history
-  const { data: history = [], isLoading: loadingHistory } = useQuery({
+  const { data: historyData, isLoading: loadingHistory } = useQuery({
     queryKey: ['reports-history', topicId],
     queryFn: () => reportsApi.listForTopic(topicId),
     enabled: !!topicId,
   })
+  const history = historyData?.items ?? []
 
   // Poll current report
   const { data: report } = useQuery<Report>({

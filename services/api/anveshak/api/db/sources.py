@@ -18,7 +18,8 @@ SQL_INSERT_SOURCE = """
 SQL_LIST_SOURCES = """
     SELECT s.id, s.name, s.url_or_handle, s.platform, s.credibility_score, s.is_active,
            s.health_status, s.consecutive_failures, s.health_error, s.last_checked_at,
-           COALESCE(tc.topic_links_count, 0) AS topic_links_count
+           COALESCE(tc.topic_links_count, 0) AS topic_links_count,
+           COUNT(*) OVER() AS total
     FROM sources s
     LEFT JOIN (
         SELECT source_id, COUNT(*) AS topic_links_count
@@ -26,12 +27,14 @@ SQL_LIST_SOURCES = """
         GROUP BY source_id
     ) tc ON tc.source_id = s.id
     ORDER BY s.credibility_score DESC
+    LIMIT $1 OFFSET $2
 """
 
 SQL_LIST_SOURCES_BY_ORG = """
     SELECT s.id, s.name, s.url_or_handle, s.platform, s.credibility_score, s.is_active,
            s.health_status, s.consecutive_failures, s.health_error, s.last_checked_at,
-           COALESCE(tc.topic_links_count, 0) AS topic_links_count
+           COALESCE(tc.topic_links_count, 0) AS topic_links_count,
+           COUNT(*) OVER() AS total
     FROM sources s
     JOIN org_sources os ON os.source_id = s.id
     LEFT JOIN (
@@ -41,6 +44,7 @@ SQL_LIST_SOURCES_BY_ORG = """
     ) tc ON tc.source_id = s.id
     WHERE os.org_id = $1
     ORDER BY s.credibility_score DESC
+    LIMIT $2 OFFSET $3
 """
 
 SQL_CHECK_SOURCE_VISIBILITY = """
@@ -189,18 +193,28 @@ async def insert_source(
     )
 
 
-async def list_sources(conn: asyncpg.Connection) -> list[dict[str, Any]]:
-    rows = await conn.fetch(SQL_LIST_SOURCES)
-    return [dict(r) for r in rows]
+async def list_sources(
+    conn: asyncpg.Connection,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[dict[str, Any]], int]:
+    rows = await conn.fetch(SQL_LIST_SOURCES, limit, offset)
+    total = rows[0]["total"] if rows else 0
+    items = [{k: v for k, v in dict(r).items() if k != "total"} for r in rows]
+    return items, total
 
 
 async def list_sources_by_org(
     conn: asyncpg.Connection,
     org_id: str,
-) -> list[dict[str, Any]]:
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[dict[str, Any]], int]:
     """Return sources visible to an organization via org_sources."""
-    rows = await conn.fetch(SQL_LIST_SOURCES_BY_ORG, org_id)
-    return [dict(r) for r in rows]
+    rows = await conn.fetch(SQL_LIST_SOURCES_BY_ORG, org_id, limit, offset)
+    total = rows[0]["total"] if rows else 0
+    items = [{k: v for k, v in dict(r).items() if k != "total"} for r in rows]
+    return items, total
 
 
 async def verify_source_access(

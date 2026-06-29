@@ -61,11 +61,12 @@ export default function ReportBuilder() {
   })
 
   // Report history for selected topic
-  const { data: history = [] } = useQuery({
+  const { data: historyData } = useQuery({
     queryKey: ['reports-history', selectedTopicId],
     queryFn: () => reportsApi.listForTopic(selectedTopicId),
     enabled: !!selectedTopicId && activeTab === 'history',
   })
+  const history = historyData?.items ?? []
 
   // GeoJSON (only fetched when GIS tab opens and report is done)
   const { data: geojson } = useQuery({

@@ -38,6 +38,7 @@ export interface AuditTrailParams {
   resource_type?: string
   resource_id?: string
   limit?: number
+  offset?: number
 }
 
 export interface AnalyticsDashboardData {
@@ -59,7 +60,7 @@ export const systemApi = {
     api.get<VectorHealth>('/api/v1/system/vector-health').then((r) => r.data),
 
   getAuditTrail: (params?: AuditTrailParams) =>
-    api.get<AuditTrailEntry[]>('/api/v1/system/audit-trail', { params }).then((r) => r.data),
+    api.get<{ items: AuditTrailEntry[]; total: number; offset: number; limit: number }>('/api/v1/system/audit-trail', { params }).then((r) => r.data),
 
   analyticsDashboard: (days = 30) =>
     api.get<AnalyticsDashboardData>('/api/v1/system/analytics-dashboard', { params: { days } }).then((r) => r.data),

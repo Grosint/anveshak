@@ -37,11 +37,12 @@ export function ManageSourcesModal({ open, onClose, topicId, topicName }: Manage
     enabled: open,
   })
 
-  const { data: allSources = [], isLoading: loadingAll } = useQuery({
+  const { data: allSourcesData, isLoading: loadingAll } = useQuery({
     queryKey: ['sources'],
-    queryFn: sourcesApi.list,
+    queryFn: () => sourcesApi.list(0, 500),
     enabled: open,
   })
+  const allSources = allSourcesData?.items ?? []
 
   const linkedIds = useMemo(
     () => new Set(linkedSources.map((s) => s.id)),

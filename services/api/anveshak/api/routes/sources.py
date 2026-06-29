@@ -10,13 +10,14 @@ from urllib.parse import urlparse
 import asyncpg
 import httpx
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict
 
 from ..auth.rbac import require_role, is_super_admin, get_user_org
 from ..db import sources as sources_db
 from ..db import audit as audit_db
 from ..db.pool import get_db
+from ..pagination import paginate_rows
 
 router = APIRouter(prefix="/api/v1/sources", tags=["sources"])
 log = structlog.get_logger(__name__)
@@ -182,14 +183,19 @@ async def create_source(
 @router.get("")
 async def list_sources(
     credibility_below: float | None = None,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin", "super-admin")),
 ):
     if credibility_below is not None:
-        return await sources_db.list_sources_below(db, credibility_below)
+        items = await sources_db.list_sources_below(db, credibility_below)
+        return paginate_rows(items, len(items), 0, len(items) or limit)
     if is_super_admin(user):
-        return await sources_db.list_sources(db)
-    return await sources_db.list_sources_by_org(db, get_user_org(user))
+        items, total = await sources_db.list_sources(db, limit, offset)
+    else:
+        items, total = await sources_db.list_sources_by_org(db, get_user_org(user), limit, offset)
+    return paginate_rows(items, total, offset, limit)
 
 
 @router.post("/{source_id}/check-health", status_code=status.HTTP_200_OK)

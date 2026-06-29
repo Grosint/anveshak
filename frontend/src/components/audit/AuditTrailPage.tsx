@@ -4,6 +4,7 @@ import { format } from 'date-fns'
 import { systemApi, AuditTrailEntry } from '../../api/system'
 import { topicsApi } from '../../api/topics'
 import { useAuth } from '../../contexts/AuthContext'
+import { Pagination } from '../ui/Pagination'
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -109,14 +110,13 @@ export default function AuditTrailPage({ embedded = false }: Props) {
   // Filters
   const [resourceType, setResourceType] = useState('')
   const [resourceId, setResourceId] = useState('')
-  const [limit, setLimit] = useState(250)
   const [selectedActions, setSelectedActions] = useState<Set<string>>(new Set())
 
   // Sort
   const [sortField, setSortField] = useState<SortField>('created_at')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
-  // Pagination
+  // Pagination — server-side
   const [page, setPage] = useState(0)
 
   // Modal
@@ -131,17 +131,21 @@ export default function AuditTrailPage({ embedded = false }: Props) {
 
   const canQuery = !isAnalyst || resourceId.trim().length > 0
 
-  const { data: entries = [], isLoading, error } = useQuery({
-    queryKey: ['audit-trail', resourceType, resourceId, limit],
+  const { data: auditData, isLoading, error } = useQuery({
+    queryKey: ['audit-trail', resourceType, resourceId, page, PAGE_SIZE],
     queryFn: () =>
       systemApi.getAuditTrail({
         resource_type: resourceType || undefined,
         resource_id: resourceId || undefined,
-        limit,
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
       }),
     refetchInterval: 30000,
     enabled: canQuery,
   })
+
+  const entries = auditData?.items ?? []
+  const totalEntries = auditData?.total ?? 0
 
   // Unique action types for filter chips
   const actionTypes = useMemo(
@@ -159,16 +163,16 @@ export default function AuditTrailPage({ embedded = false }: Props) {
     setPage(0)
   }, [])
 
-  // Filter → sort → paginate
+  // Filter → sort (within current page)
   const processed = useMemo(() => {
     let list = [...entries]
 
-    // Action filter
+    // Action filter (client-side on current page)
     if (selectedActions.size > 0) {
       list = list.filter((e) => selectedActions.has(e.action))
     }
 
-    // Sort
+    // Sort (within current page)
     list.sort((a, b) => {
       let av: string, bv: string
       if (sortField === 'username') {
@@ -185,12 +189,7 @@ export default function AuditTrailPage({ embedded = false }: Props) {
     return list
   }, [entries, selectedActions, sortField, sortDir])
 
-  // Pagination
-  const totalPages = Math.max(1, Math.ceil(processed.length / PAGE_SIZE))
-  const safePage = Math.min(page, totalPages - 1)
-  const pageEntries = processed.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)
-  const showingFrom = processed.length === 0 ? 0 : safePage * PAGE_SIZE + 1
-  const showingTo = Math.min((safePage + 1) * PAGE_SIZE, processed.length)
+  const pageEntries = processed
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -265,20 +264,6 @@ export default function AuditTrailPage({ embedded = false }: Props) {
                 className={`${INPUT_CLASS} w-52`}
               />
             )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-medium text-text-muted uppercase tracking-wider">Limit</label>
-            <select
-              value={limit}
-              onChange={(e) => { setLimit(Number(e.target.value)); setPage(0) }}
-              className={INPUT_CLASS}
-            >
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-              <option value={250}>250</option>
-              <option value={500}>500</option>
-            </select>
           </div>
 
           {/* Export CSV */}
@@ -417,46 +402,9 @@ export default function AuditTrailPage({ embedded = false }: Props) {
       </div>
 
       {/* ── Pagination ─────────────────────────────────────────────────── */}
-      {processed.length > PAGE_SIZE && (
-        <div className="flex items-center justify-between px-4 py-2.5 border-t border-anveshak-border bg-anveshak-bg/50 text-xs">
-          <span className="text-text-muted">
-            Showing {showingFrom}–{showingTo} of {processed.length}
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setPage(0)}
-              disabled={safePage === 0}
-              className="px-2 py-1 rounded text-text-muted hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              ««
-            </button>
-            <button
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={safePage === 0}
-              className="px-2 py-1 rounded text-text-muted hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              ‹
-            </button>
-            <span className="px-3 py-1 text-text-secondary font-medium">
-              {safePage + 1} / {totalPages}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              disabled={safePage >= totalPages - 1}
-              className="px-2 py-1 rounded text-text-muted hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              ›
-            </button>
-            <button
-              onClick={() => setPage(totalPages - 1)}
-              disabled={safePage >= totalPages - 1}
-              className="px-2 py-1 rounded text-text-muted hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              »»
-            </button>
-          </div>
-        </div>
-      )}
+      <div className="px-4 py-2.5 bg-anveshak-bg/50">
+        <Pagination page={page} pageSize={PAGE_SIZE} total={totalEntries} onPageChange={setPage} />
+      </div>
 
       {/* ── Details Modal ──────────────────────────────────────────────── */}
       {selectedEntry && (

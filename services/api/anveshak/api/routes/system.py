@@ -16,6 +16,7 @@ from ..db import audit as audit_db
 from ..db import failed_jobs as failed_jobs_db
 from ..db import topics as topics_db
 from ..db.pool import get_db
+from ..pagination import paginate_rows
 
 router = APIRouter(prefix="/api/v1/system", tags=["system"])
 log = structlog.get_logger(__name__)
@@ -66,7 +67,8 @@ async def get_audit_trail(
         if not resource_id:
             raise HTTPException(status_code=403, detail="Analysts must filter by resource_id")
         await topics_db.verify_topic_access(db, resource_id, user)
-    return await audit_db.get_audit_trail(db, resource_type, resource_id, limit, offset)
+    items, total = await audit_db.get_audit_trail(db, resource_type, resource_id, limit, offset)
+    return paginate_rows(items, total, offset, limit)
 
 
 @router.get("/analytics-dashboard")

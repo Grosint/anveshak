@@ -18,10 +18,11 @@ export function QuickStats({ topicId }: QuickStatsProps) {
     queryFn: () => topicsApi.listClusters(topicId),
   })
 
-  const { data: signals = [] } = useQuery({
+  const { data: signalsPage } = useQuery({
     queryKey: ['signals-topic', topicId, 'new'],
     queryFn: () => signalsApi.listByTopic(topicId, 'new'),
   })
+  const signals = signalsPage?.items ?? []
 
   const { data: identifiers = [] } = useQuery({
     queryKey: ['identifiers-top', topicId],

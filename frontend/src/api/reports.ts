@@ -1,4 +1,5 @@
 import api from './client'
+import type { PaginatedResponse } from './types'
 
 export type ReportType = 'intelligence_brief' | 'research_summary' | 'weekly_digest'
 export type ReportStatus = 'queued' | 'complete' | 'failed'
@@ -60,8 +61,12 @@ export const reportsApi = {
   get: (reportId: string) =>
     api.get<Report>(`/api/v1/reports/${reportId}`).then((r) => r.data),
 
-  listForTopic: (topicId: string) =>
-    api.get<ReportSummary[]>(`/api/v1/topics/${topicId}/reports`).then((r) => r.data),
+  listForTopic: (topicId: string, offset = 0, limit = 50) =>
+    api
+      .get<PaginatedResponse<ReportSummary>>(`/api/v1/topics/${topicId}/reports`, {
+        params: { offset, limit },
+      })
+      .then((r) => r.data),
 
   getGeojson: (reportId: string) =>
     api.get(`/api/v1/reports/${reportId}/geojson`).then((r) => r.data),

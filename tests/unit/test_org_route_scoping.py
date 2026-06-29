@@ -195,9 +195,11 @@ class TestOrgFilteredDBFunctions:
         mock_conn = AsyncMock()
         mock_conn.fetch = AsyncMock(return_value=[])
 
-        await list_signals_by_org(mock_conn, "new", "org-nia")
+        items, total = await list_signals_by_org(mock_conn, "new", "org-nia")
         call_args = mock_conn.fetch.call_args
         assert "org-nia" in call_args[0]
+        assert total == 0
+        assert items == []
 
 
 # ===================================================================
@@ -298,28 +300,28 @@ class TestSourceRouteOrgScoping:
         """list_sources route uses list_sources_by_org for non-super-admin."""
         with patch(
             "services.api.anveshak.api.routes.sources.sources_db.list_sources_by_org",
-            new=AsyncMock(return_value=[]),
+            new=AsyncMock(return_value=([], 0)),
         ) as mock_by_org:
             from services.api.anveshak.api.routes.sources import list_sources
 
             mock_conn = AsyncMock()
             user = {"sub": "u1", "role": "analyst", "org_id": "org-nia", "jti": "x"}
-            result = await list_sources(credibility_below=None, db=mock_conn, user=user)
+            result = await list_sources(credibility_below=None, limit=50, offset=0, db=mock_conn, user=user)
 
-        mock_by_org.assert_awaited_once_with(mock_conn, "org-nia")
+        mock_by_org.assert_awaited_once_with(mock_conn, "org-nia", 50, 0)
 
     @pytest.mark.asyncio
     async def test_list_sources_calls_unfiltered_for_super_admin(self):
         """list_sources route uses list_sources (unfiltered) for super-admin."""
         with patch(
             "services.api.anveshak.api.routes.sources.sources_db.list_sources",
-            new=AsyncMock(return_value=[]),
+            new=AsyncMock(return_value=([], 0)),
         ) as mock_all:
             from services.api.anveshak.api.routes.sources import list_sources
 
             mock_conn = AsyncMock()
             user = {"sub": "sa-1", "role": "super-admin", "jti": "x"}
-            result = await list_sources(credibility_below=None, db=mock_conn, user=user)
+            result = await list_sources(credibility_below=None, limit=50, offset=0, db=mock_conn, user=user)
 
         mock_all.assert_awaited_once()
 
@@ -335,7 +337,7 @@ class TestSignalRouteOrgScoping:
         """list_signals route uses list_signals_by_org for non-super-admin."""
         with patch(
             "services.api.anveshak.api.routes.signals.signals_db.list_signals_by_org",
-            new=AsyncMock(return_value=[]),
+            new=AsyncMock(return_value=([], 0)),
         ) as mock_by_org:
             from services.api.anveshak.api.routes.signals import list_signals
 
@@ -343,17 +345,18 @@ class TestSignalRouteOrgScoping:
             user = {"sub": "u1", "role": "analyst", "org_id": "org-nia", "jti": "x"}
             result = await list_signals(
                 status="new", topic_id=None, since=None, until=None,
+                limit=50, offset=0,
                 db=mock_conn, user=user,
             )
 
-        mock_by_org.assert_awaited_once_with(mock_conn, "new", "org-nia")
+        mock_by_org.assert_awaited_once_with(mock_conn, "new", "org-nia", 50, 0)
 
     @pytest.mark.asyncio
     async def test_list_signals_calls_unfiltered_for_super_admin(self):
         """list_signals route uses list_signals (unfiltered) for super-admin."""
         with patch(
             "services.api.anveshak.api.routes.signals.signals_db.list_signals",
-            new=AsyncMock(return_value=[]),
+            new=AsyncMock(return_value=([], 0)),
         ) as mock_all:
             from services.api.anveshak.api.routes.signals import list_signals
 
@@ -361,6 +364,7 @@ class TestSignalRouteOrgScoping:
             user = {"sub": "sa-1", "role": "super-admin", "jti": "x"}
             result = await list_signals(
                 status="new", topic_id=None, since=None, until=None,
+                limit=50, offset=0,
                 db=mock_conn, user=user,
             )
 
@@ -457,7 +461,7 @@ class TestReportRouteVerification:
             new=AsyncMock(),
         ) as mock_verify, patch(
             "services.api.anveshak.api.routes.reports.reports_db.list_topic_reports",
-            new=AsyncMock(return_value=[]),
+            new=AsyncMock(return_value=([], 0)),
         ):
             from services.api.anveshak.api.routes.reports import list_topic_reports
 

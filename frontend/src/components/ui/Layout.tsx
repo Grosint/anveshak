@@ -44,13 +44,13 @@ export default function Layout() {
   }, [searchParams, setSearchParams])
 
   // Lightweight poll for down-source count — shown as red badge on Source Health nav item
-  const { data: sources } = useQuery({
+  const { data: sourcesData } = useQuery({
     queryKey: ['sources'],
-    queryFn: () => sourcesApi.list(),
+    queryFn: () => sourcesApi.list(0, 500),
     refetchInterval: 60_000,
     staleTime: 30_000,
   })
-  const downCount = sources?.filter((s) => s.health_status === 'down').length ?? 0
+  const downCount = sourcesData?.items?.filter((s) => s.health_status === 'down').length ?? 0
 
   function handleLogout() {
     logout()

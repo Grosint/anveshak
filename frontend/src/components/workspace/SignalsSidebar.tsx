@@ -16,12 +16,13 @@ interface SignalsSidebarProps {
 export function SignalsSidebar({ topicId, onSelectSignal }: SignalsSidebarProps) {
   const qc = useQueryClient()
 
-  const { data: signals = [], isLoading } = useQuery({
+  const { data: signalsPage, isLoading } = useQuery({
     queryKey: ['signals-topic', topicId, 'new'],
     queryFn: () => signalsApi.listByTopic(topicId, 'new'),
     refetchInterval: 120_000,
     refetchOnWindowFocus: false,
   })
+  const signals = signalsPage?.items ?? []
 
   const ackMut = useMutation({
     mutationFn: signalsApi.acknowledge,

@@ -17,13 +17,14 @@ SQL_LIST_SIGNALS = """
            nc.independent_source_count,
            nc.item_count AS cluster_item_count,
            nc.executive_summary,
-           t.name AS topic_name
+           t.name AS topic_name,
+           COUNT(*) OVER() AS total
     FROM signals s
     LEFT JOIN narrative_clusters nc ON nc.id = s.cluster_id
     LEFT JOIN topics t ON t.id = s.topic_id
     WHERE s.status = $1
     ORDER BY s.created_at DESC
-    LIMIT 50
+    LIMIT $2 OFFSET $3
 """
 
 SQL_LIST_SIGNALS_BY_TOPIC = """
@@ -33,13 +34,14 @@ SQL_LIST_SIGNALS_BY_TOPIC = """
            nc.independent_source_count,
            nc.item_count AS cluster_item_count,
            nc.executive_summary,
-           t.name AS topic_name
+           t.name AS topic_name,
+           COUNT(*) OVER() AS total
     FROM signals s
     LEFT JOIN narrative_clusters nc ON nc.id = s.cluster_id
     LEFT JOIN topics t ON t.id = s.topic_id
     WHERE s.status = $1 AND s.topic_id = $2
     ORDER BY s.created_at DESC
-    LIMIT 50
+    LIMIT $3 OFFSET $4
 """
 
 SQL_LIST_SIGNALS_SINCE = """
@@ -105,13 +107,14 @@ SQL_LIST_SIGNALS_BY_ORG = """
            nc.independent_source_count,
            nc.item_count AS cluster_item_count,
            nc.executive_summary,
-           t.name AS topic_name
+           t.name AS topic_name,
+           COUNT(*) OVER() AS total
     FROM signals s
     LEFT JOIN narrative_clusters nc ON nc.id = s.cluster_id
     LEFT JOIN topics t ON t.id = s.topic_id
     WHERE s.status = $1 AND t.org_id = $2
     ORDER BY s.created_at DESC
-    LIMIT 50
+    LIMIT $3 OFFSET $4
 """
 
 # Per-signal enrichment: source breakdown + timeline from cluster items
@@ -367,23 +370,27 @@ async def _batch_enrich(conn: asyncpg.Connection, signals: list[dict[str, Any]])
 
 
 async def list_signals(
-    conn: asyncpg.Connection, status: str, topic_id: str | None = None
-) -> list[dict[str, Any]]:
+    conn: asyncpg.Connection, status: str, limit: int = 50, offset: int = 0,
+    topic_id: str | None = None,
+) -> tuple[list[dict[str, Any]], int]:
     if topic_id:
-        rows = await conn.fetch(SQL_LIST_SIGNALS_BY_TOPIC, status, topic_id)
+        rows = await conn.fetch(SQL_LIST_SIGNALS_BY_TOPIC, status, topic_id, limit, offset)
     else:
-        rows = await conn.fetch(SQL_LIST_SIGNALS, status)
-    signals = [dict(r) for r in rows]
-    return await _batch_enrich(conn, signals)
+        rows = await conn.fetch(SQL_LIST_SIGNALS, status, limit, offset)
+    total = rows[0]["total"] if rows else 0
+    items = [{k: v for k, v in dict(r).items() if k != "total"} for r in rows]
+    return await _batch_enrich(conn, items), total
 
 
 async def list_signals_by_org(
-    conn: asyncpg.Connection, status: str, org_id: str
-) -> list[dict[str, Any]]:
+    conn: asyncpg.Connection, status: str, org_id: str,
+    limit: int = 50, offset: int = 0,
+) -> tuple[list[dict[str, Any]], int]:
     """Return signals filtered by topic's org_id."""
-    rows = await conn.fetch(SQL_LIST_SIGNALS_BY_ORG, status, org_id)
-    signals = [dict(r) for r in rows]
-    return await _batch_enrich(conn, signals)
+    rows = await conn.fetch(SQL_LIST_SIGNALS_BY_ORG, status, org_id, limit, offset)
+    total = rows[0]["total"] if rows else 0
+    items = [{k: v for k, v in dict(r).items() if k != "total"} for r in rows]
+    return await _batch_enrich(conn, items), total
 
 
 async def list_signals_filtered(

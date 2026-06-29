@@ -45,10 +45,12 @@ SQL_LIST_TOPIC_REPORTS = """
                WHEN generated_at IS NOT NULL THEN 'complete'
                WHEN generation_error IS NOT NULL THEN 'failed'
                ELSE 'queued'
-           END AS generation_status
+           END AS generation_status,
+           COUNT(*) OVER() AS total
     FROM reports
     WHERE topic_id = $1
     ORDER BY created_at DESC
+    LIMIT $2 OFFSET $3
 """
 
 SQL_GET_REPORT_GEOJSON = "SELECT generated_at, geojson FROM reports WHERE id = $1"
@@ -86,10 +88,15 @@ async def fetch_report(
 
 
 async def list_topic_reports(
-    conn: asyncpg.Connection, topic_id: str
-) -> list[dict[str, Any]]:
-    rows = await conn.fetch(SQL_LIST_TOPIC_REPORTS, topic_id)
-    return [dict(r) for r in rows]
+    conn: asyncpg.Connection,
+    topic_id: str,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[dict[str, Any]], int]:
+    rows = await conn.fetch(SQL_LIST_TOPIC_REPORTS, topic_id, limit, offset)
+    total = rows[0]["total"] if rows else 0
+    items = [{k: v for k, v in dict(r).items() if k != "total"} for r in rows]
+    return items, total
 
 
 async def get_report_geojson(

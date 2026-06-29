@@ -46,20 +46,22 @@ export default function OverviewTab({ topicId, onSelectSignal, onNavigateTab, on
     queryFn: () => topicsApi.listClusters(topicId),
   })
 
-  const { data: signals = [] } = useQuery({
+  const { data: signalsPage } = useQuery({
     queryKey: ['signals-topic', topicId, 'new'],
     queryFn: () => signalsApi.listByTopic(topicId, 'new'),
   })
+  const signals = signalsPage?.items ?? []
 
   const { data: identifiers = [] } = useQuery({
     queryKey: ['identifiers-top-overview', topicId],
     queryFn: () => identifiersApi.top(topicId, undefined, 10),
   })
 
-  const { data: reports = [] } = useQuery({
+  const { data: reportsData } = useQuery({
     queryKey: ['reports-history', topicId],
     queryFn: () => reportsApi.listForTopic(topicId),
   })
+  const reports = reportsData?.items ?? []
 
   const topClusters = clusters.slice(0, 5)
   const latestReport = reports.find((r) => r.generated_at)
@@ -301,11 +303,12 @@ function ClusterTrackerButtons({ clusterId }: { clusterId: string }) {
   const [error, setError] = useState<string | null>(null)
 
   // Check if a tracker already exists for this cluster
-  const { data: trackers = [] } = useQuery({
+  const { data: trackersData } = useQuery({
     queryKey: ['trackers'],
     queryFn: () => trackersApi.list(),
     staleTime: 30_000,
   })
+  const trackers = trackersData?.items ?? []
   const existing = trackers.find((t) => t.origin_cluster_id === clusterId)
 
   const handleCreate = async (status: 'watching' | 'active') => {

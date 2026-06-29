@@ -20,6 +20,7 @@ vi.mock('../../api/signals', () => ({
     list: (...args: any[]) => mockSignalsList(...args),
     acknowledge: vi.fn().mockResolvedValue({ signal_id: 'sig-1', status: 'acknowledged' }),
     dismiss: vi.fn().mockResolvedValue({ signal_id: 'sig-1', status: 'dismissed' }),
+    dailyCounts: vi.fn().mockResolvedValue([]),
   },
 }))
 
@@ -81,9 +82,14 @@ vi.mock('../../contexts/WSContext', () => ({
 
 // ── Setup / Teardown ────────────────────────────────────────────────────
 
+/** Wrap a signal array in the PaginatedResponse envelope the component expects. */
+function paginated(items: any[]) {
+  return { items, total: items.length, offset: 0, limit: 50 }
+}
+
 beforeEach(() => {
   mockSignalsList.mockReset()
-  mockSignalsList.mockResolvedValue([])
+  mockSignalsList.mockResolvedValue(paginated([]))
   wsSubscribeCallback = null
 })
 
@@ -94,8 +100,8 @@ describe('Seam 1: WS → cache → SignalsInbox', () => {
     const signal = makeSignal({ id: 'sig-new', signal_type: 'narrative_spike', cluster_label: 'New cluster' })
 
     mockSignalsList
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([signal])
+      .mockResolvedValueOnce(paginated([]))
+      .mockResolvedValueOnce(paginated([signal]))
 
     const { queryClient } = renderSignalsWithMockWS()
 
@@ -122,7 +128,7 @@ describe('Seam 1: WS → cache → SignalsInbox', () => {
   })
 
   it('WS signal_replay message also triggers refetch', async () => {
-    mockSignalsList.mockResolvedValue([])
+    mockSignalsList.mockResolvedValue(paginated([]))
     renderSignalsWithMockWS()
 
     await waitFor(() => expect(mockSignalsList).toHaveBeenCalled())
@@ -150,7 +156,7 @@ describe('Seam 1: WS → cache → SignalsInbox', () => {
 describe('Seam 2: Optimistic mutation → cache', () => {
   it('acknowledge mutation calls API with signal id', async () => {
     const signal = makeSignal({ id: 'sig-ack', status: 'new', cluster_label: 'Test cluster', topic_name: 'Test Topic' })
-    mockSignalsList.mockResolvedValue([signal])
+    mockSignalsList.mockResolvedValue(paginated([signal]))
 
     renderSignalsWithMockWS()
 
@@ -164,7 +170,7 @@ describe('Seam 2: Optimistic mutation → cache', () => {
 
     // Verify the signalsApi.list was called with the expected params
     const { signalsApi } = await import('../../api/signals')
-    expect(mockSignalsList).toHaveBeenCalledWith('new', expect.any(String), expect.any(String))
+    expect(mockSignalsList).toHaveBeenCalledWith('new', expect.any(String), expect.any(String), 0, 50)
   })
 
   it('acknowledge API is wired to the correct signal id', async () => {

@@ -47,11 +47,13 @@ SQL_LIST_TRACKERS_BY_ORG = """
            (SELECT COUNT(*) FROM tracker_content_items tci
             WHERE tci.tracker_id = t.id AND tci.status = 'confirmed') AS content_count,
            (SELECT COUNT(*) FROM tracker_content_items tci
-            WHERE tci.tracker_id = t.id AND tci.status = 'pending') AS pending_count
+            WHERE tci.tracker_id = t.id AND tci.status = 'pending') AS pending_count,
+           COUNT(*) OVER() AS total
     FROM trackers t
     LEFT JOIN topics tp ON tp.id = t.topic_id
     WHERE t.org_id = $1
     ORDER BY t.updated_at DESC
+    LIMIT $2 OFFSET $3
 """
 
 SQL_LIST_TRACKERS_BY_TOPIC = """
@@ -60,11 +62,13 @@ SQL_LIST_TRACKERS_BY_TOPIC = """
            (SELECT COUNT(*) FROM tracker_content_items tci
             WHERE tci.tracker_id = t.id AND tci.status = 'confirmed') AS content_count,
            (SELECT COUNT(*) FROM tracker_content_items tci
-            WHERE tci.tracker_id = t.id AND tci.status = 'pending') AS pending_count
+            WHERE tci.tracker_id = t.id AND tci.status = 'pending') AS pending_count,
+           COUNT(*) OVER() AS total
     FROM trackers t
     LEFT JOIN topics tp ON tp.id = t.topic_id
     WHERE t.topic_id = $1 AND t.org_id = $2
     ORDER BY t.updated_at DESC
+    LIMIT $3 OFFSET $4
 """
 
 SQL_UPDATE_TRACKER_STATUS = """
@@ -319,17 +323,21 @@ async def get_tracker(
 
 
 async def list_trackers_by_org(
-    conn: asyncpg.Connection, org_id: str
-) -> list[dict[str, Any]]:
-    rows = await conn.fetch(SQL_LIST_TRACKERS_BY_ORG, org_id)
-    return [dict(r) for r in rows]
+    conn: asyncpg.Connection, org_id: str, limit: int = 50, offset: int = 0
+) -> tuple[list[dict[str, Any]], int]:
+    rows = await conn.fetch(SQL_LIST_TRACKERS_BY_ORG, org_id, limit, offset)
+    total = rows[0]["total"] if rows else 0
+    items = [{k: v for k, v in dict(r).items() if k != "total"} for r in rows]
+    return items, total
 
 
 async def list_trackers_by_topic(
-    conn: asyncpg.Connection, topic_id: str, org_id: str
-) -> list[dict[str, Any]]:
-    rows = await conn.fetch(SQL_LIST_TRACKERS_BY_TOPIC, topic_id, org_id)
-    return [dict(r) for r in rows]
+    conn: asyncpg.Connection, topic_id: str, org_id: str, limit: int = 50, offset: int = 0
+) -> tuple[list[dict[str, Any]], int]:
+    rows = await conn.fetch(SQL_LIST_TRACKERS_BY_TOPIC, topic_id, org_id, limit, offset)
+    total = rows[0]["total"] if rows else 0
+    items = [{k: v for k, v in dict(r).items() if k != "total"} for r in rows]
+    return items, total
 
 
 async def update_tracker_status(

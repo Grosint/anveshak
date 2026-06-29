@@ -41,10 +41,10 @@ export function RecentActivity({ topicId }: RecentActivityProps) {
     queryKey: ['audit-mini', topicId],
     queryFn: () =>
       api
-        .get<AuditEntry[]>('/api/v1/system/audit-trail', {
+        .get<{ items: AuditEntry[]; total: number }>('/api/v1/system/audit-trail', {
           params: { resource_id: topicId, limit: 5 },
         })
-        .then((r) => r.data)
+        .then((r) => r.data.items)
         .catch(() => [] as AuditEntry[]),
     staleTime: Infinity,
     retry: false,

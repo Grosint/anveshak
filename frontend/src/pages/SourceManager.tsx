@@ -8,6 +8,7 @@ import { AuditLogTable } from '../components/sources/AuditLogTable'
 import { PlatformBadge } from '../components/content/PlatformBadge'
 import { CredibilityBadge } from '../components/content/CredibilityBadge'
 import { Button } from '../components/ui/Button'
+import { Pagination } from '../components/ui/Pagination'
 import { Spinner } from '../components/ui/Spinner'
 import { EmptyState } from '../components/ui/EmptyState'
 import { formatDistanceToNow } from 'date-fns'
@@ -632,11 +633,16 @@ export default function SourceManager({ embedded = false }: { embedded?: boolean
   const [filter, setFilter]           = useState<FilterValue>('all')
   const qc = useQueryClient()
 
-  const { data: sources = [], isLoading } = useQuery({
-    queryKey: ['sources'],
-    queryFn: sourcesApi.list,
+  const [sourcePage, setSourcePage] = useState(0)
+  const SOURCE_PAGE_SIZE = 50
+
+  const { data: sourcesData, isLoading } = useQuery({
+    queryKey: ['sources', sourcePage, SOURCE_PAGE_SIZE],
+    queryFn: () => sourcesApi.list(sourcePage * SOURCE_PAGE_SIZE, SOURCE_PAGE_SIZE),
     refetchInterval: 60_000,
   })
+  const sources = sourcesData?.items ?? []
+  const sourcesTotal = sourcesData?.total ?? 0
 
   // Warning counts for all sources
   const warningCountResults = useQueries({
@@ -740,6 +746,9 @@ export default function SourceManager({ embedded = false }: { embedded?: boolean
               />
             ))
           )}
+          <div className="px-3 pb-3">
+            <Pagination page={sourcePage} pageSize={SOURCE_PAGE_SIZE} total={sourcesTotal} onPageChange={setSourcePage} />
+          </div>
         </div>
 
         {/* Detail panel */}

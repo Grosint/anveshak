@@ -84,20 +84,32 @@ class TestAuditTrailDB:
         assert callable(get_audit_trail)
 
     @pytest.mark.asyncio
-    async def test_get_audit_trail_returns_list(self, mock_conn):
-        """get_audit_trail must return a list of dicts."""
+    async def test_get_audit_trail_returns_tuple(self, mock_conn):
+        """get_audit_trail must return (items, total) tuple."""
         from services.api.anveshak.api.db.audit import get_audit_trail
 
         mock_conn.fetch = AsyncMock(return_value=[
             {"id": "a1", "user_id": "u1", "action": "topic.create",
              "resource_type": "topic", "resource_id": "t1",
-             "created_at": datetime.now(UTC)},
+             "created_at": datetime.now(UTC), "total": 42},
         ])
 
-        result = await get_audit_trail(mock_conn, resource_type="topic", limit=50)
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert result[0]["action"] == "topic.create"
+        items, total = await get_audit_trail(mock_conn, resource_type="topic", limit=50)
+        assert isinstance(items, list)
+        assert len(items) == 1
+        assert items[0]["action"] == "topic.create"
+        assert "total" not in items[0]  # total stripped from items
+        assert total == 42
+
+    @pytest.mark.asyncio
+    async def test_get_audit_trail_empty_returns_zero_total(self, mock_conn):
+        """get_audit_trail with no rows must return total=0."""
+        from services.api.anveshak.api.db.audit import get_audit_trail
+
+        mock_conn.fetch = AsyncMock(return_value=[])
+        items, total = await get_audit_trail(mock_conn, limit=50)
+        assert items == []
+        assert total == 0
 
     @pytest.mark.asyncio
     async def test_get_audit_trail_filters_by_resource_type(self, mock_conn):
@@ -322,42 +334,42 @@ class TestRedisAOF:
 # 8. Migration 005 exists
 # ===================================================================
 
-class TestMigration005:
-    """Migration 005 must create audit_trail and failed_jobs tables."""
+class TestMigrationAuditTables:
+    """Initial migration must create audit_trail and failed_jobs tables."""
 
     def test_migration_file_exists(self):
-        """Migration 005 file must exist."""
+        """Migration 001 file must exist."""
         from pathlib import Path
 
         migration_dir = Path("services/api/migrations/versions")
         files = [f.name for f in migration_dir.iterdir()]
-        assert any("005" in f for f in files), \
-            "Migration 005 must exist in services/api/migrations/versions/"
+        assert any("001" in f for f in files), \
+            "Migration 001 must exist in services/api/migrations/versions/"
 
     def test_migration_creates_audit_trail(self):
-        """Migration 005 must create audit_trail table."""
+        """Migration 001 must create audit_trail table."""
         from pathlib import Path
 
         migration_dir = Path("services/api/migrations/versions")
         content = ""
         for f in migration_dir.iterdir():
-            if "005" in f.name:
+            if "001" in f.name:
                 content = f.read_text()
                 break
 
         assert "audit_trail" in content.lower(), \
-            "Migration 005 must create audit_trail table"
+            "Migration 001 must create audit_trail table"
 
     def test_migration_creates_failed_jobs(self):
-        """Migration 005 must create failed_jobs table."""
+        """Migration 001 must create failed_jobs table."""
         from pathlib import Path
 
         migration_dir = Path("services/api/migrations/versions")
         content = ""
         for f in migration_dir.iterdir():
-            if "005" in f.name:
+            if "001" in f.name:
                 content = f.read_text()
                 break
 
         assert "failed_jobs" in content.lower(), \
-            "Migration 005 must create failed_jobs table"
+            "Migration 001 must create failed_jobs table"

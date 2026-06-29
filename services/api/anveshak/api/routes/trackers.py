@@ -17,6 +17,7 @@ from ..db import reports as reports_db
 from ..db import trackers as trackers_db
 from ..db import audit as audit_db
 from ..db.pool import get_db
+from ..pagination import paginate_rows
 from ..settings import settings
 
 router = APIRouter(prefix="/api/v1/trackers", tags=["trackers"])
@@ -135,18 +136,28 @@ async def create_from_cluster(
 async def list_trackers(
     topic_id: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """List trackers for the user's org, optionally filtered by topic."""
     org_id = get_user_org(user)
-    if topic_id:
-        trackers = await trackers_db.list_trackers_by_topic(db, topic_id, org_id)
-    else:
-        trackers = await trackers_db.list_trackers_by_org(db, org_id)
     if status_filter:
-        trackers = [t for t in trackers if t["status"] == status_filter]
-    return trackers
+        # Fetch all (no SQL pagination) then filter + paginate in Python
+        if topic_id:
+            all_items, _ = await trackers_db.list_trackers_by_topic(db, topic_id, org_id, 1000, 0)
+        else:
+            all_items, _ = await trackers_db.list_trackers_by_org(db, org_id, 1000, 0)
+        filtered = [t for t in all_items if t["status"] == status_filter]
+        total = len(filtered)
+        items = filtered[offset:offset + limit]
+    else:
+        if topic_id:
+            items, total = await trackers_db.list_trackers_by_topic(db, topic_id, org_id, limit, offset)
+        else:
+            items, total = await trackers_db.list_trackers_by_org(db, org_id, limit, offset)
+    return paginate_rows(items, total, offset, limit)
 
 
 @router.get("/{tracker_id}")

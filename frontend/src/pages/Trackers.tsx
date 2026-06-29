@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { trackersApi, type Tracker } from '../api/trackers'
 import { Spinner } from '../components/ui/Spinner'
+import { Pagination } from '../components/ui/Pagination'
 import { CreateTrackerModal } from '../components/trackers/CreateTrackerModal'
 
 type StatusFilter = 'all' | 'watching' | 'active' | 'concluded'
@@ -40,20 +41,24 @@ function relativeTime(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
+const PAGE_SIZE = 50
+
 export default function Trackers() {
   const navigate = useNavigate()
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [createOpen, setCreateOpen] = useState(false)
+  const [page, setPage] = useState(0)
 
-  const { data: trackers = [], isLoading, isError } = useQuery({
-    queryKey: ['trackers'],
-    queryFn: () => trackersApi.list(),
+  const statusParam = statusFilter === 'all' ? undefined : statusFilter
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['trackers', statusParam, page],
+    queryFn: () => trackersApi.list({ status: statusParam, limit: PAGE_SIZE, offset: page * PAGE_SIZE }),
     refetchInterval: 30_000,
   })
 
-  const filtered = statusFilter === 'all'
-    ? trackers
-    : trackers.filter((t) => t.status === statusFilter)
+  const trackers = data?.items ?? []
+  const total = data?.total ?? 0
 
   return (
     <div className="h-full flex flex-col">
@@ -78,7 +83,7 @@ export default function Trackers() {
         {STATUS_FILTERS.map((f) => (
           <button
             key={f.key}
-            onClick={() => setStatusFilter(f.key)}
+            onClick={() => { setStatusFilter(f.key); setPage(0) }}
             className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
               statusFilter === f.key
                 ? 'bg-anveshak-accent text-white'
@@ -100,7 +105,7 @@ export default function Trackers() {
           <div className="flex justify-center py-20">
             <Spinner label="Loading trackers…" />
           </div>
-        ) : filtered.length === 0 ? (
+        ) : trackers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <p className="text-text-muted text-sm">
               No trackers yet. Open a tracker from a narrative cluster or create one manually.
@@ -122,7 +127,7 @@ export default function Trackers() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((tracker) => (
+                {trackers.map((tracker) => (
                   <tr
                     key={tracker.id}
                     onClick={() => navigate(`/trackers/${tracker.id}`)}
@@ -167,6 +172,7 @@ export default function Trackers() {
                 ))}
               </tbody>
             </table>
+            <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
           </div>
         )}
       </div>

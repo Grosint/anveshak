@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { signalsApi, Signal, SignalStatus } from '../api/signals'
+import { signalsApi, SignalStatus } from '../api/signals'
 import { topicsApi } from '../api/topics'
 import { useWS } from '../contexts/WSContext'
 import { SignalCard } from '../components/signals/SignalCard'
@@ -9,6 +9,7 @@ import { SignalGraph } from '../components/signals/SignalGraph'
 import { CalendarStrip } from '../components/signals/CalendarStrip'
 import { Spinner } from '../components/ui/Spinner'
 import { EmptyState } from '../components/ui/EmptyState'
+import { Pagination } from '../components/ui/Pagination'
 import { resolveTimeRange, type TimePreset } from '../lib/domain'
 type ViewMode = 'list' | 'timeline'
 
@@ -34,6 +35,8 @@ export default function SignalsInbox() {
   const [viewMode, setViewMode]       = useState<ViewMode>('timeline')
   const [graphSignalId, setGraphSignalId] = useState<string | null>(null)
   const [activeTopicsOnly, setActiveTopicsOnly] = useState(true)
+  const [page, setPage]           = useState(0)
+  const PAGE_SIZE = 50
 
   // Calendar strip window size (days)
   const windowDays = useMemo(() => {
@@ -76,11 +79,13 @@ export default function SignalsInbox() {
     refetchInterval: 60_000,
   })
 
-  const { data: signals = [], isLoading } = useQuery({
-    queryKey: ['signals', activeTab, since, until],
-    queryFn: () => signalsApi.list(activeTab, since, until),
+  const { data: signalsPage, isLoading } = useQuery({
+    queryKey: ['signals', activeTab, since, until, page, PAGE_SIZE],
+    queryFn: () => signalsApi.list(activeTab, since, until, page * PAGE_SIZE, PAGE_SIZE),
     refetchInterval: 30_000,
   })
+  const signals = signalsPage?.items ?? []
+  const signalsTotal = signalsPage?.total ?? 0
 
   // Real-time: WS push → invalidate
   useEffect(() => {
@@ -95,21 +100,28 @@ export default function SignalsInbox() {
 
   useEffect(() => {
     if (activeTab === 'new') setNewCount(0)
+    setPage(0)
   }, [activeTab])
+
+  // Reset page when time range changes
+  useEffect(() => {
+    setPage(0)
+  }, [since, until])
 
   // Optimistic acknowledge
   const acknowledge = useMutation({
     mutationFn: signalsApi.acknowledge,
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ['signals', 'new'] })
-      const prev = qc.getQueryData<Signal[]>(['signals', 'new', since, until])
-      qc.setQueryData<Signal[]>(['signals', 'new', since, until], (old = []) =>
-        old.filter((s) => s.id !== id),
+      const qk = ['signals', 'new', since, until, page, PAGE_SIZE]
+      const prev = qc.getQueryData<typeof signalsPage>(qk)
+      qc.setQueryData<typeof signalsPage>(qk, (old) =>
+        old ? { ...old, items: old.items.filter((s) => s.id !== id), total: old.total - 1 } : old,
       )
       return { prev }
     },
     onError: (_e, _id, ctx) => {
-      if (ctx?.prev) qc.setQueryData(['signals', 'new', since, until], ctx.prev)
+      if (ctx?.prev) qc.setQueryData(['signals', 'new', since, until, page, PAGE_SIZE], ctx.prev)
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ['signals'] }),
   })
@@ -119,14 +131,15 @@ export default function SignalsInbox() {
     mutationFn: signalsApi.dismiss,
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ['signals', activeTab] })
-      const prev = qc.getQueryData<Signal[]>(['signals', activeTab, since, until])
-      qc.setQueryData<Signal[]>(['signals', activeTab, since, until], (old = []) =>
-        old.filter((s) => s.id !== id),
+      const qk = ['signals', activeTab, since, until, page, PAGE_SIZE]
+      const prev = qc.getQueryData<typeof signalsPage>(qk)
+      qc.setQueryData<typeof signalsPage>(qk, (old) =>
+        old ? { ...old, items: old.items.filter((s) => s.id !== id), total: old.total - 1 } : old,
       )
       return { prev }
     },
     onError: (_e, _id, ctx) => {
-      if (ctx?.prev) qc.setQueryData(['signals', activeTab, since, until], ctx.prev)
+      if (ctx?.prev) qc.setQueryData(['signals', activeTab, since, until, page, PAGE_SIZE], ctx.prev)
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ['signals'] }),
   })
@@ -303,6 +316,16 @@ export default function SignalsInbox() {
               />
             ))}
           </div>
+        )}
+
+        {/* Pagination */}
+        {!isLoading && signalsTotal > 0 && (
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={signalsTotal}
+            onPageChange={setPage}
+          />
         )}
       </div>
 

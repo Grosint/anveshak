@@ -19,15 +19,17 @@ interface SignalDetailPanelProps {
 export function SignalDetailPanel({ signalId, topicId, onShowGraph }: SignalDetailPanelProps) {
   const qc = useQueryClient()
 
-  const { data: signals = [] } = useQuery({
+  const { data: signalsPage } = useQuery({
     queryKey: ['signals-topic', topicId, 'new'],
     queryFn: () => signalsApi.listByTopic(topicId, 'new'),
   })
+  const signals = signalsPage?.items ?? []
 
-  const { data: ackSignals = [] } = useQuery({
+  const { data: ackSignalsPage } = useQuery({
     queryKey: ['signals-topic', topicId, 'acknowledged'],
     queryFn: () => signalsApi.listByTopic(topicId, 'acknowledged'),
   })
+  const ackSignals = ackSignalsPage?.items ?? []
 
   const signal = [...signals, ...ackSignals].find((s) => s.id === signalId)
 

@@ -47,11 +47,12 @@ export default function DashboardTab({ topicId }: DashboardTabProps) {
     staleTime: 60_000,
   })
 
-  const { data: signals = [] } = useQuery({
+  const { data: signalsPage } = useQuery({
     queryKey: ['signals', topicId, 'new'],
     queryFn: () => signalsApi.listByTopic(topicId, 'new'),
     staleTime: 30_000,
   })
+  const signals = signalsPage?.items ?? []
 
   const { data: triggers = [] } = useQuery({
     queryKey: ['alert-triggers', topicId],

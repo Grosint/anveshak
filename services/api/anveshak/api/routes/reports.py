@@ -21,7 +21,7 @@ import asyncpg
 import structlog
 from arq.connections import RedisSettings
 from arq import create_pool as arq_create_pool
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, ConfigDict
 
@@ -30,6 +30,7 @@ from ..db.pool import get_db
 from ..db import reports as reports_db
 from ..db import topics as topics_db
 from ..db import audit as audit_db
+from ..pagination import paginate_rows
 from ..settings import settings
 
 log = structlog.get_logger(__name__)
@@ -140,12 +141,15 @@ async def get_report(
 @router.get("/api/v1/topics/{topic_id}/reports")
 async def list_topic_reports(
     topic_id: str,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
-) -> list[dict]:
-    """Return all reports for a topic, newest first."""
+) -> dict:
+    """Return paginated reports for a topic, newest first."""
     await topics_db.verify_topic_access(db, topic_id, user)
-    return await reports_db.list_topic_reports(db, topic_id)
+    items, total = await reports_db.list_topic_reports(db, topic_id, limit, offset)
+    return paginate_rows(items, total, offset, limit)
 
 
 # ---------------------------------------------------------------------------
