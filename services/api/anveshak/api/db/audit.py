@@ -25,37 +25,41 @@ SQL_INSERT_AUDIT = """
 """
 
 SQL_GET_AUDIT_TRAIL = """
-    SELECT id, user_id, action, resource_type, resource_id,
-           details, ip_address, created_at
-    FROM audit_trail
-    WHERE resource_type = $1
-    ORDER BY created_at DESC
+    SELECT at.id, at.user_id, u.username, at.action, at.resource_type,
+           at.resource_id, at.details, at.ip_address, at.created_at
+    FROM audit_trail at
+    LEFT JOIN users u ON u.id = at.user_id
+    WHERE at.resource_type = $1
+    ORDER BY at.created_at DESC
     LIMIT $2 OFFSET $3
 """
 
 SQL_GET_AUDIT_TRAIL_ALL = """
-    SELECT id, user_id, action, resource_type, resource_id,
-           details, ip_address, created_at
-    FROM audit_trail
-    ORDER BY created_at DESC
+    SELECT at.id, at.user_id, u.username, at.action, at.resource_type,
+           at.resource_id, at.details, at.ip_address, at.created_at
+    FROM audit_trail at
+    LEFT JOIN users u ON u.id = at.user_id
+    ORDER BY at.created_at DESC
     LIMIT $1 OFFSET $2
 """
 
 SQL_GET_AUDIT_TRAIL_BY_RESOURCE = """
-    SELECT id, user_id, action, resource_type, resource_id,
-           details, ip_address, created_at
-    FROM audit_trail
-    WHERE resource_type = $1 AND resource_id = $2
-    ORDER BY created_at DESC
+    SELECT at.id, at.user_id, u.username, at.action, at.resource_type,
+           at.resource_id, at.details, at.ip_address, at.created_at
+    FROM audit_trail at
+    LEFT JOIN users u ON u.id = at.user_id
+    WHERE at.resource_type = $1 AND at.resource_id = $2
+    ORDER BY at.created_at DESC
     LIMIT $3 OFFSET $4
 """
 
 SQL_GET_AUDIT_TRAIL_BY_RESOURCE_ID = """
-    SELECT id, user_id, action, resource_type, resource_id,
-           details, ip_address, created_at
-    FROM audit_trail
-    WHERE resource_id = $1
-    ORDER BY created_at DESC
+    SELECT at.id, at.user_id, u.username, at.action, at.resource_type,
+           at.resource_id, at.details, at.ip_address, at.created_at
+    FROM audit_trail at
+    LEFT JOIN users u ON u.id = at.user_id
+    WHERE at.resource_id = $1
+    ORDER BY at.created_at DESC
     LIMIT $2 OFFSET $3
 """
 

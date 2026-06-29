@@ -25,6 +25,7 @@ export interface VectorHealth {
 export interface AuditTrailEntry {
   id: string
   user_id: string
+  username: string | null
   action: string
   resource_type: string
   resource_id: string

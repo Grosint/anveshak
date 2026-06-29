@@ -1,9 +1,16 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { systemApi, AuditTrailEntry } from '../../api/system'
 import { topicsApi } from '../../api/topics'
 import { useAuth } from '../../contexts/AuthContext'
+
+// ── Constants ──────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 25
+
+type SortField = 'created_at' | 'username' | 'action' | 'resource_type' | 'resource_id'
+type SortDir = 'asc' | 'desc'
 
 /** Backend returns details as double-encoded JSON string — parse to object. */
 function parseDetails(raw: unknown): Record<string, unknown> {
@@ -13,7 +20,6 @@ function parseDetails(raw: unknown): Record<string, unknown> {
     try {
       const parsed = JSON.parse(raw)
       if (typeof parsed === 'string') {
-        // double-encoded
         try { return JSON.parse(parsed) } catch { return {} }
       }
       return typeof parsed === 'object' && parsed !== null ? parsed : {}
@@ -56,6 +62,42 @@ const INPUT_CLASS =
   'bg-white/10 border border-white/20 rounded-md px-3 py-1.5 text-xs text-text-primary ' +
   'placeholder:text-text-muted/50 focus:outline-none focus:ring-1 focus:ring-anveshak-accent focus:border-anveshak-accent'
 
+// ── CSV Export ─────────────────────────────────────────────────────────
+
+function exportCsv(entries: AuditTrailEntry[]) {
+  const columns = ['Time', 'Username', 'User ID', 'Action', 'Resource Type', 'Resource ID', 'Details', 'IP']
+  const rows = entries.map((e) => [
+    format(new Date(e.created_at), 'yyyy-MM-dd HH:mm:ss'),
+    e.username || '',
+    e.user_id,
+    e.action,
+    e.resource_type,
+    e.resource_id,
+    JSON.stringify(parseDetails(e.details)),
+    e.ip_address || '',
+  ])
+
+  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`
+  const csv = [columns.map(escape).join(','), ...rows.map((r) => r.map(escape).join(','))].join('\n')
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `anveshak_audit_trail_${format(new Date(), 'yyyy-MM-dd')}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+// ── Sort Arrow ────────────────────────────────────────────────────────
+
+function SortArrow({ active, dir }: { active: boolean; dir: SortDir }) {
+  if (!active) return <span className="text-text-muted/30 ml-0.5">↕</span>
+  return <span className="text-anveshak-accent ml-0.5">{dir === 'asc' ? '▲' : '▼'}</span>
+}
+
+// ── Main Component ────────────────────────────────────────────────────
+
 interface Props {
   embedded?: boolean
 }
@@ -63,19 +105,30 @@ interface Props {
 export default function AuditTrailPage({ embedded = false }: Props) {
   const { user } = useAuth()
   const isAnalyst = user?.role === 'analyst'
+
+  // Filters
   const [resourceType, setResourceType] = useState('')
   const [resourceId, setResourceId] = useState('')
-  const [limit, setLimit] = useState(100)
+  const [limit, setLimit] = useState(250)
+  const [selectedActions, setSelectedActions] = useState<Set<string>>(new Set())
+
+  // Sort
+  const [sortField, setSortField] = useState<SortField>('created_at')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
+
+  // Pagination
+  const [page, setPage] = useState(0)
+
+  // Modal
   const [selectedEntry, setSelectedEntry] = useState<AuditTrailEntry | null>(null)
 
-  // Fetch topics for the resource picker (analysts need this to select a topic)
+  // Topics for analyst picker
   const { data: topics = [] } = useQuery({
     queryKey: ['topics'],
     queryFn: topicsApi.list,
     staleTime: 60_000,
   })
 
-  // Analysts must provide resource_id — don't fire query without it
   const canQuery = !isAnalyst || resourceId.trim().length > 0
 
   const { data: entries = [], isLoading, error } = useQuery({
@@ -90,6 +143,73 @@ export default function AuditTrailPage({ embedded = false }: Props) {
     enabled: canQuery,
   })
 
+  // Unique action types for filter chips
+  const actionTypes = useMemo(
+    () => [...new Set(entries.map((e) => e.action))].sort(),
+    [entries],
+  )
+
+  const toggleAction = useCallback((action: string) => {
+    setSelectedActions((prev) => {
+      const next = new Set(prev)
+      if (next.has(action)) next.delete(action)
+      else next.add(action)
+      return next
+    })
+    setPage(0)
+  }, [])
+
+  // Filter → sort → paginate
+  const processed = useMemo(() => {
+    let list = [...entries]
+
+    // Action filter
+    if (selectedActions.size > 0) {
+      list = list.filter((e) => selectedActions.has(e.action))
+    }
+
+    // Sort
+    list.sort((a, b) => {
+      let av: string, bv: string
+      if (sortField === 'username') {
+        av = a.username || a.user_id
+        bv = b.username || b.user_id
+      } else {
+        av = String((a as unknown as Record<string, unknown>)[sortField] ?? '')
+        bv = String((b as unknown as Record<string, unknown>)[sortField] ?? '')
+      }
+      const cmp = av.localeCompare(bv)
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+
+    return list
+  }, [entries, selectedActions, sortField, sortDir])
+
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(processed.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages - 1)
+  const pageEntries = processed.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)
+  const showingFrom = processed.length === 0 ? 0 : safePage * PAGE_SIZE + 1
+  const showingTo = Math.min((safePage + 1) * PAGE_SIZE, processed.length)
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortField(field)
+      setSortDir('asc')
+    }
+    setPage(0)
+  }
+
+  const SORTABLE_HEADERS: { field: SortField; label: string; align?: string }[] = [
+    { field: 'created_at', label: 'Time' },
+    { field: 'username', label: 'User' },
+    { field: 'action', label: 'Action' },
+    { field: 'resource_type', label: 'Resource' },
+    { field: 'resource_id', label: 'Resource ID' },
+  ]
+
   return (
     <div className={embedded ? 'h-full flex flex-col' : 'h-full flex flex-col p-6'}>
       {!embedded && (
@@ -101,62 +221,112 @@ export default function AuditTrailPage({ embedded = false }: Props) {
         </>
       )}
 
-      {/* Filters */}
-      <div className="flex items-center gap-4 px-4 py-3 border-b border-anveshak-border bg-anveshak-bg/50">
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-text-muted uppercase tracking-wider">Resource</label>
-          <select value={resourceType} onChange={(e) => setResourceType(e.target.value)} className={INPUT_CLASS}>
-            {RESOURCE_TYPES.map((rt) => (
-              <option key={rt.value} value={rt.value}>{rt.label}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-text-muted uppercase tracking-wider">
-            {isAnalyst ? 'Topic' : 'ID'}
-          </label>
-          {isAnalyst ? (
+      {/* ── Filters ────────────────────────────────────────────────────── */}
+      <div className="px-4 py-3 border-b border-anveshak-border bg-anveshak-bg/50 space-y-2">
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium text-text-muted uppercase tracking-wider">Resource</label>
             <select
-              value={resourceId}
-              onChange={(e) => {
-                setResourceId(e.target.value)
-                if (e.target.value) setResourceType('topic')
-              }}
-              className={`${INPUT_CLASS} w-64`}
+              value={resourceType}
+              onChange={(e) => { setResourceType(e.target.value); setPage(0) }}
+              className={INPUT_CLASS}
             >
-              <option value="">Select a topic...</option>
-              {topics.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
+              {RESOURCE_TYPES.map((rt) => (
+                <option key={rt.value} value={rt.value}>{rt.label}</option>
               ))}
             </select>
-          ) : (
-            <input
-              type="text"
-              value={resourceId}
-              onChange={(e) => setResourceId(e.target.value)}
-              placeholder="Filter by resource ID..."
-              className={`${INPUT_CLASS} w-52`}
-            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium text-text-muted uppercase tracking-wider">
+              {isAnalyst ? 'Topic' : 'ID'}
+            </label>
+            {isAnalyst ? (
+              <select
+                value={resourceId}
+                onChange={(e) => {
+                  setResourceId(e.target.value)
+                  if (e.target.value) setResourceType('topic')
+                  setPage(0)
+                }}
+                className={`${INPUT_CLASS} w-64`}
+              >
+                <option value="">Select a topic...</option>
+                {topics.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={resourceId}
+                onChange={(e) => { setResourceId(e.target.value); setPage(0) }}
+                placeholder="Filter by resource ID..."
+                className={`${INPUT_CLASS} w-52`}
+              />
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium text-text-muted uppercase tracking-wider">Limit</label>
+            <select
+              value={limit}
+              onChange={(e) => { setLimit(Number(e.target.value)); setPage(0) }}
+              className={INPUT_CLASS}
+            >
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value={250}>250</option>
+              <option value={500}>500</option>
+            </select>
+          </div>
+
+          {/* Export CSV */}
+          {processed.length > 0 && (
+            <button
+              onClick={() => exportCsv(processed)}
+              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/5 border border-white/10 text-text-secondary text-xs hover:bg-white/10 hover:border-white/20 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Export CSV
+            </button>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-text-muted uppercase tracking-wider">Limit</label>
-          <select value={limit} onChange={(e) => setLimit(Number(e.target.value))} className={INPUT_CLASS}>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-            <option value={250}>250</option>
-            <option value={500}>500</option>
-          </select>
-        </div>
-
-        <span className="ml-auto text-xs text-text-muted">
-          {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
-        </span>
+        {/* Action filter chips */}
+        {actionTypes.length > 1 && (
+          <div className="flex flex-wrap gap-1.5">
+            {actionTypes.map((action) => {
+              const isActive = selectedActions.has(action)
+              return (
+                <button
+                  key={action}
+                  onClick={() => toggleAction(action)}
+                  className={`px-2.5 py-0.5 rounded-full border text-[10px] font-semibold transition-colors ${
+                    isActive
+                      ? getActionColor(action)
+                      : 'bg-white/5 border-white/10 text-text-muted hover:bg-white/10'
+                  }`}
+                >
+                  {action}
+                </button>
+              )
+            })}
+            {selectedActions.size > 0 && (
+              <button
+                onClick={() => { setSelectedActions(new Set()); setPage(0) }}
+                className="px-2 py-0.5 text-[10px] text-text-muted hover:text-text-primary transition-colors"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Table */}
+      {/* ── Table ──────────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-auto">
         {isLoading && (
           <p className="text-sm text-text-muted py-12 text-center">Loading audit trail...</p>
@@ -180,50 +350,63 @@ export default function AuditTrailPage({ embedded = false }: Props) {
           <p className="text-sm text-text-muted py-12 text-center">No audit entries found.</p>
         )}
 
-        {!isLoading && entries.length > 0 && (
+        {!isLoading && pageEntries.length > 0 && (
           <table className="w-full text-xs">
-            <thead className="sticky top-0 bg-anveshak-bg z-10">
-              <tr className="border-b border-anveshak-border text-left">
-                <th className="py-2.5 px-4 font-medium text-text-muted uppercase tracking-wider text-[10px]">Time</th>
-                <th className="py-2.5 px-3 font-medium text-text-muted uppercase tracking-wider text-[10px]">User</th>
-                <th className="py-2.5 px-3 font-medium text-text-muted uppercase tracking-wider text-[10px]">Action</th>
-                <th className="py-2.5 px-3 font-medium text-text-muted uppercase tracking-wider text-[10px]">Resource</th>
-                <th className="py-2.5 px-3 font-medium text-text-muted uppercase tracking-wider text-[10px]">Resource ID</th>
-                <th className="py-2.5 px-3 font-medium text-text-muted uppercase tracking-wider text-[10px]">Details</th>
-                <th className="py-2.5 px-4 font-medium text-text-muted uppercase tracking-wider text-[10px] text-right">IP</th>
+            <thead className="sticky top-0 bg-anveshak-bg z-10 shadow-[0_1px_0_0_rgba(255,255,255,0.06)]">
+              <tr className="text-left">
+                {SORTABLE_HEADERS.map((h) => (
+                  <th
+                    key={h.field}
+                    onClick={() => handleSort(h.field)}
+                    className="py-3 px-3 font-medium text-text-muted uppercase tracking-wider text-[10px] cursor-pointer hover:text-text-primary transition-colors select-none"
+                  >
+                    {h.label}
+                    <SortArrow active={sortField === h.field} dir={sortDir} />
+                  </th>
+                ))}
+                <th className="py-3 px-3 font-medium text-text-muted uppercase tracking-wider text-[10px]">Details</th>
+                <th className="py-3 px-3 font-medium text-text-muted uppercase tracking-wider text-[10px] text-right">IP</th>
               </tr>
             </thead>
             <tbody>
-              {entries.map((entry: AuditTrailEntry) => (
+              {pageEntries.map((entry, idx) => (
                 <tr
                   key={entry.id}
-                  className="border-b border-anveshak-border/40 hover:bg-white/[0.03] transition-colors"
+                  className={`border-b border-white/[0.04] hover:bg-white/[0.05] transition-colors ${
+                    idx % 2 === 0 ? 'bg-white/[0.02]' : ''
+                  }`}
                 >
-                  <td className="py-2.5 px-4 text-text-muted font-mono whitespace-nowrap text-[11px]">
+                  <td className="py-3 px-3 text-text-muted font-mono whitespace-nowrap text-[11px]">
                     {format(new Date(entry.created_at), 'dd MMM HH:mm:ss')}
                   </td>
-                  <td className="py-2.5 px-3 text-text-secondary font-mono text-[11px]" title={entry.user_id}>
-                    {entry.user_id.slice(0, 8)}...
+                  <td
+                    className="py-3 px-3 text-text-secondary text-[11px] max-w-[180px] truncate"
+                    title={`${entry.username || 'Unknown'} (${entry.user_id})`}
+                  >
+                    {entry.username || entry.user_id.slice(0, 12) + '…'}
                   </td>
-                  <td className="py-2.5 px-3">
+                  <td className="py-3 px-3">
                     <span
                       className={`inline-block px-2.5 py-0.5 rounded-full border text-[10px] font-semibold tracking-wide ${getActionColor(entry.action)}`}
                     >
                       {entry.action}
                     </span>
                   </td>
-                  <td className="py-2.5 px-3">
+                  <td className="py-3 px-3">
                     <span className="text-text-secondary bg-white/5 px-2 py-0.5 rounded text-[11px]">
                       {entry.resource_type}
                     </span>
                   </td>
-                  <td className="py-2.5 px-3 text-text-muted font-mono text-[11px] max-w-[200px] truncate" title={entry.resource_id}>
+                  <td
+                    className="py-3 px-3 text-text-muted font-mono text-[11px] max-w-[180px] truncate"
+                    title={entry.resource_id}
+                  >
                     {entry.resource_id}
                   </td>
-                  <td className="py-2.5 px-3">
+                  <td className="py-3 px-3">
                     <DetailsButton details={parseDetails(entry.details)} action={entry.action} onClick={() => setSelectedEntry(entry)} />
                   </td>
-                  <td className="py-2.5 px-4 text-text-muted font-mono text-[11px] text-right">
+                  <td className="py-3 px-3 text-text-muted font-mono text-[11px] text-right">
                     {entry.ip_address || '—'}
                   </td>
                 </tr>
@@ -233,7 +416,49 @@ export default function AuditTrailPage({ embedded = false }: Props) {
         )}
       </div>
 
-      {/* Details Modal */}
+      {/* ── Pagination ─────────────────────────────────────────────────── */}
+      {processed.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between px-4 py-2.5 border-t border-anveshak-border bg-anveshak-bg/50 text-xs">
+          <span className="text-text-muted">
+            Showing {showingFrom}–{showingTo} of {processed.length}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(0)}
+              disabled={safePage === 0}
+              className="px-2 py-1 rounded text-text-muted hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              ««
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={safePage === 0}
+              className="px-2 py-1 rounded text-text-muted hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              ‹
+            </button>
+            <span className="px-3 py-1 text-text-secondary font-medium">
+              {safePage + 1} / {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={safePage >= totalPages - 1}
+              className="px-2 py-1 rounded text-text-muted hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              ›
+            </button>
+            <button
+              onClick={() => setPage(totalPages - 1)}
+              disabled={safePage >= totalPages - 1}
+              className="px-2 py-1 rounded text-text-muted hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              »»
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Details Modal ──────────────────────────────────────────────── */}
       {selectedEntry && (
         <DetailsModal entry={selectedEntry} onClose={() => setSelectedEntry(null)} />
       )}
@@ -247,7 +472,6 @@ function DetailsButton({ details, action, onClick }: { details: Record<string, u
     return <span className="text-text-muted/40">—</span>
   }
 
-  // Inline summary for credibility changes — show old → new (reason) directly
   if (action.includes('credibility') && details.old_score !== undefined) {
     const oldScore = Number(details.old_score)
     const newScore = Number(details.new_score)
@@ -297,7 +521,6 @@ function DetailsModal({ entry, onClose }: { entry: AuditTrailEntry; onClose: () 
         className="bg-[#1a1f2e] border border-white/10 rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div>
             <h3 className="text-sm font-semibold text-text-primary">Audit Entry Details</h3>
@@ -315,7 +538,6 @@ function DetailsModal({ entry, onClose }: { entry: AuditTrailEntry; onClose: () 
           </button>
         </div>
 
-        {/* Metadata grid */}
         <div className="px-5 py-4 grid grid-cols-2 gap-3 border-b border-white/10">
           <MetaField label="Action">
             <span className={`inline-block px-2.5 py-0.5 rounded-full border text-[10px] font-semibold ${getActionColor(entry.action)}`}>
@@ -325,8 +547,9 @@ function DetailsModal({ entry, onClose }: { entry: AuditTrailEntry; onClose: () 
           <MetaField label="Resource Type">
             <span className="bg-white/5 px-2 py-0.5 rounded text-[11px] text-text-secondary">{entry.resource_type}</span>
           </MetaField>
-          <MetaField label="User ID">
-            <span className="font-mono text-[11px] text-text-secondary">{entry.user_id}</span>
+          <MetaField label="User">
+            <span className="text-[11px] text-text-secondary">{entry.username || 'Unknown'}</span>
+            <span className="font-mono text-[10px] text-text-muted ml-1">({entry.user_id})</span>
           </MetaField>
           <MetaField label="IP Address">
             <span className="font-mono text-[11px] text-text-secondary">{entry.ip_address || '—'}</span>
@@ -338,7 +561,6 @@ function DetailsModal({ entry, onClose }: { entry: AuditTrailEntry; onClose: () 
           </div>
         </div>
 
-        {/* Details JSON */}
         <div className="px-5 py-4">
           <p className="text-[10px] font-medium text-text-muted uppercase tracking-wider mb-2">Details</p>
           {Object.keys(details).length > 0 ? (
