@@ -6,7 +6,7 @@ paths:
 ---
 # Docker & Compose Rules
 
-7 learned instincts. All Docker Compose and container work.
+12 learned instincts. All Docker Compose and container work.
 
 ## Compose Invocation
 
@@ -47,3 +47,41 @@ paths:
 ## Integration Testing
 
 - Tests needing running services (PostgreSQL, Redis): use `docker compose exec` or `docker cp` + `docker exec` — never assume host-reachable unless port-forwarded
+
+## Compose Override Port Merging (CRITICAL)
+
+- NEVER put `ports:` in compose override files — Compose v2 MERGES lists, doesn't replace
+  `ports: ["127.0.0.1:8000:8000"]` in override APPENDS to base `"8000:8000"` → "address already in use"
+  `ports: []` also doesn't clear base ports — merges empty list, base remains
+  Use cloud/host firewall for port restriction instead
+  See: `learned/compose-port-override-merge-trap.md`
+
+## Bind Mount Permissions for Init Containers
+
+- Init containers (model downloaders) crash with PermissionError on bind mounts owned by root
+  Fix: `chmod -R 777 /data/models /data/vision-models` before first run
+  Observability: Prometheus=65534, Loki=10001, Grafana=472 — set chown before first run
+  See: `learned/bind-mount-init-container-permissions.md`
+
+## Ubuntu 24.04 Differences
+
+- Docker package: `docker-ce` (official repo), not `docker.io`
+- NVIDIA container toolkit: needs separate NVIDIA apt repo
+- NVIDIA driver: use `-server` variant on headless VMs
+- SSH service: `systemctl restart ssh` not `sshd`
+  See: `learned/ubuntu-2404-docker-nvidia-setup.md`
+
+## bcrypt Hash Shell Escaping
+
+- bcrypt `$` characters get shell-expanded when inserting via psql/bash
+  Generate hash INSIDE API container, then update via psql with `\$` escaping
+  Passwords with `!` need single quotes (bash history expansion)
+  See: `learned/bcrypt-hash-shell-escaping.md`
+
+## GCP GPU Quota
+
+- Two layers: per-region (NVIDIA_T4_GPUS) AND global (GPUS_ALL_REGIONS) — both must be >= 1
+  Global defaults to 0 on new projects — request increase first (24-48h)
+  Zone exhaustion: try all zones, then L4, then different region
+  Admin commands (bucket create, snapshot policies): run from local, not VM
+  See: `learned/gcp-gpu-quota-two-layers.md`
