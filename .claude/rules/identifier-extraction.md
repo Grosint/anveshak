@@ -1,6 +1,6 @@
 # Identifier & Entity Extraction
 
-5 instincts. Engine C extraction + NER pipelines.
+6 instincts. Engine C extraction + NER pipelines.
 
 ## Regex First, ML Second
 
@@ -39,3 +39,8 @@ across domains: cyber fraud, narcotics, financial crime. Track identifiers as
 first-class entities w/ cross-topic linking.
 Market priority: MEA > Police > SEBI > NCB.
 See: `learned/mule-account-cross-domain-indicator.md`
+
+## New Identifier Type Wiring
+
+Adding a new type requires updating 13 files across 4 layers. Missing any one → silent breakage.
+See: `learned/identifier-type-wiring-checklist.md`

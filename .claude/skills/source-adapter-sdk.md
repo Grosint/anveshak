@@ -3,6 +3,7 @@
 ## When to load: any task involving creating or modifying a source adapter
 
 > See also: `learned/additive-backfill-join-table.md` — pattern for associating existing content with new topics without copying rows
+> See also: `learned/identifier-type-wiring-checklist.md` — 13-file checklist for adding a new identifier type (backend, frontend, migration, tests)
 > See also: `learned/cross-service-metadata-enrichment.md` — API enqueues ARQ job on social worker to fetch profile metadata; fail-open pattern
 > See also: `learned/keyword-tag-granularity-mismatch.md` — normalize multi-word keywords to single-word tags before array overlap; silent zero-result failure
 > See also: `learned/unified-discriminator-table.md` — single discovered_sources table with discovery_method discriminator vs per-method tables
