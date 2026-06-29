@@ -18,6 +18,7 @@ graphify-out/
 .env.*.local
 .env.production
 .env.staging
+.env.prod
 *.pem
 *.key
 *.crt

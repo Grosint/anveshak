@@ -5,11 +5,14 @@
 #
 # Changes from dev:
 #   - Bind mounts to /data disk (not Docker volumes)
-#   - Ports restricted to 127.0.0.1 (host nginx proxies from 443)
 #   - GPU reservations for Ollama + Vision
 #   - PostgreSQL production tuning
 #   - Redis production tuning
 #   - Analyst worker bumped to 8GB for bge-large + NLLB-1.3B
+#
+# NOTE: No port overrides. Docker Compose merges port lists (doesn't replace).
+# GCP firewall is the perimeter — only 80/443/22 exposed externally.
+# Base compose.yml ports (8000, 3000, etc.) are unreachable from internet.
 
 services:
 
@@ -19,7 +22,6 @@ services:
     volumes:
       - /data/postgres:/var/lib/postgresql/data
       - ./configs/postgres/init-pgvector.sql:/docker-entrypoint-initdb.d/01-init-pgvector.sql:ro
-    ports: []
     mem_limit: 2g
     shm_size: 256m
     command: >
@@ -43,7 +45,6 @@ services:
   redis:
     volumes:
       - /data/redis:/data
-    ports: []
     mem_limit: 512m
     command: >
       redis-server
@@ -62,7 +63,6 @@ services:
   ollama:
     volumes:
       - /data/ollama:/root/.ollama
-    ports: []
     deploy:
       resources:
         reservations:
@@ -71,25 +71,18 @@ services:
               count: 1
               capabilities: [gpu]
 
-  # --- Application services (localhost-only ports) ---
+  # --- Application services ---
 
   api:
     volumes:
       - /data/media:/app/media
       - /data/reports:/app/reports
-    ports:
-      - "127.0.0.1:8000:8000"
 
-  frontend:
-    ports:
-      - "127.0.0.1:3000:3000"
-
-  # --- Scrapers (no external ports) ---
+  # --- Scrapers ---
 
   scrape-web-scheduler:
     volumes:
       - /data/media:/app/media
-    ports: []
 
   scrape-web-worker:
     volumes:
@@ -98,7 +91,6 @@ services:
   scrape-social-scheduler:
     volumes:
       - /data/media:/app/media
-    ports: []
 
   scrape-social-worker:
     volumes:
@@ -144,26 +136,16 @@ services:
     volumes:
       - /data/reports:/app/reports
 
-  # --- Observability (no external ports) ---
+  # --- Observability ---
 
   prometheus:
-    ports: []
     volumes:
       - /data/prometheus:/prometheus
 
-  alertmanager:
-    ports: []
-
   loki:
-    ports: []
     volumes:
       - /data/loki:/loki
 
   grafana:
-    ports:
-      - "127.0.0.1:3001:3000"
     volumes:
       - /data/grafana:/var/lib/grafana
-
-  cadvisor:
-    ports: []
