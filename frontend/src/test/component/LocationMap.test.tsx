@@ -140,3 +140,62 @@ describe('GeoMap dark tiles and clustering', () => {
     expect(code).toContain('legend')
   })
 })
+
+describe('India sovereign boundary overlay', () => {
+  it('loads india-sovereign-boundary.geojson', async () => {
+    const source = await import('../../components/map/GeoMap?raw')
+    const code = (source as any).default as string
+    expect(code).toContain('india-sovereign-boundary.geojson')
+  })
+
+  it('adds india-boundary GeoJSON source', async () => {
+    const source = await import('../../components/map/GeoMap?raw')
+    const code = (source as any).default as string
+    expect(code).toContain("'india-boundary'")
+  })
+
+  it('adds territory fill layer to mask incorrect borders', async () => {
+    const source = await import('../../components/map/GeoMap?raw')
+    const code = (source as any).default as string
+    expect(code).toContain('india-territory-fill')
+    expect(code).toContain('territory-fill')
+  })
+
+  it('adds international boundary line layer', async () => {
+    const source = await import('../../components/map/GeoMap?raw')
+    const code = (source as any).default as string
+    expect(code).toContain('india-boundary-line')
+    expect(code).toContain('boundary-line')
+  })
+
+  it('adds LAC dashed line layer', async () => {
+    const source = await import('../../components/map/GeoMap?raw')
+    const code = (source as any).default as string
+    expect(code).toContain('india-lac-line')
+    expect(code).toContain('lac-line')
+    expect(code).toContain('line-dasharray')
+  })
+
+  it('renders boundary layers before point layers (z-order)', async () => {
+    const source = await import('../../components/map/GeoMap?raw')
+    const code = (source as any).default as string
+    const territoryIdx = code.indexOf('india-territory-fill')
+    const clustersIdx = code.indexOf("id: 'clusters'")
+    expect(territoryIdx).toBeGreaterThan(-1)
+    expect(clustersIdx).toBeGreaterThan(-1)
+    expect(territoryIdx).toBeLessThan(clustersIdx)
+  })
+
+  it('handles boundary fetch failure gracefully', async () => {
+    const source = await import('../../components/map/GeoMap?raw')
+    const code = (source as any).default as string
+    expect(code).toContain('catch')
+    expect(code).toContain('Failed to load India boundary')
+  })
+
+  it('caches boundary GeoJSON at module level', async () => {
+    const source = await import('../../components/map/GeoMap?raw')
+    const code = (source as any).default as string
+    expect(code).toContain('cachedBoundary')
+  })
+})

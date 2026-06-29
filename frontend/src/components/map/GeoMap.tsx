@@ -37,6 +37,18 @@ function getTileStyleUrl(): string {
   return w.__ANVESHAK_MAP_TILE_URL__ || DEFAULT_TILE_STYLE
 }
 
+// India sovereign boundary overlay — correct borders per Survey of India
+// Covers PoJK, Aksai Chin, Arunachal Pradesh as Indian territory
+let cachedBoundary: GeoJSON.FeatureCollection | null = null
+
+async function loadIndiaBoundary(): Promise<GeoJSON.FeatureCollection> {
+  if (cachedBoundary) return cachedBoundary
+  const resp = await fetch('/geo/india-sovereign-boundary.geojson')
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  cachedBoundary = await resp.json()
+  return cachedBoundary!
+}
+
 function formatTimeAgo(iso: string | null): string {
   if (!iso) return ''
   const diff = Date.now() - new Date(iso).getTime()
@@ -103,13 +115,63 @@ const GeoMap = forwardRef<GeoMapHandle, GeoMapProps>(function GeoMap(
     const map = mapRef.current
     if (!map) return
 
-    function addLayers() {
+    async function addLayers() {
       if (!map) return
 
       // If source already exists, update data
       if (map.getSource('locations')) {
         (map.getSource('locations') as maplibregl.GeoJSONSource).setData(geojson)
         return
+      }
+
+      // ── India sovereign boundary overlay ──
+      // Renders BELOW point layers to mask incorrect CartoDB borders
+      if (!map.getSource('india-boundary')) {
+        try {
+          const boundary = await loadIndiaBoundary()
+          map.addSource('india-boundary', { type: 'geojson', data: boundary })
+
+          // Territory fill — covers disputed areas with land color
+          map.addLayer({
+            id: 'india-territory-fill',
+            type: 'fill',
+            source: 'india-boundary',
+            filter: ['==', ['get', 'layer'], 'territory-fill'],
+            paint: {
+              'fill-color': '#0e0e0e',
+              'fill-opacity': 1,
+            },
+          })
+
+          // International boundary — solid line
+          map.addLayer({
+            id: 'india-boundary-line',
+            type: 'line',
+            source: 'india-boundary',
+            filter: ['==', ['get', 'layer'], 'boundary-line'],
+            paint: {
+              'line-color': '#4a5568',
+              'line-width': ['interpolate', ['linear'], ['zoom'], 1, 0.8, 5, 1.5, 10, 2.5],
+              'line-opacity': 0.7,
+            },
+          })
+
+          // LAC — dashed line
+          map.addLayer({
+            id: 'india-lac-line',
+            type: 'line',
+            source: 'india-boundary',
+            filter: ['==', ['get', 'layer'], 'lac-line'],
+            paint: {
+              'line-color': '#4a5568',
+              'line-width': 1.2,
+              'line-dasharray': [4, 3],
+              'line-opacity': 0.5,
+            },
+          })
+        } catch (err) {
+          console.warn('[GeoMap] Failed to load India boundary overlay:', err)
+        }
       }
 
       // Clustered GeoJSON source
@@ -302,9 +364,9 @@ const GeoMap = forwardRef<GeoMapHandle, GeoMapProps>(function GeoMap(
     }
 
     if (map.isStyleLoaded()) {
-      addLayers()
+      addLayers().catch(console.warn)
     } else {
-      map.once('load', addLayers)
+      map.once('load', () => addLayers().catch(console.warn))
     }
   }, [geojson, sizeProperty, onFeatureClick])
 

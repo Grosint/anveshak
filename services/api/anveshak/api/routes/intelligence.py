@@ -151,6 +151,69 @@ def _geocode(names: list[str]) -> dict[str, tuple[float, float]]:
     return result
 
 
+# Display names for normalized location keys
+_DISPLAY_NAMES: dict[str, str] = {
+    "united states": "United States",
+    "united kingdom": "United Kingdom",
+    "the netherlands": "The Netherlands",
+    "sri lanka": "Sri Lanka",
+    "new delhi": "New Delhi",
+    "middle east": "Middle East",
+}
+
+
+def _location_display_name(key: str) -> str:
+    """Convert normalized lowercase key to display name."""
+    if key in _DISPLAY_NAMES:
+        return _DISPLAY_NAMES[key]
+    return key.title()
+
+
+def _merge_location_rows(
+    rows: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Merge location rows by normalized name + entity_type.
+
+    Collapses alias variants (us, united states, the united states → united states).
+    SQL already case-folds via LOWER(), this handles alias merging.
+    Uses (normalized_name, entity_type) as merge key to keep GPE/LOC/FAC separate.
+    """
+    merged: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in rows:
+        norm = _normalize_location(row["entity_key"])
+        etype = row["entity_type"]
+        merge_key = (norm, etype)
+        if merge_key in merged:
+            m = merged[merge_key]
+            m["mention_count"] += row["mention_count"]
+            # source_count: max (sources overlap across text variants)
+            if row["source_count"] > m["source_count"]:
+                m["source_count"] = row["source_count"]
+            # latest_mention: keep most recent
+            if row["latest_mention"] and (
+                not m["latest_mention"] or row["latest_mention"] > m["latest_mention"]
+            ):
+                m["latest_mention"] = row["latest_mention"]
+        else:
+            merged[merge_key] = {
+                "entity_key": norm,
+                "entity_type": etype,
+                "mention_count": row["mention_count"],
+                "source_count": row["source_count"],
+                "latest_mention": row["latest_mention"],
+            }
+    # Flatten to dict keyed by normalized name
+    # Same name + different entity_type → separate entries with type suffix
+    seen_names: dict[str, int] = {}
+    for norm, _ in merged:
+        seen_names[norm] = seen_names.get(norm, 0) + 1
+    result: dict[str, dict[str, Any]] = {}
+    for (norm, etype), data in merged.items():
+        rkey = f"{norm}:{etype}" if seen_names[norm] > 1 else norm
+        result[rkey] = data
+    return result
+
+
 # ---------------------------------------------------------------------------
 # SQL queries
 # ---------------------------------------------------------------------------
@@ -223,7 +286,7 @@ SQL_EXISTING_SOURCE_URLS = """
 """
 
 SQL_TOPIC_LOCATION_MAP = """
-    SELECT ee.entity_text,
+    SELECT LOWER(ee.entity_text) AS entity_key,
            ee.entity_type,
            COUNT(DISTINCT ee.content_item_id) AS mention_count,
            COUNT(DISTINCT ci.source_id) AS source_count,
@@ -234,7 +297,7 @@ SQL_TOPIC_LOCATION_MAP = """
        OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND ee.entity_type IN ('GPE', 'LOC', 'FAC')
       AND ee.confidence >= 0.8
-    GROUP BY ee.entity_text, ee.entity_type
+    GROUP BY LOWER(ee.entity_text), ee.entity_type
     HAVING COUNT(DISTINCT ee.content_item_id) >= $2
     ORDER BY mention_count DESC
     LIMIT $3
@@ -417,39 +480,43 @@ async def get_location_map(
     await topics_db.verify_topic_access(db, topic_id, user)
     rows = await db.fetch(SQL_TOPIC_LOCATION_MAP, topic_id, min_mentions, limit)
 
-    location_names = [row["entity_text"] for row in rows]
+    # Merge case variants + aliases (India/india, US/the United States)
+    merged = _merge_location_rows([dict(r) for r in rows])
+
+    # Geocode merged normalized names
+    location_names = [data["entity_key"] for data in merged.values()]
     coords = _geocode(location_names)
 
-    # Build per-name lookup — keep row with highest mention_count if duplicated
-    row_lookup: dict[str, dict[str, Any]] = {}
-    for row in rows:
-        name = row["entity_text"]
-        if name not in row_lookup or row["mention_count"] > row_lookup[name]["mention_count"]:
-            row_lookup[name] = dict(row)
-
     features: list[dict[str, Any]] = []
-    for name, (lat, lon) in coords.items():
-        r = row_lookup.get(name, {})
-        latest = r.get("latest_mention")
+    for key, data in merged.items():
+        norm = data["entity_key"]
+        if norm not in coords:
+            continue
+        lat, lon = coords[norm]
+        latest = data.get("latest_mention")
         features.append({
             "type": "Feature",
             "geometry": {"type": "Point", "coordinates": [lon, lat]},
             "properties": {
-                "name": name,
-                "entity_type": r.get("entity_type", "GPE"),
-                "mention_count": r.get("mention_count", 1),
-                "source_count": r.get("source_count", 1),
+                "name": _location_display_name(norm),
+                "entity_type": data.get("entity_type", "GPE"),
+                "mention_count": data.get("mention_count", 1),
+                "source_count": data.get("source_count", 1),
                 "latest_mention": latest.isoformat() if latest else None,
             },
         })
 
-    unresolved = [r["entity_text"] for r in rows if r["entity_text"] not in coords]
+    unresolved = [
+        _location_display_name(data["entity_key"])
+        for data in merged.values()
+        if data["entity_key"] not in coords
+    ]
 
     return {
         "type": "FeatureCollection",
         "features": features,
         "metadata": {
-            "total_extracted": len(rows),
+            "total_extracted": len(merged),
             "geocoded": len(features),
             "unresolved": sorted(set(unresolved)),
         },
