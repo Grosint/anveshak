@@ -41,7 +41,7 @@ for _k, _country in _gc.get_countries().items():
 
 _custom_path = Path(__file__).resolve().parents[5] / "infra" / "configs" / "geocoder" / "custom_locations.json"
 if not _custom_path.is_file():
-    _custom_path = Path("/app/infra/configs/geocoder/custom_locations.json")
+    _custom_path = Path("/workspace/infra/configs/geocoder/custom_locations.json")
 if _custom_path.is_file():
     try:
         for _name, _coords in json.loads(_custom_path.read_text()).items():
@@ -50,11 +50,94 @@ if _custom_path.is_file():
         pass
 
 
+import re as _re
+
+# Common aliases → canonical name (lowercase keys, lowercase values)
+_ALIASES: dict[str, str] = {
+    "us": "united states",
+    "u.s.": "united states",
+    "u.s.a.": "united states",
+    "usa": "united states",
+    "the united states": "united states",
+    "the us": "united states",
+    "uk": "united kingdom",
+    "the uk": "united kingdom",
+    "the united kingdom": "united kingdom",
+    "the middle east": "middle east",
+    "the gulf": "gulf",
+    "the caribbean": "caribbean",
+    "the netherlands": "the netherlands",
+    "netherlands": "the netherlands",
+    "the philippines": "philippines",
+    "bangalore": "bengaluru",
+    "bombay": "mumbai",
+    "calcutta": "kolkata",
+    "madras": "chennai",
+    "trivandrum": "thiruvananthapuram",
+    "pondicherry": "puducherry",
+    "india delhi": "delhi",
+    "new delhi": "delhi",
+}
+
+# NER noise patterns — entities that look like locations but aren't
+_NOISE_RE = _re.compile(
+    r"""
+    ^[\W\d]+$           |  # purely punctuation/digits
+    ^.{0,2}$            |  # too short (DM, US handled by alias)
+    [<>"=]              |  # HTML artifacts (dir="ltr", City News">...)
+    ^\+                 |  # +domian
+    ^the\s*$               # bare "the"
+    """,
+    _re.VERBOSE | _re.IGNORECASE,
+)
+
+# Known non-location GPE/LOC false positives from spaCy
+_NOISE_NAMES: set[str] = {
+    "modi", "khan", "nadaprabhu", "indus", "dm", "tamil",
+    "hindu", "muslim", "congress", "bjp", "aap",
+}
+
+
+def _normalize_location(name: str) -> str:
+    """Normalize location name: strip articles, resolve aliases."""
+    key = name.lower().strip()
+    # Check alias table first
+    if key in _ALIASES:
+        return _ALIASES[key]
+    # Strip leading "the " for geographic features
+    if key.startswith("the "):
+        stripped = key[4:]
+        if stripped in _ALIASES:
+            return _ALIASES[stripped]
+        return stripped
+    return key
+
+
+def _is_noise(name: str) -> bool:
+    """Return True if entity_text is clearly not a real location."""
+    key = name.lower().strip()
+    # Known aliases are never noise (handles "US", "UK" etc.)
+    if key in _ALIASES:
+        return False
+    if _NOISE_RE.search(name):
+        return True
+    if key in _NOISE_NAMES:
+        return True
+    return False
+
+
 def _geocode(names: list[str]) -> dict[str, tuple[float, float]]:
-    """Return {name: (lat, lon)} for recognised locations. Unknown names skipped."""
+    """Return {name: (lat, lon)} for recognised locations. Unknown names skipped.
+
+    Applies alias normalization (US → United States, the Gulf → Gulf),
+    noise filtering (HTML artifacts, person names, too-short strings),
+    and multi-tier lookup (custom → cities → countries).
+    """
     result: dict[str, tuple[float, float]] = {}
     for name in names:
-        key = name.lower().strip()
+        if _is_noise(name):
+            continue
+        key = _normalize_location(name)
         if key in _CUSTOM_LOCS:
             result[name] = _CUSTOM_LOCS[key]
         elif key in _CITIES:
@@ -136,7 +219,9 @@ SQL_EXISTING_SOURCE_URLS = """
 SQL_TOPIC_LOCATION_MAP = """
     SELECT ee.entity_text,
            ee.entity_type,
-           COUNT(DISTINCT ee.content_item_id) AS mention_count
+           COUNT(DISTINCT ee.content_item_id) AS mention_count,
+           COUNT(DISTINCT ci.source_id) AS source_count,
+           MAX(ci.captured_at) AS latest_mention
     FROM extracted_entities ee
     JOIN content_items ci ON ee.content_item_id = ci.id
     WHERE (ci.topic_id = $1
@@ -329,20 +414,40 @@ async def get_location_map(
     location_names = [row["entity_text"] for row in rows]
     coords = _geocode(location_names)
 
-    # Build GeoJSON with mention_count in properties
-    mention_counts = {row["entity_text"]: row["mention_count"] for row in rows}
+    # Build per-name lookup — keep row with highest mention_count if duplicated
+    row_lookup: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        name = row["entity_text"]
+        if name not in row_lookup or row["mention_count"] > row_lookup[name]["mention_count"]:
+            row_lookup[name] = dict(row)
+
     features: list[dict[str, Any]] = []
     for name, (lat, lon) in coords.items():
+        r = row_lookup.get(name, {})
+        latest = r.get("latest_mention")
         features.append({
             "type": "Feature",
             "geometry": {"type": "Point", "coordinates": [lon, lat]},
             "properties": {
                 "name": name,
-                "mention_count": mention_counts.get(name, 1),
+                "entity_type": r.get("entity_type", "GPE"),
+                "mention_count": r.get("mention_count", 1),
+                "source_count": r.get("source_count", 1),
+                "latest_mention": latest.isoformat() if latest else None,
             },
         })
 
-    return {"type": "FeatureCollection", "features": features}
+    unresolved = [r["entity_text"] for r in rows if r["entity_text"] not in coords]
+
+    return {
+        "type": "FeatureCollection",
+        "features": features,
+        "metadata": {
+            "total_extracted": len(rows),
+            "geocoded": len(features),
+            "unresolved": sorted(set(unresolved)),
+        },
+    }
 
 
 @router.get("/topics/{topic_id}/similar")

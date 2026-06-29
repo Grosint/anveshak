@@ -47,6 +47,9 @@ WORKDIR /workspace/services/api
 COPY services/api/migrations/ migrations/
 COPY services/api/alembic.ini alembic.ini
 
+# Geocoder custom locations (Indian states, defence locations, localities)
+COPY infra/configs/geocoder/custom_locations.json /workspace/infra/configs/geocoder/custom_locations.json
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 

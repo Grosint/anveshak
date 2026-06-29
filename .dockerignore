@@ -41,6 +41,7 @@ benchmarks/
 
 # Docker / Infra configs (not needed inside containers)
 infra/configs/
+!infra/configs/geocoder/
 infra/compose*.yml
 
 # Models (downloaded at runtime, not baked in)
