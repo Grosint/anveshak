@@ -87,7 +87,7 @@ _WORK  := $(_CYN)⟳$(_RST)
 
 .PHONY: all setup up up-vision up-bridge build build-nocache build-vision down restart \
         ps logs init pull-models download-models migrate migrate-status migrate-hnsw \
-        migrate-rollback seed-demo seed-demo-iaf \
+        migrate-rollback seed-demo seed-demo-iaf seed-demo-haryana \
         fresh fresh-all \
         test test-unit test-integration test-e2e test-full test-scrape \
         test-ci test-all test-nightly \
@@ -376,6 +376,36 @@ seed-demo-iaf:
 	@printf "\n  Login at $(_CYN)http://localhost:3000$(_RST)\n"
 	@printf "  Username: $(_BOLD)demo_iaf@anveshak.local$(_RST)\n"
 	@printf "  Password: $(_BOLD)AnveshakDemo2024!$(_RST)\n\n"
+
+seed-demo-tgcsb:
+	$(call header,Loading Telangana TGCSB Demo — Cyber Fraud Intelligence)
+	@$(COMPOSE) exec -T postgres psql -U anveshak -d anveshak < scripts/seed_telangana_demo.sql 2>&1 | tail -1
+	$(call success,TGCSB demo loaded (topic tg-cyber-001 — investment fraud + mule accounts))
+	@printf "\n  Login at $(_CYN)http://localhost:3000$(_RST)\n"
+	@printf "  Username: $(_BOLD)demo_cyber@anveshak.local$(_RST)\n"
+	@printf "  Password: $(_BOLD)AnveshakDemo2024!$(_RST)\n\n"
+
+pdf-telangana:
+	$(call header,Generating Telangana TGCSB Leave-Behind PDF)
+	@docker cp scripts/gen_telangana_leave_behind.py anveshak-report-worker-1:/tmp/
+	@docker exec anveshak-report-worker-1 python /tmp/gen_telangana_leave_behind.py
+	@docker cp anveshak-report-worker-1:/tmp/telangana_leave_behind.pdf .
+	$(call success,PDF saved to ./telangana_leave_behind.pdf)
+
+seed-demo-haryana:
+	$(call header,Loading Haryana STF Demo — Narcotics Intelligence)
+	@$(COMPOSE) exec -T postgres psql -U anveshak -d anveshak < scripts/seed_haryana_demo.sql 2>&1 | tail -1
+	$(call success,Haryana STF demo loaded (topic hr-stf-001 — drug trafficking + narcotics))
+	@printf "\n  Login at $(_CYN)http://localhost:3000$(_RST)\n"
+	@printf "  Username: $(_BOLD)demo_cyber@anveshak.local$(_RST)\n"
+	@printf "  Password: $(_BOLD)AnveshakDemo2024!$(_RST)\n\n"
+
+pdf-haryana:
+	$(call header,Generating Haryana STF Leave-Behind PDF)
+	@docker cp scripts/gen_haryana_leave_behind.py anveshak-report-worker-1:/tmp/
+	@docker exec anveshak-report-worker-1 python /tmp/gen_haryana_leave_behind.py
+	@docker cp anveshak-report-worker-1:/tmp/haryana_leave_behind.pdf .
+	$(call success,PDF saved to ./haryana_leave_behind.pdf)
 
 # ---------------------------------------------------------------------------
 # Fresh start shortcuts
