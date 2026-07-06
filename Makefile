@@ -87,7 +87,7 @@ _WORK  := $(_CYN)⟳$(_RST)
 
 .PHONY: all setup up up-vision up-bridge build build-nocache build-vision down restart \
         ps logs init pull-models download-models migrate migrate-status migrate-hnsw \
-        migrate-rollback seed-demo seed-demo-iaf seed-demo-haryana \
+        migrate-rollback seed-demo seed-demo-iaf seed-demo-haryana seed-demo-kerala \
         fresh fresh-all \
         test test-unit test-integration test-e2e test-full test-scrape \
         test-ci test-all test-nightly \
@@ -406,6 +406,21 @@ pdf-haryana:
 	@docker exec anveshak-report-worker-1 python /tmp/gen_haryana_leave_behind.py
 	@docker cp anveshak-report-worker-1:/tmp/haryana_leave_behind.pdf .
 	$(call success,PDF saved to ./haryana_leave_behind.pdf)
+
+seed-demo-kerala:
+	$(call header,Loading Kerala Cyber Dome Demo — Online Child Protection Intelligence)
+	@$(COMPOSE) exec -T postgres psql -U anveshak -d anveshak < scripts/seed_kerala_demo.sql 2>&1 | tail -1
+	$(call success,Kerala demo loaded (topic kl-cyd-001 — child protection + predator networks))
+	@printf "\n  Login at $(_CYN)http://localhost:3000$(_RST)\n"
+	@printf "  Username: $(_BOLD)demo_cyber@anveshak.local$(_RST)\n"
+	@printf "  Password: $(_BOLD)AnveshakDemo2024!$(_RST)\n\n"
+
+pdf-kerala:
+	$(call header,Generating Kerala Cyber Dome Leave-Behind PDF)
+	@docker cp scripts/gen_kerala_leave_behind.py anveshak-report-worker-1:/tmp/
+	@docker exec anveshak-report-worker-1 python /tmp/gen_kerala_leave_behind.py
+	@docker cp anveshak-report-worker-1:/tmp/kerala_leave_behind.pdf .
+	$(call success,PDF saved to ./kerala_leave_behind.pdf)
 
 # ---------------------------------------------------------------------------
 # Fresh start shortcuts

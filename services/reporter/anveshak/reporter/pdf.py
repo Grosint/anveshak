@@ -471,7 +471,7 @@ PDF_TEMPLATE_V2 = """\
 
 <div class="bluf-box">
   <div class="bluf-label">Bottom-Line Judgement</div>
-  <p>{{ rd.get('bluf', rd.get('executive_summary', 'No summary available.')) }}</p>
+  <p>{{ rd.get('bluf', rd.get('executive_summary', 'No summary available.')) | safe }}</p>
 </div>
 
 <!-- ══ PART I: DATA SHEET ══ -->
