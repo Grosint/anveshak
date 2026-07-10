@@ -493,7 +493,7 @@ export default function TopicWorkspace() {
 
             {activeTab === 'map' && (
               <Suspense fallback={<div className="p-4"><Spinner label="Loading map..." /></div>}>
-                <LocationMap topicId={topicId} />
+                <LocationMap topicId={topicId} topicName={topic?.name} />
               </Suspense>
             )}
 

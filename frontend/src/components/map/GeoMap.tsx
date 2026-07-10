@@ -5,7 +5,7 @@
  * Import via: const GeoMap = React.lazy(() => import('../components/map/GeoMap'))
  * This file is only loaded when the GIS tab is opened — saves ~700KB from initial bundle.
  */
-import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react'
+import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
@@ -60,6 +60,15 @@ function formatTimeAgo(iso: string | null): string {
   return `${days}d ago`
 }
 
+type MapMode = 'pins' | 'heatmap'
+
+interface AnalystPin {
+  id: string
+  latitude: number
+  longitude: number
+  label: string
+}
+
 interface GeoMapProps {
   geojson: GeoJSON.FeatureCollection
   /** When set, circle radius scales by this numeric feature property. */
@@ -68,6 +77,12 @@ interface GeoMapProps {
   onFeatureClick?: (properties: Record<string, unknown>) => void
   /** Name of the currently selected feature — shows a highlight ring. */
   selectedFeature?: string | null
+  /** Topic name for PNG export watermark. */
+  topicName?: string
+  /** Analyst pins to render on map. */
+  pins?: AnalystPin[]
+  /** Called when analyst drops a pin (map click in pin mode). */
+  onPinDrop?: (lat: number, lng: number) => void
 }
 
 export interface GeoMapHandle {
@@ -75,19 +90,59 @@ export interface GeoMapHandle {
 }
 
 const GeoMap = forwardRef<GeoMapHandle, GeoMapProps>(function GeoMap(
-  { geojson, sizeProperty, onFeatureClick, selectedFeature },
+  { geojson, sizeProperty, onFeatureClick, selectedFeature, topicName, pins, onPinDrop },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const hoverPopupRef = useRef<maplibregl.Popup | null>(null)
   const clickPopupRef = useRef<maplibregl.Popup | null>(null)
+  const [mapMode, setMapMode] = useState<MapMode>('pins')
+  const [pinMode, setPinMode] = useState(false)
 
   const flyTo = useCallback((lng: number, lat: number) => {
     mapRef.current?.flyTo({ center: [lng, lat], zoom: 6, duration: 800 })
   }, [])
 
   useImperativeHandle(ref, () => ({ flyTo }), [flyTo])
+
+  // --- PNG Export ---
+  const handleExportPng = useCallback(() => {
+    const map = mapRef.current
+    if (!map) return
+    const canvas = map.getCanvas()
+    // Draw watermark on a copy canvas
+    const exportCanvas = document.createElement('canvas')
+    exportCanvas.width = canvas.width
+    exportCanvas.height = canvas.height
+    const ctx = exportCanvas.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(canvas, 0, 0)
+    // Watermark
+    ctx.font = '14px sans-serif'
+    ctx.fillStyle = 'rgba(255,255,255,0.6)'
+    const label = `${topicName ?? 'Anveshak'} · ${new Date().toISOString().slice(0, 16)}`
+    ctx.fillText(label, 12, exportCanvas.height - 12)
+    // Download
+    const link = document.createElement('a')
+    link.download = `anveshak-map-${Date.now()}.png`
+    link.href = exportCanvas.toDataURL('image/png')
+    link.click()
+  }, [topicName])
+
+  const handleCopyPng = useCallback(async () => {
+    const map = mapRef.current
+    if (!map) return
+    const canvas = map.getCanvas()
+    try {
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+      if (blob) {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+      }
+    } catch {
+      // Clipboard API not available in some browsers — silent fail
+    }
+  }, [])
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
@@ -98,9 +153,10 @@ const GeoMap = forwardRef<GeoMapHandle, GeoMapProps>(function GeoMap(
       center: [78, 22], // Center on India
       zoom: 3,
       attributionControl: { compact: true },
+      preserveDrawingBuffer: true, // Required for PNG export via toDataURL
     })
 
-    mapRef.current.addControl(new maplibregl.NavigationControl(), 'top-right')
+    mapRef.current.addControl(new maplibregl.NavigationControl(), 'top-left')
 
     return () => {
       hoverPopupRef.current?.remove()
@@ -233,6 +289,33 @@ const GeoMap = forwardRef<GeoMapHandle, GeoMapProps>(function GeoMap(
           'circle-stroke-color': MAP_COLORS.stroke,
           'circle-stroke-width': 1.5,
         },
+      })
+
+      // ── Heatmap layer (uses same source, hidden by default) ──
+      map.addSource('locations-heatmap', {
+        type: 'geojson',
+        data: geojson,
+      })
+      map.addLayer({
+        id: 'heatmap-layer',
+        type: 'heatmap',
+        source: 'locations-heatmap',
+        paint: {
+          'heatmap-weight': ['interpolate', ['linear'], ['get', 'mention_count'], 1, 0.3, 10, 0.6, 50, 1],
+          'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 0, 1, 9, 3],
+          'heatmap-color': [
+            'interpolate', ['linear'], ['heatmap-density'],
+            0, 'rgba(0,0,0,0)',
+            0.2, 'rgb(103,169,207)',
+            0.4, 'rgb(209,229,240)',
+            0.6, 'rgb(253,219,199)',
+            0.8, 'rgb(239,138,98)',
+            1, 'rgb(178,24,43)',
+          ],
+          'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 0, 15, 9, 30],
+          'heatmap-opacity': 0.7,
+        },
+        layout: { visibility: 'none' }, // Hidden by default — pins mode
       })
 
       // ── Selected feature highlight ring ──
@@ -381,6 +464,88 @@ const GeoMap = forwardRef<GeoMapHandle, GeoMapProps>(function GeoMap(
     }
   }, [selectedFeature])
 
+  // Render analyst pins as a separate layer
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded()) return
+
+    const pinFeatures: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: (pins ?? []).map((p) => ({
+        type: 'Feature' as const,
+        geometry: { type: 'Point' as const, coordinates: [p.longitude, p.latitude] },
+        properties: { label: p.label, id: p.id },
+      })),
+    }
+
+    if (map.getSource('analyst-pins')) {
+      (map.getSource('analyst-pins') as maplibregl.GeoJSONSource).setData(pinFeatures)
+    } else {
+      map.addSource('analyst-pins', { type: 'geojson', data: pinFeatures })
+      map.addLayer({
+        id: 'analyst-pin-markers',
+        type: 'circle',
+        source: 'analyst-pins',
+        paint: {
+          'circle-radius': 8,
+          'circle-color': '#10b981', // emerald — distinct from blue location dots
+          'circle-stroke-color': '#065f46',
+          'circle-stroke-width': 2,
+        },
+      })
+      map.addLayer({
+        id: 'analyst-pin-labels',
+        type: 'symbol',
+        source: 'analyst-pins',
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-size': 11,
+          'text-offset': [0, 1.5],
+          'text-anchor': 'top',
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+        },
+        paint: {
+          'text-color': '#10b981',
+          'text-halo-color': '#0e0e0e',
+          'text-halo-width': 1,
+        },
+      })
+    }
+  }, [pins])
+
+  // Pin drop handler — listens for map clicks when in pin mode
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (!pinMode || !onPinDrop) return
+
+    map.getCanvas().style.cursor = 'crosshair'
+    const handler = (e: maplibregl.MapMouseEvent) => {
+      onPinDrop(e.lngLat.lat, e.lngLat.lng)
+      setPinMode(false)
+      map.getCanvas().style.cursor = ''
+    }
+    map.once('click', handler)
+    return () => {
+      map.off('click', handler)
+      map.getCanvas().style.cursor = ''
+    }
+  }, [pinMode, onPinDrop])
+
+  // Toggle pin/heatmap layer visibility
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded()) return
+    const pinLayers = ['clusters', 'cluster-count', 'unclustered-point', 'selected-ring']
+    const heatLayers = ['heatmap-layer']
+    for (const id of pinLayers) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', mapMode === 'pins' ? 'visible' : 'none')
+    }
+    for (const id of heatLayers) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', mapMode === 'heatmap' ? 'visible' : 'none')
+    }
+  }, [mapMode])
+
   return (
     <div className="relative w-full h-full">
       <div
@@ -389,21 +554,78 @@ const GeoMap = forwardRef<GeoMapHandle, GeoMapProps>(function GeoMap(
         role="img"
         aria-label="Geographic map of mentioned locations"
       />
+
+      {/* Top-right controls: export + mode toggle */}
+      <div className="absolute top-12 right-3 flex flex-col gap-2">
+        {/* Mode toggle */}
+        <div className="bg-anveshak-card/90 backdrop-blur-sm border border-anveshak-border rounded-lg flex overflow-hidden text-xs">
+          <button
+            onClick={() => setMapMode('pins')}
+            className={`px-3 py-1.5 transition-colors ${mapMode === 'pins' ? 'bg-anveshak-accent text-white' : 'text-text-muted hover:text-text-primary'}`}
+          >
+            Pins
+          </button>
+          <button
+            onClick={() => setMapMode('heatmap')}
+            className={`px-3 py-1.5 transition-colors ${mapMode === 'heatmap' ? 'bg-anveshak-accent text-white' : 'text-text-muted hover:text-text-primary'}`}
+          >
+            Heatmap
+          </button>
+        </div>
+
+        {/* Export + pin buttons */}
+        <div className="bg-anveshak-card/90 backdrop-blur-sm border border-anveshak-border rounded-lg flex flex-col overflow-hidden text-xs">
+          <button
+            onClick={handleExportPng}
+            className="px-3 py-1.5 text-text-muted hover:text-text-primary transition-colors text-left"
+            title="Download map as PNG"
+          >
+            Save PNG
+          </button>
+          <button
+            onClick={handleCopyPng}
+            className="px-3 py-1.5 text-text-muted hover:text-text-primary transition-colors border-t border-anveshak-border text-left"
+            title="Copy map to clipboard"
+          >
+            Copy
+          </button>
+          {onPinDrop && (
+            <button
+              onClick={() => setPinMode(!pinMode)}
+              className={`px-3 py-1.5 transition-colors border-t border-anveshak-border text-left ${
+                pinMode ? 'text-emerald-400 bg-emerald-400/10' : 'text-text-muted hover:text-text-primary'
+              }`}
+              title={pinMode ? 'Cancel pin drop' : 'Drop a pin on the map'}
+            >
+              {pinMode ? 'Cancel pin' : 'Drop pin'}
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Legend overlay */}
       <div
         className="absolute bottom-3 left-3 bg-anveshak-card/90 backdrop-blur-sm border border-anveshak-border rounded-lg px-3 py-2 text-xs text-text-muted pointer-events-none"
         aria-label="Map legend"
       >
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: MAP_COLORS.dotDefault }} />
-            Few mentions
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-4 h-4 rounded-full" style={{ background: MAP_COLORS.dotHigh }} />
-            Many mentions
-          </span>
-        </div>
+        {mapMode === 'pins' ? (
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: MAP_COLORS.dotDefault }} />
+              Few mentions
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-4 h-4 rounded-full" style={{ background: MAP_COLORS.dotHigh }} />
+              Many mentions
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span>Low density</span>
+            <span className="inline-block w-16 h-2 rounded" style={{ background: 'linear-gradient(90deg, rgb(103,169,207), rgb(253,219,199), rgb(178,24,43))' }} />
+            <span>High density</span>
+          </div>
+        )}
       </div>
     </div>
   )

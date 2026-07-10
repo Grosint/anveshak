@@ -303,6 +303,124 @@ SQL_TOPIC_LOCATION_MAP = """
     LIMIT $3
 """
 
+# ---------------------------------------------------------------------------
+# Location Map V2 — backed by geocoded_locations table (Phase 2 map upgrade)
+# ---------------------------------------------------------------------------
+
+SQL_LOCATION_MAP_V2 = """
+    SELECT gl.entity_text_normalized AS name,
+           gl.entity_type,
+           gl.latitude,
+           gl.longitude,
+           gl.geocode_confidence,
+           gl.geocode_source,
+           COUNT(DISTINCT ee.content_item_id) AS mention_count,
+           COUNT(DISTINCT ci.source_id) AS source_count,
+           MAX(ci.captured_at) AS latest_mention
+    FROM extracted_entities ee
+    JOIN content_items ci ON ee.content_item_id = ci.id
+    JOIN geocoded_locations gl
+        ON LOWER(ee.entity_text) = gl.entity_text_normalized
+        AND ee.entity_type = gl.entity_type
+    WHERE (ci.topic_id = $1
+       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
+      AND ee.entity_type IN ('GPE', 'LOC', 'FAC')
+      AND ee.confidence >= 0.8
+      AND gl.geocode_source != 'unresolved'
+    GROUP BY gl.entity_text_normalized, gl.entity_type, gl.latitude, gl.longitude,
+             gl.geocode_confidence, gl.geocode_source
+    HAVING COUNT(DISTINCT ee.content_item_id) >= $2
+    ORDER BY mention_count DESC
+    LIMIT $3
+"""
+
+SQL_UNRESOLVED_COUNT_V2 = """
+    SELECT COUNT(DISTINCT LOWER(ee.entity_text)) AS unresolved_count
+    FROM extracted_entities ee
+    JOIN content_items ci ON ee.content_item_id = ci.id
+    LEFT JOIN geocoded_locations gl
+        ON LOWER(ee.entity_text) = gl.entity_text_normalized
+        AND ee.entity_type = gl.entity_type
+    WHERE (ci.topic_id = $1
+       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
+      AND ee.entity_type IN ('GPE', 'LOC', 'FAC')
+      AND ee.confidence >= 0.8
+      AND (gl.id IS NULL OR gl.geocode_source = 'unresolved')
+"""
+
+SQL_UNRESOLVED_NAMES_V2 = """
+    SELECT DISTINCT LOWER(ee.entity_text) AS entity_key
+    FROM extracted_entities ee
+    JOIN content_items ci ON ee.content_item_id = ci.id
+    LEFT JOIN geocoded_locations gl
+        ON LOWER(ee.entity_text) = gl.entity_text_normalized
+        AND ee.entity_type = gl.entity_type
+    WHERE (ci.topic_id = $1
+       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
+      AND ee.entity_type IN ('GPE', 'LOC', 'FAC')
+      AND ee.confidence >= 0.8
+      AND (gl.id IS NULL OR gl.geocode_source = 'unresolved')
+    ORDER BY entity_key
+    LIMIT 50
+"""
+
+SQL_LOCATION_TIMELINE = """
+    SELECT gl.entity_text_normalized AS name,
+           date_trunc('week', ci.captured_at)::date AS week,
+           COUNT(DISTINCT ee.content_item_id) AS mention_count
+    FROM extracted_entities ee
+    JOIN content_items ci ON ee.content_item_id = ci.id
+    JOIN geocoded_locations gl
+        ON LOWER(ee.entity_text) = gl.entity_text_normalized
+        AND ee.entity_type = gl.entity_type
+    WHERE (ci.topic_id = $1
+       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
+      AND ee.entity_type IN ('GPE', 'LOC', 'FAC')
+      AND ee.confidence >= 0.8
+      AND gl.geocode_source != 'unresolved'
+      AND ci.captured_at >= NOW() - INTERVAL '30 days'
+    GROUP BY gl.entity_text_normalized, date_trunc('week', ci.captured_at)::date
+    ORDER BY gl.entity_text_normalized, week
+"""
+
+SQL_LOCATION_CONTENT = """
+    SELECT ci.id, ci.title, ci.url, ci.captured_at,
+           ci.source_id, s.name AS source_name, s.platform,
+           ci.labels
+    FROM extracted_entities ee
+    JOIN content_items ci ON ee.content_item_id = ci.id
+    JOIN sources s ON ci.source_id = s.id
+    WHERE (ci.topic_id = $1
+       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
+      AND LOWER(ee.entity_text) = $2
+      AND ee.entity_type IN ('GPE', 'LOC', 'FAC')
+      AND ee.confidence >= 0.8
+    ORDER BY ci.captured_at DESC
+    LIMIT $3
+"""
+
+# ---------------------------------------------------------------------------
+# Analyst Pins — manual map annotations (Phase 2 map upgrade)
+# ---------------------------------------------------------------------------
+
+SQL_LIST_PINS = """
+    SELECT id, topic_id, org_id, latitude, longitude, label, analyst_id, created_at
+    FROM analyst_pins
+    WHERE topic_id = $1 AND org_id = $2
+    ORDER BY created_at DESC
+"""
+
+SQL_INSERT_PIN = """
+    INSERT INTO analyst_pins (topic_id, org_id, latitude, longitude, label, analyst_id, labels)
+    VALUES ($1, $2, $3, $4, $5, $6, '{}'::jsonb)
+    RETURNING id, topic_id, org_id, latitude, longitude, label, analyst_id, created_at
+"""
+
+SQL_DELETE_PIN = """
+    DELETE FROM analyst_pins
+    WHERE id = $1 AND topic_id = $2 AND org_id = $3
+"""
+
 SQL_CLUSTER_DUPLICATES = """
     SELECT nc1.id AS cluster_a_id,
            nc1.label AS cluster_a_label,
@@ -521,6 +639,200 @@ async def get_location_map(
             "unresolved": sorted(set(unresolved)),
         },
     }
+
+
+@router.get("/topics/{topic_id}/location-map-v2")
+async def get_location_map_v2(
+    topic_id: str,
+    min_mentions: int = Query(2, ge=1, description="Minimum mention count"),
+    limit: int = Query(100, ge=1, le=500, description="Max locations"),
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+) -> dict[str, Any]:
+    """Location map V2 — backed by geocoded_locations table.
+
+    Returns same GeoJSON FeatureCollection shape as v1 but coordinates come
+    from pre-geocoded table (faster, cached, analyst-overridable).
+    """
+    await topics_db.verify_topic_access(db, topic_id, user)
+
+    rows = await db.fetch(SQL_LOCATION_MAP_V2, topic_id, min_mentions, limit)
+
+    features: list[dict[str, Any]] = []
+    for r in rows:
+        latest = r.get("latest_mention")
+        features.append({
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [r["longitude"], r["latitude"]]},
+            "properties": {
+                "name": r["name"].title(),
+                "entity_type": r["entity_type"],
+                "mention_count": r["mention_count"],
+                "source_count": r["source_count"],
+                "latest_mention": latest.isoformat() if latest else None,
+                "geocode_source": r["geocode_source"],
+            },
+        })
+
+    # Count unresolved entities for metadata
+    unresolved_row = await db.fetchrow(SQL_UNRESOLVED_COUNT_V2, topic_id)
+    unresolved_count = unresolved_row["unresolved_count"] if unresolved_row else 0
+
+    unresolved_names: list[str] = []
+    if unresolved_count > 0:
+        unresolved_rows = await db.fetch(SQL_UNRESOLVED_NAMES_V2, topic_id)
+        unresolved_names = [r["entity_key"].title() for r in unresolved_rows]
+
+    return {
+        "type": "FeatureCollection",
+        "features": features,
+        "metadata": {
+            "total_extracted": len(features) + unresolved_count,
+            "geocoded": len(features),
+            "unresolved": unresolved_names,
+        },
+    }
+
+
+@router.get("/topics/{topic_id}/location-timeline")
+async def get_location_timeline(
+    topic_id: str,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+) -> dict[str, Any]:
+    """Per-location mention counts over last 30 days in weekly buckets.
+
+    Returns {locations: [{name, timeline: [{week, count}]}]}.
+    """
+    await topics_db.verify_topic_access(db, topic_id, user)
+    rows = await db.fetch(SQL_LOCATION_TIMELINE, topic_id)
+
+    # Group by location name
+    by_name: dict[str, list[dict[str, Any]]] = {}
+    for r in rows:
+        name = r["name"]
+        by_name.setdefault(name, []).append({
+            "week": r["week"].isoformat(),
+            "count": r["mention_count"],
+        })
+
+    return {
+        "locations": [
+            {"name": name.title(), "timeline": timeline}
+            for name, timeline in sorted(by_name.items(), key=lambda x: -sum(p["count"] for p in x[1]))
+        ]
+    }
+
+
+@router.get("/topics/{topic_id}/location/{entity}/content")
+async def get_location_content(
+    topic_id: str,
+    entity: str,
+    limit: int = Query(20, ge=1, le=100),
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+) -> list[dict[str, Any]]:
+    """Content items mentioning a specific location entity.
+
+    Entity should be the normalized (lowercased) entity text.
+    """
+    await topics_db.verify_topic_access(db, topic_id, user)
+    rows = await db.fetch(SQL_LOCATION_CONTENT, topic_id, entity.lower(), limit)
+
+    results = []
+    for r in rows:
+        labels = r.get("labels")
+        if isinstance(labels, str):
+            import json as _json
+            try:
+                labels = _json.loads(labels)
+            except Exception:
+                labels = {}
+        sentiment = labels.get("sentiment", {}) if isinstance(labels, dict) else {}
+
+        results.append({
+            "id": str(r["id"]),
+            "title": r["title"],
+            "url": r["url"],
+            "captured_at": r["captured_at"].isoformat() if r["captured_at"] else None,
+            "source_name": r["source_name"],
+            "platform": r["platform"],
+            "sentiment_compound": sentiment.get("compound"),
+        })
+
+    return results
+
+
+@router.get("/topics/{topic_id}/pins")
+async def list_pins(
+    topic_id: str,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+) -> list[dict[str, Any]]:
+    """List analyst pins for a topic (org-scoped)."""
+    await topics_db.verify_topic_access(db, topic_id, user)
+    from ..auth.rbac import get_user_org
+    org_id = get_user_org(user)
+    rows = await db.fetch(SQL_LIST_PINS, topic_id, org_id)
+    return [
+        {
+            "id": str(r["id"]),
+            "latitude": r["latitude"],
+            "longitude": r["longitude"],
+            "label": r["label"],
+            "analyst_id": str(r["analyst_id"]),
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+        }
+        for r in rows
+    ]
+
+
+@router.post("/topics/{topic_id}/pins")
+async def create_pin(
+    topic_id: str,
+    request: Request,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+) -> dict[str, Any]:
+    """Create a manual analyst pin on the map."""
+    await topics_db.verify_topic_access(db, topic_id, user)
+    body = await request.json()
+    lat = float(body.get("latitude", 0))
+    lng = float(body.get("longitude", 0))
+    label = str(body.get("label", ""))
+    if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+        raise HTTPException(status_code=422, detail="Invalid coordinates")
+
+    from ..auth.rbac import get_user_org
+    org_id = get_user_org(user)
+    analyst_id = user.get("sub", "")
+
+    row = await db.fetchrow(SQL_INSERT_PIN, topic_id, org_id, lat, lng, label, analyst_id)
+    return {
+        "id": str(row["id"]),
+        "latitude": row["latitude"],
+        "longitude": row["longitude"],
+        "label": row["label"],
+        "analyst_id": str(row["analyst_id"]),
+        "created_at": row["created_at"].isoformat(),
+    }
+
+
+@router.delete("/topics/{topic_id}/pins/{pin_id}")
+async def delete_pin(
+    topic_id: str,
+    pin_id: str,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+) -> dict[str, str]:
+    """Delete an analyst pin."""
+    await topics_db.verify_topic_access(db, topic_id, user)
+    from ..auth.rbac import get_user_org
+    org_id = get_user_org(user)
+    result = await db.execute(SQL_DELETE_PIN, pin_id, topic_id, org_id)
+    if result != "DELETE 1":
+        raise HTTPException(status_code=404, detail="Pin not found")
+    return {"status": "deleted", "id": pin_id}
 
 
 @router.get("/topics/{topic_id}/similar")

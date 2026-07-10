@@ -31,9 +31,42 @@ export const intelligenceApi = {
 
   locationMap: (topicId: string, minMentions = 2, limit = 100) =>
     api
-      .get<GeoJSON.FeatureCollection & { metadata?: { total_extracted: number; geocoded: number; unresolved: string[] } }>(`/api/v1/topics/${topicId}/location-map`, {
+      .get<GeoJSON.FeatureCollection & { metadata?: { total_extracted: number; geocoded: number; unresolved: string[] } }>(`/api/v1/topics/${topicId}/location-map-v2`, {
         params: { min_mentions: minMentions, limit },
       })
+      .then((r) => r.data),
+
+  locationTimeline: (topicId: string) =>
+    api
+      .get<{ locations: { name: string; timeline: { week: string; count: number }[] }[] }>(`/api/v1/topics/${topicId}/location-timeline`)
+      .then((r) => r.data),
+
+  locationContent: (topicId: string, entity: string, limit = 20) =>
+    api
+      .get<{ id: string; title: string; url: string; captured_at: string | null; source_name: string; platform: string; sentiment_compound: number | null }[]>(
+        `/api/v1/topics/${topicId}/location/${encodeURIComponent(entity)}/content`,
+        { params: { limit } },
+      )
+      .then((r) => r.data),
+
+  listPins: (topicId: string) =>
+    api
+      .get<{ id: string; latitude: number; longitude: number; label: string; analyst_id: string; created_at: string }[]>(
+        `/api/v1/topics/${topicId}/pins`,
+      )
+      .then((r) => r.data),
+
+  createPin: (topicId: string, latitude: number, longitude: number, label: string) =>
+    api
+      .post<{ id: string; latitude: number; longitude: number; label: string }>(
+        `/api/v1/topics/${topicId}/pins`,
+        { latitude, longitude, label },
+      )
+      .then((r) => r.data),
+
+  deletePin: (topicId: string, pinId: string) =>
+    api
+      .delete<{ status: string }>(`/api/v1/topics/${topicId}/pins/${pinId}`)
       .then((r) => r.data),
 
   topicStats: (topicId: string, days = 30) =>
