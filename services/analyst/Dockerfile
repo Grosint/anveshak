@@ -52,6 +52,10 @@ COPY --from=builder /workspace/sdk /workspace/sdk
 
 # Copy service source
 COPY --from=builder /workspace/services/analyst /workspace/services/analyst
+
+# Geocoder custom locations overlay (shared with reporter service)
+COPY infra/configs/geocoder/custom_locations.json /workspace/infra/configs/geocoder/custom_locations.json
+
 WORKDIR /workspace/services/analyst
 
 # Non-root user — created BEFORE model dir so ownership is set in one layer

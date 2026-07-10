@@ -35,6 +35,8 @@ from .identifiers import extract_identifiers
 from .templates import match_templates, ScamTemplate, BUILTIN_TEMPLATES
 from .llm_discovery import suggest_source_types_job
 from .keyword_alerts import check_keyword_alerts
+from .geocoding import geocode_and_store, LOCATION_ENTITY_TYPES
+from .geocoding_backfill import backfill_geocoding
 
 log = structlog.get_logger(__name__)
 
@@ -331,6 +333,23 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
                         _LABELS_JSON,
                     )
 
+        # --- Step 5a: Geocode location entities (non-critical, fail-open) ---
+        try:
+            redis_conn = ctx.get("redis")
+            geocoded_count = await geocode_and_store(entities, db_pool, redis_conn)
+            if geocoded_count:
+                log.info(
+                    "analyst.geocoded_locations",
+                    content_item_id=content_item_id,
+                    count=geocoded_count,
+                )
+        except Exception:
+            log.warning(
+                "analyst.geocoding_failed",
+                content_item_id=content_item_id,
+                exc_info=True,
+            )
+
         # Check keyword alert rules (non-critical, fail-open)
         await check_keyword_alerts(db_pool, content_item_id, row["topic_id"], clean_text)
 
@@ -566,6 +585,7 @@ class WorkerSettings:
         arq.func(run_cross_verification, max_tries=2),
         backfill_relevance_scores,
         arq.func(suggest_source_types_job, max_tries=2),
+        arq.func(backfill_geocoding, max_tries=2),
     ]
     cron_jobs = [
         arq.cron(run_contradiction_scoring, hour={2}),       # 7.2 — daily at 02:00 UTC
