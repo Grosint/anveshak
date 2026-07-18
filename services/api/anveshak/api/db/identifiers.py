@@ -19,7 +19,7 @@ IDENTIFIER_TYPES = (
     "CRYPTO_TRC20", "TELEGRAM_HANDLE", "INSTAGRAM_HANDLE",
     "FACEBOOK_HANDLE", "X_HANDLE",
     "URL_DOMAIN", "GSTIN", "UDYAM", "PAN", "IFSC",
-    "BANK_ACCOUNT", "SEBI_REG",
+    "BANK_ACCOUNT", "SEBI_REG", "AIRCRAFT_ID",
 )
 
 # SQL fragment generated from IDENTIFIER_TYPES — single source of truth

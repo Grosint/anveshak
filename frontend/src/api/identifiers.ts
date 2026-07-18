@@ -19,6 +19,7 @@ export type IdentifierType =
   | 'IFSC'
   | 'BANK_ACCOUNT'
   | 'SEBI_REG'
+  | 'AIRCRAFT_ID'
 
 export interface IdentifierResult {
   entity_type: IdentifierType

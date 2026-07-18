@@ -407,6 +407,19 @@ pdf-haryana:
 	@docker cp anveshak-report-worker-1:/tmp/haryana_leave_behind.pdf .
 	$(call success,PDF saved to ./haryana_leave_behind.pdf)
 
+seed-demo-iaf-media:
+	$(call header,Seeding IAF Deepfake Media + Vision Results)
+	@docker cp scripts/seed_iaf_deepfake_media.py anveshak-analyse-vision-worker-1:/tmp/
+	@docker exec anveshak-analyse-vision-worker-1 python /tmp/seed_iaf_deepfake_media.py
+	$(call success,3 deepfake media assets + vision results seeded)
+
+pdf-iaf:
+	$(call header,Generating IAF Air Intelligence Leave-Behind PDF)
+	@docker cp scripts/gen_iaf_leave_behind.py anveshak-report-worker-1:/tmp/
+	@docker exec anveshak-report-worker-1 python /tmp/gen_iaf_leave_behind.py
+	@docker cp anveshak-report-worker-1:/tmp/iaf_leave_behind.pdf .
+	$(call success,PDF saved to ./iaf_leave_behind.pdf)
+
 seed-demo-kerala:
 	$(call header,Loading Kerala Cyber Dome Demo — Online Child Protection Intelligence)
 	@$(COMPOSE) exec -T postgres psql -U anveshak -d anveshak < scripts/seed_kerala_demo.sql 2>&1 | tail -1

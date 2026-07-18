@@ -23,6 +23,7 @@ const IDENTIFIER_TYPES: { value: IdentifierType; label: string }[] = [
   { value: 'IFSC', label: 'IFSC' },
   { value: 'BANK_ACCOUNT', label: 'Bank A/C' },
   { value: 'SEBI_REG', label: 'SEBI' },
+  { value: 'AIRCRAFT_ID', label: 'Aircraft ID' },
 ]
 
 type ViewMode = 'top' | 'clusters' | 'search'
@@ -104,7 +105,7 @@ export default function Identifiers({ embedded = false, topicId: propTopicId }: 
       )}
 
       {/* View tabs + type filter */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
+      <div className="flex items-center gap-3 mb-4 flex-wrap px-1 pt-1">
         <div className="flex bg-anveshak-muted rounded p-0.5 gap-0.5">
           {(['top', 'clusters', 'search'] as ViewMode[]).map((v) => (
             <button
@@ -330,6 +331,16 @@ function ClustersGrid({ clusters, onSelect }: { clusters: IdentifierCluster[]; o
   )
 }
 
+const PLATFORM_COLORS: Record<string, { dot: string; badge: string }> = {
+  telegram: { dot: 'bg-cyan-400', badge: 'bg-cyan-500/20 text-cyan-400' },
+  rss: { dot: 'bg-blue-400', badge: 'bg-blue-500/20 text-blue-400' },
+  web: { dot: 'bg-emerald-400', badge: 'bg-emerald-500/20 text-emerald-400' },
+  reddit: { dot: 'bg-orange-400', badge: 'bg-orange-500/20 text-orange-400' },
+  instagram: { dot: 'bg-pink-400', badge: 'bg-pink-500/20 text-pink-400' },
+  youtube: { dot: 'bg-red-400', badge: 'bg-red-500/20 text-red-400' },
+  darkweb: { dot: 'bg-purple-400', badge: 'bg-purple-500/20 text-purple-400' },
+}
+
 function ClusterDetailPanel({
   detail,
   loading,
@@ -340,50 +351,91 @@ function ClusterDetailPanel({
   onClose: () => void
 }) {
   return (
-    <div className="mb-4 bg-anveshak-card border border-anveshak-accent/50 rounded-lg p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-bold text-text-primary">Cluster Detail</h3>
+    <div className="mb-4 bg-anveshak-card border border-anveshak-accent/30 rounded-lg p-5">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-bold text-text-primary mb-2">Identifier Timeline</h3>
+          {detail && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <TypeBadge type={detail.identifier_type} />
+              <span className="font-mono text-base font-bold text-text-primary">{detail.identifier_value}</span>
+              <span className="text-xs text-text-muted">
+                {detail.source_count} sources &middot; {detail.content_item_count} sightings
+              </span>
+              {detail.first_seen_at && detail.last_seen_at && (
+                <span className="text-[10px] text-text-muted">
+                  {formatDate(detail.first_seen_at)} &rarr; {formatDate(detail.last_seen_at)}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
         <button
           onClick={onClose}
-          className="text-text-muted hover:text-text-primary text-xs"
+          className="text-text-muted hover:text-text-primary text-xs px-2 py-1 rounded hover:bg-white/[0.05] transition-colors"
         >
           Close
         </button>
       </div>
+
       {loading && <Spinner />}
+
+      {/* Vertical timeline */}
       {detail && (
-        <>
-          <div className="flex items-center gap-3 mb-3">
-            <TypeBadge type={detail.identifier_type} />
-            <span className="font-mono text-sm text-text-primary">{detail.identifier_value}</span>
-            <span className="text-xs text-text-muted">{detail.source_count} sources, {detail.content_item_count} items</span>
-          </div>
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {detail.items.map((item) => (
-              <div
-                key={item.content_item_id}
-                className="bg-anveshak-muted rounded p-2 text-xs"
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-text-muted">{item.platform}</span>
-                  <span className="text-text-muted">{item.source_name}</span>
-                  <span className="text-text-muted ml-auto">{formatDate(item.captured_at)}</span>
+        <div className="relative pl-6 max-h-[400px] overflow-y-auto">
+          {/* Vertical line */}
+          <div className="absolute left-[9px] top-2 bottom-2 w-px bg-anveshak-border/60" />
+
+          <div className="space-y-1">
+            {detail.items.map((item, i) => {
+              const colors = PLATFORM_COLORS[item.platform] || { dot: 'bg-gray-400', badge: 'bg-gray-500/20 text-gray-400' }
+              const isFirst = i === 0
+              const isLast = i === detail.items.length - 1
+              return (
+                <div key={item.content_item_id} className="relative group">
+                  {/* Timeline dot */}
+                  <div className={`absolute -left-6 top-3 w-[11px] h-[11px] rounded-full border-2 border-anveshak-bg ${colors.dot} ${
+                    isFirst || isLast ? 'ring-2 ring-offset-1 ring-offset-anveshak-bg ring-current opacity-100' : ''
+                  }`} />
+
+                  {/* Content card */}
+                  <div className={`rounded-lg p-3 transition-colors ${
+                    isFirst ? 'bg-anveshak-accent/[0.06] border border-anveshak-accent/20' : 'bg-white/[0.02] border border-transparent hover:border-anveshak-border/30 hover:bg-white/[0.04]'
+                  }`}>
+                    {/* Top row: platform + source + date */}
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider ${colors.badge}`}>
+                        {item.platform}
+                      </span>
+                      <span className="text-xs font-medium text-text-primary">{item.source_name}</span>
+                      <span className="text-[10px] text-text-muted ml-auto whitespace-nowrap">
+                        {formatDate(item.captured_at)}
+                      </span>
+                    </div>
+
+                    {/* Content snippet */}
+                    <p className="text-xs text-text-secondary leading-relaxed line-clamp-2">
+                      {item.clean_text}
+                    </p>
+
+                    {/* Source link */}
+                    {item.url && (
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] text-anveshak-accent/70 hover:text-anveshak-accent hover:underline mt-1 inline-block"
+                      >
+                        {item.url.replace(/^https?:\/\//, '').slice(0, 50)}{item.url.length > 60 ? '...' : ''} &rarr;
+                      </a>
+                    )}
+                  </div>
                 </div>
-                <p className="text-text-secondary line-clamp-2">{item.clean_text}</p>
-                {item.url && (
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-anveshak-accent hover:underline mt-1 inline-block"
-                  >
-                    Source link
-                  </a>
-                )}
-              </div>
-            ))}
+              )
+            })}
           </div>
-        </>
+        </div>
       )}
     </div>
   )

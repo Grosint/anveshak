@@ -3,15 +3,35 @@
  * Shows structured information: title, key entities, quality indicator,
  * and content text only when it's meaningful.
  */
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { contentApi, Entity } from '../../api/content'
 import { visionApi } from '../../api/vision'
+import api from '../../api/client'
 import { CredibilityBadge } from './CredibilityBadge'
 import { PlatformBadge } from './PlatformBadge'
 import { Badge } from '../ui/Badge'
 import { Spinner } from '../ui/Spinner'
 import { DeepfakeMeter } from '../vision/DeepfakeMeter'
 import { format, formatDistanceToNow } from 'date-fns'
+
+/** Fetch image via authenticated axios, render as blob URL */
+function AuthImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null)
+  useEffect(() => {
+    let revoke: string | null = null
+    api.get(src, { responseType: 'blob' })
+      .then((res) => {
+        const url = URL.createObjectURL(res.data)
+        revoke = url
+        setBlobUrl(url)
+      })
+      .catch(() => setBlobUrl(null))
+    return () => { if (revoke) URL.revokeObjectURL(revoke) }
+  }, [src])
+  if (!blobUrl) return null
+  return <img src={blobUrl} alt={alt} className={className} />
+}
 
 // ── Entity color map ───────────────────────────────────────────────────
 
@@ -254,11 +274,10 @@ export function ContentDetail({ contentId, onClose }: ContentDetailProps) {
                     <div key={vr.vision_result_id} className="space-y-3">
                       {/* Media thumbnail */}
                       {vr.asset_type === 'image' && (
-                        <img
+                        <AuthImage
                           src={`/api/v1/content/media/${vr.media_asset_id}`}
                           alt="Analysed media"
                           className="w-full max-h-48 object-contain rounded border border-anveshak-border/30 bg-black/30"
-                          loading="lazy"
                         />
                       )}
 
@@ -279,10 +298,74 @@ export function ContentDetail({ contentId, onClose }: ContentDetailProps) {
                                 key={i}
                                 className="text-[10px] text-text-secondary bg-white/[0.04] border border-white/[0.08] rounded px-1.5 py-0.5"
                               >
-                                {d.label} {Math.round(d.confidence * 100)}%
+                                {d.label || (d as unknown as Record<string, string>).class} {Math.round(d.confidence * 100)}%
                               </span>
                             ))}
                           </div>
+                        </div>
+                      )}
+
+                      {/* CLIP labels */}
+                      {vr.clip_labels && Object.keys(vr.clip_labels as Record<string, number>).length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-text-muted uppercase mb-1">
+                            Content Classification
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {Object.entries(vr.clip_labels as Record<string, number>)
+                              .sort(([, a], [, b]) => b - a)
+                              .map(([label, score]) => (
+                                <span
+                                  key={label}
+                                  className={`text-[10px] bg-white/[0.04] border rounded px-1.5 py-0.5 ${
+                                    label === 'fabricated'
+                                      ? 'text-red-400 border-red-500/30'
+                                      : 'text-text-secondary border-white/[0.08]'
+                                  }`}
+                                >
+                                  {label.replace(/_/g, ' ')} {Math.round(score * 100)}%
+                                </span>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* EXIF metadata / anomalies */}
+                      {vr.exif_data && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-text-muted uppercase mb-1">
+                            EXIF Metadata
+                          </p>
+                          {(() => {
+                            const exif = (typeof vr.exif_data === 'string' ? JSON.parse(vr.exif_data) : vr.exif_data) as Record<string, unknown>
+                            return (
+                              <div className="bg-white/[0.02] border border-white/[0.06] rounded p-2 space-y-1">
+                                {'Software' in exif && (
+                                  <p className="text-[10px] text-amber-400">
+                                    <span className="text-text-muted">Software:</span> {String(exif.Software)}
+                                  </p>
+                                )}
+                                {'GPS' in exif && (
+                                  <p className="text-[10px] text-text-secondary">
+                                    <span className="text-text-muted">GPS:</span> {String(exif.GPS)}
+                                  </p>
+                                )}
+                                {'ImageDescription' in exif && (
+                                  <p className="text-[10px] text-text-secondary">
+                                    <span className="text-text-muted">Description:</span> {String(exif.ImageDescription)}
+                                  </p>
+                                )}
+                                {Array.isArray(exif.anomalies) && (
+                                  <div className="mt-1 pt-1 border-t border-white/[0.06]">
+                                    <p className="text-[9px] font-semibold text-red-400 uppercase mb-0.5">Anomalies</p>
+                                    {(exif.anomalies as string[]).map((a, i) => (
+                                      <p key={i} className="text-[9px] text-red-300/80">⚠ {a}</p>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })()}
                         </div>
                       )}
 

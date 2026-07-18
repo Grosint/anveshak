@@ -442,6 +442,8 @@ async def get_topic_content(
         labels = d.pop("labels", None) or {}
         if isinstance(labels, str):
             labels = json.loads(labels)
+        if not isinstance(labels, dict):
+            labels = {}
         d["sentiment"] = labels.get("sentiment")
         d["keywords"] = labels.get("keywords", [])
         d["scam_template"] = labels.get("scam_template")
