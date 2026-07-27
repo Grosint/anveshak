@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { identifiersApi, type IdentifierType } from '../../api/identifiers'
+import { useDebounce } from '../../hooks/useDebounce'
 import { Spinner } from '../ui/Spinner'
 
 const IDENTIFIER_TYPES: { value: IdentifierType; label: string }[] = [
@@ -55,31 +56,18 @@ export default function IdentifierSearch({ open, onClose, initialQuery = '' }: I
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [open, onClose])
 
-  // Global Cmd+K shortcut
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault()
-        if (open) onClose()
-        else {
-          // Trigger parent to open — handled via the Layout state
-        }
-      }
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [open, onClose])
+  const debouncedQuery = useDebounce(query, 300)
 
   const { data: results = [], isLoading } = useQuery({
-    queryKey: ['identifiers-global-search', query, typeFilter],
-    queryFn: () => identifiersApi.searchGlobal(query, typeFilter || undefined),
-    enabled: open && query.length >= 2,
+    queryKey: ['identifiers-global-search', debouncedQuery, typeFilter],
+    queryFn: () => identifiersApi.searchGlobal(debouncedQuery, typeFilter || undefined),
+    enabled: open && debouncedQuery.length >= 2,
     staleTime: 15_000,
   })
 
-  function handleRowClick(topicId: string) {
+  function handleRowClick(topicId: string, identifierValue: string) {
     onClose()
-    navigate(`/topics/${topicId}`)
+    navigate(`/topics/${topicId}?panel=identifier&value=${encodeURIComponent(identifierValue)}`)
   }
 
   if (!open) return null
@@ -142,7 +130,7 @@ export default function IdentifierSearch({ open, onClose, initialQuery = '' }: I
             </div>
           )}
 
-          {!isLoading && query.length >= 2 && results.length === 0 && (
+          {!isLoading && debouncedQuery.length >= 2 && results.length === 0 && (
             <div className="py-8 text-center text-text-muted text-sm">
               No identifiers found for "{query}"
             </div>
@@ -161,6 +149,7 @@ export default function IdentifierSearch({ open, onClose, initialQuery = '' }: I
                   <th className="text-left py-2 px-4">Type</th>
                   <th className="text-left py-2 px-4">Value</th>
                   <th className="text-left py-2 px-4">Topic</th>
+                  <th className="text-right py-2 px-4">Mentions</th>
                   <th className="text-right py-2 px-4">Sources</th>
                 </tr>
               </thead>
@@ -168,7 +157,7 @@ export default function IdentifierSearch({ open, onClose, initialQuery = '' }: I
                 {results.map((r, i) => (
                   <tr
                     key={`${r.identifier_value}-${r.topic_id}-${i}`}
-                    onClick={() => handleRowClick(r.topic_id)}
+                    onClick={() => handleRowClick(r.topic_id, r.identifier_value)}
                     className="border-b border-anveshak-border/50 hover:bg-anveshak-accent/10 cursor-pointer transition-colors"
                   >
                     <td className="py-2 px-4">
@@ -179,6 +168,9 @@ export default function IdentifierSearch({ open, onClose, initialQuery = '' }: I
                     </td>
                     <td className="py-2 px-4 text-text-secondary text-xs truncate max-w-[200px]">
                       {r.topic_name}
+                    </td>
+                    <td className="py-2 px-4 text-right text-text-primary">
+                      {r.content_item_count}
                     </td>
                     <td className="py-2 px-4 text-right">
                       <span className={`font-bold ${r.source_count >= 3 ? 'text-signal-high' : 'text-text-primary'}`}>
@@ -194,7 +186,7 @@ export default function IdentifierSearch({ open, onClose, initialQuery = '' }: I
 
         {/* Footer hint */}
         <div className="px-4 py-2 border-t border-anveshak-border flex items-center gap-4 text-[10px] text-text-muted">
-          <span>Click a row to navigate to topic</span>
+          <span>Click a row to open provenance trail</span>
           <span className="ml-auto">Results scoped to your org</span>
         </div>
       </div>

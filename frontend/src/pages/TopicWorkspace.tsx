@@ -1,5 +1,5 @@
-import { useState, lazy, Suspense } from 'react'
-import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import { useState, useEffect, lazy, Suspense } from 'react'
+import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { topicsApi } from '../api/topics'
 import { contentApi, ContentFilters, ContentItem } from '../api/content'
@@ -30,6 +30,7 @@ export default function TopicWorkspace() {
   const { topicId } = useParams<{ topicId: string }>()
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams, setSearchParams] = useSearchParams()
   const provenance = useProvenance()
 
   const activeView: WorkspaceView = resolveWorkspaceView(location.pathname, topicId ?? '')
@@ -40,6 +41,21 @@ export default function TopicWorkspace() {
   const [graphSignalId, setGraphSignalId] = useState<string | null>(null)
   const [showEntityGraph, setShowEntityGraph] = useState(false)
   const [activeModal, setActiveModal] = useState<ActiveModal>(null)
+
+  // Auto-open ProvenancePanel from URL params (e.g. ?panel=identifier&value=X)
+  useEffect(() => {
+    const panel = searchParams.get('panel')
+    const value = searchParams.get('value')
+    if (panel === 'identifier' && value && topicId) {
+      provenance.push({
+        entityType: 'identifier',
+        entityId: value,
+        topicId,
+        label: value,
+      })
+      setSearchParams({}, { replace: true })
+    }
+  }, [searchParams, setSearchParams, topicId, provenance])
 
   const handleViewSwitch = (view: WorkspaceView) => {
     const viewDef = WORKSPACE_VIEWS.find((v) => v.key === view)!

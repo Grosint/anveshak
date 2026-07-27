@@ -32,6 +32,18 @@ export default function Layout() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchInitialQuery, setSearchInitialQuery] = useState('')
 
+  // Global Cmd+K / Ctrl+K shortcut
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setSearchOpen((prev) => !prev)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   // Open search modal from URL param ?search=...
   useEffect(() => {
     const q = searchParams.get('search')
