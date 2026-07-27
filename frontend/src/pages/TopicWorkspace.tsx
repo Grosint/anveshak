@@ -32,6 +32,7 @@ export default function TopicWorkspace() {
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const provenance = useProvenance()
+  const { push: provenancePush } = provenance
 
   const activeView: WorkspaceView = resolveWorkspaceView(location.pathname, topicId ?? '')
 
@@ -47,7 +48,7 @@ export default function TopicWorkspace() {
     const panel = searchParams.get('panel')
     const value = searchParams.get('value')
     if (panel === 'identifier' && value && topicId) {
-      provenance.push({
+      provenancePush({
         entityType: 'identifier',
         entityId: value,
         topicId,
@@ -55,7 +56,7 @@ export default function TopicWorkspace() {
       })
       setSearchParams({}, { replace: true })
     }
-  }, [searchParams, setSearchParams, topicId, provenance])
+  }, [searchParams, setSearchParams, topicId, provenancePush])
 
   const handleViewSwitch = (view: WorkspaceView) => {
     const viewDef = WORKSPACE_VIEWS.find((v) => v.key === view)!

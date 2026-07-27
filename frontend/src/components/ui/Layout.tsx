@@ -37,7 +37,7 @@ export default function Layout() {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
-        setSearchOpen((prev) => !prev)
+        setSearchOpen(true)
       }
     }
     document.addEventListener('keydown', handleKeyDown)
