@@ -8,6 +8,8 @@ import { Badge } from '../components/ui/Badge'
 import { SignalBadge, NewContentBadge, SourceHealthDot } from '../components/ui/UrgencyBadge'
 import { Spinner } from '../components/ui/Spinner'
 import { EmptyState } from '../components/ui/EmptyState'
+import { compareByUrgency } from '../lib/domain'
+import type { HealthStatus } from '../lib/domain'
 import { formatDistanceToNow } from 'date-fns'
 
 function TopicCard({
@@ -24,7 +26,7 @@ function TopicCard({
   const statusVariant = topic.status === 'active' ? 'success' : 'default'
   const signalCount = topic.signal_count ?? 0
   const newContent = topic.new_content_24h ?? 0
-  const healthStatus = topic.worst_source_health ?? 'healthy'
+  const healthStatus: HealthStatus = topic.worst_source_health ?? 'healthy'
   return (
     <article
       className="bg-anveshak-card border border-anveshak-border rounded-lg p-4 hover:border-anveshak-accent/50 hover:shadow-card-hover transition-all cursor-pointer group animate-fade-in"
@@ -120,14 +122,8 @@ export default function TopicsDashboard() {
 
     list.sort((a, b) => {
       switch (sortBy) {
-        case 'urgency': {
-          const aSig = a.signal_count ?? 0
-          const bSig = b.signal_count ?? 0
-          if (aSig !== bSig) return bSig - aSig
-          const aTime = a.last_activity ? new Date(a.last_activity).getTime() : 0
-          const bTime = b.last_activity ? new Date(b.last_activity).getTime() : 0
-          return bTime - aTime
-        }
+        case 'urgency':
+          return compareByUrgency(a, b)
         case 'oldest':
           return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
         case 'most_content':

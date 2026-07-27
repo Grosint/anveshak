@@ -1,4 +1,5 @@
 import api from './client'
+import type { HealthStatus } from '../lib/domain'
 
 export interface Topic {
   id: string
@@ -10,7 +11,7 @@ export interface Topic {
   content_count?: number
   signal_count?: number
   new_content_24h?: number
-  worst_source_health?: 'healthy' | 'degraded' | 'down'
+  worst_source_health?: HealthStatus
   last_activity?: string | null
   keywords?: string[]
   languages?: string[]

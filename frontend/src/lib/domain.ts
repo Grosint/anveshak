@@ -7,6 +7,7 @@
  */
 import type { Signal } from '../api/signals'
 import type { ContentItem, ContentFilters } from '../api/content'
+import type { Topic } from '../api/topics'
 
 // ── Signal severity ─────────────────────────────────────────────────────
 
@@ -120,6 +121,21 @@ export function resolveTimeRange(
     ? new Date(customTo + 'T23:59:59Z').toISOString()
     : until
   return { since, until: customUntil }
+}
+
+// ── Source health ───────────────────────────────────────────────────────
+
+export type HealthStatus = 'healthy' | 'degraded' | 'down'
+
+// ── Topic urgency sort ─────────────────────────────────────────────────
+
+export function compareByUrgency(a: Topic, b: Topic): number {
+  const aSig = a.signal_count ?? 0
+  const bSig = b.signal_count ?? 0
+  if (aSig !== bSig) return bSig - aSig
+  const aTime = a.last_activity ? new Date(a.last_activity).getTime() : 0
+  const bTime = b.last_activity ? new Date(b.last_activity).getTime() : 0
+  return bTime - aTime
 }
 
 // ── Client-side content filtering ───────────────────────────────────────

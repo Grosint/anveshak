@@ -1,4 +1,4 @@
-type HealthStatus = 'healthy' | 'degraded' | 'down'
+import type { HealthStatus } from '../../lib/domain'
 
 const healthConfig: Record<HealthStatus, { dot: string; label: string }> = {
   healthy:  { dot: 'bg-cred-high',   label: 'Sources healthy' },
