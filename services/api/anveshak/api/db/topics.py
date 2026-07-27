@@ -29,7 +29,29 @@ SQL_LIST_TOPICS = """
                UNION
                SELECT tci.content_item_id FROM topic_content_items tci WHERE tci.topic_id = t.id
            ) x) AS content_count,
-           COUNT(DISTINCT sig.id) FILTER (WHERE sig.status = 'new') AS signal_count
+           COUNT(DISTINCT sig.id) FILTER (WHERE sig.status = 'new') AS signal_count,
+           (SELECT COUNT(DISTINCT x2.id) FROM (
+               SELECT ci2.id FROM content_items ci2
+               WHERE ci2.topic_id = t.id AND ci2.captured_at >= NOW() - INTERVAL '24 hours'
+               UNION
+               SELECT tci2.content_item_id FROM topic_content_items tci2
+               JOIN content_items ci3 ON ci3.id = tci2.content_item_id
+               WHERE tci2.topic_id = t.id AND ci3.captured_at >= NOW() - INTERVAL '24 hours'
+           ) x2) AS new_content_24h,
+           (SELECT CASE COALESCE(
+               MIN(CASE src.health_status
+                   WHEN 'down' THEN 1
+                   WHEN 'degraded' THEN 2
+                   ELSE 3
+               END), 3)
+               WHEN 1 THEN 'down'
+               WHEN 2 THEN 'degraded'
+               ELSE 'healthy'
+            END
+            FROM topic_sources ts2
+            JOIN sources src ON src.id = ts2.source_id
+            WHERE ts2.topic_id = t.id
+           ) AS worst_source_health
     FROM topics t
     LEFT JOIN signals sig ON sig.topic_id = t.id
     GROUP BY t.id
@@ -43,7 +65,29 @@ SQL_LIST_TOPICS_BY_ORG = """
                UNION
                SELECT tci.content_item_id FROM topic_content_items tci WHERE tci.topic_id = t.id
            ) x) AS content_count,
-           COUNT(DISTINCT sig.id) FILTER (WHERE sig.status = 'new') AS signal_count
+           COUNT(DISTINCT sig.id) FILTER (WHERE sig.status = 'new') AS signal_count,
+           (SELECT COUNT(DISTINCT x2.id) FROM (
+               SELECT ci2.id FROM content_items ci2
+               WHERE ci2.topic_id = t.id AND ci2.captured_at >= NOW() - INTERVAL '24 hours'
+               UNION
+               SELECT tci2.content_item_id FROM topic_content_items tci2
+               JOIN content_items ci3 ON ci3.id = tci2.content_item_id
+               WHERE tci2.topic_id = t.id AND ci3.captured_at >= NOW() - INTERVAL '24 hours'
+           ) x2) AS new_content_24h,
+           (SELECT CASE COALESCE(
+               MIN(CASE src.health_status
+                   WHEN 'down' THEN 1
+                   WHEN 'degraded' THEN 2
+                   ELSE 3
+               END), 3)
+               WHEN 1 THEN 'down'
+               WHEN 2 THEN 'degraded'
+               ELSE 'healthy'
+            END
+            FROM topic_sources ts2
+            JOIN sources src ON src.id = ts2.source_id
+            WHERE ts2.topic_id = t.id
+           ) AS worst_source_health
     FROM topics t
     LEFT JOIN signals sig ON sig.topic_id = t.id
     WHERE t.org_id = $1

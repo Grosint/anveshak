@@ -34,6 +34,7 @@ from .routes.trackers import router as trackers_router
 from .routes.alerts import router as alerts_router
 from .routes.assessments import router as assessments_router
 from .routes.geocoded_locations import router as geocoded_locations_router
+from .routes.provenance import router as provenance_router
 
 log = structlog.get_logger(__name__)
 
@@ -127,6 +128,7 @@ app.include_router(trackers_router)       # Trackers: persistent analyst case fi
 app.include_router(alerts_router)         # Keyword alert rules for social monitoring
 app.include_router(assessments_router)   # Source Assessment: topic-scoped source intelligence cards
 app.include_router(geocoded_locations_router)  # Phase 1 map upgrade: geocoded locations + analyst override
+app.include_router(provenance_router)          # Issue #7: intelligence view + provenance chains
 
 # Prometheus metrics endpoint — uses isolated registry (API_REGISTRY) so custom
 # api_* metrics are exposed alongside default process metrics.
