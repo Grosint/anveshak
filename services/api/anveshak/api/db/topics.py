@@ -51,7 +51,14 @@ SQL_LIST_TOPICS = """
             FROM topic_sources ts2
             JOIN sources src ON src.id = ts2.source_id
             WHERE ts2.topic_id = t.id
-           ) AS worst_source_health
+           ) AS worst_source_health,
+           (SELECT MAX(la.captured_at) FROM (
+               SELECT ci4.captured_at FROM content_items ci4 WHERE ci4.topic_id = t.id
+               UNION ALL
+               SELECT ci5.captured_at FROM topic_content_items tci3
+               JOIN content_items ci5 ON ci5.id = tci3.content_item_id
+               WHERE tci3.topic_id = t.id
+           ) la) AS last_activity
     FROM topics t
     LEFT JOIN signals sig ON sig.topic_id = t.id
     GROUP BY t.id
@@ -87,7 +94,14 @@ SQL_LIST_TOPICS_BY_ORG = """
             FROM topic_sources ts2
             JOIN sources src ON src.id = ts2.source_id
             WHERE ts2.topic_id = t.id
-           ) AS worst_source_health
+           ) AS worst_source_health,
+           (SELECT MAX(la.captured_at) FROM (
+               SELECT ci4.captured_at FROM content_items ci4 WHERE ci4.topic_id = t.id
+               UNION ALL
+               SELECT ci5.captured_at FROM topic_content_items tci3
+               JOIN content_items ci5 ON ci5.id = tci3.content_item_id
+               WHERE tci3.topic_id = t.id
+           ) la) AS last_activity
     FROM topics t
     LEFT JOIN signals sig ON sig.topic_id = t.id
     WHERE t.org_id = $1

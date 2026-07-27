@@ -9,6 +9,9 @@ export interface Topic {
   created_at: string
   content_count?: number
   signal_count?: number
+  new_content_24h?: number
+  worst_source_health?: 'healthy' | 'degraded' | 'down'
+  last_activity?: string | null
   keywords?: string[]
   languages?: string[]
   clip_categories?: string[]

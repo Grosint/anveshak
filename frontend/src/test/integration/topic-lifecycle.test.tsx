@@ -103,7 +103,7 @@ describe('Seam 5: Create → cache invalidate → list re-render', () => {
       expect(screen.getByText('OSINT Monitor')).toBeInTheDocument()
       expect(screen.getByText('active')).toBeInTheDocument()
       expect(screen.getByText(/42 items/)).toBeInTheDocument()
-      expect(screen.getByText('5 signals')).toBeInTheDocument()
+      expect(screen.getByLabelText('5 unacknowledged signals')).toBeInTheDocument()
     })
   })
 })
