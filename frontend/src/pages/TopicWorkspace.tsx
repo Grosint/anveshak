@@ -1,11 +1,12 @@
 import { useState, lazy, Suspense } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { topicsApi, Cluster, ClusterContentItem } from '../api/topics'
+import { topicsApi } from '../api/topics'
 import { contentApi, ContentFilters, ContentItem } from '../api/content'
 import { useInfiniteContent } from '../hooks/useInfiniteContent'
 import { useProvenance } from '../contexts/ProvenanceContext'
 import { IntelligenceView } from '../components/intelligence'
+import { ClusterBrowser } from '../components/clusters/ClusterBrowser'
 import { ContentCard } from '../components/content/ContentCard'
 import { FilterBar } from '../components/content/FilterBar'
 import { ProvenancePanel } from '../components/provenance/ProvenancePanel'
@@ -14,28 +15,6 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import ExportButton from '../components/ui/ExportButton'
-
-type SearchMode = 'content' | 'narratives'
-
-const TIER_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  high:    { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'High' },
-  medium:  { bg: 'bg-amber-500/20',   text: 'text-amber-400',   label: 'Medium' },
-  low:     { bg: 'bg-red-500/20',     text: 'text-red-400',     label: 'Low' },
-  keyword: { bg: 'bg-blue-500/20',    text: 'text-blue-400',    label: 'Keyword' },
-}
-
-function RelevanceBadge({ tier }: { tier?: string | null }) {
-  if (!tier) return null
-  const style = TIER_STYLES[tier] ?? TIER_STYLES.low
-  return (
-    <span
-      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold ${style.bg} ${style.text}`}
-      title="Topic similarity — indicates shared subject matter, not operational linkage"
-    >
-      {style.label}
-    </span>
-  )
-}
 
 const Identifiers = lazy(() => import('./Identifiers'))
 const TemplateManager = lazy(() => import('../components/topics/TemplateManager'))
@@ -66,9 +45,6 @@ export default function TopicWorkspace() {
   const [filters, setFilters] = useState<ContentFilters>({})
   const [searchQ, setSearchQ] = useState('')
   const [searchActive, setSearchActive] = useState(false)
-  const [searchMode, setSearchMode] = useState<SearchMode>('content')
-  const [expandedClusterId, setExpandedClusterId] = useState<string | null>(null)
-  const [drilldownSort, setDrilldownSort] = useState<'time' | 'relevance'>('time')
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [graphSignalId, setGraphSignalId] = useState<string | null>(null)
   const [showEntityGraph, setShowEntityGraph] = useState(false)
@@ -86,41 +62,15 @@ export default function TopicWorkspace() {
     enabled: !!topicId,
   })
 
-  // Clusters (browsing)
-  const { data: clusters = [] } = useQuery({
-    queryKey: ['clusters', topicId],
-    queryFn: () => topicsApi.listClusters(topicId!),
-    enabled: !!topicId && activeTab === 'clusters' && !(searchActive && searchMode === 'narratives'),
-  })
-
-  // Narrative search — cluster centroid search
-  const { data: narrativeResults = [], isFetching: isNarrativeSearching } = useQuery({
-    queryKey: ['cluster-search', topicId, searchQ],
-    queryFn: () => topicsApi.searchClusters(topicId!, searchQ),
-    enabled: searchActive && searchMode === 'narratives' && !!searchQ && !!topicId && activeTab === 'clusters',
-    staleTime: 60_000,
-  })
-
-  // Cluster drill-down — content within expanded cluster
-  const { data: clusterContent = [], isFetching: isDrilldownLoading } = useQuery({
-    queryKey: ['cluster-content', topicId, expandedClusterId, drilldownSort, searchActive ? searchQ : ''],
-    queryFn: () => topicsApi.getClusterContent(topicId!, expandedClusterId!, {
-      q: searchActive ? searchQ : undefined,
-      sort: searchActive && searchQ ? drilldownSort : 'time',
-      limit: 50,
-    }),
-    enabled: !!topicId && !!expandedClusterId,
-  })
-
   // Content semantic search
   const { data: searchResults = [], isFetching: isContentSearching } = useQuery({
     queryKey: ['search', topicId, searchQ],
     queryFn: () => contentApi.search(searchQ, topicId!),
-    enabled: searchActive && searchMode === 'content' && !!searchQ && !!topicId,
+    enabled: searchActive && !!searchQ && !!topicId,
     staleTime: 60_000,
   })
 
-  const isSearching = isContentSearching || isNarrativeSearching
+  const isSearching = isContentSearching
 
   // Infinite feed
   const { items, isLoading, isFetchingNextPage, sentinelRef } = useInfiniteContent(
@@ -209,56 +159,27 @@ export default function TopicWorkspace() {
             </div>
           </div>
 
-          {/* Search bar (feed + clusters only) */}
-          {(activeTab === 'feed' || activeTab === 'clusters') && (
+          {/* Search bar (feed only) */}
+          {activeTab === 'feed' && (
             <div className="px-4 py-2 border-b border-anveshak-border flex gap-2 items-center shrink-0">
-              {/* Segmented control: Content | Narratives */}
-              <div className="flex bg-anveshak-card border border-anveshak-border rounded overflow-hidden shrink-0">
-                <button
-                  className={`px-2.5 py-1 text-[10px] font-medium transition-colors ${
-                    searchMode === 'content'
-                      ? 'bg-anveshak-accent/20 text-anveshak-accent'
-                      : 'text-text-muted hover:text-text-primary'
-                  }`}
-                  onClick={() => { setSearchMode('content'); if (searchActive) { setSearchActive(false); setExpandedClusterId(null) } }}
-                >
-                  Content
-                </button>
-                <button
-                  className={`px-2.5 py-1 text-[10px] font-medium transition-colors border-l border-anveshak-border ${
-                    searchMode === 'narratives'
-                      ? 'bg-anveshak-accent/20 text-anveshak-accent'
-                      : 'text-text-muted hover:text-text-primary'
-                  }`}
-                  onClick={() => { setSearchMode('narratives'); setActiveTab('clusters'); if (searchActive) { setSearchActive(false); setExpandedClusterId(null) } }}
-                >
-                  Narratives
-                </button>
-              </div>
               <input
                 type="search"
                 value={searchQ}
                 onChange={(e) => setSearchQ(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && searchQ.trim()) {
-                    setSearchActive(true)
-                    if (searchMode === 'narratives') setActiveTab('clusters')
-                  }
-                  if (e.key === 'Escape') { setSearchActive(false); setSearchQ(''); setExpandedClusterId(null) }
+                  if (e.key === 'Enter' && searchQ.trim()) setSearchActive(true)
+                  if (e.key === 'Escape') { setSearchActive(false); setSearchQ('') }
                 }}
-                placeholder={searchMode === 'narratives' ? 'Search narratives...' : 'Semantic search...'}
+                placeholder="Semantic search..."
                 className="flex-1 bg-anveshak-card border border-anveshak-border rounded px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-anveshak-accent"
               />
               {searchActive ? (
-                <Button size="sm" variant="ghost" onClick={() => { setSearchActive(false); setSearchQ(''); setExpandedClusterId(null) }}>
+                <Button size="sm" variant="ghost" onClick={() => { setSearchActive(false); setSearchQ('') }}>
                   Clear
                 </Button>
               ) : (
                 <Button size="sm" variant="secondary" onClick={() => {
-                  if (searchQ.trim()) {
-                    setSearchActive(true)
-                    if (searchMode === 'narratives') setActiveTab('clusters')
-                  }
+                  if (searchQ.trim()) setSearchActive(true)
                 }} disabled={!searchQ.trim()}>
                   Search
                 </Button>
@@ -323,156 +244,9 @@ export default function TopicWorkspace() {
               </div>
             )}
 
-            {activeTab === 'clusters' && (() => {
-              const displayClusters: Cluster[] = (searchActive && searchMode === 'narratives')
-                ? narrativeResults
-                : clusters
-
-              const handleClusterClick = (id: string) => {
-                if (expandedClusterId === id) {
-                  setExpandedClusterId(null)
-                } else {
-                  setExpandedClusterId(id)
-                  setDrilldownSort(searchActive && searchQ ? 'relevance' : 'time')
-                }
-              }
-
-              return (
-                <div className="p-4">
-                  {isNarrativeSearching ? (
-                    <div className="flex justify-center py-20">
-                      <Spinner label="Searching narratives..." />
-                    </div>
-                  ) : displayClusters.length === 0 ? (
-                    <EmptyState
-                      icon="📊"
-                      title={searchActive && searchMode === 'narratives' ? 'No matching narratives' : 'No clusters yet'}
-                      description={searchActive ? 'Try different keywords.' : 'Clusters emerge when enough content is analyzed.'}
-                    />
-                  ) : (
-                    <div className="max-w-3xl space-y-3">
-                      {/* Summary */}
-                      <div className="flex items-center gap-3 text-[10px] text-text-muted px-1">
-                        <span>
-                          {searchActive && searchMode === 'narratives'
-                            ? `${displayClusters.length} matching narrative${displayClusters.length !== 1 ? 's' : ''}`
-                            : `${displayClusters.length} cluster${displayClusters.length !== 1 ? 's' : ''}`}
-                        </span>
-                        <span className="text-anveshak-border">|</span>
-                        <span>{displayClusters.reduce((s, c) => s + c.item_count, 0)} total items</span>
-                      </div>
-
-                      {displayClusters.map((cluster) => {
-                        const isExpanded = expandedClusterId === cluster.id
-                        return (
-                          <div key={cluster.id}>
-                            <article
-                              className={`bg-anveshak-card border border-anveshak-border rounded-lg p-4 hover:border-anveshak-accent/40 transition-all cursor-pointer ${
-                                isExpanded ? 'ring-1 ring-anveshak-accent' : ''
-                              }`}
-                              onClick={() => handleClusterClick(cluster.id)}
-                            >
-                              <div className="flex items-start justify-between mb-1">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <h3 className="text-sm font-semibold text-text-primary truncate">{cluster.label ?? 'Unclassified'}</h3>
-                                  <RelevanceBadge tier={cluster.relevance_tier} />
-                                </div>
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  <Badge variant="accent">{cluster.item_count}</Badge>
-                                  <span className="text-[10px] text-text-muted">{cluster.independent_source_count} sources</span>
-                                  <svg
-                                    viewBox="0 0 20 20" fill="currentColor"
-                                    className={`w-3 h-3 text-text-muted transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                                  >
-                                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-                                  </svg>
-                                </div>
-                              </div>
-                              {cluster.executive_summary && (
-                                <p className="text-xs text-text-secondary leading-relaxed line-clamp-3">{cluster.executive_summary}</p>
-                              )}
-                              {cluster.sources?.length > 0 && (
-                                <div className="flex gap-1.5 flex-wrap mt-2">
-                                  {cluster.sources.map((src, i) => (
-                                    <span key={i} className="text-[9px] bg-anveshak-muted rounded px-1.5 py-0.5 text-text-muted">
-                                      {src.platform.toUpperCase()} {src.source_name.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </article>
-
-                            {/* Drill-down: content items */}
-                            {isExpanded && (
-                              <div className="ml-4 mt-1 mb-2 border-l-2 border-anveshak-border/40 pl-4">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <span className="text-[10px] text-text-muted">Sort:</span>
-                                  <button
-                                    className={`text-[10px] px-2 py-0.5 rounded ${drilldownSort === 'time' ? 'bg-anveshak-accent/20 text-anveshak-accent' : 'text-text-muted hover:text-text-primary'}`}
-                                    onClick={(e) => { e.stopPropagation(); setDrilldownSort('time') }}
-                                  >
-                                    Chronological
-                                  </button>
-                                  <button
-                                    className={`text-[10px] px-2 py-0.5 rounded ${drilldownSort === 'relevance' ? 'bg-anveshak-accent/20 text-anveshak-accent' : 'text-text-muted hover:text-text-primary'}`}
-                                    onClick={(e) => { e.stopPropagation(); setDrilldownSort('relevance') }}
-                                    disabled={!searchQ}
-                                    title={searchQ ? 'Rank by query similarity' : 'Enter a search query to enable relevance sort'}
-                                  >
-                                    Relevance
-                                  </button>
-                                </div>
-
-                                {isDrilldownLoading ? (
-                                  <div className="py-3 flex justify-center">
-                                    <Spinner size="sm" label="Loading items..." />
-                                  </div>
-                                ) : clusterContent.length === 0 ? (
-                                  <p className="text-[11px] text-text-muted py-2">No content items in this cluster.</p>
-                                ) : (
-                                  <div className="space-y-2">
-                                    {clusterContent.map((item: ClusterContentItem) => (
-                                      <div
-                                        key={item.id}
-                                        className="bg-anveshak-card/50 border border-anveshak-border rounded-lg p-3 cursor-pointer hover:border-anveshak-accent/40 transition-colors"
-                                        onClick={(e) => { e.stopPropagation(); handleSelectContent(item.id, item.title ?? undefined) }}
-                                      >
-                                        <div className="flex items-start justify-between gap-2 mb-1">
-                                          <div className="flex items-center gap-2 min-w-0">
-                                            {item.platform && (
-                                              <span className="text-[9px] font-bold text-text-muted shrink-0">
-                                                {item.platform.toUpperCase()}
-                                              </span>
-                                            )}
-                                            <span className="text-[10px] text-text-muted truncate">
-                                              {item.source_name?.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
-                                            </span>
-                                            <RelevanceBadge tier={item.relevance_tier} />
-                                          </div>
-                                          <span className="text-[9px] text-text-muted shrink-0">
-                                            {new Date(item.captured_at).toLocaleDateString()}
-                                          </span>
-                                        </div>
-                                        {item.title && (
-                                          <p className="text-[11px] font-medium text-text-primary mb-1 line-clamp-1">{item.title}</p>
-                                        )}
-                                        <p className="text-[11px] text-text-secondary/80 leading-relaxed line-clamp-2">
-                                          {item.translated_text || item.clean_text}
-                                        </p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
+            {activeTab === 'clusters' && (
+              <ClusterBrowser topicId={topicId} onSelectContent={handleSelectContent} />
+            )}
 
             {activeTab === 'map' && (
               <Suspense fallback={<div className="p-4"><Spinner label="Loading map..." /></div>}>
