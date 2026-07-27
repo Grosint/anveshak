@@ -273,7 +273,7 @@ export default function TopicWorkspace() {
 
             {activeTab === 'identifiers' && (
               <Suspense fallback={<div className="p-4"><Spinner label="Loading identifiers..." /></div>}>
-                <Identifiers embedded topicId={topicId} />
+                <Identifiers embedded topicId={topicId} onSelectIdentifier={handleSelectIdentifier} />
               </Suspense>
             )}
 
