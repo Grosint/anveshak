@@ -138,6 +138,25 @@ export function compareByUrgency(a: Topic, b: Topic): number {
   return bTime - aTime
 }
 
+// ── Workspace view resolution ──────────────────────────────────────────
+
+export type WorkspaceView = 'intelligence' | 'content' | 'map'
+
+export const WORKSPACE_VIEWS: { key: WorkspaceView; label: string; path: string }[] = [
+  { key: 'intelligence', label: 'Intelligence', path: '' },
+  { key: 'content', label: 'Content', path: '/content' },
+  { key: 'map', label: 'Map', path: '/map' },
+]
+
+export function resolveWorkspaceView(pathname: string, topicId: string): WorkspaceView {
+  const base = `/topics/${topicId}`
+  const match = WORKSPACE_VIEWS.find((v) => v.path && pathname === `${base}${v.path}`)
+  if (match) return match.key
+  // Backward compat: /feed → content
+  if (pathname === `${base}/feed`) return 'content'
+  return 'intelligence'
+}
+
 // ── Client-side content filtering ───────────────────────────────────────
 
 export function applyClientFilters(items: ContentItem[], filters: ContentFilters): ContentItem[] {

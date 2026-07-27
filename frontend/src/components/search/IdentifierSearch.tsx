@@ -79,7 +79,7 @@ export default function IdentifierSearch({ open, onClose, initialQuery = '' }: I
 
   function handleRowClick(topicId: string) {
     onClose()
-    navigate(`/topics/${topicId}/feed`)
+    navigate(`/topics/${topicId}`)
   }
 
   if (!open) return null

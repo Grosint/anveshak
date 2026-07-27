@@ -13,6 +13,7 @@ import {
   resolveTimeRange,
   applyClientFilters,
   compareByUrgency,
+  resolveWorkspaceView,
 } from '../../lib/domain'
 import { makeSignal, makeContentItem, makeTopic } from '../factories'
 
@@ -231,6 +232,30 @@ describe('compareByUrgency', () => {
     const a = makeTopic({ signal_count: undefined, last_activity: '2026-07-27T10:00:00Z' })
     const b = makeTopic({ signal_count: 1, last_activity: '2026-07-27T08:00:00Z' })
     expect(compareByUrgency(a, b)).toBeGreaterThan(0) // b has signal, comes first
+  })
+})
+
+// ── resolveWorkspaceView ────────────────────────────────────────────────
+
+describe('resolveWorkspaceView', () => {
+  it('base path → intelligence', () => {
+    expect(resolveWorkspaceView('/topics/t1', 't1')).toBe('intelligence')
+  })
+
+  it('/content → content', () => {
+    expect(resolveWorkspaceView('/topics/t1/content', 't1')).toBe('content')
+  })
+
+  it('/map → map', () => {
+    expect(resolveWorkspaceView('/topics/t1/map', 't1')).toBe('map')
+  })
+
+  it('/feed → content (backward compat)', () => {
+    expect(resolveWorkspaceView('/topics/t1/feed', 't1')).toBe('content')
+  })
+
+  it('unknown suffix → intelligence', () => {
+    expect(resolveWorkspaceView('/topics/t1/unknown', 't1')).toBe('intelligence')
   })
 })
 

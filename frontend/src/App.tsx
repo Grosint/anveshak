@@ -1,5 +1,5 @@
 import React from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
 import { WSProvider } from './contexts/WSContext'
 import { ProvenanceProvider } from './contexts/ProvenanceContext'
@@ -62,6 +62,11 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, EBSta
   }
 }
 
+function FeedRedirect() {
+  const { topicId } = useParams<{ topicId: string }>()
+  return <Navigate to={`/topics/${topicId}/content`} replace />
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
   if (!isAuthenticated) return <Navigate to="/login" replace />
@@ -86,7 +91,11 @@ export default function App() {
         >
           <Route path="/" element={<Navigate to="/topics" replace />} />
           <Route path="/topics" element={<TopicsDashboard />} />
-          <Route path="/topics/:topicId/feed" element={<TopicWorkspace />} />
+          <Route path="/topics/:topicId" element={<TopicWorkspace />} />
+          <Route path="/topics/:topicId/content" element={<TopicWorkspace />} />
+          <Route path="/topics/:topicId/map" element={<TopicWorkspace />} />
+          {/* Redirect old feed route to content view */}
+          <Route path="/topics/:topicId/feed" element={<FeedRedirect />} />
           <Route path="/vision" element={<ImageAnalysis />} />
           <Route path="/signals" element={<SignalsInbox />} />
           <Route path="/trackers" element={<Trackers />} />

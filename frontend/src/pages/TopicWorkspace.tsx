@@ -1,12 +1,12 @@
 import { useState, lazy, Suspense } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { topicsApi } from '../api/topics'
 import { contentApi, ContentFilters, ContentItem } from '../api/content'
 import { useInfiniteContent } from '../hooks/useInfiniteContent'
 import { useProvenance } from '../contexts/ProvenanceContext'
+import { resolveWorkspaceView, WORKSPACE_VIEWS, WorkspaceView } from '../lib/domain'
 import { IntelligenceView } from '../components/intelligence'
-import { ClusterBrowser } from '../components/clusters/ClusterBrowser'
 import { IdentifiersModal } from '../components/modals/IdentifiersModal'
 import { ClustersModal } from '../components/modals/ClustersModal'
 import { ReportGenerationModal } from '../components/modals/ReportGenerationModal'
@@ -20,46 +20,30 @@ import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import ExportButton from '../components/ui/ExportButton'
 
-const Identifiers = lazy(() => import('./Identifiers'))
-const TemplateManager = lazy(() => import('../components/topics/TemplateManager'))
-const ReportsTab = lazy(() => import('../components/workspace/ReportsTab'))
-const SourcesTab = lazy(() => import('../components/workspace/SourcesTab'))
 import EntityGraph from '../components/workspace/EntityGraph'
 const LocationMap = lazy(() => import('../components/workspace/LocationMap'))
 const SignalGraph = lazy(() => import('../components/signals/SignalGraph').then(m => ({ default: m.SignalGraph })))
 
-type CenterTab = 'intelligence' | 'feed' | 'clusters' | 'map' | 'identifiers' | 'reports' | 'sources'
-
-const TABS: { key: CenterTab; label: string }[] = [
-  { key: 'intelligence', label: 'Intelligence' },
-  { key: 'feed', label: 'Feed' },
-  { key: 'clusters', label: 'Clusters' },
-  { key: 'map', label: 'Map' },
-  { key: 'identifiers', label: 'Identifiers' },
-  { key: 'reports', label: 'Reports' },
-  { key: 'sources', label: 'Sources' },
-]
+type ActiveModal = 'identifiers' | 'clusters' | 'report' | 'sources' | null
 
 export default function TopicWorkspace() {
   const { topicId } = useParams<{ topicId: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const provenance = useProvenance()
 
-  const [activeTab, setActiveTab] = useState<CenterTab>('intelligence')
+  const activeView: WorkspaceView = resolveWorkspaceView(location.pathname, topicId ?? '')
+
   const [filters, setFilters] = useState<ContentFilters>({})
   const [searchQ, setSearchQ] = useState('')
   const [searchActive, setSearchActive] = useState(false)
-  const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [graphSignalId, setGraphSignalId] = useState<string | null>(null)
   const [showEntityGraph, setShowEntityGraph] = useState(false)
-  const [showIdentifiersModal, setShowIdentifiersModal] = useState(false)
-  const [showClustersModal, setShowClustersModal] = useState(false)
-  const [showReportModal, setShowReportModal] = useState(false)
-  const [showSourcesModal, setShowSourcesModal] = useState(false)
+  const [activeModal, setActiveModal] = useState<ActiveModal>(null)
 
-  // Close provenance panel on tab switch
-  const handleTabSwitch = (tab: CenterTab) => {
-    setActiveTab(tab)
+  const handleViewSwitch = (view: WorkspaceView) => {
+    const viewDef = WORKSPACE_VIEWS.find((v) => v.key === view)!
+    navigate(`/topics/${topicId}${viewDef.path}`, { replace: true })
     provenance.close()
   }
 
@@ -70,20 +54,19 @@ export default function TopicWorkspace() {
     enabled: !!topicId,
   })
 
-  // Content semantic search
-  const { data: searchResults = [], isFetching: isContentSearching } = useQuery({
+  // Content semantic search (only active in content view)
+  const { data: searchResults = [], isFetching: isSearching } = useQuery({
     queryKey: ['search', topicId, searchQ],
     queryFn: () => contentApi.search(searchQ, topicId!),
-    enabled: searchActive && !!searchQ && !!topicId,
+    enabled: activeView === 'content' && searchActive && !!searchQ && !!topicId,
     staleTime: 60_000,
   })
 
-  const isSearching = isContentSearching
-
-  // Infinite feed
+  // Infinite feed — gated to content view only
   const { items, isLoading, isFetchingNextPage, sentinelRef } = useInfiniteContent(
     topicId ?? '',
     filters,
+    activeView === 'content',
   )
 
   if (!topicId) return null
@@ -157,27 +140,28 @@ export default function TopicWorkspace() {
       <div className="flex-1 flex overflow-hidden">
         {/* Center content */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          {/* Tab bar */}
-          <div className="px-4 border-b border-anveshak-border shrink-0">
-            <div className="flex items-center gap-0.5 -mb-px">
-              {TABS.map((tab) => (
+          {/* 3-view tab bar — responsive: scrollable on mobile */}
+          <div className="px-2 sm:px-4 border-b border-anveshak-border shrink-0 overflow-x-auto">
+            <nav className="flex items-center gap-0.5 -mb-px min-w-0" aria-label="Workspace views">
+              {WORKSPACE_VIEWS.map((view) => (
                 <button
-                  key={tab.key}
-                  onClick={() => handleTabSwitch(tab.key)}
-                  className={`px-3 py-2.5 text-xs font-medium border-b-2 transition-colors ${
-                    activeTab === tab.key
+                  key={view.key}
+                  onClick={() => handleViewSwitch(view.key)}
+                  className={`px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0 ${
+                    activeView === view.key
                       ? 'border-anveshak-accent text-anveshak-accent'
                       : 'border-transparent text-text-muted hover:text-text-primary'
                   }`}
+                  aria-current={activeView === view.key ? 'page' : undefined}
                 >
-                  {tab.label}
+                  {view.label}
                 </button>
               ))}
-            </div>
+            </nav>
           </div>
 
-          {/* Search bar (feed only) */}
-          {activeTab === 'feed' && (
+          {/* Search bar (content view only) */}
+          {activeView === 'content' && (
             <div className="px-4 py-2 border-b border-anveshak-border flex gap-2 items-center shrink-0">
               <input
                 type="search"
@@ -204,33 +188,41 @@ export default function TopicWorkspace() {
             </div>
           )}
 
-          {/* Filter bar (feed only) */}
-          {activeTab === 'feed' && !searchActive && (
+          {/* Filter bar (content view, not during search) */}
+          {activeView === 'content' && !searchActive && (
             <FilterBar
               filters={filters}
               onChange={setFilters}
               clusterView={false}
-              onToggleCluster={() => setActiveTab('clusters')}
+              onToggleCluster={() => setActiveModal('clusters')}
             />
           )}
 
-          {/* Tab content */}
+          {/* View content */}
           <div className="flex-1 overflow-y-auto">
-            {activeTab === 'intelligence' && (
+            {activeView === 'intelligence' && (
               <IntelligenceView
                 topicId={topicId}
                 topicStatus={topic?.status}
-                onNavigateMap={() => handleTabSwitch('map')}
-                onNavigateContent={() => handleTabSwitch('feed')}
-                onShowAllClusters={() => setShowClustersModal(true)}
-                onShowAllIdentifiers={() => setShowIdentifiersModal(true)}
-                onGenerateReport={() => setShowReportModal(true)}
-                onManageSources={() => setShowSourcesModal(true)}
+                onNavigateMap={() => handleViewSwitch('map')}
+                onNavigateContent={() => handleViewSwitch('content')}
+                onShowAllClusters={() => setActiveModal('clusters')}
+                onShowAllIdentifiers={() => setActiveModal('identifiers')}
+                onGenerateReport={() => setActiveModal('report')}
+                onManageSources={() => setActiveModal('sources')}
               />
             )}
 
-            {activeTab === 'feed' && (
+            {activeView === 'content' && (
               <div className="p-4">
+                <div className="flex justify-end mb-3">
+                  <ExportButton
+                    endpoint="/api/v1/export/content"
+                    params={{ topic_id: topicId }}
+                    label="Export CSV"
+                    format="csv"
+                  />
+                </div>
                 {isLoading || isSearching ? (
                   <div className="flex justify-center py-20">
                     <Spinner label={isSearching ? 'Searching...' : 'Loading content...'} />
@@ -261,34 +253,23 @@ export default function TopicWorkspace() {
               </div>
             )}
 
-            {activeTab === 'clusters' && (
-              <ClusterBrowser topicId={topicId} onSelectContent={handleSelectContent} />
-            )}
-
-            {activeTab === 'map' && (
+            {activeView === 'map' && (
               <Suspense fallback={<div className="p-4"><Spinner label="Loading map..." /></div>}>
-                <LocationMap topicId={topicId} topicName={topic?.name} />
+                <div className="h-full flex flex-col">
+                  <div className="flex justify-end px-4 py-2 shrink-0">
+                    <ExportButton
+                      endpoint="/api/v1/export/locations"
+                      params={{ topic_id: topicId }}
+                      label="Export GeoJSON"
+                      format="json"
+                    />
+                  </div>
+                  <div className="flex-1 min-h-0">
+                    <LocationMap topicId={topicId} topicName={topic?.name} />
+                  </div>
+                </div>
               </Suspense>
             )}
-
-            {activeTab === 'identifiers' && (
-              <Suspense fallback={<div className="p-4"><Spinner label="Loading identifiers..." /></div>}>
-                <Identifiers embedded topicId={topicId} onSelectIdentifier={handleSelectIdentifier} />
-              </Suspense>
-            )}
-
-            {activeTab === 'reports' && (
-              <Suspense fallback={<div className="p-4"><Spinner label="Loading reports..." /></div>}>
-                <ReportsTab topicId={topicId} />
-              </Suspense>
-            )}
-
-            {activeTab === 'sources' && (
-              <Suspense fallback={<div className="p-4"><Spinner label="Loading sources..." /></div>}>
-                <SourcesTab topicId={topicId} />
-              </Suspense>
-            )}
-
           </div>
         </div>
 
@@ -296,46 +277,27 @@ export default function TopicWorkspace() {
         {provenance.isOpen && <ProvenancePanel />}
       </div>
 
-      {/* Template manager modal */}
-      {showTemplateModal && (
-        <>
-          <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={() => setShowTemplateModal(false)} />
-          <div className="fixed inset-x-4 top-[10%] bottom-[10%] z-50 max-w-2xl mx-auto bg-[#0b1222] border border-anveshak-border rounded-xl shadow-2xl overflow-y-auto p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-text-primary">Manage Templates</h2>
-              <button onClick={() => setShowTemplateModal(false)} className="text-text-muted hover:text-text-primary">
-                <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                  <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-              </svg>
-              </button>
-            </div>
-            <Suspense fallback={<Spinner label="Loading..." />}>
-              <TemplateManager topicId={topicId} />
-            </Suspense>
-          </div>
-        </>
-      )}
       {/* Full-screen content modals */}
       <IdentifiersModal
-        open={showIdentifiersModal}
-        onClose={() => setShowIdentifiersModal(false)}
+        open={activeModal === 'identifiers'}
+        onClose={() => setActiveModal(null)}
         topicId={topicId}
         onSelectIdentifier={handleSelectIdentifier}
       />
       <ClustersModal
-        open={showClustersModal}
-        onClose={() => setShowClustersModal(false)}
+        open={activeModal === 'clusters'}
+        onClose={() => setActiveModal(null)}
         topicId={topicId}
         onSelectContent={handleSelectContent}
       />
       <ReportGenerationModal
-        open={showReportModal}
-        onClose={() => setShowReportModal(false)}
+        open={activeModal === 'report'}
+        onClose={() => setActiveModal(null)}
         topicId={topicId}
       />
       <SourceManagementModal
-        open={showSourcesModal}
-        onClose={() => setShowSourcesModal(false)}
+        open={activeModal === 'sources'}
+        onClose={() => setActiveModal(null)}
         topicId={topicId}
       />
 

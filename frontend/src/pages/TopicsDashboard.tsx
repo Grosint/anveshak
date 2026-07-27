@@ -265,7 +265,7 @@ export default function TopicsDashboard() {
               <TopicCard
                 key={topic.id}
                 topic={topic}
-                onClick={() => navigate(`/topics/${topic.id}/feed`)}
+                onClick={() => navigate(`/topics/${topic.id}`)}
                 onToggleStatus={(e) => {
                   e.stopPropagation()
                   toggleStatus.mutate({

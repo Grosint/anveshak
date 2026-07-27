@@ -274,7 +274,7 @@ export default function TrackerDetail() {
               )}
               {tracker.topic_id && (
                 <Link
-                  to={`/topics/${tracker.topic_id}/feed`}
+                  to={`/topics/${tracker.topic_id}`}
                   className="text-anveshak-accent hover:underline"
                 >
                   {tracker.topic_name || tracker.topic_id}
