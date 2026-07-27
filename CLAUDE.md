@@ -166,3 +166,17 @@ anveshak/
 - Schema change might break backward compat: STOP and flag
 - Adding new ML model: check hardware.md first, document upgrade path
 - Security decision ambiguous: FAIL CLOSED and document why
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on `Grosint/anveshak`. External PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-label vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at repo root. See `docs/agents/domain.md`.
