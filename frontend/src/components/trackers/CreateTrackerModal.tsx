@@ -38,7 +38,7 @@ export function CreateTrackerModal({ open, onClose, onCreated }: CreateTrackerMo
       onCreated(tracker)
     },
     onError: (err: Error) => {
-      setError(err.message || 'Failed to create tracker.')
+      setError(err.message || 'Failed to create case.')
     },
   })
 
@@ -67,7 +67,7 @@ export function CreateTrackerModal({ open, onClose, onCreated }: CreateTrackerMo
     <Modal
       open={open}
       onClose={handleClose}
-      title="New Tracker"
+      title="New Case"
       footer={
         <>
           <Button variant="secondary" size="sm" onClick={handleClose} disabled={createMutation.isPending}>
@@ -79,7 +79,7 @@ export function CreateTrackerModal({ open, onClose, onCreated }: CreateTrackerMo
             onClick={handleSubmit}
             loading={createMutation.isPending}
           >
-            Create Tracker
+            Create Case
           </Button>
         </>
       }
@@ -100,7 +100,7 @@ export function CreateTrackerModal({ open, onClose, onCreated }: CreateTrackerMo
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Short descriptive title for this tracker"
+            placeholder="Short descriptive title for this case"
             className="w-full bg-anveshak-card border border-anveshak-border rounded px-3 py-2 text-text-primary text-sm placeholder:text-text-muted focus:outline-none focus:border-anveshak-accent"
             autoFocus
           />

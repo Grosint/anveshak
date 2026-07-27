@@ -9,10 +9,9 @@ import TopicsDashboard from './pages/TopicsDashboard'
 import TopicWorkspace from './pages/TopicWorkspace'
 import ImageAnalysis from './pages/ImageAnalysis'
 import SignalsInbox from './pages/SignalsInbox'
-import ReportBuilder from './pages/ReportBuilder'
 import Settings from './pages/Settings'
-import Trackers from './pages/Trackers'
-import TrackerDetail from './pages/TrackerDetail'
+import Cases from './pages/Trackers'
+import CaseDetail from './pages/TrackerDetail'
 
 // ── Error boundary — catches unhandled render errors so the page never
 // goes silently blank. Shows the error message + a reload button.
@@ -67,6 +66,11 @@ function FeedRedirect() {
   return <Navigate to={`/topics/${topicId}/content`} replace />
 }
 
+function TrackerRedirect() {
+  const { trackerId } = useParams<{ trackerId: string }>()
+  return <Navigate to={`/cases/${trackerId}`} replace />
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
   if (!isAuthenticated) return <Navigate to="/login" replace />
@@ -98,9 +102,11 @@ export default function App() {
           <Route path="/topics/:topicId/feed" element={<FeedRedirect />} />
           <Route path="/vision" element={<ImageAnalysis />} />
           <Route path="/signals" element={<SignalsInbox />} />
-          <Route path="/trackers" element={<Trackers />} />
-          <Route path="/trackers/:trackerId" element={<TrackerDetail />} />
-          <Route path="/reports" element={<ReportBuilder />} />
+          <Route path="/cases" element={<Cases />} />
+          <Route path="/cases/:caseId" element={<CaseDetail />} />
+          {/* Legacy redirects: Trackers → Cases */}
+          <Route path="/trackers" element={<Navigate to="/cases" replace />} />
+          <Route path="/trackers/:trackerId" element={<TrackerRedirect />} />
           <Route path="/analytics" element={<Navigate to="/settings/dashboard" replace />} />
           <Route path="/settings/:tab" element={<Settings />} />
           <Route path="/settings" element={<Settings />} />
@@ -108,7 +114,8 @@ export default function App() {
           <Route path="/sources" element={<Navigate to="/settings/sources" replace />} />
           <Route path="/source-health" element={<Navigate to="/settings/sources" replace />} />
           <Route path="/users" element={<Navigate to="/settings/users" replace />} />
-          <Route path="/schedules" element={<Navigate to="/reports" replace />} />
+          <Route path="/reports" element={<Navigate to="/topics" replace />} />
+          <Route path="/schedules" element={<Navigate to="/topics" replace />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

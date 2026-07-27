@@ -65,7 +65,7 @@ export default function Trackers() {
       {/* Header */}
       <div className="px-6 pt-6 pb-4 border-b border-anveshak-border flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-text-primary">Trackers</h1>
+          <h1 className="text-xl font-semibold text-text-primary">Cases</h1>
           <p className="text-sm text-text-muted mt-0.5">
             Case tracking for narrative investigations
           </p>
@@ -74,7 +74,7 @@ export default function Trackers() {
           onClick={() => setCreateOpen(true)}
           className="bg-anveshak-accent hover:bg-anveshak-accent/80 text-white rounded px-3 py-1.5 text-sm font-medium transition-colors"
         >
-          + New Tracker
+          + New Case
         </button>
       </div>
 
@@ -99,16 +99,16 @@ export default function Trackers() {
       <div className="flex-1 overflow-y-auto p-6">
         {isError ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <p className="text-red-400 text-sm">Failed to load trackers.</p>
+            <p className="text-red-400 text-sm">Failed to load cases.</p>
           </div>
         ) : isLoading ? (
           <div className="flex justify-center py-20">
-            <Spinner label="Loading trackers…" />
+            <Spinner label="Loading cases…" />
           </div>
         ) : trackers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <p className="text-text-muted text-sm">
-              No trackers yet. Open a tracker from a narrative cluster or create one manually.
+              No cases yet. Open a case from a narrative cluster or create one manually.
             </p>
           </div>
         ) : (
@@ -130,7 +130,7 @@ export default function Trackers() {
                 {trackers.map((tracker) => (
                   <tr
                     key={tracker.id}
-                    onClick={() => navigate(`/trackers/${tracker.id}`)}
+                    onClick={() => navigate(`/cases/${tracker.id}`)}
                     className="border-b border-anveshak-border/50 hover:bg-anveshak-muted/50 transition-colors cursor-pointer"
                   >
                     <td className="py-3 px-3">
@@ -180,9 +180,9 @@ export default function Trackers() {
       <CreateTrackerModal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        onCreated={(tracker) => {
+        onCreated={(tracker: Tracker) => {
           setCreateOpen(false)
-          navigate(`/trackers/${tracker.id}`)
+          navigate(`/cases/${tracker.id}`)
         }}
       />
     </div>

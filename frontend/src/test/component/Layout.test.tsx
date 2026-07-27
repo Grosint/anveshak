@@ -36,7 +36,7 @@ vi.mock('../../api/sources', () => ({
 
 describe('Layout sidebar navigation', () => {
   // ─────────────────────────────────────────────────────────────────────
-  // Primary nav items (5) — each rendered twice (desktop + mobile)
+  // Primary nav items (4) — each rendered twice (desktop + mobile)
   // ─────────────────────────────────────────────────────────────────────
 
   it('has Topics nav link', () => {
@@ -54,14 +54,9 @@ describe('Layout sidebar navigation', () => {
     expect(screen.getAllByRole('link', { name: /vision/i }).length).toBeGreaterThanOrEqual(1)
   })
 
-  it('has Reports nav link', () => {
+  it('has Cases nav link', () => {
     renderWithProviders(<Layout />)
-    expect(screen.getAllByRole('link', { name: /reports/i }).length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('has Analytics nav link', () => {
-    renderWithProviders(<Layout />)
-    expect(screen.getAllByRole('link', { name: /analytics/i }).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByRole('link', { name: /cases/i }).length).toBeGreaterThanOrEqual(1)
   })
 
   // ─────────────────────────────────────────────────────────────────────
@@ -76,6 +71,20 @@ describe('Layout sidebar navigation', () => {
   // ─────────────────────────────────────────────────────────────────────
   // Removed nav items — should NOT exist
   // ─────────────────────────────────────────────────────────────────────
+
+  it('does NOT have Trackers as a standalone nav link', () => {
+    renderWithProviders(<Layout />)
+    const links = screen.getAllByRole('link')
+    const trackerLinks = links.filter((l) => l.textContent?.trim() === 'Trackers')
+    expect(trackerLinks).toHaveLength(0)
+  })
+
+  it('does NOT have Reports as a standalone nav link', () => {
+    renderWithProviders(<Layout />)
+    const links = screen.getAllByRole('link')
+    const reportLinks = links.filter((l) => l.textContent?.trim() === 'Reports')
+    expect(reportLinks).toHaveLength(0)
+  })
 
   it('does NOT have Sources as a standalone nav link', () => {
     renderWithProviders(<Layout />)
