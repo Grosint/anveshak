@@ -2,14 +2,12 @@ import { useState, lazy, Suspense } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { topicsApi, Cluster, ClusterContentItem } from '../api/topics'
-import { Signal } from '../api/signals'
-import { TopIdentifier } from '../api/identifiers'
 import { contentApi, ContentFilters, ContentItem } from '../api/content'
 import { useInfiniteContent } from '../hooks/useInfiniteContent'
 import { useProvenance } from '../contexts/ProvenanceContext'
+import { IntelligenceView } from '../components/intelligence'
 import { ContentCard } from '../components/content/ContentCard'
 import { FilterBar } from '../components/content/FilterBar'
-import { IntelSidebar } from '../components/workspace/IntelSidebar'
 import { ProvenancePanel } from '../components/provenance/ProvenancePanel'
 import { Spinner } from '../components/ui/Spinner'
 import { EmptyState } from '../components/ui/EmptyState'
@@ -44,16 +42,13 @@ const TemplateManager = lazy(() => import('../components/topics/TemplateManager'
 const ReportsTab = lazy(() => import('../components/workspace/ReportsTab'))
 const SourcesTab = lazy(() => import('../components/workspace/SourcesTab'))
 import EntityGraph from '../components/workspace/EntityGraph'
-const OverviewTab = lazy(() => import('../components/workspace/OverviewTab'))
 const LocationMap = lazy(() => import('../components/workspace/LocationMap'))
 const SignalGraph = lazy(() => import('../components/signals/SignalGraph').then(m => ({ default: m.SignalGraph })))
-const DashboardTab = lazy(() => import('../components/workspace/DashboardTab'))
 
-type CenterTab = 'dashboard' | 'overview' | 'feed' | 'clusters' | 'map' | 'identifiers' | 'reports' | 'sources'
+type CenterTab = 'intelligence' | 'feed' | 'clusters' | 'map' | 'identifiers' | 'reports' | 'sources'
 
 const TABS: { key: CenterTab; label: string }[] = [
-  { key: 'dashboard', label: 'Dashboard' },
-  { key: 'overview', label: 'Overview' },
+  { key: 'intelligence', label: 'Intelligence' },
   { key: 'feed', label: 'Feed' },
   { key: 'clusters', label: 'Clusters' },
   { key: 'map', label: 'Map' },
@@ -67,7 +62,7 @@ export default function TopicWorkspace() {
   const navigate = useNavigate()
   const provenance = useProvenance()
 
-  const [activeTab, setActiveTab] = useState<CenterTab>('dashboard')
+  const [activeTab, setActiveTab] = useState<CenterTab>('intelligence')
   const [filters, setFilters] = useState<ContentFilters>({})
   const [searchQ, setSearchQ] = useState('')
   const [searchActive, setSearchActive] = useState(false)
@@ -141,24 +136,6 @@ export default function TopicWorkspace() {
 
   // ── Click handlers — all push to provenance panel ─────────────────────
 
-  const handleSelectSignal = (signal: Signal) => {
-    provenance.push({
-      entityType: 'signal',
-      entityId: signal.id,
-      topicId,
-      label: signal.cluster_label || signal.description,
-    })
-  }
-
-  const handleSelectIdentifier = (id: TopIdentifier) => {
-    provenance.push({
-      entityType: 'identifier',
-      entityId: id.identifier_value,
-      topicId,
-      label: id.identifier_value,
-    })
-  }
-
   const handleSelectContent = (contentId: string, title?: string) => {
     provenance.push({
       entityType: 'content',
@@ -209,17 +186,8 @@ export default function TopicWorkspace() {
         </div>
       </div>
 
-      {/* Main 3-column layout */}
+      {/* Main layout */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left intel sidebar */}
-        <IntelSidebar
-          topicId={topicId}
-          onSelectSignal={handleSelectSignal}
-          onSelectIdentifier={handleSelectIdentifier}
-          onViewAllIdentifiers={() => handleTabSwitch('identifiers')}
-          onManageTemplates={() => setShowTemplateModal(true)}
-        />
-
         {/* Center content */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           {/* Tab bar */}
@@ -310,23 +278,17 @@ export default function TopicWorkspace() {
 
           {/* Tab content */}
           <div className="flex-1 overflow-y-auto">
-            {activeTab === 'dashboard' && (
-              <Suspense fallback={<div className="p-4"><Spinner label="Loading dashboard..." /></div>}>
-                <DashboardTab topicId={topicId!} />
-              </Suspense>
-            )}
-
-            {activeTab === 'overview' && (
-              <Suspense fallback={<div className="p-4"><Spinner label="Loading overview..." /></div>}>
-                <OverviewTab
-                  topicId={topicId}
-                  onSelectSignal={handleSelectSignal}
-                  onNavigateTab={(tab) => setActiveTab(tab as CenterTab)}
-                  onViewReport={() => {
-                    // Reports not yet in provenance panel — future integration
-                  }}
-                />
-              </Suspense>
+            {activeTab === 'intelligence' && (
+              <IntelligenceView
+                topicId={topicId}
+                topicStatus={topic?.status}
+                onNavigateMap={() => handleTabSwitch('map')}
+                onNavigateContent={() => handleTabSwitch('feed')}
+                onShowAllClusters={() => handleTabSwitch('clusters')}
+                onShowAllIdentifiers={() => handleTabSwitch('identifiers')}
+                onGenerateReport={() => handleTabSwitch('reports')}
+                onManageSources={() => handleTabSwitch('sources')}
+              />
             )}
 
             {activeTab === 'feed' && (
@@ -553,7 +515,7 @@ export default function TopicWorkspace() {
               <button onClick={() => setShowTemplateModal(false)} className="text-text-muted hover:text-text-primary">
                 <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
                   <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-                </svg>
+              </svg>
               </button>
             </div>
             <Suspense fallback={<Spinner label="Loading..." />}>

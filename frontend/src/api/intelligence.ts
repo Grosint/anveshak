@@ -1,5 +1,67 @@
 import api from './client'
 
+// ── Topic Intelligence (aggregated overview) ──────────────────────────
+
+export interface IntelSignal {
+  id: string
+  signal_type: string
+  description: string
+  status: string
+  fired_at: string
+  cluster_label: string | null
+  isc: number
+}
+
+export interface IntelCluster {
+  id: string
+  label: string | null
+  item_count: number
+  isc: number
+  executive_summary: string | null
+  created_at: string
+  growth_24h: number
+  growth_rate: number | null
+}
+
+export interface IntelIdentifier {
+  identifier_type: string
+  identifier_value: string
+  mention_count: number
+  source_count: number
+}
+
+export interface IntelLocation {
+  location_name: string
+  latitude: number
+  longitude: number
+  content_count: number
+}
+
+export interface IntelSourceHealth {
+  id: string
+  name: string
+  platform: string
+  health_status: string
+  credibility_score: number
+}
+
+export interface IntelStats {
+  total_content: number
+  total_clusters: number
+  total_signals: number
+}
+
+export interface TopicIntelligence {
+  signals: IntelSignal[]
+  clusters: IntelCluster[]
+  identifiers: IntelIdentifier[]
+  locations: IntelLocation[]
+  source_health: IntelSourceHealth[]
+  stats: IntelStats
+}
+
+// ── Entity Graph ──────────────────────────────────────────────────────
+
 export interface EntityNode {
   entity: string
   type: string
@@ -22,6 +84,11 @@ export interface EntityGraph {
 }
 
 export const intelligenceApi = {
+  topicIntelligence: (topicId: string) =>
+    api
+      .get<TopicIntelligence>(`/api/v1/topics/${topicId}/intelligence`)
+      .then((r) => r.data),
+
   entityGraph: (topicId: string, minCount = 2, limit = 100) =>
     api
       .get<EntityGraph>(`/api/v1/topics/${topicId}/entity-graph`, {

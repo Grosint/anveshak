@@ -25,6 +25,18 @@ export function inferSeverity(signal: Signal): string {
   return 'LOW'
 }
 
+export type SeverityLevel = 'HIGH' | 'MEDIUM' | 'LOW'
+
+export function inferSeverityFromISC(isc: number): SeverityLevel {
+  if (isc >= 3) return 'HIGH'
+  if (isc >= 2) return 'MEDIUM'
+  return 'LOW'
+}
+
+export const SEVERITY_VARIANT: Record<string, 'danger' | 'warning' | 'success' | 'default'> = {
+  HIGH: 'danger', MEDIUM: 'warning', LOW: 'success',
+}
+
 // ── Confidence badge ────────────────────────────────────────────────────
 
 export function confidenceVariant(score: number): 'success' | 'warning' | 'danger' {
