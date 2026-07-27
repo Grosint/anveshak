@@ -61,11 +61,6 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, EBSta
   }
 }
 
-function FeedRedirect() {
-  const { topicId } = useParams<{ topicId: string }>()
-  return <Navigate to={`/topics/${topicId}/content`} replace />
-}
-
 function TrackerRedirect() {
   const { trackerId } = useParams<{ trackerId: string }>()
   return <Navigate to={`/cases/${trackerId}`} replace />
@@ -98,8 +93,6 @@ export default function App() {
           <Route path="/topics/:topicId" element={<TopicWorkspace />} />
           <Route path="/topics/:topicId/content" element={<TopicWorkspace />} />
           <Route path="/topics/:topicId/map" element={<TopicWorkspace />} />
-          {/* Redirect old feed route to content view */}
-          <Route path="/topics/:topicId/feed" element={<FeedRedirect />} />
           <Route path="/vision" element={<ImageAnalysis />} />
           <Route path="/signals" element={<SignalsInbox />} />
           <Route path="/cases" element={<Cases />} />
