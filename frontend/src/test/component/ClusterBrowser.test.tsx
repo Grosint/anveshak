@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
+import { ProvenanceProvider } from '../../contexts/ProvenanceContext'
 
 vi.mock('../../api/topics', () => ({
   topicsApi: {
@@ -38,7 +39,9 @@ function wrapper({ children }: { children: React.ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
   return (
     <QueryClientProvider client={qc}>
-      <MemoryRouter>{children}</MemoryRouter>
+      <MemoryRouter>
+        <ProvenanceProvider>{children}</ProvenanceProvider>
+      </MemoryRouter>
     </QueryClientProvider>
   )
 }
