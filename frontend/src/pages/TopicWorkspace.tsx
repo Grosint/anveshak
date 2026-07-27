@@ -6,11 +6,11 @@ import { Signal } from '../api/signals'
 import { TopIdentifier } from '../api/identifiers'
 import { contentApi, ContentFilters, ContentItem } from '../api/content'
 import { useInfiniteContent } from '../hooks/useInfiniteContent'
+import { useProvenance } from '../contexts/ProvenanceContext'
 import { ContentCard } from '../components/content/ContentCard'
-import { ContentDetail } from '../components/content/ContentDetail'
 import { FilterBar } from '../components/content/FilterBar'
 import { IntelSidebar } from '../components/workspace/IntelSidebar'
-import { WorkspacePanel, PanelItem } from '../components/workspace/WorkspacePanel'
+import { ProvenancePanel } from '../components/provenance/ProvenancePanel'
 import { Spinner } from '../components/ui/Spinner'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Button } from '../components/ui/Button'
@@ -65,11 +65,10 @@ const TABS: { key: CenterTab; label: string }[] = [
 export default function TopicWorkspace() {
   const { topicId } = useParams<{ topicId: string }>()
   const navigate = useNavigate()
+  const provenance = useProvenance()
 
   const [activeTab, setActiveTab] = useState<CenterTab>('dashboard')
   const [filters, setFilters] = useState<ContentFilters>({})
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [panelItem, setPanelItem] = useState<PanelItem>(null)
   const [searchQ, setSearchQ] = useState('')
   const [searchActive, setSearchActive] = useState(false)
   const [searchMode, setSearchMode] = useState<SearchMode>('content')
@@ -78,6 +77,12 @@ export default function TopicWorkspace() {
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [graphSignalId, setGraphSignalId] = useState<string | null>(null)
   const [showEntityGraph, setShowEntityGraph] = useState(false)
+
+  // Close provenance panel on tab switch
+  const handleTabSwitch = (tab: CenterTab) => {
+    setActiveTab(tab)
+    provenance.close()
+  }
 
   // Topic metadata
   const { data: topic } = useQuery({
@@ -134,20 +139,34 @@ export default function TopicWorkspace() {
     ? searchResults.map((r) => ({ ...r, backfilled: false }))
     : items
 
-  // Handlers
+  // ── Click handlers — all push to provenance panel ─────────────────────
+
   const handleSelectSignal = (signal: Signal) => {
-    setPanelItem({ type: 'signal', id: signal.id, topicId: topicId! })
+    provenance.push({
+      entityType: 'signal',
+      entityId: signal.id,
+      topicId,
+      label: signal.cluster_label || signal.description,
+    })
   }
 
-  const handleSelectIdentifier = (_id: TopIdentifier) => {
-    setActiveTab('identifiers')
+  const handleSelectIdentifier = (id: TopIdentifier) => {
+    provenance.push({
+      entityType: 'identifier',
+      entityId: id.identifier_value,
+      topicId,
+      label: id.identifier_value,
+    })
   }
 
-  const handleSelectContent = (contentId: string) => {
-    setSelectedId(contentId)
+  const handleSelectContent = (contentId: string, title?: string) => {
+    provenance.push({
+      entityType: 'content',
+      entityId: contentId,
+      topicId,
+      label: title || contentId.slice(0, 8),
+    })
   }
-
-  const handleClosePanel = () => setPanelItem(null)
 
   return (
     <div className="h-full flex flex-col">
@@ -197,7 +216,7 @@ export default function TopicWorkspace() {
           topicId={topicId}
           onSelectSignal={handleSelectSignal}
           onSelectIdentifier={handleSelectIdentifier}
-          onViewAllIdentifiers={() => setActiveTab('identifiers')}
+          onViewAllIdentifiers={() => handleTabSwitch('identifiers')}
           onManageTemplates={() => setShowTemplateModal(true)}
         />
 
@@ -209,7 +228,7 @@ export default function TopicWorkspace() {
               {TABS.map((tab) => (
                 <button
                   key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
+                  onClick={() => handleTabSwitch(tab.key)}
                   className={`px-3 py-2.5 text-xs font-medium border-b-2 transition-colors ${
                     activeTab === tab.key
                       ? 'border-anveshak-accent text-anveshak-accent'
@@ -303,7 +322,9 @@ export default function TopicWorkspace() {
                   topicId={topicId}
                   onSelectSignal={handleSelectSignal}
                   onNavigateTab={(tab) => setActiveTab(tab as CenterTab)}
-                  onViewReport={(reportId) => setPanelItem({ type: 'report', id: reportId })}
+                  onViewReport={() => {
+                    // Reports not yet in provenance panel — future integration
+                  }}
                 />
               </Suspense>
             )}
@@ -326,7 +347,7 @@ export default function TopicWorkspace() {
                       <ContentCard
                         key={item.id}
                         item={item}
-                        onClick={() => handleSelectContent(item.id)}
+                        onClick={() => handleSelectContent(item.id, item.title ?? undefined)}
                       />
                     ))}
                     {!searchActive && <div ref={sentinelRef} className="h-1" />}
@@ -452,7 +473,7 @@ export default function TopicWorkspace() {
                                       <div
                                         key={item.id}
                                         className="bg-anveshak-card/50 border border-anveshak-border rounded-lg p-3 cursor-pointer hover:border-anveshak-accent/40 transition-colors"
-                                        onClick={(e) => { e.stopPropagation(); setSelectedId(item.id) }}
+                                        onClick={(e) => { e.stopPropagation(); handleSelectContent(item.id, item.title ?? undefined) }}
                                       >
                                         <div className="flex items-start justify-between gap-2 mb-1">
                                           <div className="flex items-center gap-2 min-w-0">
@@ -518,16 +539,9 @@ export default function TopicWorkspace() {
           </div>
         </div>
 
-        {/* Right panel (contextual) */}
-        {panelItem && (
-          <WorkspacePanel item={panelItem} onClose={handleClosePanel} onShowGraph={setGraphSignalId} />
-        )}
+        {/* Right panel — provenance */}
+        {provenance.isOpen && <ProvenancePanel />}
       </div>
-
-      {/* Content detail slide-over */}
-      {selectedId && (
-        <ContentDetail contentId={selectedId} onClose={() => setSelectedId(null)} />
-      )}
 
       {/* Template manager modal */}
       {showTemplateModal && (

@@ -2,6 +2,7 @@ import React from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
 import { WSProvider } from './contexts/WSContext'
+import { ProvenanceProvider } from './contexts/ProvenanceContext'
 import Layout from './components/ui/Layout'
 import Login from './pages/Login'
 import TopicsDashboard from './pages/TopicsDashboard'
@@ -76,7 +77,9 @@ export default function App() {
           element={
             <ProtectedRoute>
               <WSProvider>
-                <Layout />
+                <ProvenanceProvider>
+                  <Layout />
+                </ProvenanceProvider>
               </WSProvider>
             </ProtectedRoute>
           }
