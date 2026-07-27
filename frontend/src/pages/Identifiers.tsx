@@ -31,9 +31,10 @@ type ViewMode = 'top' | 'clusters' | 'search'
 interface IdentifiersProps {
   embedded?: boolean
   topicId?: string
+  onSelectIdentifier?: (type: string, value: string) => void
 }
 
-export default function Identifiers({ embedded = false, topicId: propTopicId }: IdentifiersProps) {
+export default function Identifiers({ embedded = false, topicId: propTopicId, onSelectIdentifier }: IdentifiersProps) {
   const [topicId, setTopicId] = useState(propTopicId || '')
   const [view, setView] = useState<ViewMode>('top')
   const [typeFilter, setTypeFilter] = useState<IdentifierType | ''>('')
@@ -161,7 +162,7 @@ export default function Identifiers({ embedded = false, topicId: propTopicId }: 
 
       {/* Top identifiers table */}
       {view === 'top' && !isLoading && activeTopicId && (
-        <TopIdentifiersTable items={topIdentifiers} />
+        <TopIdentifiersTable items={topIdentifiers} onSelect={onSelectIdentifier} />
       )}
 
       {/* Clusters grid */}
@@ -250,7 +251,7 @@ function IdentifierContext({ type, value }: { type: string; value: string }) {
   return <span className={`ml-2 text-[10px] ${color}`}>{label}</span>
 }
 
-function TopIdentifiersTable({ items }: { items: TopIdentifier[] }) {
+function TopIdentifiersTable({ items, onSelect }: { items: TopIdentifier[]; onSelect?: (type: string, value: string) => void }) {
   if (items.length === 0) {
     return <p className="text-text-muted text-sm">No identifiers found.</p>
   }
@@ -271,7 +272,8 @@ function TopIdentifiersTable({ items }: { items: TopIdentifier[] }) {
           {items.map((item, i) => (
             <tr
               key={`${item.identifier_type}-${item.identifier_value}-${i}`}
-              className="border-b border-anveshak-border/50 hover:bg-anveshak-muted/50 transition-colors"
+              onClick={() => onSelect?.(item.identifier_type, item.identifier_value)}
+              className="border-b border-anveshak-border/50 hover:bg-anveshak-muted/50 transition-colors cursor-pointer"
             >
               <td className="py-2 px-3"><TypeBadge type={item.identifier_type} /></td>
               <td className="py-2 px-3">

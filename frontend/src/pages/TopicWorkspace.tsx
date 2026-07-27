@@ -7,6 +7,10 @@ import { useInfiniteContent } from '../hooks/useInfiniteContent'
 import { useProvenance } from '../contexts/ProvenanceContext'
 import { IntelligenceView } from '../components/intelligence'
 import { ClusterBrowser } from '../components/clusters/ClusterBrowser'
+import { IdentifiersModal } from '../components/modals/IdentifiersModal'
+import { ClustersModal } from '../components/modals/ClustersModal'
+import { ReportGenerationModal } from '../components/modals/ReportGenerationModal'
+import { SourceManagementModal } from '../components/modals/SourceManagementModal'
 import { ContentCard } from '../components/content/ContentCard'
 import { FilterBar } from '../components/content/FilterBar'
 import { ProvenancePanel } from '../components/provenance/ProvenancePanel'
@@ -48,6 +52,10 @@ export default function TopicWorkspace() {
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [graphSignalId, setGraphSignalId] = useState<string | null>(null)
   const [showEntityGraph, setShowEntityGraph] = useState(false)
+  const [showIdentifiersModal, setShowIdentifiersModal] = useState(false)
+  const [showClustersModal, setShowClustersModal] = useState(false)
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [showSourcesModal, setShowSourcesModal] = useState(false)
 
   // Close provenance panel on tab switch
   const handleTabSwitch = (tab: CenterTab) => {
@@ -92,6 +100,15 @@ export default function TopicWorkspace() {
       entityId: contentId,
       topicId,
       label: title || contentId.slice(0, 8),
+    })
+  }
+
+  const handleSelectIdentifier = (_type: string, value: string) => {
+    provenance.push({
+      entityType: 'identifier',
+      entityId: value,
+      topicId: topicId!,
+      label: value,
     })
   }
 
@@ -205,10 +222,10 @@ export default function TopicWorkspace() {
                 topicStatus={topic?.status}
                 onNavigateMap={() => handleTabSwitch('map')}
                 onNavigateContent={() => handleTabSwitch('feed')}
-                onShowAllClusters={() => handleTabSwitch('clusters')}
-                onShowAllIdentifiers={() => handleTabSwitch('identifiers')}
-                onGenerateReport={() => handleTabSwitch('reports')}
-                onManageSources={() => handleTabSwitch('sources')}
+                onShowAllClusters={() => setShowClustersModal(true)}
+                onShowAllIdentifiers={() => setShowIdentifiersModal(true)}
+                onGenerateReport={() => setShowReportModal(true)}
+                onManageSources={() => setShowSourcesModal(true)}
               />
             )}
 
@@ -298,6 +315,30 @@ export default function TopicWorkspace() {
           </div>
         </>
       )}
+      {/* Full-screen content modals */}
+      <IdentifiersModal
+        open={showIdentifiersModal}
+        onClose={() => setShowIdentifiersModal(false)}
+        topicId={topicId}
+        onSelectIdentifier={handleSelectIdentifier}
+      />
+      <ClustersModal
+        open={showClustersModal}
+        onClose={() => setShowClustersModal(false)}
+        topicId={topicId}
+        onSelectContent={handleSelectContent}
+      />
+      <ReportGenerationModal
+        open={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        topicId={topicId}
+      />
+      <SourceManagementModal
+        open={showSourcesModal}
+        onClose={() => setShowSourcesModal(false)}
+        topicId={topicId}
+      />
+
       {/* Entity graph full-screen modal */}
       {showEntityGraph && (
         <div className="fixed inset-0 z-[60] bg-[#0b1222]">
