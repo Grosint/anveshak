@@ -7,6 +7,7 @@ import { EmptyState } from '../ui/EmptyState'
 import { CredibilityBadge } from '../content/CredibilityBadge'
 import { PlatformBadge } from '../content/PlatformBadge'
 import { DeepfakeMeter } from '../vision/DeepfakeMeter'
+import { ExifTable } from '../vision/ExifTable'
 import { format, formatDistanceToNow } from 'date-fns'
 
 const ENTITY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -180,6 +181,12 @@ export default function ContentDetailView({ contentId }: ContentDetailViewProps)
                         {label.replace(/_/g, ' ')} {Math.round(score * 100)}%
                       </span>
                     ))}
+                  </div>
+                )}
+                {vr.exif_data && Object.keys(vr.exif_data).length > 0 && (
+                  <div>
+                    <p className="text-[9px] font-semibold text-text-muted/60 uppercase tracking-wider mb-1">EXIF Metadata</p>
+                    <ExifTable exif={vr.exif_data} />
                   </div>
                 )}
               </div>

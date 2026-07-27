@@ -59,6 +59,10 @@ async def analyse_image(
         None,
         description="Associate upload with an existing content_item (optional for ad-hoc analysis)",
     ),
+    topic_id: Optional[str] = Query(
+        None,
+        description="Link upload to a topic (content appears in topic workspace)",
+    ),
     db: asyncpg.Connection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
@@ -67,6 +71,10 @@ async def analyse_image(
     Criteria 4.28: multipart upload → ARQ job dispatched → returns {job_id}.
     Never blocks — job processes in background, poll GET /jobs/{job_id}.
     """
+    # Verify topic access if topic_id provided (multi-tenancy.md: Dual-Layer Isolation)
+    if topic_id:
+        await topics_db.verify_topic_access(db, topic_id, user)
+
     file_bytes = await file.read()
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Empty file upload")
@@ -114,7 +122,7 @@ async def analyse_image(
     # Resolve content_item_id — required FK on media_assets.
     # For ad-hoc uploads (no existing content_item) create a stub so the FK is satisfied.
     resolved_content_item_id = content_item_id or await vision_db.get_or_create_stub_content_item(
-        db, content_hash, file.filename or "upload",
+        db, content_hash, file.filename or "upload", topic_id=topic_id,
     )
 
     # Upsert media_assets row with ON CONFLICT(content_hash) DO NOTHING (criteria 4.34 dedup)

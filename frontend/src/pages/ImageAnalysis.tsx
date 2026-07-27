@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { visionApi, VisionJob, VisionJobSummary } from '../api/vision'
+import { topicsApi, Topic } from '../api/topics'
 import { DropZone } from '../components/vision/DropZone'
 import { DeepfakeMeter } from '../components/vision/DeepfakeMeter'
 import { YoloCanvas } from '../components/vision/YoloCanvas'
@@ -28,7 +29,14 @@ export default function ImageAnalysis() {
   const [errorDialog, setErrorDialog] = useState<{ title: string; message: string } | null>(null)
   const [activeTab, setActiveTab]     = useState<Tab>('deepfake')
   const [reverseHash, setReverseHash] = useState('')
+  const [selectedTopicId, setSelectedTopicId] = useState<string>('')
   const fileRef = useRef<File | null>(null)
+
+  const { data: topics = [] } = useQuery<Topic[]>({
+    queryKey: ['topics'],
+    queryFn: topicsApi.list,
+    staleTime: 60_000,
+  })
 
   // Poll job until complete or errored
   const { data: job } = useQuery<VisionJob>({
@@ -70,7 +78,7 @@ export default function ImageAnalysis() {
 
     setUploading(true)
     try {
-      const res = await visionApi.analyse(file)
+      const res = await visionApi.analyse(file, undefined, selectedTopicId || undefined)
       setJobId(res.job_id)
       setActiveTab('deepfake')
     } catch (err: unknown) {
@@ -128,6 +136,29 @@ export default function ImageAnalysis() {
 
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-4xl space-y-6">
+          {/* Topic selector */}
+          {topics.length > 0 && (
+            <div>
+              <label htmlFor="topic-select" className="block text-xs font-medium text-text-secondary mb-1.5">
+                Link to topic (optional)
+              </label>
+              <select
+                id="topic-select"
+                value={selectedTopicId}
+                onChange={(e) => setSelectedTopicId(e.target.value)}
+                className="w-full max-w-xs bg-anveshak-card border border-anveshak-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-anveshak-accent"
+              >
+                <option value="">Standalone analysis</option>
+                {topics.filter((t) => t.status === 'active').map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+              <p className="text-[10px] text-text-muted mt-1">
+                When linked, results appear in the topic&apos;s content view
+              </p>
+            </div>
+          )}
+
           {/* Drop zone */}
           <DropZone onFile={handleFile} disabled={uploading} />
 
