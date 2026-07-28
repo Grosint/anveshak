@@ -5,13 +5,15 @@ Tests:
   - get_identifier_provenance returns full chain + cross-topic
   - get_content_provenance returns nested source/cluster/identifiers/vision
   - get_topic_urgency returns urgency metrics with health label
+  - get_cluster_provenance returns enriched cluster detail
+  - get_cluster_flow returns source flow graph
   - SQL queries have correct org/topic scoping
   - Topic list queries include urgency fields
 """
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -19,26 +21,20 @@ pytestmark = pytest.mark.unit
 
 
 # ---------------------------------------------------------------------------
-# 1. Topic Intelligence
+# 1. Topic Intelligence (pool-based)
 # ---------------------------------------------------------------------------
 
 class TestGetTopicIntelligence:
 
     @pytest.mark.asyncio
-    async def test_returns_all_sections_empty(self, mock_conn: AsyncMock) -> None:
-        """Empty topic returns empty arrays and zero stats.
-
-        get_topic_intelligence uses asyncio.gather, so fetch/fetchrow
-        are called concurrently. We use side_effect to return different
-        results for each concurrent call.
-        """
+    async def test_returns_all_sections_empty(self, mock_pool: MagicMock, mock_conn: AsyncMock) -> None:
+        """Empty topic returns empty arrays and zero stats."""
         empty_stats = {"total_content": 0, "total_clusters": 0, "total_signals": 0}
-        # 5 fetch calls + 1 fetchrow call via asyncio.gather
         mock_conn.fetch = AsyncMock(return_value=[])
         mock_conn.fetchrow = AsyncMock(return_value=empty_stats)
 
         from services.api.anveshak.api.db.provenance import get_topic_intelligence
-        result = await get_topic_intelligence(mock_conn, "topic-001")
+        result = await get_topic_intelligence(mock_pool, "topic-001")
 
         assert result["signals"] == []
         assert result["clusters"] == []
@@ -48,7 +44,7 @@ class TestGetTopicIntelligence:
         assert result["stats"]["total_content"] == 0
 
     @pytest.mark.asyncio
-    async def test_passes_limits(self, mock_conn: AsyncMock) -> None:
+    async def test_passes_limits(self, mock_pool: MagicMock, mock_conn: AsyncMock) -> None:
         """Limit params forwarded to SQL queries via asyncio.gather."""
         mock_conn.fetch = AsyncMock(return_value=[])
         mock_conn.fetchrow = AsyncMock(return_value={
@@ -57,24 +53,22 @@ class TestGetTopicIntelligence:
 
         from services.api.anveshak.api.db.provenance import get_topic_intelligence
         await get_topic_intelligence(
-            mock_conn, "topic-001",
+            mock_pool, "topic-001",
             cluster_limit=5, identifier_limit=10, location_limit=15,
         )
 
-        # All fetch calls made — verify cluster query got limit=5
         fetch_calls = mock_conn.fetch.call_args_list
-        # Find the call that has 3 args (SQL, topic_id, cluster_limit)
         cluster_calls = [c for c in fetch_calls if len(c[0]) == 3]
         assert any(c[0][2] == 5 for c in cluster_calls)
 
     @pytest.mark.asyncio
-    async def test_stats_fallback_when_none(self, mock_conn: AsyncMock) -> None:
+    async def test_stats_fallback_when_none(self, mock_pool: MagicMock, mock_conn: AsyncMock) -> None:
         """If stats query returns None, fallback to zeros."""
         mock_conn.fetch = AsyncMock(return_value=[])
         mock_conn.fetchrow = AsyncMock(return_value=None)
 
         from services.api.anveshak.api.db.provenance import get_topic_intelligence
-        result = await get_topic_intelligence(mock_conn, "topic-001")
+        result = await get_topic_intelligence(mock_pool, "topic-001")
 
         assert result["stats"] == {
             "total_content": 0, "total_clusters": 0, "total_signals": 0,
@@ -82,13 +76,13 @@ class TestGetTopicIntelligence:
 
 
 # ---------------------------------------------------------------------------
-# 2. Identifier Provenance
+# 2. Identifier Provenance (pool-based)
 # ---------------------------------------------------------------------------
 
 class TestGetIdentifierProvenance:
 
     @pytest.mark.asyncio
-    async def test_returns_full_chain(self, mock_conn: AsyncMock) -> None:
+    async def test_returns_full_chain(self, mock_pool: MagicMock, mock_conn: AsyncMock) -> None:
         """All 5 sections returned with correct structure (asyncio.gather)."""
         fake_content = [{"id": "ci-1", "title": "T", "snippet": "S",
                          "captured_at": "2026-01-01", "platform": "web"}]
@@ -98,7 +92,6 @@ class TestGetIdentifierProvenance:
         fake_signal = [{"id": "sig-1", "status": "new", "fired_at": "2026-01-01"}]
         fake_cross = [{"topic_name": "Other Topic", "mention_count": 2}]
 
-        # asyncio.gather calls all 5 concurrently; side_effect sequences results
         mock_conn.fetch = AsyncMock(
             side_effect=[fake_content, fake_source, fake_cluster,
                          fake_signal, fake_cross],
@@ -106,7 +99,7 @@ class TestGetIdentifierProvenance:
 
         from services.api.anveshak.api.db.provenance import get_identifier_provenance
         result = await get_identifier_provenance(
-            mock_conn, "9876543210", "topic-001", "org-001",
+            mock_pool, "9876543210", "topic-001", "org-001",
         )
 
         assert result["identifier_value"] == "9876543210"
@@ -118,13 +111,13 @@ class TestGetIdentifierProvenance:
         assert len(result["cross_topic_appearances"]) == 1
 
     @pytest.mark.asyncio
-    async def test_empty_chain(self, mock_conn: AsyncMock) -> None:
+    async def test_empty_chain(self, mock_pool: MagicMock, mock_conn: AsyncMock) -> None:
         """Identifier not found returns empty arrays, not errors."""
         mock_conn.fetch = AsyncMock(return_value=[])
 
         from services.api.anveshak.api.db.provenance import get_identifier_provenance
         result = await get_identifier_provenance(
-            mock_conn, "nonexistent", "topic-001", "org-001",
+            mock_pool, "nonexistent", "topic-001", "org-001",
         )
 
         assert result["content_items"] == []
@@ -135,7 +128,7 @@ class TestGetIdentifierProvenance:
 
 
 # ---------------------------------------------------------------------------
-# 3. Content Provenance
+# 3. Content Provenance (conn-based)
 # ---------------------------------------------------------------------------
 
 class TestGetContentProvenance:
@@ -218,7 +211,7 @@ class TestGetContentProvenance:
 
 
 # ---------------------------------------------------------------------------
-# 4. Topic Urgency
+# 4. Topic Urgency (conn-based)
 # ---------------------------------------------------------------------------
 
 class TestGetTopicUrgency:
@@ -266,7 +259,133 @@ class TestGetTopicUrgency:
 
 
 # ---------------------------------------------------------------------------
-# 5. SQL Query Correctness
+# 5. Cluster Provenance (pool-based)
+# ---------------------------------------------------------------------------
+
+class TestGetClusterProvenance:
+
+    @pytest.mark.asyncio
+    async def test_returns_enriched_cluster(self, mock_pool: MagicMock, mock_conn: AsyncMock) -> None:
+        """All sections returned: header, signal, items, identifiers, source_spread."""
+        fake_header = {
+            "id": "nc-1", "label": "Scam Ring", "item_count": 15,
+            "isc": 4, "executive_summary": "Summary",
+            "created_at": "2026-01-01T00:00:00", "growth_24h": 3,
+        }
+        fake_signal = {
+            "id": "sig-1", "status": "new", "fired_at": "2026-01-15",
+            "signal_type": "narrative_convergence",
+            "description": "desc", "threshold_crossed_at": "2026-01-15",
+        }
+        fake_items = [{"id": "ci-1", "title": "T", "clean_text": "text",
+                       "captured_at": "2026-01-01", "source_id": "s-1",
+                       "source_name": "Src", "platform": "web"}]
+        fake_identifiers = [{"entity_type": "UPI", "entity_text": "a@b",
+                            "mention_count": 5, "source_count": 3}]
+        fake_spread = [{"source_id": "s-1", "source_name": "Src",
+                       "platform": "web", "first_seen": "2026-01-01",
+                       "last_seen": "2026-01-10", "item_count": 8}]
+
+        mock_conn.fetchrow = AsyncMock(
+            side_effect=[fake_header, fake_signal],
+        )
+        mock_conn.fetch = AsyncMock(
+            side_effect=[fake_items, fake_identifiers, fake_spread],
+        )
+
+        from services.api.anveshak.api.db.provenance import get_cluster_provenance
+        result = await get_cluster_provenance(mock_pool, "nc-1", "topic-001")
+
+        assert result is not None
+        assert result["label"] == "Scam Ring"
+        assert result["isc"] == 4
+        assert result["signal"]["status"] == "new"
+        assert len(result["items"]) == 1
+        assert len(result["identifiers"]) == 1
+        assert len(result["source_spread"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_not_found(self, mock_pool: MagicMock, mock_conn: AsyncMock) -> None:
+        """Missing cluster returns None."""
+        mock_conn.fetchrow = AsyncMock(return_value=None)
+        mock_conn.fetch = AsyncMock(return_value=[])
+
+        from services.api.anveshak.api.db.provenance import get_cluster_provenance
+        result = await get_cluster_provenance(mock_pool, "nonexistent", "topic-001")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_no_signal(self, mock_pool: MagicMock, mock_conn: AsyncMock) -> None:
+        """Cluster without signal sets signal=None."""
+        fake_header = {
+            "id": "nc-1", "label": "Topic", "item_count": 5,
+            "isc": 2, "executive_summary": None,
+            "created_at": "2026-01-01T00:00:00", "growth_24h": 0,
+        }
+        mock_conn.fetchrow = AsyncMock(
+            side_effect=[fake_header, None],
+        )
+        mock_conn.fetch = AsyncMock(return_value=[])
+
+        from services.api.anveshak.api.db.provenance import get_cluster_provenance
+        result = await get_cluster_provenance(mock_pool, "nc-1", "topic-001")
+
+        assert result is not None
+        assert result["signal"] is None
+
+
+# ---------------------------------------------------------------------------
+# 6. Cluster Flow (pool-based)
+# ---------------------------------------------------------------------------
+
+class TestGetClusterFlow:
+
+    @pytest.mark.asyncio
+    async def test_returns_flow_graph(self, mock_pool: MagicMock, mock_conn: AsyncMock) -> None:
+        """Flow graph returns nodes and edges."""
+        from datetime import datetime, timedelta
+
+        t0 = datetime(2026, 1, 1, 10, 0, 0)
+        t1 = t0 + timedelta(hours=6)
+        fake_nodes = [
+            {"id": "s-1", "name": "Source A", "platform": "rss",
+             "first_seen": t0, "item_count": 5},
+            {"id": "s-2", "name": "Source B", "platform": "telegram",
+             "first_seen": t1, "item_count": 3},
+        ]
+        fake_shared = [
+            {"source_a": "s-1", "source_b": "s-2", "shared_count": 2},
+        ]
+
+        mock_conn.fetch = AsyncMock(
+            side_effect=[fake_nodes, fake_shared],
+        )
+
+        from services.api.anveshak.api.db.provenance import get_cluster_flow
+        result = await get_cluster_flow(mock_pool, "nc-1", "topic-001")
+
+        assert result["cluster_id"] == "nc-1"
+        assert len(result["nodes"]) == 2
+        assert len(result["temporal_edges"]) == 1
+        assert result["temporal_edges"][0]["time_delta_hours"] == 6.0
+        assert len(result["shared_identifier_edges"]) == 1
+        assert result["shared_identifier_edges"][0]["shared_count"] == 2
+
+    @pytest.mark.asyncio
+    async def test_empty_cluster(self, mock_pool: MagicMock, mock_conn: AsyncMock) -> None:
+        """Empty cluster returns empty arrays."""
+        mock_conn.fetch = AsyncMock(return_value=[])
+
+        from services.api.anveshak.api.db.provenance import get_cluster_flow
+        result = await get_cluster_flow(mock_pool, "nc-1", "topic-001")
+
+        assert result["nodes"] == []
+        assert result["temporal_edges"] == []
+        assert result["shared_identifier_edges"] == []
+
+
+# ---------------------------------------------------------------------------
+# 7. SQL Query Correctness
 # ---------------------------------------------------------------------------
 
 class TestSQLCorrectness:
@@ -304,3 +423,16 @@ class TestSQLCorrectness:
     def test_identifier_locations_use_lower_for_case_insensitive(self) -> None:
         from services.api.anveshak.api.db.provenance import SQL_IDENTIFIER_CONTENT_ITEMS
         assert "LOWER(ee.entity_text) = LOWER($2)" in SQL_IDENTIFIER_CONTENT_ITEMS
+
+    def test_cluster_header_scoped_by_topic(self) -> None:
+        from services.api.anveshak.api.db.provenance import SQL_CLUSTER_HEADER
+        assert "topic_id = $2" in SQL_CLUSTER_HEADER
+
+    def test_cluster_flow_nodes_scoped_by_topic(self) -> None:
+        from services.api.anveshak.api.db.provenance import SQL_CLUSTER_FLOW_NODES
+        assert "topic_id = $2" in SQL_CLUSTER_FLOW_NODES
+
+    def test_cluster_identifiers_ranked_scoped(self) -> None:
+        from services.api.anveshak.api.db.provenance import SQL_CLUSTER_IDENTIFIERS_RANKED
+        assert "topic_id = $2" in SQL_CLUSTER_IDENTIFIERS_RANKED
+        assert "mention_count DESC" in SQL_CLUSTER_IDENTIFIERS_RANKED

@@ -213,7 +213,114 @@ SQL_CONTENT_VISION = """
 """
 
 # ---------------------------------------------------------------------------
-# 4. Topic Urgency — metrics for dashboard sort
+# 4. Cluster Provenance — enriched detail for one cluster
+# ---------------------------------------------------------------------------
+
+SQL_CLUSTER_HEADER = """
+    SELECT nc.id, nc.label, nc.item_count,
+           nc.independent_source_count AS isc,
+           nc.executive_summary, nc.created_at,
+           (SELECT COUNT(*) FROM content_items ci
+            WHERE ci.narrative_cluster_id = nc.id
+              AND ci.captured_at >= NOW() - INTERVAL '24 hours'
+           ) AS growth_24h
+    FROM narrative_clusters nc
+    WHERE nc.id = $1 AND nc.topic_id = $2
+"""
+
+SQL_CLUSTER_SIGNAL = """
+    SELECT s.id, s.status, s.created_at AS fired_at,
+           s.signal_type, s.description,
+           s.created_at AS threshold_crossed_at
+    FROM signals s
+    WHERE s.cluster_id = $1 AND s.topic_id = $2
+    ORDER BY s.created_at DESC
+    LIMIT 1
+"""
+
+SQL_CLUSTER_CONTENT_TIMELINE = """
+    SELECT ci.id, ci.title,
+           LEFT(ci.clean_text, 200) AS clean_text,
+           ci.captured_at,
+           s.id AS source_id, s.name AS source_name, s.platform
+    FROM content_items ci
+    LEFT JOIN sources s ON s.id = ci.source_id
+    WHERE ci.narrative_cluster_id = $1
+      AND ci.topic_id = $2
+    ORDER BY ci.captured_at ASC
+    LIMIT $3
+"""
+
+SQL_CLUSTER_IDENTIFIERS_RANKED = """
+    SELECT ee.entity_type,
+           LOWER(ee.entity_text) AS entity_text,
+           COUNT(DISTINCT ee.content_item_id) AS mention_count,
+           COUNT(DISTINCT ci.source_id) AS source_count
+    FROM extracted_entities ee
+    JOIN content_items ci ON ee.content_item_id = ci.id
+    WHERE ci.narrative_cluster_id = $1
+      AND ci.topic_id = $2
+      AND ee.entity_type IN (
+          'PHONE_IN', 'PHONE_INTL', 'UPI', 'EMAIL', 'CRYPTO_BTC', 'CRYPTO_ETH',
+          'CRYPTO_TRC20', 'TELEGRAM_HANDLE', 'INSTAGRAM_HANDLE',
+          'FACEBOOK_HANDLE', 'X_HANDLE',
+          'URL_DOMAIN', 'GSTIN', 'UDYAM', 'PAN', 'IFSC',
+          'BANK_ACCOUNT', 'SEBI_REG', 'AIRCRAFT_ID'
+      )
+    GROUP BY ee.entity_type, LOWER(ee.entity_text)
+    ORDER BY mention_count DESC
+    LIMIT 20
+"""
+
+SQL_CLUSTER_SOURCE_SPREAD = """
+    SELECT s.id AS source_id, s.name AS source_name, s.platform,
+           MIN(ci.captured_at) AS first_seen,
+           MAX(ci.captured_at) AS last_seen,
+           COUNT(*) AS item_count
+    FROM content_items ci
+    JOIN sources s ON s.id = ci.source_id
+    WHERE ci.narrative_cluster_id = $1
+      AND ci.topic_id = $2
+    GROUP BY s.id, s.name, s.platform
+    ORDER BY first_seen ASC
+"""
+
+# ---------------------------------------------------------------------------
+# 5. Cluster Flow Graph — source-to-source information propagation
+# ---------------------------------------------------------------------------
+
+SQL_CLUSTER_FLOW_NODES = """
+    SELECT s.id, s.name, s.platform,
+           MIN(ci.captured_at) AS first_seen,
+           COUNT(*) AS item_count
+    FROM content_items ci
+    JOIN sources s ON s.id = ci.source_id
+    WHERE ci.narrative_cluster_id = $1
+      AND ci.topic_id = $2
+    GROUP BY s.id, s.name, s.platform
+    ORDER BY first_seen ASC
+"""
+
+SQL_CLUSTER_FLOW_SHARED_IDENTIFIERS = """
+    SELECT s1.id AS source_a, s2.id AS source_b,
+           COUNT(DISTINCT ee1.entity_text) AS shared_count
+    FROM content_items ci1
+    JOIN sources s1 ON s1.id = ci1.source_id
+    JOIN extracted_entities ee1 ON ee1.content_item_id = ci1.id
+    JOIN extracted_entities ee2 ON LOWER(ee2.entity_text) = LOWER(ee1.entity_text)
+         AND ee2.entity_type = ee1.entity_type
+    JOIN content_items ci2 ON ci2.id = ee2.content_item_id
+         AND ci2.narrative_cluster_id = $1 AND ci2.topic_id = $2
+    JOIN sources s2 ON s2.id = ci2.source_id
+    WHERE ci1.narrative_cluster_id = $1
+      AND ci1.topic_id = $2
+      AND s1.id < s2.id
+    GROUP BY s1.id, s2.id
+    HAVING COUNT(DISTINCT ee1.entity_text) >= 1
+"""
+
+# ---------------------------------------------------------------------------
+# 6. Topic Urgency — metrics for dashboard sort
 # ---------------------------------------------------------------------------
 
 SQL_TOPIC_URGENCY = """
@@ -243,11 +350,32 @@ SQL_TOPIC_URGENCY = """
 
 
 # ---------------------------------------------------------------------------
+# Repository helpers — pool-based concurrent queries
+# ---------------------------------------------------------------------------
+
+
+async def _pool_fetch(
+    pool: asyncpg.Pool, sql: str, *args: Any,
+) -> list[asyncpg.Record]:
+    """Execute pool.acquire() → conn.fetch() for use in asyncio.gather."""
+    async with pool.acquire() as conn:
+        return await conn.fetch(sql, *args)
+
+
+async def _pool_fetchrow(
+    pool: asyncpg.Pool, sql: str, *args: Any,
+) -> asyncpg.Record | None:
+    """Execute pool.acquire() → conn.fetchrow() for use in asyncio.gather."""
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(sql, *args)
+
+
+# ---------------------------------------------------------------------------
 # Repository functions
 # ---------------------------------------------------------------------------
 
 async def get_topic_intelligence(
-    conn: asyncpg.Connection,
+    pool: asyncpg.Pool,
     topic_id: str,
     *,
     cluster_limit: int = 10,
@@ -256,16 +384,18 @@ async def get_topic_intelligence(
 ) -> dict[str, Any]:
     """Aggregated intelligence overview for a topic — single API call.
 
-    All 6 queries run concurrently via asyncio.gather.
+    All 6 queries run concurrently via asyncio.gather, each acquiring
+    its own connection from the pool (asyncpg connections are not safe
+    for concurrent operations).
     """
     (signals, clusters, identifiers, locations,
      source_health, stats_row) = await asyncio.gather(
-        conn.fetch(SQL_INTELLIGENCE_SIGNALS, topic_id),
-        conn.fetch(SQL_INTELLIGENCE_CLUSTERS, topic_id, cluster_limit),
-        conn.fetch(SQL_INTELLIGENCE_IDENTIFIERS, topic_id, identifier_limit),
-        conn.fetch(SQL_INTELLIGENCE_LOCATIONS, topic_id, location_limit),
-        conn.fetch(SQL_INTELLIGENCE_SOURCE_HEALTH, topic_id),
-        conn.fetchrow(SQL_INTELLIGENCE_STATS, topic_id),
+        _pool_fetch(pool, SQL_INTELLIGENCE_SIGNALS, topic_id),
+        _pool_fetch(pool, SQL_INTELLIGENCE_CLUSTERS, topic_id, cluster_limit),
+        _pool_fetch(pool, SQL_INTELLIGENCE_IDENTIFIERS, topic_id, identifier_limit),
+        _pool_fetch(pool, SQL_INTELLIGENCE_LOCATIONS, topic_id, location_limit),
+        _pool_fetch(pool, SQL_INTELLIGENCE_SOURCE_HEALTH, topic_id),
+        _pool_fetchrow(pool, SQL_INTELLIGENCE_STATS, topic_id),
     )
 
     stats = dict(stats_row) if stats_row else {
@@ -283,22 +413,23 @@ async def get_topic_intelligence(
 
 
 async def get_identifier_provenance(
-    conn: asyncpg.Connection,
+    pool: asyncpg.Pool,
     identifier_value: str,
     topic_id: str,
     org_id: str,
 ) -> dict[str, Any]:
     """Full provenance chain for one identifier within a topic.
 
-    All 5 queries run concurrently via asyncio.gather.
+    All 5 queries run concurrently via asyncio.gather, each acquiring
+    its own connection from the pool.
     """
     (content_items, sources, clusters, signals_rows,
      cross_topic) = await asyncio.gather(
-        conn.fetch(SQL_IDENTIFIER_CONTENT_ITEMS, topic_id, identifier_value),
-        conn.fetch(SQL_IDENTIFIER_SOURCES, topic_id, identifier_value),
-        conn.fetch(SQL_IDENTIFIER_CLUSTERS, topic_id, identifier_value),
-        conn.fetch(SQL_IDENTIFIER_SIGNALS, topic_id, identifier_value),
-        conn.fetch(SQL_IDENTIFIER_CROSS_TOPIC, identifier_value, topic_id, org_id),
+        _pool_fetch(pool, SQL_IDENTIFIER_CONTENT_ITEMS, topic_id, identifier_value),
+        _pool_fetch(pool, SQL_IDENTIFIER_SOURCES, topic_id, identifier_value),
+        _pool_fetch(pool, SQL_IDENTIFIER_CLUSTERS, topic_id, identifier_value),
+        _pool_fetch(pool, SQL_IDENTIFIER_SIGNALS, topic_id, identifier_value),
+        _pool_fetch(pool, SQL_IDENTIFIER_CROSS_TOPIC, identifier_value, topic_id, org_id),
     )
 
     return {
@@ -309,6 +440,96 @@ async def get_identifier_provenance(
         "clusters": [dict(r) for r in clusters],
         "signals": [dict(r) for r in signals_rows],
         "cross_topic_appearances": [dict(r) for r in cross_topic],
+    }
+
+
+async def get_cluster_provenance(
+    pool: asyncpg.Pool,
+    cluster_id: str,
+    topic_id: str,
+    *,
+    content_limit: int = 30,
+) -> dict[str, Any] | None:
+    """Enriched provenance for one narrative cluster.
+
+    Concurrent queries for header, signal, content timeline,
+    identifiers, and source spread.
+    """
+    (header, signal_row, items, identifiers,
+     source_spread) = await asyncio.gather(
+        _pool_fetchrow(pool, SQL_CLUSTER_HEADER, cluster_id, topic_id),
+        _pool_fetchrow(pool, SQL_CLUSTER_SIGNAL, cluster_id, topic_id),
+        _pool_fetch(pool, SQL_CLUSTER_CONTENT_TIMELINE, cluster_id, topic_id, content_limit),
+        _pool_fetch(pool, SQL_CLUSTER_IDENTIFIERS_RANKED, cluster_id, topic_id),
+        _pool_fetch(pool, SQL_CLUSTER_SOURCE_SPREAD, cluster_id, topic_id),
+    )
+
+    if not header:
+        return None
+
+    return {
+        "id": cluster_id,
+        "label": header["label"],
+        "item_count": header["item_count"],
+        "isc": header["isc"],
+        "executive_summary": header["executive_summary"],
+        "created_at": str(header["created_at"]) if header["created_at"] else None,
+        "growth_24h": header["growth_24h"] or 0,
+        "signal": dict(signal_row) if signal_row else None,
+        "items": [dict(r) for r in items],
+        "identifiers": [dict(r) for r in identifiers],
+        "source_spread": [dict(r) for r in source_spread],
+    }
+
+
+async def get_cluster_flow(
+    pool: asyncpg.Pool,
+    cluster_id: str,
+    topic_id: str,
+) -> dict[str, Any]:
+    """Information flow graph for one cluster — source nodes + temporal edges.
+
+    Nodes = sources contributing to cluster.
+    Edges = temporal flow (earlier source → later source) + shared identifiers.
+    """
+    nodes_rows, shared_rows = await asyncio.gather(
+        _pool_fetch(pool, SQL_CLUSTER_FLOW_NODES, cluster_id, topic_id),
+        _pool_fetch(pool, SQL_CLUSTER_FLOW_SHARED_IDENTIFIERS, cluster_id, topic_id),
+    )
+
+    nodes = [dict(r) for r in nodes_rows]
+
+    # Build temporal edges: source with earlier first_seen → source with later first_seen
+    edges: list[dict[str, Any]] = []
+    for i, src_a in enumerate(nodes):
+        for src_b in nodes[i + 1:]:
+            if src_a["first_seen"] and src_b["first_seen"]:
+                delta = src_b["first_seen"] - src_a["first_seen"]
+                edges.append({
+                    "source": src_a["id"],
+                    "target": src_b["id"],
+                    "edge_type": "temporal",
+                    "time_delta_hours": round(
+                        delta.total_seconds() / 3600, 1,
+                    ),
+                })
+
+    # Shared identifier edges (dotted)
+    shared_edges = [
+        {
+            "source": str(r["source_a"]),
+            "target": str(r["source_b"]),
+            "edge_type": "shared_identifier",
+            "shared_count": r["shared_count"],
+        }
+        for r in shared_rows
+    ]
+
+    return {
+        "cluster_id": cluster_id,
+        "nodes": nodes,
+        "temporal_edges": edges,
+        "shared_identifier_edges": shared_edges,
     }
 
 

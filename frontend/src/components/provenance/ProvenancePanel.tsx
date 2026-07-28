@@ -16,19 +16,18 @@ export function ProvenancePanel() {
 
   return (
     <>
-      {/* Mobile backdrop (< 768px) */}
+      {/* Backdrop — semi-transparent, click to close */}
       <div
-        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
+        className="fixed inset-0 z-40 bg-black/40"
         onClick={close}
         aria-hidden="true"
       />
 
-      {/* Panel */}
+      {/* Panel — slides over content from right (WhatsApp-style overlay) */}
       <aside
         className={
           'fixed right-0 top-0 bottom-0 z-50 flex flex-col overflow-hidden bg-[#0b1222] border-l border-anveshak-border/50 shadow-2xl animate-fade-in ' +
-          // Full-screen on mobile, 400px on desktop
-          'w-full md:w-[400px] md:static md:shrink-0 md:z-auto md:shadow-none'
+          'w-full md:w-[420px]'
         }
         aria-label="Provenance panel"
         role="complementary"

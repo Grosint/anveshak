@@ -19,14 +19,14 @@ export function SignalCards({ signals, onSelect }: SignalCardsProps) {
           {signals.length} new
         </span>
       </h2>
-      <div className="flex gap-3 overflow-x-auto pb-2">
+      <div className="space-y-3">
         {signals.map((sig) => {
           const sev = inferSeverityFromISC(sig.isc)
           return (
             <button
               key={sig.id}
               onClick={() => onSelect(sig)}
-              className="shrink-0 w-[280px] text-left bg-anveshak-card border border-anveshak-accent/60 rounded-lg p-3 hover:border-anveshak-accent transition-all shadow-[0_0_0_1px_rgba(59,130,246,0.2)]"
+              className="w-full text-left bg-anveshak-card border border-anveshak-accent/60 rounded-lg p-3 hover:border-anveshak-accent transition-all shadow-[0_0_0_1px_rgba(59,130,246,0.2)]"
             >
               <div className="flex items-center gap-2 mb-1.5">
                 <span className="w-2 h-2 rounded-full bg-anveshak-accent shrink-0" />

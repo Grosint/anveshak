@@ -187,6 +187,27 @@ describe('ProvenancePanel — navigation controls', () => {
     renderWithProviders(<PanelHarness />)
     expect(screen.queryByLabelText('Provenance panel')).not.toBeInTheDocument()
   })
+
+  it('backdrop click closes panel (overlay mode)', async () => {
+    renderWithProviders(<PanelHarness />)
+    await act(async () => { fireEvent.click(screen.getByTestId('push-identifier')) })
+    expect(screen.getByTestId('is-open')).toHaveTextContent('open')
+
+    // Click the backdrop (aria-hidden div)
+    const backdrop = screen.getByLabelText('Provenance panel').previousElementSibling
+    if (backdrop) {
+      await act(async () => { fireEvent.click(backdrop) })
+      expect(screen.getByTestId('is-open')).toHaveTextContent('closed')
+    }
+  })
+
+  it('panel renders as fixed overlay (not static flex sibling)', async () => {
+    renderWithProviders(<PanelHarness />)
+    await act(async () => { fireEvent.click(screen.getByTestId('push-identifier')) })
+    const panel = screen.getByLabelText('Provenance panel')
+    expect(panel.className).toContain('fixed')
+    expect(panel.className).not.toContain('md:static')
+  })
 })
 
 describe('ProvenanceBreadcrumb', () => {

@@ -9,7 +9,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..auth.rbac import require_role, get_user_org
-from ..db.pool import get_db
+from ..db.pool import get_db, get_pool
 from ..db import provenance as provenance_db
 from ..db import topics as topics_db
 
@@ -33,8 +33,9 @@ async def get_topic_intelligence(
     source health strip, and quick stats in a single call.
     """
     await topics_db.verify_topic_access(db, topic_id, user)
+    pool = get_pool()
     return await provenance_db.get_topic_intelligence(
-        db, topic_id,
+        pool, topic_id,
         cluster_limit=cluster_limit,
         identifier_limit=identifier_limit,
         location_limit=location_limit,
@@ -55,9 +56,50 @@ async def get_identifier_provenance(
     """
     await topics_db.verify_topic_access(db, topic_id, user)
     org_id = get_user_org(user)
+    pool = get_pool()
     return await provenance_db.get_identifier_provenance(
-        db, identifier_value, topic_id, org_id,
+        pool, identifier_value, topic_id, org_id,
     )
+
+
+@router.get("/clusters/{cluster_id}/provenance")
+async def get_cluster_provenance(
+    cluster_id: str,
+    topic_id: str = Query(..., description="Topic to scope the cluster"),
+    content_limit: int = Query(30, ge=1, le=100),
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+):
+    """Enriched provenance for one narrative cluster.
+
+    Returns cluster header, signal link, content timeline,
+    ranked identifiers, and source spread.
+    """
+    await topics_db.verify_topic_access(db, topic_id, user)
+    pool = get_pool()
+    result = await provenance_db.get_cluster_provenance(
+        pool, cluster_id, topic_id, content_limit=content_limit,
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    return result
+
+
+@router.get("/clusters/{cluster_id}/flow")
+async def get_cluster_flow(
+    cluster_id: str,
+    topic_id: str = Query(..., description="Topic to scope the cluster"),
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+):
+    """Information flow graph for one cluster.
+
+    Returns source nodes with temporal ordering and edges
+    showing information propagation direction.
+    """
+    await topics_db.verify_topic_access(db, topic_id, user)
+    pool = get_pool()
+    return await provenance_db.get_cluster_flow(pool, cluster_id, topic_id)
 
 
 @router.get("/content/{content_id}/provenance")

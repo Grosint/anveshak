@@ -153,10 +153,8 @@ export default function TopicWorkspace() {
         </div>
       </div>
 
-      {/* Main layout */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Center content */}
-        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+      {/* Main layout — full width, panel overlays */}
+      <div className="flex-1 flex flex-col overflow-hidden">
           {/* 3-view tab bar — responsive: scrollable on mobile */}
           <div className="px-2 sm:px-4 border-b border-anveshak-border shrink-0 overflow-x-auto">
             <nav className="flex items-center gap-0.5 -mb-px min-w-0" aria-label="Workspace views">
@@ -288,11 +286,10 @@ export default function TopicWorkspace() {
               </Suspense>
             )}
           </div>
-        </div>
-
-        {/* Right panel — provenance */}
-        {provenance.isOpen && <ProvenancePanel />}
       </div>
+
+      {/* Provenance panel — overlay from right */}
+      {provenance.isOpen && <ProvenancePanel />}
 
       {/* Full-screen content modals */}
       <IdentifiersModal

@@ -112,12 +112,22 @@ export interface SourceProvenance {
 
 // ── Cluster Provenance ─────────────────────────────────────────────────
 
+export interface ClusterSourceSpread {
+  source_id: string
+  source_name: string
+  platform: string
+  first_seen: string
+  last_seen: string
+  item_count: number
+}
+
 export interface ClusterProvenance {
   id: string
   label: string | null
   item_count: number
   isc: number
   executive_summary: string | null
+  created_at: string | null
   growth_24h: number
   items: Array<{
     id: string
@@ -126,17 +136,48 @@ export interface ClusterProvenance {
     captured_at: string
     platform: string | null
     source_name: string | null
+    source_id: string | null
   }>
   identifiers: Array<{
     entity_type: string
     entity_text: string
     mention_count: number
+    source_count: number
   }>
   signal: {
     id: string
     status: string
     fired_at: string
+    signal_type: string
+    description: string
+    threshold_crossed_at: string
   } | null
+  source_spread: ClusterSourceSpread[]
+}
+
+// ── Cluster Flow Graph ────────────────────────────────────────────────
+
+export interface FlowNode {
+  id: string
+  name: string
+  platform: string
+  first_seen: string
+  item_count: number
+}
+
+export interface FlowEdge {
+  source: string
+  target: string
+  edge_type: 'temporal' | 'shared_identifier'
+  time_delta_hours?: number
+  shared_count?: number
+}
+
+export interface ClusterFlow {
+  cluster_id: string
+  nodes: FlowNode[]
+  temporal_edges: FlowEdge[]
+  shared_identifier_edges: FlowEdge[]
 }
 
 // ── API Functions ──────────────────────────────────────────────────────
@@ -181,29 +222,17 @@ export const provenanceApi = {
     }
   },
 
-  // Cluster provenance: composed from existing endpoints
-  clusterProvenance: async (clusterId: string, topicId: string): Promise<ClusterProvenance> => {
-    const [clusterRes, contentRes] = await Promise.all([
-      api.get(`/api/v1/topics/${topicId}/clusters`),
-      api.get(`/api/v1/topics/${topicId}/clusters/${clusterId}/content`, {
-        params: { limit: 20, sort: 'time' },
-      }),
-    ])
-    const allClusters = clusterRes.data ?? []
-    const cluster = Array.isArray(allClusters)
-      ? allClusters.find((c: Record<string, unknown>) => c.id === clusterId)
-      : null
+  clusterProvenance: (clusterId: string, topicId: string) =>
+    api
+      .get<ClusterProvenance>(`/api/v1/clusters/${clusterId}/provenance`, {
+        params: { topic_id: topicId },
+      })
+      .then((r) => r.data),
 
-    return {
-      id: clusterId,
-      label: cluster?.label ?? null,
-      item_count: cluster?.item_count ?? 0,
-      isc: cluster?.independent_source_count ?? 0,
-      executive_summary: cluster?.executive_summary ?? null,
-      growth_24h: 0,
-      items: contentRes.data ?? [],
-      identifiers: [],
-      signal: null,
-    }
-  },
+  clusterFlow: (clusterId: string, topicId: string) =>
+    api
+      .get<ClusterFlow>(`/api/v1/clusters/${clusterId}/flow`, {
+        params: { topic_id: topicId },
+      })
+      .then((r) => r.data),
 }
