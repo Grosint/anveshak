@@ -9,6 +9,7 @@ import { resolveWorkspaceView, WORKSPACE_VIEWS, WorkspaceView } from '../lib/dom
 import { IntelligenceView } from '../components/intelligence'
 import { IdentifiersModal } from '../components/modals/IdentifiersModal'
 import { ClustersModal } from '../components/modals/ClustersModal'
+import { SignalsModal } from '../components/modals/SignalsModal'
 import { ReportGenerationModal } from '../components/modals/ReportGenerationModal'
 import { SourceManagementModal } from '../components/modals/SourceManagementModal'
 import { ContentCard } from '../components/content/ContentCard'
@@ -24,7 +25,7 @@ import EntityGraph from '../components/workspace/EntityGraph'
 const LocationMap = lazy(() => import('../components/workspace/LocationMap'))
 const SignalGraph = lazy(() => import('../components/signals/SignalGraph').then(m => ({ default: m.SignalGraph })))
 
-type ActiveModal = 'identifiers' | 'clusters' | 'report' | 'sources' | null
+type ActiveModal = 'identifiers' | 'clusters' | 'signals' | 'report' | 'sources' | null
 
 export default function TopicWorkspace() {
   const { topicId } = useParams<{ topicId: string }>()
@@ -223,6 +224,7 @@ export default function TopicWorkspace() {
                 onNavigateContent={() => handleViewSwitch('content')}
                 onShowAllClusters={() => setActiveModal('clusters')}
                 onShowAllIdentifiers={() => setActiveModal('identifiers')}
+                onShowAllSignals={() => setActiveModal('signals')}
                 onGenerateReport={() => setActiveModal('report')}
                 onManageSources={() => setActiveModal('sources')}
               />
@@ -297,6 +299,10 @@ export default function TopicWorkspace() {
         onClose={() => setActiveModal(null)}
         topicId={topicId}
         onSelectIdentifier={handleSelectIdentifier}
+      />
+      <SignalsModal
+        open={activeModal === 'signals'}
+        onClose={() => setActiveModal(null)}
       />
       <ClustersModal
         open={activeModal === 'clusters'}

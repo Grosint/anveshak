@@ -73,7 +73,7 @@ describe('SignalCards', () => {
     render(<SignalCards signals={signals} onSelect={vi.fn()} />, { wrapper })
     expect(screen.getByText('Cyber fraud ring')).toBeInTheDocument()
     expect(screen.getByText('ID signal')).toBeInTheDocument()
-    expect(screen.getByText('2 new')).toBeInTheDocument()
+    expect(screen.getByText(/2 total/)).toBeInTheDocument()
   })
 
   it('shows HIGH severity for ISC >= 3', () => {
@@ -112,9 +112,9 @@ describe('NarrativeCards', () => {
   it('shows "Show all" when totalCount > displayed', () => {
     const onShowAll = vi.fn()
     render(<NarrativeCards clusters={clusters} onSelect={vi.fn()} onShowAll={onShowAll} totalCount={20} />, { wrapper })
-    const showAll = screen.getByText(/Show all 20/)
-    expect(showAll).toBeInTheDocument()
-    fireEvent.click(showAll)
+    const viewAll = screen.getByText(/View all 20 narratives/)
+    expect(viewAll).toBeInTheDocument()
+    fireEvent.click(viewAll)
     expect(onShowAll).toHaveBeenCalled()
   })
 
@@ -159,7 +159,7 @@ describe('IdentifierPills', () => {
   it('shows "Show all" button when onShowAll provided', () => {
     const onShowAll = vi.fn()
     render(<IdentifierPills identifiers={identifiers} onSelect={vi.fn()} onShowAll={onShowAll} />, { wrapper })
-    const btn = screen.getByText(/Show all/)
+    const btn = screen.getByText(/View all 3 identifiers/)
     fireEvent.click(btn)
     expect(onShowAll).toHaveBeenCalled()
   })

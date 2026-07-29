@@ -15,6 +15,9 @@ const TYPE_SHORT: Record<string, string> = {
   PAN: 'PAN', IFSC: 'IFSC', BANK_ACCOUNT: 'BA',
 }
 
+/** Max identifier rows shown inline */
+const INLINE_LIMIT = 6
+
 interface IdentifierPillsProps {
   identifiers: IntelIdentifier[]
   onSelect: (identifier: IntelIdentifier) => void
@@ -24,17 +27,14 @@ interface IdentifierPillsProps {
 export function IdentifierPills({ identifiers, onSelect, onShowAll }: IdentifierPillsProps) {
   if (identifiers.length === 0) return null
 
+  const inline = identifiers.slice(0, INLINE_LIMIT)
+
   return (
     <section>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-[11px] font-bold text-text-muted uppercase tracking-widest">
           Key Identifiers
         </h2>
-        {onShowAll && (
-          <button onClick={onShowAll} className="text-[10px] text-anveshak-accent hover:underline">
-            Show all →
-          </button>
-        )}
       </div>
       <div className="bg-anveshak-card border border-anveshak-border rounded-lg overflow-hidden">
         <table className="w-full text-xs">
@@ -47,7 +47,7 @@ export function IdentifierPills({ identifiers, onSelect, onShowAll }: Identifier
             </tr>
           </thead>
           <tbody>
-            {identifiers.map((id, i) => (
+            {inline.map((id, i) => (
               <tr
                 key={`${id.identifier_type}-${id.identifier_value}-${i}`}
                 onClick={() => onSelect(id)}
@@ -72,6 +72,18 @@ export function IdentifierPills({ identifiers, onSelect, onShowAll }: Identifier
           </tbody>
         </table>
       </div>
+
+      {/* View all button */}
+      {(identifiers.length > INLINE_LIMIT || onShowAll) && (
+        <div className="mt-3 text-center">
+          <button
+            onClick={onShowAll}
+            className="text-[11px] text-anveshak-accent hover:underline"
+          >
+            View all {identifiers.length} identifiers →
+          </button>
+        </div>
+      )}
     </section>
   )
 }

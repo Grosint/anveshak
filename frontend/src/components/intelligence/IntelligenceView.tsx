@@ -19,6 +19,7 @@ interface IntelligenceViewProps {
   onNavigateContent?: () => void
   onShowAllClusters?: () => void
   onShowAllIdentifiers?: () => void
+  onShowAllSignals?: () => void
   onGenerateReport?: () => void
   onManageSources?: () => void
 }
@@ -30,6 +31,7 @@ export function IntelligenceView({
   onNavigateContent,
   onShowAllClusters,
   onShowAllIdentifiers,
+  onShowAllSignals,
   onGenerateReport,
   onManageSources,
 }: IntelligenceViewProps) {
@@ -134,10 +136,14 @@ export function IntelligenceView({
         </Button>
       </div>
 
-      {/* Section 1: Signals */}
-      <SignalCards signals={intel?.signals ?? []} onSelect={handleSelectSignal} />
+      {/* Section 1: Signals (with summary bar, filters, inline limit) */}
+      <SignalCards
+        signals={intel?.signals ?? []}
+        onSelect={handleSelectSignal}
+        onShowAll={onShowAllSignals}
+      />
 
-      {/* Section 2: Narratives */}
+      {/* Section 2: Narratives (with open/closed filters, inline limit) */}
       <NarrativeCards
         clusters={intel?.clusters ?? []}
         onSelect={handleSelectCluster}
@@ -145,7 +151,7 @@ export function IntelligenceView({
         totalCount={intel?.stats?.total_clusters}
       />
 
-      {/* Section 3: Key Identifiers */}
+      {/* Section 3: Key Identifiers (inline limit) */}
       <IdentifierPills
         identifiers={intel?.identifiers ?? []}
         onSelect={handleSelectIdentifier}
