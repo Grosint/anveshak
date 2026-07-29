@@ -1,12 +1,13 @@
-import { useState, lazy, Suspense } from 'react'
+import { lazy, Suspense } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { provenanceApi } from '../../api/provenance'
 import { useProvenance } from '../../contexts/ProvenanceContext'
 import { Spinner } from '../ui/Spinner'
 import { Badge } from '../ui/Badge'
 import { EmptyState } from '../ui/EmptyState'
-import { format, formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow, differenceInHours, differenceInDays } from 'date-fns'
 import { TimelineItems } from './TimelineItems'
+import { PlatformBadge } from '../content/PlatformBadge'
 
 const FlowGraph = lazy(() => import('./FlowGraph'))
 
@@ -17,7 +18,6 @@ interface ClusterDetailProps {
 
 export default function ClusterDetail({ clusterId, topicId }: ClusterDetailProps) {
   const { push } = useProvenance()
-  const [flowExpanded, setFlowExpanded] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['provenance', 'cluster', clusterId, topicId],
@@ -45,6 +45,9 @@ export default function ClusterDetail({ clusterId, topicId }: ClusterDetailProps
           <span className="text-[10px] text-text-muted">{data.isc} independent sources</span>
           {growth24h > 0 && (
             <Badge variant="warning">+{growth24h} today</Badge>
+          )}
+          {data.items.some((it: { deepfake_score?: number | null }) => (it.deepfake_score ?? 0) >= 0.7) && (
+            <Badge variant="danger">⚠ Deepfake Detected</Badge>
           )}
         </div>
         {data.executive_summary && (
@@ -81,43 +84,58 @@ export default function ClusterDetail({ clusterId, topicId }: ClusterDetailProps
         </div>
       )}
 
-      {/* Source spread narrative */}
+      {/* Source spread — flow graph + compact stats */}
       {sourceSpread.length > 0 && (
-        <Section title="Source Spread">
-          <p className="text-[11px] text-text-secondary leading-relaxed mb-2">
-            {sourceSpread.map((s, i) => (
-              <span key={s.source_id}>
-                {i > 0 && ' → '}
-                <span className="font-semibold text-text-primary">{s.platform.toUpperCase()}/{s.source_name}</span>
-              </span>
-            ))}
-          </p>
-          <div className="space-y-1">
-            {sourceSpread.map((src) => (
-              <div key={src.source_id} className="flex items-center justify-between text-[10px]">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-bold text-text-secondary shrink-0">{src.platform.toUpperCase()}</span>
-                  <span className="text-text-muted truncate">{src.source_name}</span>
+        <div className="px-4 py-3">
+          <h3 className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">
+            Source Spread ({sourceSpread.length} sources)
+          </h3>
+
+          {/* Flow graph — primary visualization */}
+          <Suspense fallback={<Spinner label="Loading flow..." />}>
+            <FlowGraph clusterId={clusterId} topicId={topicId} />
+          </Suspense>
+
+          {/* Compact source stats below graph */}
+          <div className="mt-3 space-y-1.5">
+            {sourceSpread.map((src, i) => {
+              const maxItems = Math.max(...sourceSpread.map((s) => s.item_count))
+              const barWidth = maxItems > 0 ? Math.max(8, (src.item_count / maxItems) * 100) : 8
+              const prevDate = i > 0 ? new Date(sourceSpread[i - 1].first_seen) : null
+              const curDate = new Date(src.first_seen)
+              const daysDelta = prevDate ? differenceInDays(curDate, prevDate) : 0
+              const hoursDelta = prevDate ? differenceInHours(curDate, prevDate) : 0
+              const deltaLabel = prevDate
+                ? daysDelta >= 1 ? `+${daysDelta}d` : `+${hoursDelta}h`
+                : ''
+
+              return (
+                <div key={src.source_id} className="flex items-center gap-2 text-[10px]">
+                  <PlatformBadge platform={src.platform} />
+                  <span className="text-text-primary truncate min-w-0 flex-shrink">{src.source_name}</span>
+                  <div className="flex-1 h-1 bg-anveshak-border/20 rounded-full overflow-hidden mx-1">
+                    <div className="h-full bg-anveshak-accent/40 rounded-full" style={{ width: `${barWidth}%` }} />
+                  </div>
+                  <span className="text-[9px] text-text-muted font-mono shrink-0">{src.item_count}</span>
+                  {deltaLabel && (
+                    <span className="text-[8px] text-anveshak-accent shrink-0">{deltaLabel}</span>
+                  )}
                 </div>
-                <div className="flex items-center gap-2 shrink-0 text-[9px] text-text-muted">
-                  <span>{src.item_count} items</span>
-                  <span>{format(new Date(src.first_seen), 'MMM d HH:mm')}</span>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
-        </Section>
+        </div>
       )}
 
-      {/* Vertical content timeline */}
+      {/* Content timeline */}
       <Section title={`Timeline (${data.items.length})`}>
-        <TimelineItems items={data.items} topicId={topicId} maxHeight="400px" />
+        <TimelineItems items={data.items} topicId={topicId} maxHeight="500px" />
       </Section>
 
       {/* Key identifiers — ranked by mention count */}
       {data.identifiers.length > 0 && (
         <Section title={`Key Identifiers (${data.identifiers.length})`}>
-          <div className="space-y-1">
+          <div className="space-y-1 max-h-[200px] overflow-y-auto">
             {data.identifiers.map((id, i) => (
               <button
                 key={i}
@@ -138,31 +156,6 @@ export default function ClusterDetail({ clusterId, topicId }: ClusterDetailProps
         </Section>
       )}
 
-      {/* Information flow graph — lazy-loaded, expandable */}
-      <div className="px-4 py-3">
-        <button
-          className="w-full flex items-center justify-between text-left"
-          onClick={() => setFlowExpanded(!flowExpanded)}
-        >
-          <h3 className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
-            Information Flow
-          </h3>
-          <svg
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            className={`w-3.5 h-3.5 text-text-muted transition-transform ${flowExpanded ? 'rotate-180' : ''}`}
-          >
-            <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-          </svg>
-        </button>
-        {flowExpanded && (
-          <div className="mt-2">
-            <Suspense fallback={<Spinner label="Loading flow graph..." />}>
-              <FlowGraph clusterId={clusterId} topicId={topicId} />
-            </Suspense>
-          </div>
-        )}
-      </div>
     </div>
   )
 }

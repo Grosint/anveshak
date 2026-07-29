@@ -5,8 +5,9 @@ const PLATFORM_CONFIG: Record<string, { label: string; color: string }> = {
   bluesky:  { label: 'Bluesky',  color: 'text-blue-400 bg-blue-400/10' },
   web:      { label: 'Web',      color: 'text-green-400 bg-green-400/10' },
   rss:      { label: 'RSS',      color: 'text-amber-400 bg-amber-400/10' },
+  youtube:  { label: 'YouTube',  color: 'text-red-400 bg-red-400/10' },
   upload:   { label: 'Upload',   color: 'text-purple-400 bg-purple-400/10' },
-  darkweb:  { label: 'Dark Web', color: 'text-red-400 bg-red-400/10' },
+  darkweb:  { label: 'Dark Web', color: 'text-rose-400 bg-rose-400/10' },
 }
 
 interface PlatformBadgeProps {

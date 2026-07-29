@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import type { IntelCluster } from '../../api/intelligence'
 import { Badge } from '../ui/Badge'
+import { deepfakeLabel } from '../../lib/domain'
 
 /* Accent bar colors as Tailwind classes — mirrors CSS variable palette.
    Using classes instead of inline hex per theming rules. */
@@ -110,6 +111,9 @@ export function NarrativeCards({ clusters, onSelect, onShowAll, totalCount }: Na
                       <span className="text-[9px] text-cred-high font-bold">
                         +{growthPct}%
                       </span>
+                    )}
+                    {cluster.max_deepfake_score != null && cluster.max_deepfake_score >= 0.7 && (
+                      <Badge variant="danger">⚠ {deepfakeLabel(cluster.max_deepfake_score).label}</Badge>
                     )}
                   </div>
                 </div>

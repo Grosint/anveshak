@@ -21,6 +21,7 @@ export interface IntelCluster {
   created_at: string
   growth_24h: number
   growth_rate: number | null
+  max_deepfake_score: number | null
 }
 
 export interface IntelIdentifier {

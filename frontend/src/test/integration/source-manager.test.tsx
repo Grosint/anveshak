@@ -68,7 +68,7 @@ describe('Seam 7: Warning counts map to correct sources (R10)', () => {
     const srcA = makeSource({ id: 'src-a', name: 'Source Alpha', health_status: 'healthy', credibility_score: 80 })
     const srcB = makeSource({ id: 'src-b', name: 'Source Beta', health_status: 'healthy', credibility_score: 60 })
 
-    mockSourcesList.mockResolvedValue([srcA, srcB])
+    mockSourcesList.mockResolvedValue({ items: [srcA, srcB], total: 2, offset: 0, limit: 50 })
 
     // Source A has 3 warnings, Source B has 0
     mockWarningsCount.mockImplementation((sourceId: string) => {
@@ -96,7 +96,7 @@ describe('Seam 7: Warning counts map to correct sources (R10)', () => {
 describe('Seam 9: Delete 409 error parsing (R9)', () => {
   it('extracts content count from 409 error message', async () => {
     const source = makeSource({ id: 'src-del', name: 'Deletable Source' })
-    mockSourcesList.mockResolvedValue([source])
+    mockSourcesList.mockResolvedValue({ items: [source], total: 1, offset: 0, limit: 50 })
     mockWarningsCount.mockResolvedValue({ source_id: 'src-del', warning_count: 0 })
 
     // First delete attempt returns 409 with content count

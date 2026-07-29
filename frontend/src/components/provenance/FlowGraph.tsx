@@ -25,6 +25,7 @@ function buildElements(
   sharedEdges: FlowEdge[],
 ) {
   const cyNodes = nodes.map((n) => ({
+    group: 'nodes' as const,
     data: {
       id: n.id,
       label: `${n.platform.toUpperCase()}\n${n.name.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}`,
@@ -39,6 +40,7 @@ function buildElements(
     ...temporalEdges
       .filter((e) => e.time_delta_hours != null && e.time_delta_hours <= 168) // within 1 week
       .map((e, i) => ({
+        group: 'edges' as const,
         data: {
           id: `t-${i}`,
           source: e.source,
@@ -50,6 +52,7 @@ function buildElements(
         },
       })),
     ...sharedEdges.map((e, i) => ({
+      group: 'edges' as const,
       data: {
         id: `s-${i}`,
         source: e.source,

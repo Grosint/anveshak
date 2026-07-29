@@ -137,6 +137,7 @@ export interface ClusterProvenance {
     platform: string | null
     source_name: string | null
     source_id: string | null
+    deepfake_score: number | null
   }>
   identifiers: Array<{
     entity_type: string

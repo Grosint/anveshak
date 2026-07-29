@@ -43,7 +43,13 @@ SQL_INTELLIGENCE_CLUSTERS = """
                        AND ci.captured_at >= NOW() - INTERVAL '24 hours'
                     )::numeric / nc.item_count, 2)
                 ELSE 0
-           END AS growth_rate
+           END AS growth_rate,
+           (SELECT MAX(vr.deepfake_score)
+            FROM vision_results vr
+            JOIN media_assets ma ON ma.id = vr.media_asset_id
+            JOIN content_items ci2 ON ci2.id = ma.content_item_id
+            WHERE ci2.narrative_cluster_id = nc.id
+           ) AS max_deepfake_score
     FROM narrative_clusters nc
     WHERE nc.topic_id = $1
       AND nc.archived_at IS NULL
@@ -242,9 +248,12 @@ SQL_CLUSTER_CONTENT_TIMELINE = """
     SELECT ci.id, ci.title,
            LEFT(ci.clean_text, 200) AS clean_text,
            ci.captured_at,
-           s.id AS source_id, s.name AS source_name, s.platform
+           s.id AS source_id, s.name AS source_name, s.platform,
+           vr.deepfake_score
     FROM content_items ci
     LEFT JOIN sources s ON s.id = ci.source_id
+    LEFT JOIN media_assets ma ON ma.content_item_id = ci.id
+    LEFT JOIN vision_results vr ON vr.media_asset_id = ma.id
     WHERE ci.narrative_cluster_id = $1
       AND ci.topic_id = $2
     ORDER BY ci.captured_at ASC

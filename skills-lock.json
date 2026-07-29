@@ -42,6 +42,36 @@
       "sourceType": "github",
       "skillPath": "skills/caveman-stats/SKILL.md",
       "computedHash": "47ce2de3d6cb39a75047b5c962e4eb3da15594e7397c94103e9a104d42626553"
+    },
+    "dispatch": {
+      "source": "glitchwerks/claude-wayfinder",
+      "sourceType": "github",
+      "skillPath": "skills/dispatch/SKILL.md",
+      "computedHash": "fb4c1d068dbc23e3e0c76632a52daaae4ec4eddd403e424d865bfa8f1d23b7a6"
+    },
+    "dispatch-authoring": {
+      "source": "glitchwerks/claude-wayfinder",
+      "sourceType": "github",
+      "skillPath": "skills/dispatch-authoring/SKILL.md",
+      "computedHash": "5e791a384658a846dcf3aec2a7f06cf6d462b26980d6385df6636ff689385bfa"
+    },
+    "refresh-catalog": {
+      "source": "glitchwerks/claude-wayfinder",
+      "sourceType": "github",
+      "skillPath": "skills/refresh-catalog/SKILL.md",
+      "computedHash": "6ae8059597c1084131a8c4d66b1095f71c23bb00cf073b3dbf1c168af4b865f7"
+    },
+    "router-health": {
+      "source": "glitchwerks/claude-wayfinder",
+      "sourceType": "github",
+      "skillPath": "skills/router-health/SKILL.md",
+      "computedHash": "db8adff1985a19c93e4778cbe9c11100c5c5488fdbf91b2d25013099e23d09cd"
+    },
+    "setup-wayfinder": {
+      "source": "glitchwerks/claude-wayfinder",
+      "sourceType": "github",
+      "skillPath": "skills/setup-wayfinder/SKILL.md",
+      "computedHash": "fa51610f5a5241c9fc03f7e45227e38f6d7216a48ac610064eab8a3d18de73b6"
     }
   }
 }

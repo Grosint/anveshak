@@ -25,9 +25,21 @@ const mockSources = vi.hoisted(() => [
   { id: 's5', name: 'Source 5', platform: 'reddit', health_status: 'healthy', credibility_score: 60, url_or_handle: 'r/osint', topic_links_count: 1, consecutive_failures: 0 },
 ])
 
+const mockDashboard = vi.hoisted(() => ({
+  content_volume_trend: [],
+  content_by_platform: [{ platform: 'web', count: 10 }],
+  content_by_language: [],
+  top_entities: [],
+  sentiment_distribution: { positive: 0, neutral: 0, negative: 0, total: 0 },
+  signal_activity_trend: [],
+  recent_activity: [],
+  active_topics: 0,
+}))
+
 vi.mock('../../api/system', () => ({
   systemApi: {
     pipelineHealth: vi.fn().mockResolvedValue(mockHealth),
+    analyticsDashboard: vi.fn().mockResolvedValue(mockDashboard),
   },
 }))
 
@@ -91,24 +103,13 @@ describe('AnalyticsDashboard page', () => {
   })
 
   // ─────────────────────────────────────────────────────────────────────
-  // Source Health chart section
-  // ─────────────────────────────────────────────────────────────────────
-
-  it('renders Source Health Distribution section', async () => {
-    renderWithProviders(<AnalyticsDashboard />)
-    await waitFor(() => {
-      expect(screen.getByText(/source health distribution/i)).toBeInTheDocument()
-    })
-  })
-
-  // ─────────────────────────────────────────────────────────────────────
   // Platform Distribution chart section
   // ─────────────────────────────────────────────────────────────────────
 
   it('renders Platform Distribution section', async () => {
     renderWithProviders(<AnalyticsDashboard />)
     await waitFor(() => {
-      expect(screen.getByText(/sources by platform/i)).toBeInTheDocument()
+      expect(screen.getByText(/content by platform/i)).toBeInTheDocument()
     })
   })
 
