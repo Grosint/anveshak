@@ -218,6 +218,14 @@ SQL_CONTENT_VISION = """
     WHERE ma.content_item_id = $1
 """
 
+SQL_CLUSTER_LINKED_TRACKER = """
+    SELECT t.id, t.case_number, t.title, t.status
+    FROM trackers t
+    WHERE t.origin_cluster_id = $1
+    ORDER BY t.created_at DESC
+    LIMIT 1
+"""
+
 # ---------------------------------------------------------------------------
 # 4. Cluster Provenance — enriched detail for one cluster
 # ---------------------------------------------------------------------------
@@ -465,12 +473,13 @@ async def get_cluster_provenance(
     identifiers, and source spread.
     """
     (header, signal_row, items, identifiers,
-     source_spread) = await asyncio.gather(
+     source_spread, linked_tracker) = await asyncio.gather(
         _pool_fetchrow(pool, SQL_CLUSTER_HEADER, cluster_id, topic_id),
         _pool_fetchrow(pool, SQL_CLUSTER_SIGNAL, cluster_id, topic_id),
         _pool_fetch(pool, SQL_CLUSTER_CONTENT_TIMELINE, cluster_id, topic_id, content_limit),
         _pool_fetch(pool, SQL_CLUSTER_IDENTIFIERS_RANKED, cluster_id, topic_id),
         _pool_fetch(pool, SQL_CLUSTER_SOURCE_SPREAD, cluster_id, topic_id),
+        _pool_fetchrow(pool, SQL_CLUSTER_LINKED_TRACKER, cluster_id),
     )
 
     if not header:
@@ -488,6 +497,7 @@ async def get_cluster_provenance(
         "items": [dict(r) for r in items],
         "identifiers": [dict(r) for r in identifiers],
         "source_spread": [dict(r) for r in source_spread],
+        "linked_tracker": dict(linked_tracker) if linked_tracker else None,
     }
 
 

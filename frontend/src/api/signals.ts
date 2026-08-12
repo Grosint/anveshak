@@ -57,6 +57,9 @@ export const signalsApi = {
       params: { status, offset, limit, ...(since ? { since } : {}), ...(until ? { until } : {}) },
     }).then((r) => r.data),
 
+  getById: (signalId: string) =>
+    api.get<Signal>(`/api/v1/signals/${signalId}`).then((r) => r.data),
+
   acknowledge: (signalId: string) =>
     api.patch<{ signal_id: string; status: string }>(`/api/v1/signals/${signalId}/acknowledge`).then((r) => r.data),
 

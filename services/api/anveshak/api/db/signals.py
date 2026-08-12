@@ -117,6 +117,20 @@ SQL_LIST_SIGNALS_BY_ORG = """
     LIMIT $3 OFFSET $4
 """
 
+SQL_GET_SIGNAL_BY_ID = """
+    SELECT s.id, s.topic_id, s.cluster_id, s.signal_type, s.description, s.evidence,
+           s.status, s.created_at,
+           nc.label AS cluster_label,
+           nc.independent_source_count,
+           nc.item_count AS cluster_item_count,
+           nc.executive_summary,
+           t.name AS topic_name
+    FROM signals s
+    LEFT JOIN narrative_clusters nc ON nc.id = s.cluster_id
+    LEFT JOIN topics t ON t.id = s.topic_id
+    WHERE s.id = $1
+"""
+
 # Per-signal enrichment: source breakdown + timeline from cluster items
 SQL_SIGNAL_SOURCES = """
     SELECT DISTINCT ON (src.id)
@@ -367,6 +381,18 @@ async def _batch_enrich(conn: asyncpg.Connection, signals: list[dict[str, Any]])
             s["last_seen"] = tl.get("last_seen")
 
     return signals
+
+
+async def get_signal(
+    conn: asyncpg.Connection, signal_id: str,
+) -> dict[str, Any] | None:
+    """Fetch a single signal by ID with cluster/topic enrichment."""
+    row = await conn.fetchrow(SQL_GET_SIGNAL_BY_ID, signal_id)
+    if not row:
+        return None
+    items = [dict(row)]
+    enriched = await _batch_enrich(conn, items)
+    return enriched[0] if enriched else None
 
 
 async def list_signals(

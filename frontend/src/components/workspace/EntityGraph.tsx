@@ -1,9 +1,11 @@
-import { useEffect, useRef, useCallback, useState, useMemo } from 'react'
+import { useEffect, useRef, useCallback, useState, useMemo, lazy, Suspense } from 'react'
 import { useQuery, useQueries } from '@tanstack/react-query'
 import cytoscape from 'cytoscape'
 import { intelligenceApi } from '../../api/intelligence'
 import { identifiersApi, ClusterDetail } from '../../api/identifiers'
 import { Spinner } from '../ui/Spinner'
+
+const DrishtiPreview = lazy(() => import('./DrishtiPreview'))
 
 // ── Visual config ──────────────────────────────────────────────────────
 
@@ -63,6 +65,10 @@ const VIEWS: StoryView[] = [
   {
     id: 'full', title: 'Full Picture', subtitle: 'All layers combined', icon: '🔍',
     idTypes: new Set(), showSources: true, showEntities: true, entityTypes: new Set(), color: '#3b82f6',
+  },
+  {
+    id: 'drishti', title: 'Drishti Preview', subtitle: 'Cross-topic entity resolution', icon: '🔮',
+    idTypes: new Set(), showSources: false, showEntities: false, entityTypes: new Set(), color: '#a855f7',
   },
 ]
 
@@ -281,6 +287,7 @@ export default function EntityGraph({ topicId, onClose }: Props) {
   const viewHasData = useMemo(() => {
     const r: Record<string, boolean> = {}
     for (const v of VIEWS) {
+      if (v.id === 'drishti') { r[v.id] = true; continue }
       let has = false
       for (const n of allNodes.values()) {
         if (n.group === 'identifier' && (v.idTypes.size === 0 || v.idTypes.has(n.type))) { has = true; break }
@@ -399,6 +406,12 @@ export default function EntityGraph({ topicId, onClose }: Props) {
 
       {/* Graph + detail */}
       <div className="flex-1 flex min-h-0">
+        {activeView === 'drishti' ? (
+          <Suspense fallback={<div className="flex-1 flex items-center justify-center bg-[#050a15]"><Spinner label="Loading Drishti Preview..." /></div>}>
+            <DrishtiPreview topicId={topicId} />
+          </Suspense>
+        ) : (
+        <>
         <div className="flex-1 relative min-w-0">
           {isLoading ? (
             <div className="flex items-center justify-center h-full"><Spinner label="Building intelligence graph..." /></div>
@@ -458,6 +471,8 @@ export default function EntityGraph({ topicId, onClose }: Props) {
               )}
             </div>
           </div>
+        )}
+        </>
         )}
       </div>
     </div>

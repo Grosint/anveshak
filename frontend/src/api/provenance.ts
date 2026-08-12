@@ -154,6 +154,12 @@ export interface ClusterProvenance {
     threshold_crossed_at: string
   } | null
   source_spread: ClusterSourceSpread[]
+  linked_tracker: {
+    id: string
+    case_number: string
+    title: string
+    status: 'watching' | 'active' | 'concluded'
+  } | null
 }
 
 // ── Cluster Flow Graph ────────────────────────────────────────────────

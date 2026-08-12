@@ -22,18 +22,11 @@ export default function SignalDetail({ signalId, topicId }: SignalDetailProps) {
   const { push } = useProvenance()
   const qc = useQueryClient()
 
-  // Fetch from both new + acknowledged pools
-  const { data: newPage } = useQuery({
-    queryKey: ['signals-topic', topicId, 'new'],
-    queryFn: () => signalsApi.listByTopic(topicId, 'new'),
+  // Fetch signal directly by ID
+  const { data: signal, isLoading, isError } = useQuery({
+    queryKey: ['signal', signalId],
+    queryFn: () => signalsApi.getById(signalId),
   })
-  const { data: ackPage } = useQuery({
-    queryKey: ['signals-topic', topicId, 'acknowledged'],
-    queryFn: () => signalsApi.listByTopic(topicId, 'acknowledged'),
-  })
-
-  const allSignals = [...(newPage?.items ?? []), ...(ackPage?.items ?? [])]
-  const signal = allSignals.find((s) => s.id === signalId)
 
   // Fetch cluster provenance for enrichment (timeline, identifiers, source spread)
   const { data: clusterData } = useQuery({
@@ -44,15 +37,22 @@ export default function SignalDetail({ signalId, topicId }: SignalDetailProps) {
 
   const ackMut = useMutation({
     mutationFn: signalsApi.acknowledge,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['signals-topic', topicId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['signal', signalId] })
+      qc.invalidateQueries({ queryKey: ['signals-topic', topicId] })
+    },
   })
 
   const dismissMut = useMutation({
     mutationFn: signalsApi.dismiss,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['signals-topic', topicId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['signal', signalId] })
+      qc.invalidateQueries({ queryKey: ['signals-topic', topicId] })
+    },
   })
 
-  if (!signal) return <div className="p-4"><Spinner label="Loading signal..." /></div>
+  if (isLoading) return <div className="p-4"><Spinner label="Loading signal..." /></div>
+  if (isError || !signal) return <div className="p-4 text-text-muted text-xs">Signal not found</div>
 
   const sev = inferSeverity(signal)
   const sources = signal.sources ?? []

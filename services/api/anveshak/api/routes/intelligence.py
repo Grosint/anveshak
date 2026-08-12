@@ -1133,3 +1133,186 @@ async def get_network_graph(
         "node_count": len(nodes),
         "edge_count": len(edges),
     }
+
+
+# ---------------------------------------------------------------------------
+# Drishti Preview — cross-topic entity resolution graph
+# ---------------------------------------------------------------------------
+
+SQL_DRISHTI_CROSS_TOPIC_ENTITIES = """
+    WITH target_entities AS (
+        SELECT LOWER(e.entity_text) AS norm,
+               e.entity_type,
+               MAX(e.entity_text) AS display_text,
+               COUNT(DISTINCT e.content_item_id) AS mention_count
+        FROM extracted_entities e
+        JOIN content_items ci ON e.content_item_id = ci.id
+        WHERE ci.topic_id = $1
+          AND e.entity_type IN ('PERSON', 'ORG', 'FAC', 'GPE')
+          AND LENGTH(e.entity_text) >= 3
+          AND e.entity_text NOT LIKE '%%<%%'
+          AND e.entity_text NOT LIKE '%%>%%'
+          AND e.entity_text NOT LIKE '%%=%%'
+          AND e.entity_text NOT LIKE '%%href%%'
+          AND e.entity_text NOT LIKE '%%' || chr(10) || '%%'
+          AND LENGTH(e.entity_text) <= 40
+        GROUP BY LOWER(e.entity_text), e.entity_type
+        HAVING COUNT(DISTINCT e.content_item_id) >= $2
+    ),
+    cross_topic_matches AS (
+        SELECT te.norm, te.entity_type, te.display_text,
+               te.mention_count AS home_mentions,
+               ci2.topic_id AS other_topic_id,
+               t2.name AS other_topic_name,
+               COUNT(DISTINCT e2.content_item_id) AS other_mentions
+        FROM target_entities te
+        JOIN extracted_entities e2
+            ON LOWER(e2.entity_text) = te.norm
+            AND e2.entity_type = te.entity_type
+        JOIN content_items ci2 ON e2.content_item_id = ci2.id
+        JOIN topics t2 ON ci2.topic_id = t2.id
+        WHERE ci2.topic_id != $1
+          AND t2.org_id = (SELECT org_id FROM topics WHERE id = $1)
+        GROUP BY te.norm, te.entity_type, te.display_text,
+                 te.mention_count, ci2.topic_id, t2.name
+    ),
+    home_cooccurrence AS (
+        SELECT LOWER(e1.entity_text) AS entity_a,
+               e1.entity_type AS type_a,
+               LOWER(e2.entity_text) AS entity_b,
+               e2.entity_type AS type_b,
+               COUNT(DISTINCT e1.content_item_id) AS count
+        FROM extracted_entities e1
+        JOIN extracted_entities e2
+            ON e1.content_item_id = e2.content_item_id
+            AND e1.id < e2.id
+        JOIN content_items ci ON e1.content_item_id = ci.id
+        WHERE ci.topic_id = $1
+          AND e1.entity_type IN ('PERSON', 'ORG', 'FAC', 'GPE')
+          AND e2.entity_type IN ('PERSON', 'ORG', 'FAC', 'GPE')
+          AND LENGTH(e1.entity_text) >= 3
+          AND LENGTH(e2.entity_text) >= 3
+          AND e1.entity_text NOT LIKE '%%<%%'
+          AND e2.entity_text NOT LIKE '%%<%%'
+        GROUP BY LOWER(e1.entity_text), e1.entity_type,
+                 LOWER(e2.entity_text), e2.entity_type
+        HAVING COUNT(DISTINCT e1.content_item_id) >= $2
+    )
+    SELECT 'nodes' AS section,
+           te.display_text, te.entity_type, te.norm,
+           te.mention_count, $1::text AS topic_id,
+           NULL::text AS topic_name,
+           NULL::text AS entity_b, NULL::text AS type_b, NULL::int AS edge_count
+    FROM target_entities te
+    UNION ALL
+    SELECT 'cross_nodes' AS section,
+           cm.display_text, cm.entity_type, cm.norm,
+           cm.other_mentions AS mention_count, cm.other_topic_id AS topic_id,
+           cm.other_topic_name AS topic_name,
+           NULL, NULL, NULL
+    FROM cross_topic_matches cm
+    UNION ALL
+    SELECT 'edges' AS section,
+           NULL, NULL, hc.entity_a,
+           NULL, NULL, NULL,
+           hc.entity_b, hc.type_b, hc.count::int
+    FROM home_cooccurrence hc
+"""
+
+
+@router.get("/topics/{topic_id}/drishti-preview")
+async def get_drishti_preview(
+    topic_id: str,
+    min_count: int = Query(1, ge=1, description="Minimum mention count"),
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("analyst", "admin")),
+) -> dict[str, Any]:
+    """Drishti Preview — cross-topic entity resolution graph.
+
+    Shows entities from this topic that also appear in other topics
+    within the same org, simulating what Drishti entity resolution
+    would surface.
+    """
+    await topics_db.verify_topic_access(db, topic_id, user)
+
+    # Get home topic name
+    home_topic = await db.fetchrow(
+        "SELECT name FROM topics WHERE id = $1", topic_id,
+    )
+    home_topic_name = home_topic["name"] if home_topic else "This Topic"
+
+    rows = await db.fetch(SQL_DRISHTI_CROSS_TOPIC_ENTITIES, topic_id, min_count)
+
+    nodes: dict[str, dict[str, Any]] = {}
+    edges: list[dict[str, Any]] = []
+    topic_colors: dict[str, str] = {}
+
+    # Assign colors per topic
+    color_palette = ["#f59e0b", "#06b6d4", "#a855f7", "#22c55e", "#ec4899", "#6366f1"]
+    topic_colors[topic_id] = color_palette[0]
+    color_idx = 1
+
+    for row in rows:
+        section = row["section"]
+
+        if section == "nodes":
+            nid = f"{row['norm']}:{row['entity_type']}"
+            if nid not in nodes:
+                nodes[nid] = {
+                    "id": nid,
+                    "name": row["display_text"],
+                    "type": row["entity_type"],
+                    "topics": [{"id": topic_id, "name": home_topic_name, "mentions": row["mention_count"]}],
+                    "total_mentions": row["mention_count"],
+                    "is_cross_topic": False,
+                }
+
+        elif section == "cross_nodes":
+            nid = f"{row['norm']}:{row['entity_type']}"
+            other_tid = row["topic_id"]
+
+            if other_tid not in topic_colors:
+                topic_colors[other_tid] = color_palette[color_idx % len(color_palette)]
+                color_idx += 1
+
+            if nid in nodes:
+                nodes[nid]["topics"].append({
+                    "id": other_tid,
+                    "name": row["topic_name"],
+                    "mentions": row["mention_count"],
+                })
+                nodes[nid]["total_mentions"] += row["mention_count"]
+                nodes[nid]["is_cross_topic"] = True
+            else:
+                nodes[nid] = {
+                    "id": nid,
+                    "name": row["display_text"],
+                    "type": row["entity_type"],
+                    "topics": [{"id": other_tid, "name": row["topic_name"], "mentions": row["mention_count"]}],
+                    "total_mentions": row["mention_count"],
+                    "is_cross_topic": True,
+                }
+
+        elif section == "edges":
+            entity_a = row["norm"]
+            entity_b = row["entity_b"]
+            if entity_a and entity_b:
+                # Find node IDs by norm text
+                src_ids = [nid for nid in nodes if nid.startswith(f"{entity_a}:")]
+                tgt_ids = [nid for nid in nodes if nid.startswith(f"{entity_b}:")]
+                if src_ids and tgt_ids:
+                    edges.append({
+                        "source": src_ids[0],
+                        "target": tgt_ids[0],
+                        "weight": row["edge_count"] or 1,
+                    })
+
+    return {
+        "topic_id": topic_id,
+        "nodes": list(nodes.values()),
+        "edges": edges,
+        "topic_colors": topic_colors,
+        "node_count": len(nodes),
+        "edge_count": len(edges),
+        "has_cross_topic_data": any(n["is_cross_topic"] for n in nodes.values()),
+    }

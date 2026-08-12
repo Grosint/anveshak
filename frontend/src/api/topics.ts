@@ -51,6 +51,7 @@ export interface ClusterContentItem {
   platform?: string
   similarity_score?: number | null
   relevance_tier?: string
+  sentiment?: { compound: number; label: string }
 }
 
 export interface CreateTopicPayload {

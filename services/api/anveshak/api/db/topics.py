@@ -201,6 +201,7 @@ SQL_CLUSTER_CONTENT_BY_RELEVANCE = """
            LEFT(ci.translated_text, 500) AS translated_text,
            ci.language, ci.captured_at,
            ci.credibility_score_at_capture,
+           ci.labels,
            s.name AS source_name, s.platform,
            1 - (ci.embedding <=> $1::vector) AS similarity_score
     FROM content_items ci
@@ -218,6 +219,7 @@ SQL_CLUSTER_CONTENT_BY_TIME = """
            LEFT(ci.translated_text, 500) AS translated_text,
            ci.language, ci.captured_at,
            ci.credibility_score_at_capture,
+           ci.labels,
            s.name AS source_name, s.platform,
            NULL::float AS similarity_score
     FROM content_items ci
@@ -695,6 +697,12 @@ async def get_cluster_content(
         if d.get("similarity_score") is not None:
             d["similarity_score"] = round(float(d["similarity_score"]), 4)
             d["relevance_tier"] = _relevance_tier(d["similarity_score"])
+        # Extract sentiment from labels JSONB
+        raw_labels = d.pop("labels", None)
+        if raw_labels:
+            labels = json.loads(raw_labels) if isinstance(raw_labels, str) else raw_labels
+            if isinstance(labels, dict) and "sentiment" in labels:
+                d["sentiment"] = labels["sentiment"]
         results.append(d)
     return results
 

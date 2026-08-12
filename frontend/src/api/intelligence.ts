@@ -168,4 +168,44 @@ export const intelligenceApi = {
         params: { min_weight: minWeight, limit },
       })
       .then((r) => r.data),
+
+  drishtiPreview: (topicId: string, minCount = 1) =>
+    api
+      .get<DrishtiPreviewGraph>(`/api/v1/topics/${topicId}/drishti-preview`, {
+        params: { min_count: minCount },
+      })
+      .then((r) => r.data),
+}
+
+// ── Drishti Preview types ─────────────────────────────────────────────
+
+export interface DrishtiTopicRef {
+  id: string
+  name: string
+  mentions: number
+}
+
+export interface DrishtiNode {
+  id: string
+  name: string
+  type: string
+  topics: DrishtiTopicRef[]
+  total_mentions: number
+  is_cross_topic: boolean
+}
+
+export interface DrishtiEdge {
+  source: string
+  target: string
+  weight: number
+}
+
+export interface DrishtiPreviewGraph {
+  topic_id: string
+  nodes: DrishtiNode[]
+  edges: DrishtiEdge[]
+  topic_colors: Record<string, string>
+  node_count: number
+  edge_count: number
+  has_cross_topic_data: boolean
 }

@@ -4,6 +4,7 @@ import { topicsApi, Cluster, ClusterContentItem } from '../../api/topics'
 import { Badge } from '../ui/Badge'
 import { Spinner } from '../ui/Spinner'
 import { EmptyState } from '../ui/EmptyState'
+import { SentimentBadge } from '../content/SentimentBadge'
 
 const TIER_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   high:    { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'High' },
@@ -211,6 +212,7 @@ export function ClusterBrowser({ topicId, onSelectContent }: ClusterBrowserProps
                                   {item.source_name?.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
                                 </span>
                                 <RelevanceBadge tier={item.relevance_tier} />
+                                {item.sentiment && <SentimentBadge compound={item.sentiment.compound} />}
                               </div>
                               <span className="text-[9px] text-text-muted shrink-0">
                                 {new Date(item.captured_at).toLocaleDateString()}

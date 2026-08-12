@@ -1,5 +1,5 @@
-import { lazy, Suspense } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import React, { lazy, Suspense } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { provenanceApi } from '../../api/provenance'
 import { useProvenance } from '../../contexts/ProvenanceContext'
 import { Spinner } from '../ui/Spinner'
@@ -8,6 +8,7 @@ import { EmptyState } from '../ui/EmptyState'
 import { formatDistanceToNow, differenceInHours, differenceInDays } from 'date-fns'
 import { TimelineItems } from './TimelineItems'
 import { PlatformBadge } from '../content/PlatformBadge'
+import { trackersApi } from '../../api/trackers'
 
 const FlowGraph = lazy(() => import('./FlowGraph'))
 
@@ -61,6 +62,9 @@ export default function ClusterDetail({ clusterId, topicId }: ClusterDetailProps
             <span>Started {formatDistanceToNow(new Date(data.created_at), { addSuffix: true })}</span>
           )}
         </div>
+
+        {/* Case actions */}
+        <CaseActions clusterId={clusterId} linkedTracker={data.linked_tracker} />
       </div>
 
       {/* Signal status — prominently at top if fired */}
@@ -156,6 +160,94 @@ export default function ClusterDetail({ clusterId, topicId }: ClusterDetailProps
         </Section>
       )}
 
+    </div>
+  )
+}
+
+function CaseActions({ clusterId, linkedTracker }: {
+  clusterId: string
+  linkedTracker: { id: string; case_number: string; title: string; status: string } | null
+}) {
+  const queryClient = useQueryClient()
+  const [showConclude, setShowConclude] = React.useState(false)
+  const [closingSummary, setClosingSummary] = React.useState('')
+
+  const openCase = useMutation({
+    mutationFn: () => trackersApi.createFromCluster(clusterId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['provenance', 'cluster'] }),
+  })
+
+  const concludeCase = useMutation({
+    mutationFn: () => trackersApi.updateStatus(linkedTracker!.id, { status: 'concluded', closing_summary: closingSummary }),
+    onSuccess: () => {
+      setShowConclude(false)
+      setClosingSummary('')
+      queryClient.invalidateQueries({ queryKey: ['provenance', 'cluster'] })
+    },
+  })
+
+  if (!linkedTracker) {
+    return (
+      <button
+        onClick={() => openCase.mutate()}
+        disabled={openCase.isPending}
+        className="mt-3 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-medium bg-anveshak-accent/20 text-anveshak-accent border border-anveshak-accent/30 hover:bg-anveshak-accent/30 transition-colors disabled:opacity-50"
+      >
+        {openCase.isPending ? 'Opening...' : '📁 Open as Case'}
+      </button>
+    )
+  }
+
+  if (linkedTracker.status === 'concluded') {
+    return (
+      <div className="mt-3 flex items-center gap-2 px-3 py-1.5 rounded-md bg-anveshak-muted/30 border border-anveshak-border/20">
+        <span className="text-[10px] text-text-muted">Case {linkedTracker.case_number} — concluded</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-3 space-y-2">
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-anveshak-card/50 border border-anveshak-border/30">
+        <span className="text-[10px] font-medium text-text-primary flex-1">
+          📁 Case {linkedTracker.case_number}
+        </span>
+        <span className="text-[9px] text-anveshak-accent">{linkedTracker.status}</span>
+        <button
+          onClick={() => setShowConclude(true)}
+          className="text-[9px] text-text-muted hover:text-signal-high transition-colors"
+        >
+          Conclude
+        </button>
+      </div>
+
+      {showConclude && (
+        <div className="px-3 py-2 rounded-md bg-anveshak-card border border-anveshak-border/30 space-y-2">
+          <p className="text-[10px] text-text-secondary">Closing summary:</p>
+          <textarea
+            value={closingSummary}
+            onChange={(e) => setClosingSummary(e.target.value)}
+            placeholder="Reason for concluding this case..."
+            className="w-full text-[10px] bg-anveshak-muted rounded p-2 text-text-primary placeholder:text-text-muted/50 border border-anveshak-border/20 resize-none"
+            rows={3}
+          />
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => { setShowConclude(false); setClosingSummary('') }}
+              className="text-[9px] text-text-muted hover:text-text-primary"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => concludeCase.mutate()}
+              disabled={!closingSummary.trim() || concludeCase.isPending}
+              className="text-[9px] px-2 py-1 rounded bg-signal-high/20 text-signal-high hover:bg-signal-high/30 disabled:opacity-50"
+            >
+              {concludeCase.isPending ? 'Concluding...' : 'Conclude Case'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
