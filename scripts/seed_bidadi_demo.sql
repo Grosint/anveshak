@@ -446,7 +446,11 @@ INSERT INTO signals (id, topic_id, cluster_id, signal_type, description, evidenc
     ('bidadi-sig-08', 'bidadi-topic-03', NULL, 'identifier_convergence',
      'Amrita Bhoomi (129/1997-98) and KRRS (RMG-S20-2013-14) share same Rajarajeshwari Nagar 560098 locality — organizational proximity indicator',
      '{"independent_source_count":1,"severity":"MEDIUM","identifier_type":"NGO_REG","identifier_value":"560098","cross_topic":false}'::jsonb,
-     'new', NOW()-INTERVAL '20 days', NOW(), '{"classification":"RESTRICTED","domain":"signal","owner_org":"mha-bidadi"}'::jsonb)
+     'new', NOW()-INTERVAL '20 days', NOW(), '{"classification":"RESTRICTED","domain":"signal","owner_org":"mha-bidadi"}'::jsonb),
+    ('bidadi-sig-09', 'bidadi-topic-03', 'bidadi-cl-11', 'deepfake_detected',
+     'DEEPFAKE ALERT: Video of Karnataka minister endorsing KRRS/Amrita Bhoomi flagged as 91% synthetic (efficientnet-b0). 4,200+ shares on Telegram in 48 hours. Source swabhimana_kannada auto-downgraded 15→8. Manufactured endorsement likely part of coordinated info warfare campaign.',
+     '{"severity":"HIGH","deepfake_score":0.91,"deepfake_model":"efficientnet-b0-deepfake","content_item_id":"bidadi-ci-62","source_id":"bidadi-src-11","shares_48h":4200,"credibility_downgrade":{"old":15.0,"new":8.0}}'::jsonb,
+     'new', NOW()-INTERVAL '8 days', NOW(), '{"classification":"RESTRICTED","domain":"signal","owner_org":"mha-bidadi"}'::jsonb)
 ON CONFLICT (id) DO NOTHING;
 
 -- ==========================================================================
@@ -468,7 +472,64 @@ INSERT INTO keyword_alert_triggers (id, rule_id, content_item_id, matched_keywor
 ON CONFLICT (id) DO NOTHING;
 
 -- ==========================================================================
--- 9. Forwarding Chains (network graph)
+-- 9. Deepfake Video — Manipulated Minister Endorsement (Topic 3)
+-- ==========================================================================
+-- Story: A deepfake video surfaces on Telegram showing a Karnataka minister
+-- endorsing KRRS's foreign-linked NGO Amrita Bhoomi. System flags it 91% synthetic.
+-- This enriches Cluster 11 (Hashtag Amplification & Coordinated Messaging).
+
+-- Content item: the Telegram post with the deepfake video
+INSERT INTO content_items (id, topic_id, source_id, url, raw_text, clean_text, content_hash, language, captured_at, credibility_score_at_capture, narrative_cluster_id, labels, created_at, updated_at, org_id) VALUES
+('bidadi-ci-62','bidadi-topic-03','bidadi-src-11','https://t.me/swabhimana_kannada/512',
+ 'ವಿಡಿಯೋ: ಸಚಿವರು KRRS ಮತ್ತು ಅಮೃತ ಭೂಮಿ ಬೆಂಬಲ ಘೋಷಿಸಿದರು — ವಿದೇಶಿ ಅನುದಾನ ನ್ಯಾಯಸಮ್ಮತ ಎಂದು ಹೇಳಿದರು',
+ 'VIDEO: Karnataka Revenue Minister allegedly endorses KRRS and Amrita Bhoomi in leaked clip — says foreign funding to farmer organisations is ''legitimate solidarity, not interference.'' Minister''s office denies the video is authentic. Clip shared 4,200+ times across Telegram and WhatsApp in 48 hours. Original source unknown — first appeared on swabhimana_kannada channel.',
+ md5('bidadi-ci-62'),'en',NOW()-INTERVAL '8 days',15.0,'bidadi-cl-11',
+ '{"classification":"RESTRICTED","domain":"land_intelligence","owner_org":"mha-bidadi","sentiment":{"compound":-0.7,"label":"negative"},"keywords":["deepfake","minister","KRRS","Amrita Bhoomi","foreign funding","endorsement","video"],"deepfake_flagged":true}'::jsonb,
+ NOW()-INTERVAL '8 days',NOW(),'org_bidadi')
+ON CONFLICT (id) DO NOTHING;
+
+-- Update cluster item count (11→4 items now, ISC stays 3)
+UPDATE narrative_clusters SET item_count = 4 WHERE id = 'bidadi-cl-11';
+
+-- Media asset: the video file
+INSERT INTO media_assets (id, content_item_id, asset_type, storage_path, content_hash, created_at, labels) VALUES
+('bidadi-ma-01','bidadi-ci-62','video',
+ 'media/bidadi-topic-03/2026/08/04/deepfake-minister-krrs-endorsement.mp4',
+ md5('bidadi-deepfake-video-01'),
+ NOW()-INTERVAL '8 days',
+ '{"classification":"RESTRICTED","domain":"land_intelligence","owner_org":"mha-bidadi"}'::jsonb)
+ON CONFLICT (id) DO NOTHING;
+
+-- Vision result: deepfake score 0.91 (HIGH — "Likely Synthetic")
+INSERT INTO vision_results (id, media_asset_id, deepfake_score, deepfake_model, synthetic_probability, yolo_detections, clip_labels, processed_at, labels) VALUES
+('bidadi-vr-01','bidadi-ma-01',
+ 0.91, 'efficientnet-b0-deepfake',
+ 0.88,
+ '[{"class":"person","confidence":0.94,"bbox":[120,80,380,420]},{"class":"tie","confidence":0.87,"bbox":[220,280,300,400]}]'::jsonb,
+ '["politician","press conference","microphone","indoor","formal"]'::jsonb,
+ NOW()-INTERVAL '8 days',
+ '{"classification":"RESTRICTED","domain":"land_intelligence","owner_org":"mha-bidadi","analysis_frames":12,"worst_frame_score":0.91,"mean_frame_score":0.74}'::jsonb)
+ON CONFLICT (id) DO NOTHING;
+
+-- Credibility audit: source auto-downgraded due to deepfake content
+INSERT INTO credibility_audit_log (id, source_id, org_id, old_score, new_score, reason, changed_by, created_at, labels) VALUES
+('bidadi-audit-01','bidadi-src-11','org_bidadi',
+ 15.0, 8.0,
+ 'Automatic downgrade: deepfake content detected (score 0.91, model efficientnet-b0-deepfake). Content item bidadi-ci-62 flagged as likely synthetic. Source credibility reduced per deepfake penalty policy.',
+ 'system:vision-deepfake-auto',
+ NOW()-INTERVAL '8 days',
+ '{"classification":"RESTRICTED","domain":"land_intelligence","owner_org":"mha-bidadi"}'::jsonb)
+ON CONFLICT (id) DO NOTHING;
+
+-- Entity extraction for the deepfake content
+INSERT INTO extracted_entities (id, content_item_id, entity_type, entity_text, created_at, labels) VALUES
+('bidadi-ent-060','bidadi-ci-62','ORG','KRRS',NOW()-INTERVAL '8 days','{"classification":"RESTRICTED","domain":"land_intelligence","owner_org":"mha-bidadi"}'::jsonb),
+('bidadi-ent-061','bidadi-ci-62','ORG','Amrita Bhoomi',NOW()-INTERVAL '8 days','{"classification":"RESTRICTED","domain":"land_intelligence","owner_org":"mha-bidadi"}'::jsonb),
+('bidadi-ent-062','bidadi-ci-62','PERSON','Revenue Minister',NOW()-INTERVAL '8 days','{"classification":"RESTRICTED","domain":"land_intelligence","owner_org":"mha-bidadi"}'::jsonb)
+ON CONFLICT (id) DO NOTHING;
+
+-- ==========================================================================
+-- 10. Forwarding Chains (network graph)
 -- ==========================================================================
 UPDATE content_items SET forwarded_from_channel_name = 'HaveriRaitaSangaKRRS' WHERE id IN ('bidadi-ci-15','bidadi-ci-51');
 UPDATE content_items SET forwarded_from_channel_name = 'swabhimana_kannada' WHERE id = 'bidadi-ci-04';
@@ -485,6 +546,9 @@ UNION ALL SELECT 'Clusters', COUNT(*) FROM narrative_clusters WHERE id LIKE 'bid
 UNION ALL SELECT 'Entities', COUNT(*) FROM extracted_entities WHERE id LIKE 'bidadi-ent-%'
 UNION ALL SELECT 'ID Clusters', COUNT(*) FROM identifier_clusters WHERE id LIKE 'bidadi-ic-%'
 UNION ALL SELECT 'Signals', COUNT(*) FROM signals WHERE id LIKE 'bidadi-sig-%'
+UNION ALL SELECT 'Media Assets', COUNT(*) FROM media_assets WHERE id LIKE 'bidadi-ma-%'
+UNION ALL SELECT 'Vision Results', COUNT(*) FROM vision_results WHERE id LIKE 'bidadi-vr-%'
+UNION ALL SELECT 'Credibility Audits', COUNT(*) FROM credibility_audit_log WHERE id LIKE 'bidadi-audit-%'
 UNION ALL SELECT 'Alert Rules', COUNT(*) FROM keyword_alert_rules WHERE id LIKE 'bidadi-alert-%'
 UNION ALL SELECT 'Alert Triggers', COUNT(*) FROM keyword_alert_triggers WHERE id LIKE 'bidadi-trig-%';
 
@@ -496,6 +560,7 @@ BEGIN
     RAISE NOTICE '  Login: demo_bidadi@anveshak.local';
     RAISE NOTICE '  Password: AnveshakDemo2024!';
     RAISE NOTICE '  Topics: 3 (Civil Unrest, Land Nexus, Foreign Linkages)';
+    RAISE NOTICE '  Deepfake: minister endorsement video (score 0.91) in Topic 3';
     RAISE NOTICE '  Cross-topic person: DK Shivakumar across ALL 3 topics';
     RAISE NOTICE '  Cross-topic location: Kethaganahalli Sy 7-79 across Topics 1 & 2';
     RAISE NOTICE '  Cross-topic org: KRRS-Amrita Bhoomi 560098 proximity';

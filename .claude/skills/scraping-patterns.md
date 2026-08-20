@@ -2,8 +2,8 @@
 
 ## When to load: any task involving web crawling, content extraction, or open-web ingestion
 
-> See also: `learned/cross-service-delivery-loop.md` — pattern for delivering DB-written events to WebSocket clients across service boundaries
-> See also: `learned/websocket-auth-pattern.md` — JWT auth on WebSocket endpoints (Depends() does not work; use query param)
+> See also: `.claude/skills/learned/cross-service-delivery-loop.md` — pattern for delivering DB-written events to WebSocket clients across service boundaries
+> See also: `.claude/skills/learned/websocket-auth-pattern.md` — JWT auth on WebSocket endpoints (Depends() does not work; use query param)
 
 ---
 

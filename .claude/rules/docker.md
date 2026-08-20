@@ -25,7 +25,7 @@ paths:
   `media_store:/app/media` and `vision_media:/app/media` = TWO SEPARATE host dirs — mismatched names create invisible data silos, no error/log
 - After compose volume change, grep mount path across services:
   `grep -n '/app/media' infra/compose.yml` — verify volume name consistency
-  See: `learned/docker-volume-name-consistency.md`
+  See: `.claude/skills/learned/docker-volume-name-consistency.md`
 
 ## Build Context
 
@@ -54,14 +54,14 @@ paths:
   `ports: ["127.0.0.1:8000:8000"]` in override APPENDS to base `"8000:8000"` → "address already in use"
   `ports: []` also doesn't clear base ports — merges empty list, base remains
   Use cloud/host firewall for port restriction instead
-  See: `learned/compose-port-override-merge-trap.md`
+  See: `.claude/skills/learned/compose-port-override-merge-trap.md`
 
 ## Bind Mount Permissions for Init Containers
 
 - Init containers (model downloaders) crash with PermissionError on bind mounts owned by root
   Fix: `chmod -R 777 /data/models /data/vision-models` before first run
   Observability: Prometheus=65534, Loki=10001, Grafana=472 — set chown before first run
-  See: `learned/bind-mount-init-container-permissions.md`
+  See: `.claude/skills/learned/bind-mount-init-container-permissions.md`
 
 ## Ubuntu 24.04 Differences
 
@@ -69,14 +69,14 @@ paths:
 - NVIDIA container toolkit: needs separate NVIDIA apt repo
 - NVIDIA driver: use `-server` variant on headless VMs
 - SSH service: `systemctl restart ssh` not `sshd`
-  See: `learned/ubuntu-2404-docker-nvidia-setup.md`
+  See: `.claude/skills/learned/ubuntu-2404-docker-nvidia-setup.md`
 
 ## bcrypt Hash Shell Escaping
 
 - bcrypt `$` characters get shell-expanded when inserting via psql/bash
   Generate hash INSIDE API container, then update via psql with `\$` escaping
   Passwords with `!` need single quotes (bash history expansion)
-  See: `learned/bcrypt-hash-shell-escaping.md`
+  See: `.claude/skills/learned/bcrypt-hash-shell-escaping.md`
 
 ## GCP GPU Quota
 
@@ -84,4 +84,4 @@ paths:
   Global defaults to 0 on new projects — request increase first (24-48h)
   Zone exhaustion: try all zones, then L4, then different region
   Admin commands (bucket create, snapshot policies): run from local, not VM
-  See: `learned/gcp-gpu-quota-two-layers.md`
+  See: `.claude/skills/learned/gcp-gpu-quota-two-layers.md`

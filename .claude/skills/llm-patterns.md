@@ -2,47 +2,46 @@
 
 ## When to load: any task involving Ollama, report generation, or LLM inference
 
-> See also: `learned/phase-check-pitfalls.md` — transient LLM-output Pydantic models and the labels rule
-> See also: `learned/data-driven-reports-over-llm.md` — 90% SQL data + 10% LLM BLUF; BlufContent model; template fallback when LLM fails
-> See also: `learned/eager-pdf-on-shared-volume.md` — generate PDF at report time, store on shared volume; env var mismatch pitfall; datetime not subscriptable in Jinja2
-> See also: `learned/entity-type-noise-filter.md` — exclude CARDINAL/ORDINAL/DATE/TIME/MONEY from entity tables; confidence 0.75
-> See also: `learned/stats-first-llm-second.md` — deterministic SQL stats as Phase 0, LLM brief as Phase 2 with separate endpoint
-> See also: `learned/generated-at-null-for-stats-only.md` — generated_at must stay NULL until LLM brief is stored; setting at Phase 0 breaks idempotency guard
-> See also: `learned/sql-param-count-caller-mismatch.md` — adding $N to SQL constant requires updating ALL callers; grep for the constant name
-> See also: `learned/role-constraint-migration-order.md` — update CHECK constraint BEFORE inserting rows with new role values
-> See also: `learned/dual-layer-rls-safety-net.md` — application filtering + PostgreSQL RLS for defence/LEA deployments
-> See also: `learned/optional-dep-lazy-import-two-level-log.md` — WeasyPrint/PyMuPDF lazy import with two-level logging
-> See also: `learned/path-parents-index-off-by-one.md` — Path.parents[] off-by-one bug (geocoder custom_locations.json)
-> See also: `learned/leiden-threshold-per-model.md` — clustering threshold must be calibrated per embedding model; 0.70 for MiniLM, re-calibrate on model change
-> See also: `learned/benchmark-100-percent-completion.md` — benchmark must wait for 100% embedding completion; 90% causes non-deterministic recall
-> See also: `learned/new-db-func-mock-all-callers.md` — adding new db functions requires updating all test mocks that patch the db module
-> See also: `learned/analysis-jobs-db-source-of-truth.md` — analysis_jobs table is authoritative; don't rely on ARQ Redis for completed jobs
-> See also: `learned/passlib-bcrypt-incompatibility.md` — replace passlib with direct bcrypt wrapper (passlib 1.7 + bcrypt>=4 broken)
-> See also: `learned/asyncpg-repository-pattern.md` — SQL constants + typed db/ functions; why not ORM
-> See also: `learned/llm-validated-output-retry.md` — JSON fence stripping, ReportContent schema, progressive retry pattern
-> See also: `learned/idempotent-cron-insert.md` — UNIQUE index + ON CONFLICT DO NOTHING for cron jobs that write event/warning rows repeatedly
-> See also: `learned/bidirectional-auto-scoring.md` — separate min-threshold settings for score boosts vs drops; mandatory invariant test
-> See also: `learned/jsonb-labels-api-surfacing.md` — threading labels through CTE UNION ALL + DISTINCT ON dedup; post-processing to extract sentiment/keywords
-> See also: `learned/git-stash-pop-silent-data-loss.md` — stash pop failure silently reverts files; never stash to test hypotheses, use worktrees instead
-> See also: `learned/post-embedding-relevance-gate.md` — cosine similarity gate between content and topic query embeddings; threshold calibration from histogram
-> See also: `learned/mock-sequential-db-calls.md` — use side_effect for functions making multiple sequential DB fetches; expand fake_row when SQL JOINs change
-> See also: `learned/scheduler-worker-split.md` — split monolithic service into lightweight scheduler (124 MiB) + ARQ ML worker (6 GiB); import safety rules
-> See also: `learned/orphan-sweep-safety-net.md` — periodic sweep for content_items missed by scraper enqueue; runs in scheduler every 5 min
-> See also: `learned/quality-gate-all-consumers.md` — relevance score must filter at display AND clustering; NULL-safe SQL pattern
-> See also: `learned/per-topic-relevance-auto-calibration.md` — auto-calibrate relevance threshold per topic; global threshold fails for mixed-breadth topics
-> See also: `learned/psql-null-empty-string-pitfall.md` — psql returns '' for NULL, not Python None; use truthiness check in scripts
-> See also: `learned/incremental-clustering-centroid-assign.md` — O(new×clusters) instead of O(N²); preserves cluster_id stability
-> See also: `learned/entity-minhash-clustering-boost.md` — blend entity Jaccard into HDBSCAN distance; BIGINT[] not INTEGER[]; NULL-safe mask
-> See also: `learned/hdbscan-cosine-precomputed.md` — HDBSCAN 0.8.x needs precomputed float64 matrix; metric="cosine" not supported
-> See also: `learned/benchmark-arq-dedup-flush.md` — flush arq:job:* Redis keys before benchmark re-runs; production uses unique UUIDs
-> See also: `learned/quality-gate-unicode-ranges.md` — word regex must cover Devanagari \u0900-\u097f; silent failure drops Hindi content
-> See also: `learned/deepfake-none-error-signal.md` — return None on detection failure instead of default 0.0 score
-> See also: `learned/spacy-pip-models-bake-in-image.md` — spaCy models are pip packages; bake into image, not volume
-> See also: `learned/credibility-settings-separation.md` — separate penalty magnitude from noise filter threshold
-> See also: `learned/detect-language-must-not-gatekeep.md` — detect_language returns real lang; don't filter on downstream model availability
-> See also: `learned/golden-test-data-ml-pipeline.md` — pre-written multilingual content with expected outputs; fuzzy keyword matching
-> See also: `learned/scope-param-passthrough-invariant.md` — if route accepts topic_id, every code path must pass it through to SQL; silent drop = cross-topic data leak
-> See also: `learned/arq-queue-name-all-callers.md` — enqueue_job _queue_name must match target WorkerSettings.queue_name at every call site
+> See also: `.claude/skills/learned/phase-check-pitfalls.md` — transient LLM-output Pydantic models and the labels rule
+> See also: `.claude/skills/learned/data-driven-reports-over-llm.md` — 90% SQL data + 10% LLM BLUF; BlufContent model; template fallback when LLM fails
+> See also: `.claude/skills/learned/eager-pdf-on-shared-volume.md` — generate PDF at report time, store on shared volume; env var mismatch pitfall; datetime not subscriptable in Jinja2
+> See also: `.claude/skills/learned/entity-type-noise-filter.md` — exclude CARDINAL/ORDINAL/DATE/TIME/MONEY from entity tables; confidence 0.75
+> See also: `.claude/skills/learned/stats-first-llm-second.md` — deterministic SQL stats as Phase 0, LLM brief as Phase 2 with separate endpoint
+> See also: `.claude/skills/learned/generated-at-null-for-stats-only.md` — generated_at must stay NULL until LLM brief is stored; setting at Phase 0 breaks idempotency guard
+> See also: `.claude/skills/learned/sql-param-count-caller-mismatch.md` — adding $N to SQL constant requires updating ALL callers; grep for the constant name
+> See also: `.claude/skills/learned/role-constraint-migration-order.md` — update CHECK constraint BEFORE inserting rows with new role values
+> See also: `.claude/skills/learned/dual-layer-rls-safety-net.md` — application filtering + PostgreSQL RLS for defence/LEA deployments
+> See also: `.claude/skills/learned/optional-dep-lazy-import-two-level-log.md` — WeasyPrint/PyMuPDF lazy import with two-level logging
+> See also: `.claude/skills/learned/path-parents-index-off-by-one.md` — Path.parents[] off-by-one bug (geocoder custom_locations.json)
+> See also: `.claude/skills/learned/leiden-threshold-per-model.md` — clustering threshold must be calibrated per embedding model; 0.70 for MiniLM, re-calibrate on model change
+> See also: `.claude/skills/learned/benchmark-100-percent-completion.md` — benchmark must wait for 100% embedding completion; 90% causes non-deterministic recall
+> See also: `.claude/skills/learned/new-db-func-mock-all-callers.md` — adding new db functions requires updating all test mocks that patch the db module
+> See also: `.claude/skills/learned/analysis-jobs-db-source-of-truth.md` — analysis_jobs table is authoritative; don't rely on ARQ Redis for completed jobs
+> See also: `.claude/skills/learned/passlib-bcrypt-incompatibility.md` — replace passlib with direct bcrypt wrapper (passlib 1.7 + bcrypt>=4 broken)
+> See also: `.claude/skills/learned/asyncpg-repository-pattern.md` — SQL constants + typed db/ functions; why not ORM
+> See also: `.claude/skills/learned/llm-validated-output-retry.md` — JSON fence stripping, ReportContent schema, progressive retry pattern
+> See also: `.claude/skills/learned/idempotent-cron-insert.md` — UNIQUE index + ON CONFLICT DO NOTHING for cron jobs that write event/warning rows repeatedly
+> See also: `.claude/skills/learned/threshold-and-setting-invariants.md` — separate min-threshold settings for score boosts vs drops; mandatory invariant test
+> See also: `.claude/skills/learned/jsonb-labels-api-surfacing.md` — threading labels through CTE UNION ALL + DISTINCT ON dedup; post-processing to extract sentiment/keywords
+> See also: `.claude/skills/learned/git-stash-pop-silent-data-loss.md` — stash pop failure silently reverts files; never stash to test hypotheses, use worktrees instead
+> See also: `.claude/skills/learned/post-embedding-relevance-gate.md` — cosine similarity gate between content and topic query embeddings; threshold calibration from histogram
+> See also: `.claude/skills/learned/mock-sequential-db-calls.md` — use side_effect for functions making multiple sequential DB fetches; expand fake_row when SQL JOINs change
+> See also: `.claude/skills/learned/scheduler-worker-split.md` — split monolithic service into lightweight scheduler (124 MiB) + ARQ ML worker (6 GiB); import safety rules
+> See also: `.claude/skills/learned/orphan-sweep-safety-net.md` — periodic sweep for content_items missed by scraper enqueue; runs in scheduler every 5 min
+> See also: `.claude/skills/learned/quality-gate-all-consumers.md` — relevance score must filter at display AND clustering; NULL-safe SQL pattern
+> See also: `.claude/skills/learned/per-topic-relevance-auto-calibration.md` — auto-calibrate relevance threshold per topic; global threshold fails for mixed-breadth topics
+> See also: `.claude/skills/learned/psql-null-empty-string-pitfall.md` — psql returns '' for NULL, not Python None; use truthiness check in scripts
+> See also: `.claude/skills/learned/incremental-clustering-centroid-assign.md` — O(new×clusters) instead of O(N²); preserves cluster_id stability
+> See also: `.claude/skills/learned/entity-minhash-clustering-boost.md` — blend entity Jaccard into HDBSCAN distance; BIGINT[] not INTEGER[]; NULL-safe mask
+> See also: `.claude/skills/learned/benchmark-arq-dedup-flush.md` — flush arq:job:* Redis keys before benchmark re-runs; production uses unique UUIDs
+> See also: `.claude/skills/learned/quality-gate-unicode-ranges.md` — word regex must cover Devanagari \u0900-\u097f; silent failure drops Hindi content
+> See also: `.claude/skills/learned/deepfake-none-error-signal.md` — return None on detection failure instead of default 0.0 score
+> See also: `.claude/skills/learned/spacy-pip-models-bake-in-image.md` — spaCy models are pip packages; bake into image, not volume
+> See also: `.claude/skills/learned/threshold-and-setting-invariants.md` — separate penalty magnitude from noise filter threshold
+> See also: `.claude/skills/learned/detect-language-must-not-gatekeep.md` — detect_language returns real lang; don't filter on downstream model availability
+> See also: `.claude/skills/learned/golden-test-data-ml-pipeline.md` — pre-written multilingual content with expected outputs; fuzzy keyword matching
+> See also: `.claude/skills/learned/scope-param-passthrough-invariant.md` — if route accepts topic_id, every code path must pass it through to SQL; silent drop = cross-topic data leak
+> See also: `.claude/skills/learned/arq-queue-name-all-callers.md` — enqueue_job _queue_name must match target WorkerSettings.queue_name at every call site
 
 ---
 

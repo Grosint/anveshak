@@ -17,7 +17,7 @@ Consolidated from 4 learned instincts.
 
 **Rule:** If it's a pip package with dependencies → bake into image.
 If it's a weight file → download to shared volume via init container.
-See: `learned/spacy-pip-models-bake-in-image.md`
+See: `.claude/skills/learned/spacy-pip-models-bake-in-image.md`
 
 ### Singleton pattern for ARQ workers
 
@@ -36,7 +36,7 @@ def encode_text(text: str) -> list[float]:
     return _encoder.encode(text).tolist()
 ```
 
-See: `learned/arq-worker-ml-singleton.md`
+See: `.claude/skills/learned/arq-worker-ml-singleton.md`
 
 ### Hardware independence via ONNX providers
 
@@ -47,7 +47,7 @@ def onnx_providers(self) -> list[str]:
     return ["CPUExecutionProvider"]
 ```
 
-Zero code changes when upgrading CPU → GPU. See: `learned/onnx-hardware-independence.md`
+Zero code changes when upgrading CPU → GPU. See: `.claude/skills/learned/onnx-hardware-independence.md`
 
 ### Health checks for volume-mounted models
 
@@ -56,4 +56,4 @@ Empty volume = silent 0.0 scores. Always:
 2. Worker validates models at startup (fail-fast)
 3. Health endpoint reports model status
 
-See: `learned/volume-mounted-models-silent-failure.md`
+See: `.claude/skills/learned/volume-mounted-models-silent-failure.md`

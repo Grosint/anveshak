@@ -17,17 +17,17 @@ paths:
 ## Idempotency
 
 - All replayed inserts use `ON CONFLICT ... DO NOTHING` or `DO UPDATE`
-  See: `learned/idempotent-cron-insert.md`
+  See: `.claude/skills/learned/idempotent-cron-insert.md`
 - Cron jobs inserting rows MUST have `UNIQUE` constraint preventing dupes
 - Immutable fields (e.g., `generated_at`) guarded with `WHERE generated_at IS NULL`
-  — prevents replayed ARQ jobs overwriting. See: `learned/immutable-write-idempotency.md`
+  — prevents replayed ARQ jobs overwriting. See: `.claude/skills/learned/immutable-write-idempotency.md`
 - ARQ child jobs enqueued from parent (not scheduler) with scope guard:
-  `if clusters: enqueue(...)` — prevents empty enqueues. See: `learned/causal-arq-job-chaining.md`
+  `if clusters: enqueue(...)` — prevents empty enqueues. See: `.claude/skills/learned/causal-arq-job-chaining.md`
 - Orphan sweep: null completion rows from last 1h, every 5min, batch 100.
   Catches jobs where INSERT succeeded but enqueue failed (not atomic).
-  See: `learned/orphan-sweep-safety-net.md`
+  See: `.claude/skills/learned/orphan-sweep-safety-net.md`
 - Redis quota guards use INCR (atomic), never GET→compare→SET (race condition).
-  Decrement on reject for accurate counter. See: `learned/redis-atomic-budget-guard.md`
+  Decrement on reject for accurate counter. See: `.claude/skills/learned/redis-atomic-budget-guard.md`
 
 ## Migrations
 
@@ -52,11 +52,11 @@ Checklist shortcut: `grep -r 'INSERT INTO <table>' tests/ scripts/ | grep -v <ne
 Why invisible: unit tests with mocked DB pass fine (column unchecked).
 Integration tests fail but often skipped in quick CI. Service code catches
 `KeyError` in generic `except Exception` — produces zero output, not crash.
-See: `learned/migration-breaks-all-test-fixtures.md`, `learned/seed-sql-schema-sync.md`
+See: `.claude/skills/learned/migration-breaks-all-test-fixtures.md`, `.claude/skills/learned/seed-sql-schema-sync.md`
 
 Adding new role value → update CHECK constraint in SAME migration,
 BEFORE any INSERT using new role. Use `DROP CONSTRAINT IF EXISTS` + `ADD CONSTRAINT`.
-See: `learned/role-constraint-migration-order.md`
+See: `.claude/skills/learned/role-constraint-migration-order.md`
 
 ## Testing
 
@@ -77,32 +77,32 @@ See: `learned/role-constraint-migration-order.md`
 - Database ALWAYS authoritative. Never rely on Redis or in-memory state
   for long-lived entities (jobs, reports, credibility scores).
   Redis = queues and caches. DB = truth.
-  See: `learned/analysis-jobs-db-source-of-truth.md`
+  See: `.claude/skills/learned/analysis-jobs-db-source-of-truth.md`
 
 ## Atomicity
 
 - Use DB constraints and SQL atomicity for critical paths
   `ON CONFLICT`, `WHERE sentinel IS NULL`, Redis INCR (not GET→SET)
-  See: `learned/redis-atomic-budget-guard.md`, `learned/immutable-write-idempotency.md`
+  See: `.claude/skills/learned/redis-atomic-budget-guard.md`, `.claude/skills/learned/immutable-write-idempotency.md`
 
 ## SQL Correctness Checklist
 
 - JOINing tables with same column name (`labels`, `id`) → always qualify:
   `ci.labels`, not `labels`. PostgreSQL raises "ambiguous column" at runtime.
-  See: `learned/sql-ambiguous-labels-join.md`
+  See: `.claude/skills/learned/sql-ambiguous-labels-join.md`
 - Adding `$N` parameter to SQL constant → grep ALL callers, add param.
   Missing param → `asyncpg.exceptions.DataError` at runtime, not compile time.
-  See: `learned/sql-param-count-caller-mismatch.md`
+  See: `.claude/skills/learned/sql-param-count-caller-mismatch.md`
 - Use `EXISTS (SELECT 1 FROM ...)` for boolean flags on list queries instead of
   N+1 API calls from frontend. EXISTS short-circuits, no GROUP BY needed.
-  See: `learned/has-vision-exists-subquery.md`
+  See: `.claude/skills/learned/has-vision-exists-subquery.md`
 - `ON CONFLICT` requires conflict target: `ON CONFLICT (id) DO NOTHING`, not bare
   `ON CONFLICT DO NOTHING` (PostgreSQL accepts but behavior undefined).
 - Before writing multi-table SQL (JOINs, aggregates), run `\d tablename` for EACH
   table. Column name assumptions wrong more often than expected (`is_active` vs
   `status = 'active'`, `platform` on sources not content_items). Mocked unit tests
   pass fine — error only at runtime after container rebuild.
-  See: `learned/aggregate-sql-schema-validation.md`
+  See: `.claude/skills/learned/aggregate-sql-schema-validation.md`
 
 ## Pitfalls
 

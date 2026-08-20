@@ -2,8 +2,8 @@
 
 ## When to load: any task involving report generation, content retrieval, or pgvector
 
-> See also: `learned/sovereign-geocoder.md` — offline geonamescache geocoding (no network)
-> See also: `learned/immutable-write-idempotency.md` — WHERE generated_at IS NULL guard for one-time writes
+> See also: `.claude/skills/learned/sovereign-geocoder.md` — offline geonamescache geocoding (no network)
+> See also: `.claude/skills/learned/immutable-write-idempotency.md` — WHERE generated_at IS NULL guard for one-time writes
 
 ---
 

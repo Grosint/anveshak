@@ -20,7 +20,7 @@ for row in orphans:
     await arq_pool.enqueue_job("analyse_content", row["id"])
 ```
 
-See: `learned/orphan-sweep-safety-net.md`
+See: `.claude/skills/learned/orphan-sweep-safety-net.md`
 
 ### Causal job chaining
 
@@ -33,21 +33,21 @@ if items_inserted > 0:
     await arq_pool.enqueue_job("run_clustering", topic_id)
 ```
 
-See: `learned/causal-arq-job-chaining.md`
+See: `.claude/skills/learned/causal-arq-job-chaining.md`
 
 ### Additive backfill via join table
 
 When associating existing content with new topics, use a many-to-many join table.
 Never UPDATE the primary table — it breaks UNIQUE constraints.
 
-See: `learned/additive-backfill-join-table.md`
+See: `.claude/skills/learned/additive-backfill-join-table.md`
 
 ### URL-level media dedup
 
 Maintain a job-scoped `set[str]` of seen media URLs. Check before downloading.
 Prevents redundant HTTP requests within a single scrape run.
 
-See: `learned/url-level-media-dedup.md`
+See: `.claude/skills/learned/url-level-media-dedup.md`
 
 ### Cross-service event delivery
 
@@ -55,4 +55,4 @@ When services share a DB but can't call each other, use a `delivered_at IS NULL`
 polling pattern. Writer inserts row → poller finds undelivered → pushes via
 WebSocket → marks delivered.
 
-See: `learned/cross-service-delivery-loop.md`
+See: `.claude/skills/learned/cross-service-delivery-loop.md`
