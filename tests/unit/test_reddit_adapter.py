@@ -3,6 +3,7 @@
 pytest.mark.unit — no network, no PRAW client needed.
 Tests static/pure methods and documents the known lstrip bug.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock
@@ -61,18 +62,21 @@ class TestPostToText:
     def test_post_to_text_removed_body(self):
         """[removed] selftext is excluded — only title returned."""
         from anveshak.social.adapters.reddit import RedditAdapter
+
         post = self._make_post("Title", "[removed]")
         assert RedditAdapter._post_to_text(post) == "Title"
 
     def test_post_to_text_deleted_body(self):
         """[deleted] selftext is excluded — only title returned."""
         from anveshak.social.adapters.reddit import RedditAdapter
+
         post = self._make_post("Title", "[deleted]")
         assert RedditAdapter._post_to_text(post) == "Title"
 
     def test_post_to_text_with_body(self):
         """Normal selftext is joined with title via double newline."""
         from anveshak.social.adapters.reddit import RedditAdapter
+
         post = self._make_post("Title", "body text")
         assert RedditAdapter._post_to_text(post) == "Title\n\nbody text"
 
@@ -88,6 +92,7 @@ class TestExtractMediaUrls:
     def test_extract_media_urls_jpg(self):
         """Post with .jpg URL → extracted."""
         from anveshak.social.adapters.reddit import RedditAdapter
+
         post = MagicMock()
         post.url = "https://i.redd.it/photo.jpg"
         assert RedditAdapter._extract_media_urls(post) == ["https://i.redd.it/photo.jpg"]
@@ -95,6 +100,7 @@ class TestExtractMediaUrls:
     def test_extract_media_urls_no_extension(self):
         """Post URL without media extension → empty list."""
         from anveshak.social.adapters.reddit import RedditAdapter
+
         post = MagicMock()
         post.url = "https://reddit.com/post"
         assert RedditAdapter._extract_media_urls(post) == []
@@ -102,5 +108,6 @@ class TestExtractMediaUrls:
     def test_extract_media_urls_no_url_attr(self):
         """Post without url attribute → empty list (hasattr check)."""
         from anveshak.social.adapters.reddit import RedditAdapter
+
         post = MagicMock(spec=[])  # spec=[] means no attributes at all
         assert RedditAdapter._extract_media_urls(post) == []

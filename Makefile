@@ -29,6 +29,7 @@
 #
 # VALIDATE:
 #   make syscheck         system requirements check (RAM, disk, Docker, ports)
+#   make venv-check       verify .venv matches this repo path and Python 3.12
 #   make health           quick health check (are services up?)
 #   make validate         full pipeline validation (7 stages)
 #   make validate-vision  vision pipeline validation (M4 deepfake)
@@ -89,14 +90,16 @@ _WORK  := $(_CYN)⟳$(_RST)
         ps logs init pull-models download-models migrate migrate-status migrate-hnsw \
         migrate-rollback seed-demo seed-demo-iaf seed-demo-haryana seed-demo-kerala \
         fresh fresh-all \
-        test test-unit test-integration test-e2e test-full test-scrape \
+        test test-unit test-contract test-integration test-e2e test-full test-scrape \
         test-ci test-all test-nightly \
         demo-check validate validate-vision health syscheck \
         lint format typecheck security-scan \
         clean clean-containers clean-volumes clean-cache purge nuke \
         verify-labels verify-reports shell-% \
         benchmark benchmark-clean benchmark-skip-analyse \
-        validate-vision-full
+        validate-vision-full \
+        agents-sync agents-check venv-check \
+        create-test-db migrate-test migrate-all reset-test-db-if-orphaned
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -317,6 +320,7 @@ migrate:
 
 create-test-db:
 	$(call header,Creating Test Database)
+	@$(MAKE) --no-print-directory reset-test-db-if-orphaned
 	@$(COMPOSE) exec -T postgres psql -U anveshak -tc \
 		"SELECT 1 FROM pg_database WHERE datname='anveshak_test'" | grep -q 1 \
 		|| $(COMPOSE) exec -T postgres psql -U anveshak -c "CREATE DATABASE anveshak_test OWNER anveshak;"
@@ -325,6 +329,22 @@ create-test-db:
 	@$(COMPOSE) exec -T postgres psql -U anveshak -d anveshak_test -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;" 2>/dev/null
 	@$(COMPOSE) exec -T postgres psql -U anveshak -d anveshak_test -c "CREATE EXTENSION IF NOT EXISTS btree_gin;" 2>/dev/null
 	$(call success,Test database ready)
+
+# Migrations get squashed periodically, and the old revisions move to
+# migrations/archive/. A postgres volume that outlived a squash leaves
+# anveshak_test stamped at a revision alembic can no longer walk from, and
+# `alembic upgrade head` fails with the opaque "Can't locate revision
+# identified by 'NNN'". The test DB holds no data worth keeping, so drop it
+# and let create-test-db rebuild from head. Only ever touches anveshak_test.
+reset-test-db-if-orphaned:
+	@stamp=$$($(COMPOSE) exec -T postgres psql -U anveshak -d anveshak_test -tAc \
+		"SELECT version_num FROM alembic_version" 2>/dev/null | tr -d '[:space:]'); \
+	if [ -n "$$stamp" ] && ! grep -qs "revision = \"$$stamp\"" services/api/migrations/versions/*.py; then \
+		printf "  $(_WARN) $(_YEL)anveshak_test is stamped at revision $$stamp, which no longer exists in migrations/versions/$(_RST)\n"; \
+		printf "  $(_INFO) Dropping and rebuilding the test database from head\n"; \
+		$(COMPOSE) exec -T postgres psql -U anveshak -c \
+			"DROP DATABASE IF EXISTS anveshak_test WITH (FORCE);" >/dev/null; \
+	fi
 
 migrate-test:
 	$(call header,Running Test Database Migrations)
@@ -482,12 +502,16 @@ integration: test-integration
 
 # ── Base targets ──────────────────────────────────────────
 
-test-unit:
+test-unit: venv-check
 	$(call header,Unit Tests (~10s — no containers needed))
 	@$(UV) pytest tests/unit/ tests/contracts/ -v --tb=short -q \
 		--cov=services --cov=sdk --cov-report=term:skip-covered
 
-test-integration:
+test-contract: venv-check
+	$(call header,Contract Tests (~10s — no containers needed))
+	@$(UV) pytest tests/contracts/ -v --tb=short -q
+
+test-integration: venv-check
 	$(call header,Integration Tests (~90s — requires make up))
 	@$(MAKE) --no-print-directory migrate-test
 	@_fail=0; \
@@ -510,7 +534,7 @@ test-integration:
 		analyse-worker python /tmp/test_multilingual_pipeline.py || _fail=1; \
 	exit $$_fail
 
-test-e2e:
+test-e2e: venv-check
 	$(call header,End-to-End Tests (~2min — requires make up + seed-demo))
 	@$(UV) pytest tests/e2e/ tests/resilience/ -v --tb=short -m "e2e or resilience"
 
@@ -529,7 +553,7 @@ test-frontend-coverage:
 test: test-unit test-integration test-e2e
 	$(call success,All tests passed)
 
-test-full:
+test-full: venv-check
 	$(call header,Full Test Suite + Coverage Gate (pre-release))
 	@$(MAKE) --no-print-directory test
 	@$(MAKE) --no-print-directory test-frontend
@@ -541,7 +565,7 @@ test-full:
 
 # ── External (manual — needs internet) ────────────────────
 
-test-scrape:
+test-scrape: venv-check
 	$(call header,Source Connectivity Tests (manual — needs internet))
 	@$(UV) python scripts/test_scrape.py
 
@@ -654,21 +678,21 @@ benchmark-skip-analyse:
 
 lint:
 	$(call header,Linting)
-	@$(UV) run ruff check services/ sdk/ tests/ scripts/
+	@$(UV) ruff check services/ sdk/ tests/ scripts/
 
 format:
 	$(call header,Formatting)
-	@$(UV) run ruff format services/ sdk/ tests/ scripts/
-	@$(UV) run ruff check --fix services/ sdk/ tests/ scripts/
+	@$(UV) ruff format services/ sdk/ tests/ scripts/
+	@$(UV) ruff check --fix services/ sdk/ tests/ scripts/
 	$(call success,Formatted)
 
 typecheck:
 	$(call header,Type Checking)
-	@$(UV) run pyright services/ sdk/
+	@$(UV) pyright
 
 security-scan:
 	$(call header,Security Scan)
-	@$(UV) run bandit -r services/ sdk/ -ll --quiet
+	@$(UV) bandit -r services/ sdk/ -ll --quiet
 	$(call success,No security issues found)
 
 # ---------------------------------------------------------------------------
@@ -831,3 +855,72 @@ graph:
 	$(call header,Rebuilding Graphify knowledge graph)
 	@graphify update .
 	$(call success,Knowledge graph updated)
+
+# agents-sync — regenerate .claude/skills symlinks from .agents/skills
+# Skills live harness-agnostically in .agents/skills/ (read directly by Codex and
+# Cursor). Claude Code only scans .claude/skills/, so each skill is symlinked in.
+agents-sync:
+	$(call header,Syncing .claude/skills from .agents/skills)
+	@find .claude/skills -maxdepth 1 -type l -delete 2>/dev/null || true
+	@mkdir -p .claude/skills
+	@for d in .agents/skills/*/; do \
+		n=$$(basename $$d); \
+		ln -sfn "../../.agents/skills/$$n" ".claude/skills/$$n"; \
+	done
+	@printf "  %s skills linked\n" "$$(find .claude/skills -maxdepth 1 -type l | wc -l | tr -d ' ')"
+	$(call success,Skill symlinks synced)
+
+# venv-check - fail early if .venv cannot actually run its console scripts
+#
+# uv venvs are path-bound: every console script in .venv/bin carries an
+# absolute shebang. Moving the repo leaves them pointing at the old location
+# and every entry point dies with "Failed to spawn: pytest". `uv sync` does
+# not repair it, because all packages are present and uv never rewrites
+# shebangs. The only fix is a rebuild, so say so explicitly.
+venv-check:
+	@if [ ! -d .venv ]; then \
+		printf "  $(_FAIL) $(_RED)no .venv found, run: uv sync$(_RST)\n"; exit 1; \
+	fi
+	@if [ ! -f .venv/bin/pytest ]; then \
+		printf "  $(_FAIL) $(_RED).venv has no dev dependencies, run: uv sync$(_RST)\n"; exit 1; \
+	fi
+	@shebang=$$(head -1 .venv/bin/pytest | sed 's|^#!||'); \
+	case "$$shebang" in \
+		"$(CURDIR)/.venv/"*) ;; \
+		*) printf "  $(_FAIL) $(_RED)venv was built for a different path, run: rm -rf .venv && uv sync$(_RST)\n"; \
+		   printf "  $(_DIM)      .venv/bin/pytest points at $$shebang$(_RST)\n"; \
+		   printf "  $(_DIM)      this repo is at $(CURDIR)$(_RST)\n"; \
+		   exit 1 ;; \
+	esac
+	@home=$$(awk -F' = ' '/^home/{print $$2}' .venv/pyvenv.cfg); \
+	if [ ! -x "$$home/python3" ]; then \
+		printf "  $(_FAIL) $(_RED)venv base interpreter is gone, run: rm -rf .venv && uv sync$(_RST)\n"; \
+		printf "  $(_DIM)      pyvenv.cfg home = $$home$(_RST)\n"; \
+		exit 1; \
+	fi
+	@ver=$$(awk -F' = ' '/^version_info/{print $$2}' .venv/pyvenv.cfg); \
+	case "$$ver" in \
+		3.12*) ;; \
+		*) printf "  $(_FAIL) $(_RED)venv is Python $$ver, this workspace requires 3.12, run: rm -rf .venv && uv sync$(_RST)\n"; \
+		   exit 1 ;; \
+	esac
+
+# agents-check — fail if the bridge has drifted or a skill is malformed
+agents-check:
+	$(call header,Validating agent configuration)
+	@fail=0; \
+	for d in .agents/skills/*/; do \
+		n=$$(basename $$d); \
+		if [ ! -f "$$d/SKILL.md" ]; then echo "  MISSING SKILL.md: $$n"; fail=1; fi; \
+		fm=$$(awk '/^---$$/{c++;next} c==1&&/^name:/{print $$2; exit}' "$$d/SKILL.md" 2>/dev/null); \
+		if [ "$$fm" != "$$n" ]; then echo "  NAME MISMATCH: dir=$$n frontmatter=$$fm"; fail=1; fi; \
+		if [ ! -L ".claude/skills/$$n" ]; then echo "  NOT LINKED: $$n (run make agents-sync)"; fail=1; fi; \
+	done; \
+	for l in .claude/skills/*; do \
+		[ -e "$$l" ] || { echo "  BROKEN LINK: $$l"; fail=1; }; \
+	done; \
+	for a in .claude/agents/*.md; do \
+		head -1 "$$a" | grep -q '^---$$' || { echo "  BAD FRONTMATTER: $$a"; fail=1; }; \
+	done; \
+	if [ $$fail -ne 0 ]; then echo "agents-check FAILED"; exit 1; fi
+	$(call success,Agent configuration valid)

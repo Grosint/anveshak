@@ -3,15 +3,16 @@
 API key lookup, tipline source management, and content insertion
 for citizen-forwarded scam messages.
 """
+
 from __future__ import annotations
 
 import json
 import re
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any, Optional
 
-import asyncpg
+from anveshak.db import DBConnection
 
 # ---------------------------------------------------------------------------
 # SQL constants
@@ -55,23 +56,27 @@ SQL_INSERT_TIPLINE_CONTENT = """
     RETURNING id
 """
 
+
 def _build_labels(source_phone: str | None, forwarded_from: str | None) -> str:
     """Build labels JSON safely — no user input in format strings."""
-    return json.dumps({
-        "classification": "OPEN",
-        "domain": "tipline",
-        "owner_org": "anveshak",
-        "source_phone": source_phone or "",
-        "forwarded_from": forwarded_from or "",
-    })
+    return json.dumps(
+        {
+            "classification": "OPEN",
+            "domain": "tipline",
+            "owner_org": "anveshak",
+            "source_phone": source_phone or "",
+            "forwarded_from": forwarded_from or "",
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
 # Functions
 # ---------------------------------------------------------------------------
 
+
 async def lookup_api_key(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     api_key: str,
 ) -> Optional[dict[str, Any]]:
     """Look up API key → org_id. Returns None if key invalid/inactive."""
@@ -82,7 +87,7 @@ async def lookup_api_key(
 
 
 async def verify_topic_org(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     topic_id: str,
     org_id: str,
 ) -> bool:
@@ -92,7 +97,7 @@ async def verify_topic_org(
 
 
 async def get_or_create_tipline_source(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     org_id: str,
 ) -> dict[str, Any]:
     """Get or create the canonical 'tipline' source for this org."""
@@ -111,18 +116,22 @@ async def get_or_create_tipline_source(
         "whatsapp_tipline",
         "tipline",
         "tipline",
-        50.0,               # default credibility for tipline
+        50.0,  # default credibility for tipline
         True,
         now,
         now,
         labels,
         org_id,
     )
+    if row is None:
+        # INSERT ... RETURNING with no ON CONFLICT: unreachable, asyncpg raises on
+        # failure rather than returning None.
+        raise RuntimeError(f"tipline source insert returned no row for org {org_id}")
     return dict(row)
 
 
 async def insert_tipline_content(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     *,
     content_item_id: str,
     topic_id: str,
@@ -150,11 +159,11 @@ async def insert_tipline_content(
         raw_text,
         clean_text,
         content_hash,
-        None,                  # url — tipline has no external URL
-        now,                   # captured_at
+        None,  # url — tipline has no external URL
+        now,  # captured_at
         credibility_score,
-        now,                   # created_at
-        now,                   # updated_at
+        now,  # created_at
+        now,  # updated_at
         labels,
         org_id,
     )

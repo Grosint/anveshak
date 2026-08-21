@@ -7,22 +7,22 @@ Tests:
   - Archived clusters excluded
   - Evidence JSON contains all IDs
 """
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from anveshak.analyst.convergence import (
     SQL_CONVERGENT_CLUSTERS,
     check_cross_topic_convergence,
 )
 from anveshak.analyst.signal_engine import _SIGNAL_TYPE_CROSS_TOPIC
 
-
 # ---------------------------------------------------------------------------
 # SQL validation tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 def test_convergent_sql_excludes_same_topic():
@@ -46,6 +46,7 @@ def test_signal_type_constant():
 # ---------------------------------------------------------------------------
 # check_cross_topic_convergence tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio

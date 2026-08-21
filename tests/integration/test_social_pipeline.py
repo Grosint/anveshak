@@ -8,17 +8,16 @@ These tests verify that:
 All external APIs (tweepy, PRAW, atproto, Telethon) are mocked via unittest.mock.
 Real PostgreSQL and Redis from Docker Compose are used (pytest.mark.integration).
 """
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from anveshak.social.adapters.base import RawItem
 from anveshak.social.ingest import ingest_raw_item
-
 
 pytestmark = pytest.mark.integration
 
@@ -26,6 +25,7 @@ pytestmark = pytest.mark.integration
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 async def test_topic(make_topic):
@@ -68,6 +68,7 @@ def mock_arq_pool():
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestIngestRawItem:
     """ingest_raw_item() inserts content_items rows correctly."""
 
@@ -82,17 +83,20 @@ class TestIngestRawItem:
             captured_at=datetime.now(UTC),
             source_handle="r/worldnews",
         )
-        new = await ingest_raw_item(raw, test_topic, db_pool, mock_arq_pool, "reddit-v1", org_id="org-integration-test")
+        new = await ingest_raw_item(
+            raw, test_topic, db_pool, mock_arq_pool, "reddit-v1", org_id="org-integration-test"
+        )
         assert new is True
 
         async with db_pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT source_id FROM content_items WHERE url = $1", raw.url
-            )
+            row = await conn.fetchrow("SELECT source_id FROM content_items WHERE url = $1", raw.url)
         assert row is not None
         assert row["source_id"] == reddit_source["id"]
         from unittest.mock import ANY
-        mock_arq_pool.enqueue_job.assert_called_once_with("analyse_content", ANY, _queue_name="arq:analyst")
+
+        mock_arq_pool.enqueue_job.assert_called_once_with(
+            "analyse_content", ANY, _queue_name="arq:analyst"
+        )
 
     @pytest.mark.asyncio
     async def test_telegram_item_inserted_with_correct_platform(
@@ -105,19 +109,17 @@ class TestIngestRawItem:
             captured_at=datetime.now(UTC),
             source_handle="@defencenews",
         )
-        new = await ingest_raw_item(raw, test_topic, db_pool, mock_arq_pool, "telegram-v1", org_id="org-integration-test")
+        new = await ingest_raw_item(
+            raw, test_topic, db_pool, mock_arq_pool, "telegram-v1", org_id="org-integration-test"
+        )
         assert new is True
 
         async with db_pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT source_id FROM content_items WHERE url = $1", raw.url
-            )
+            row = await conn.fetchrow("SELECT source_id FROM content_items WHERE url = $1", raw.url)
         assert row is not None
 
     @pytest.mark.asyncio
-    async def test_dedup_same_content_hash(
-        self, db_pool, test_topic, reddit_source, mock_arq_pool
-    ):
+    async def test_dedup_same_content_hash(self, db_pool, test_topic, reddit_source, mock_arq_pool):
         """Inserting identical text twice → second insert is a no-op (criteria 1.5 / 3.4)."""
         raw = RawItem(
             raw_text="Unique dedup test text " + str(uuid.uuid4()),
@@ -126,8 +128,12 @@ class TestIngestRawItem:
             captured_at=datetime.now(UTC),
             source_handle="r/worldnews",
         )
-        first = await ingest_raw_item(raw, test_topic, db_pool, mock_arq_pool, "reddit-v1", org_id="org-integration-test")
-        second = await ingest_raw_item(raw, test_topic, db_pool, mock_arq_pool, "reddit-v1", org_id="org-integration-test")
+        first = await ingest_raw_item(
+            raw, test_topic, db_pool, mock_arq_pool, "reddit-v1", org_id="org-integration-test"
+        )
+        second = await ingest_raw_item(
+            raw, test_topic, db_pool, mock_arq_pool, "reddit-v1", org_id="org-integration-test"
+        )
         assert first is True
         assert second is False  # dedup hit
         # ARQ job enqueued only once
@@ -144,7 +150,9 @@ class TestIngestRawItem:
             captured_at=datetime.now(UTC),
             source_handle="r/worldnews",
         )
-        await ingest_raw_item(raw, test_topic, db_pool, mock_arq_pool, "reddit-v1", org_id="org-integration-test")
+        await ingest_raw_item(
+            raw, test_topic, db_pool, mock_arq_pool, "reddit-v1", org_id="org-integration-test"
+        )
         mock_arq_pool.enqueue_job.assert_called_once()
         call_args = mock_arq_pool.enqueue_job.call_args[0]
         assert call_args[0] == "analyse_content"
@@ -178,8 +186,22 @@ class TestMultiPlatformIndependentSourceCount:
             source_handle="@defencenews",
         )
 
-        await ingest_raw_item(reddit_raw, test_topic, db_pool, mock_arq_pool, "reddit-v1", org_id="org-integration-test")
-        await ingest_raw_item(telegram_raw, test_topic, db_pool, mock_arq_pool, "telegram-v1", org_id="org-integration-test")
+        await ingest_raw_item(
+            reddit_raw,
+            test_topic,
+            db_pool,
+            mock_arq_pool,
+            "reddit-v1",
+            org_id="org-integration-test",
+        )
+        await ingest_raw_item(
+            telegram_raw,
+            test_topic,
+            db_pool,
+            mock_arq_pool,
+            "telegram-v1",
+            org_id="org-integration-test",
+        )
 
         # Verify two distinct platform values exist in sources for this topic
         async with db_pool.acquire() as conn:
@@ -213,14 +235,14 @@ class TestIngestEdgeCases:
             captured_at=datetime.now(UTC),
             source_handle="r/worldnews",
         )
-        result = await ingest_raw_item(raw, test_topic, db_pool, mock_arq_pool, "reddit-v1", org_id="org-integration-test")
+        result = await ingest_raw_item(
+            raw, test_topic, db_pool, mock_arq_pool, "reddit-v1", org_id="org-integration-test"
+        )
         assert result is False
         mock_arq_pool.enqueue_job.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_unknown_source_handle_not_inserted(
-        self, db_pool, test_topic, mock_arq_pool
-    ):
+    async def test_unknown_source_handle_not_inserted(self, db_pool, test_topic, mock_arq_pool):
         raw = RawItem(
             raw_text="Content from unknown handle " + str(uuid.uuid4()),
             url="https://example.com/unknown",
@@ -228,5 +250,7 @@ class TestIngestEdgeCases:
             captured_at=datetime.now(UTC),
             source_handle="r/nonexistent_subreddit_xyz",
         )
-        result = await ingest_raw_item(raw, test_topic, db_pool, mock_arq_pool, "reddit-v1", org_id="org-integration-test")
+        result = await ingest_raw_item(
+            raw, test_topic, db_pool, mock_arq_pool, "reddit-v1", org_id="org-integration-test"
+        )
         assert result is False

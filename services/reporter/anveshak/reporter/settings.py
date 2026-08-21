@@ -22,12 +22,15 @@ class ReporterSettings(BaseSettings):
     rag_max_context_tokens: int = 4000
 
     # Reports
-    report_output_dir: str = "/app/reports"  # Maps to reporter_output Docker volume (shared with API)
+    report_output_dir: str = (
+        "/app/reports"  # Maps to reporter_output Docker volume (shared with API)
+    )
     pdf_output_dir: str = ""  # Computed from report_output_dir if not set explicitly
 
     def model_post_init(self, __context: object) -> None:
         if not self.pdf_output_dir:
             self.pdf_output_dir = self.report_output_dir
+
     report_cache_hours: int = 24  # don't regenerate same report type within 24h
 
     # LLM retry / timeout

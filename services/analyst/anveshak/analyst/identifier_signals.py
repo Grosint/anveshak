@@ -7,6 +7,7 @@ delivery, same status flow (new -> acknowledged -> dismissed).
 Signals table cluster_id FK references narrative_clusters — identifier
 cluster references go in evidence JSONB instead.
 """
+
 from __future__ import annotations
 
 import json
@@ -16,6 +17,7 @@ from typing import Awaitable, Callable
 
 import asyncpg
 import structlog
+from anveshak.db import DBConnection
 
 from .metrics import analyst_signals_fired_total
 
@@ -75,6 +77,7 @@ SQL_INSERT_SIGNAL = """
 # ---------------------------------------------------------------------------
 # Pure functions
 # ---------------------------------------------------------------------------
+
 
 def compute_identifier_severity(source_count: int) -> str:
     """Map source_count to severity: CRITICAL >= 5, HIGH >= 3, MEDIUM otherwise."""
@@ -145,8 +148,9 @@ def build_identifier_signal_payload(
 # Async DB functions
 # ---------------------------------------------------------------------------
 
+
 async def is_duplicate_identifier_signal(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     identifier_cluster_id: str,
 ) -> bool:
     """Return True if identifier_convergence signal fired for this cluster in last 24h."""
@@ -158,7 +162,7 @@ async def is_duplicate_identifier_signal(
 
 
 async def fire_identifier_signal(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     *,
     topic_id: str,
     identifier_cluster_id: str,
@@ -183,14 +187,16 @@ async def fire_identifier_signal(
         identifier_value=identifier_value,
         source_count=source_count,
     )
-    evidence = json.dumps(build_identifier_evidence(
-        identifier_cluster_id=identifier_cluster_id,
-        identifier_type=identifier_type,
-        identifier_value=identifier_value,
-        source_count=source_count,
-        sources=sources,
-        content_item_count=content_item_count,
-    ))
+    evidence = json.dumps(
+        build_identifier_evidence(
+            identifier_cluster_id=identifier_cluster_id,
+            identifier_type=identifier_type,
+            identifier_value=identifier_value,
+            source_count=source_count,
+            sources=sources,
+            content_item_count=content_item_count,
+        )
+    )
 
     severity = compute_identifier_severity(source_count)
 
@@ -248,11 +254,10 @@ async def check_identifier_signals(
 
             # Fetch source names for evidence
             source_rows = await conn.fetch(
-                SQL_IDENTIFIER_CLUSTER_SOURCES, cluster_id,
+                SQL_IDENTIFIER_CLUSTER_SOURCES,
+                cluster_id,
             )
-            sources = [
-                f"{r['platform']}:{r['name']}" for r in source_rows
-            ]
+            sources = [f"{r['platform']}:{r['name']}" for r in source_rows]
 
             now = datetime.now(timezone.utc)
 

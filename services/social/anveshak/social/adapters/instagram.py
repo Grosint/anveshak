@@ -8,22 +8,22 @@ Bio extraction: profile bio text → feed through Engine C for identifiers.
 Circuit breaker: threshold=10 (Meta API is flaky), cooldown=86400s (24h bans).
 Rate limiting: 100 requests/hour via Redis atomic counter.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, UTC
-from typing import AsyncIterator
+from datetime import UTC, datetime, timedelta
+from typing import Any, AsyncIterator
 
 import structlog
 from arq import ArqRedis
 
+from ..settings import settings
 from .base import (
     AdapterAuthError,
-    AdapterDegradedError,
     AdapterRateLimitError,
     RawItem,
     SourceAdapterBase,
 )
-from ..settings import settings
 
 log = structlog.get_logger(__name__)
 
@@ -41,6 +41,7 @@ _MAX_POSTS_PER_HASHTAG = 25
 # ---------------------------------------------------------------------------
 # Rate limit guard — 100 requests/hour via Redis atomic counter
 # ---------------------------------------------------------------------------
+
 
 def _hourly_key() -> str:
     """Redis key for current hour's Instagram call counter."""
@@ -103,6 +104,7 @@ class InstagramRateLimitGuard:
 # Instagram Adapter
 # ---------------------------------------------------------------------------
 
+
 class InstagramAdapter(SourceAdapterBase):
     """Monitor Instagram profiles and hashtag searches for OSINT content.
 
@@ -143,6 +145,7 @@ class InstagramAdapter(SourceAdapterBase):
 
         try:
             from instagrapi import Client
+
             self._client = Client()
 
             # Load session if path provided (avoids repeated logins)
@@ -186,9 +189,7 @@ class InstagramAdapter(SourceAdapterBase):
                 return
 
             try:
-                user_info = await asyncio.to_thread(
-                    self._client.user_info_by_username, normalised
-                )
+                user_info = await asyncio.to_thread(self._client.user_info_by_username, normalised)
             except Exception as exc:
                 if "login_required" in str(exc).lower():
                     raise AdapterAuthError(f"Instagram session expired: {exc}") from exc
@@ -266,8 +267,13 @@ class InstagramAdapter(SourceAdapterBase):
             return {"status": "DOWN", "checked_at": datetime.now(UTC).isoformat()}
         try:
             import asyncio
+
             await asyncio.to_thread(self._client.account_info)
-            result = {"status": "HEALTHY", "checked_at": datetime.now(UTC).isoformat()}
+            # dict[str, Any]: hourly_calls_used below is an int, the rest strings.
+            result: dict[str, Any] = {
+                "status": "HEALTHY",
+                "checked_at": datetime.now(UTC).isoformat(),
+            }
             if self._rate_guard:
                 result["hourly_calls_used"] = await self._rate_guard.current_count()
             return result
@@ -291,10 +297,14 @@ class InstagramAdapter(SourceAdapterBase):
         """
         h = handle.strip().rstrip("/")
         # Strip Instagram URL prefix
-        for prefix in ("https://www.instagram.com/", "https://instagram.com/",
-                       "http://www.instagram.com/", "http://instagram.com/"):
+        for prefix in (
+            "https://www.instagram.com/",
+            "https://instagram.com/",
+            "http://www.instagram.com/",
+            "http://instagram.com/",
+        ):
             if h.lower().startswith(prefix):
-                h = h[len(prefix):]
+                h = h[len(prefix) :]
                 break
         # Strip @ prefix
         if h.startswith("@"):

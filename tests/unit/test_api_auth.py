@@ -2,10 +2,11 @@
 
 Validates login flow, password verification, token creation, and token verification.
 """
+
 from __future__ import annotations
 
 from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -13,6 +14,7 @@ pytestmark = pytest.mark.unit
 
 
 # ---- Test 1: Successful login returns access token ----
+
 
 @pytest.mark.unit
 async def test_login_success(mock_conn: AsyncMock) -> None:
@@ -28,7 +30,7 @@ async def test_login_success(mock_conn: AsyncMock) -> None:
         "services.api.anveshak.api.routes.auth.auth_db.get_user_by_username",
         new=AsyncMock(return_value={"id": "user-001", "password_hash": hashed, "role": "analyst"}),
     ):
-        from services.api.anveshak.api.routes.auth import login, LoginRequest
+        from services.api.anveshak.api.routes.auth import LoginRequest, login
 
         req = LoginRequest(username="analyst", password="correct-password")
         # Inject mock DB via dependency override simulation
@@ -41,10 +43,12 @@ async def test_login_success(mock_conn: AsyncMock) -> None:
 
 # ---- Test 2: Wrong password raises 401 ----
 
+
 @pytest.mark.unit
 async def test_login_wrong_password(mock_conn: AsyncMock) -> None:
     """Invalid password should raise HTTPException 401."""
     from fastapi import HTTPException
+
     from services.api.anveshak.api.auth.jwt import pwd_context
 
     hashed = pwd_context.hash("real-password")
@@ -53,7 +57,7 @@ async def test_login_wrong_password(mock_conn: AsyncMock) -> None:
         "services.api.anveshak.api.routes.auth.auth_db.get_user_by_username",
         new=AsyncMock(return_value={"id": "user-001", "password_hash": hashed}),
     ):
-        from services.api.anveshak.api.routes.auth import login, LoginRequest
+        from services.api.anveshak.api.routes.auth import LoginRequest, login
 
         req = LoginRequest(username="analyst", password="wrong-password")
         with pytest.raises(HTTPException) as exc_info:
@@ -65,6 +69,7 @@ async def test_login_wrong_password(mock_conn: AsyncMock) -> None:
 
 # ---- Test 3: User not found raises 401 ----
 
+
 @pytest.mark.unit
 async def test_login_user_not_found(mock_conn: AsyncMock) -> None:
     """Non-existent username should raise HTTPException 401."""
@@ -74,7 +79,7 @@ async def test_login_user_not_found(mock_conn: AsyncMock) -> None:
         "services.api.anveshak.api.routes.auth.auth_db.get_user_by_username",
         new=AsyncMock(return_value=None),
     ):
-        from services.api.anveshak.api.routes.auth import login, LoginRequest
+        from services.api.anveshak.api.routes.auth import LoginRequest, login
 
         req = LoginRequest(username="ghost", password="anything")
         with pytest.raises(HTTPException) as exc_info:
@@ -84,6 +89,7 @@ async def test_login_user_not_found(mock_conn: AsyncMock) -> None:
 
 
 # ---- Test 4: create_access_token produces a valid JWT ----
+
 
 @pytest.mark.unit
 def test_create_access_token_structure() -> None:
@@ -103,6 +109,7 @@ def test_create_access_token_structure() -> None:
 
 # ---- Test 5: verify_token round-trips with create_access_token ----
 
+
 @pytest.mark.unit
 def test_verify_token_roundtrip() -> None:
     """A token created by create_access_token should be verifiable by verify_token."""
@@ -121,6 +128,7 @@ def test_verify_token_roundtrip() -> None:
 
 
 # ---- Test 6: verify_token rejects tampered token ----
+
 
 @pytest.mark.unit
 def test_verify_token_rejects_tampered() -> None:
@@ -145,6 +153,7 @@ def test_verify_token_rejects_tampered() -> None:
 
 
 # ---- Test 7: verify_token rejects expired token ----
+
 
 @pytest.mark.unit
 def test_verify_token_rejects_expired() -> None:
@@ -172,6 +181,7 @@ def test_verify_token_rejects_expired() -> None:
 
 
 # ---- Test 8: pwd_context hash and verify round-trip ----
+
 
 @pytest.mark.unit
 def test_pwd_context_roundtrip() -> None:

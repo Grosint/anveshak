@@ -3,10 +3,11 @@
 Model singletons must use double-checked locking to prevent concurrent
 jobs from instantiating 500MB models twice.
 """
+
 from __future__ import annotations
 
 import threading
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -14,7 +15,6 @@ pytestmark = pytest.mark.unit
 
 
 class TestVisionModelThreadSafety:
-
     def test_get_yolo_uses_lock(self):
         """_get_yolo must use a threading.Lock for thread-safe instantiation."""
         from anveshak.vision import jobs as vision_jobs
@@ -39,9 +39,7 @@ class TestVisionModelThreadSafety:
         """_get_clip must use a threading.Lock."""
         from anveshak.vision import jobs as vision_jobs
 
-        assert hasattr(vision_jobs, "_clip_lock"), (
-            "_get_clip must use _clip_lock"
-        )
+        assert hasattr(vision_jobs, "_clip_lock"), "_get_clip must use _clip_lock"
 
     def test_concurrent_get_yolo_creates_single_instance(self):
         """Two threads calling _get_yolo simultaneously must create exactly one instance."""
@@ -50,8 +48,6 @@ class TestVisionModelThreadSafety:
         # Reset singleton
         vision_jobs._yolo_detector = None
         instantiation_count = {"n": 0}
-
-        original_init = vision_jobs.YOLODetector
 
         class CountingYOLO:
             def __init__(self):

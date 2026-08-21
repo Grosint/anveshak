@@ -5,14 +5,14 @@ These tests exercise real SQL: INSERT, SELECT, JOIN, JSON aggregation, NULLs.
 
 Requires: make up (PostgreSQL running)
 """
+
 from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 import pytest
-
 from anveshak.api.db.reports import (
     fetch_report,
     get_report_geojson,
@@ -29,6 +29,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 async def _create_topic(conn, topic_id: str) -> None:
     await conn.execute(
         """
@@ -44,7 +45,10 @@ async def _create_topic(conn, topic_id: str) -> None:
         VALUES ($1, $2, '{}', NOW(), NOW(), $3::jsonb, $4)
         ON CONFLICT (id) DO NOTHING
         """,
-        topic_id, f"Report Test {topic_id[:8]}", LABELS_JSON, "org-integration-test",
+        topic_id,
+        f"Report Test {topic_id[:8]}",
+        LABELS_JSON,
+        "org-integration-test",
     )
 
 
@@ -59,6 +63,7 @@ async def _cleanup(conn, topic_id: str, report_ids: list[str]) -> None:
 # Tests
 # ---------------------------------------------------------------------------
 
+
 async def test_insert_and_fetch_report(db_pool):
     """INSERT a report then SELECT it back — all fields must match."""
     topic_id = str(uuid.uuid4())
@@ -68,8 +73,15 @@ async def test_insert_and_fetch_report(db_pool):
     async with db_pool.acquire() as conn:
         await _create_topic(conn, topic_id)
         await insert_report(
-            conn, report_id, topic_id, "intelligence_brief",
-            now, now, 30.0, now, LABELS_JSON,
+            conn,
+            report_id,
+            topic_id,
+            "intelligence_brief",
+            now,
+            now,
+            30.0,
+            now,
+            LABELS_JSON,
         )
         result = await fetch_report(conn, report_id)
 
@@ -80,7 +92,11 @@ async def test_insert_and_fetch_report(db_pool):
         assert result["report_type"] == "intelligence_brief"
         assert result["credibility_min_filter"] == 30.0
         # source_warnings should be empty JSON array (no warnings yet)
-        warnings = json.loads(result["source_warnings"]) if isinstance(result["source_warnings"], str) else result["source_warnings"]
+        warnings = (
+            json.loads(result["source_warnings"])
+            if isinstance(result["source_warnings"], str)
+            else result["source_warnings"]
+        )
         assert warnings == [], f"Expected empty warnings, got {warnings}"
     finally:
         async with db_pool.acquire() as conn:
@@ -104,14 +120,14 @@ async def test_list_topic_reports_generation_status(db_pool):
     async with db_pool.acquire() as conn:
         await _create_topic(conn, topic_id)
         # Queued report (no generated_at, no error)
-        await insert_report(conn, report_queued, topic_id, "intelligence_brief",
-                            now, now, 30.0, now, LABELS_JSON)
-        # Complete report (has generated_at)
-        await insert_report(conn, report_complete, topic_id, "intelligence_brief",
-                            now, now, 30.0, now, LABELS_JSON)
-        await conn.execute(
-            "UPDATE reports SET generated_at=$1 WHERE id=$2", now, report_complete
+        await insert_report(
+            conn, report_queued, topic_id, "intelligence_brief", now, now, 30.0, now, LABELS_JSON
         )
+        # Complete report (has generated_at)
+        await insert_report(
+            conn, report_complete, topic_id, "intelligence_brief", now, now, 30.0, now, LABELS_JSON
+        )
+        await conn.execute("UPDATE reports SET generated_at=$1 WHERE id=$2", now, report_complete)
 
         result, total = await list_topic_reports(conn, topic_id)
 
@@ -155,8 +171,9 @@ async def test_get_report_geojson_null_geojson(db_pool):
 
     async with db_pool.acquire() as conn:
         await _create_topic(conn, topic_id)
-        await insert_report(conn, report_id, topic_id, "intelligence_brief",
-                            now, now, 30.0, now, LABELS_JSON)
+        await insert_report(
+            conn, report_id, topic_id, "intelligence_brief", now, now, 30.0, now, LABELS_JSON
+        )
         result = await get_report_geojson(conn, report_id)
 
     try:

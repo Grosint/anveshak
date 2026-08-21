@@ -8,6 +8,7 @@ Verifies that signal_engine_loop calls all 4 check functions:
 
 pytest.mark.unit -- no external dependencies, no DB, no network.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -44,7 +45,9 @@ class TestSignalEngineLoopCallsIdentifierSignals:
         with (
             patch(f"{_MOD}.check_signals", new_callable=AsyncMock, return_value=0),
             patch(f"{_MOD}.check_sentiment_shifts", new_callable=AsyncMock, return_value=0),
-            patch(f"{_MOD}.check_identifier_signals", new_callable=AsyncMock, return_value=2) as mock_id_signals,
+            patch(
+                f"{_MOD}.check_identifier_signals", new_callable=AsyncMock, return_value=2
+            ) as mock_id_signals,
             patch(f"{_MOD}.check_template_signals", new_callable=AsyncMock, return_value=0),
             patch(f"{_MOD}.settings") as mock_settings,
         ):
@@ -67,7 +70,9 @@ class TestSignalEngineLoopCallsTemplateSignals:
             patch(f"{_MOD}.check_signals", new_callable=AsyncMock, return_value=0),
             patch(f"{_MOD}.check_sentiment_shifts", new_callable=AsyncMock, return_value=0),
             patch(f"{_MOD}.check_identifier_signals", new_callable=AsyncMock, return_value=0),
-            patch(f"{_MOD}.check_template_signals", new_callable=AsyncMock, return_value=1) as mock_tpl_signals,
+            patch(
+                f"{_MOD}.check_template_signals", new_callable=AsyncMock, return_value=1
+            ) as mock_tpl_signals,
             patch(f"{_MOD}.settings") as mock_settings,
         ):
             mock_settings.signal_check_interval_s = 0.01
@@ -100,15 +105,16 @@ class TestSignalEngineLoopCountsAllSignalTypes:
         mock_log.info.assert_called()
         # Find the cycle_complete log call
         cycle_calls = [
-            c for c in mock_log.info.call_args_list
-            if c.args and "cycle_complete" in str(c.args[0])
+            c for c in mock_log.info.call_args_list if c.args and "cycle_complete" in str(c.args[0])
         ]
         assert len(cycle_calls) >= 1, "signal_engine.cycle_complete not logged"
         kwargs = cycle_calls[0].kwargs
-        assert kwargs.get("identifier_signals") == 2, \
+        assert kwargs.get("identifier_signals") == 2, (
             f"identifier_signals count missing or wrong: {kwargs}"
-        assert kwargs.get("template_signals") == 3, \
+        )
+        assert kwargs.get("template_signals") == 3, (
             f"template_signals count missing or wrong: {kwargs}"
+        )
 
 
 @pytest.mark.unit
@@ -116,7 +122,7 @@ class TestSignalEngineImportsExist:
     """Verify check_identifier_signals and check_template_signals are importable from signal_engine."""
 
     def test_imports_exist(self):
-        from anveshak.analyst.signal_engine import check_identifier_signals
-        from anveshak.analyst.signal_engine import check_template_signals
+        from anveshak.analyst.signal_engine import check_identifier_signals, check_template_signals
+
         assert callable(check_identifier_signals)
         assert callable(check_template_signals)

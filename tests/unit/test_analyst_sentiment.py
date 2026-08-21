@@ -8,6 +8,7 @@ Existing tests in test_sentiment.py cover happy path. These tests catch:
 
 pytest.mark.unit — VADER is pure Python, no GPU, no network.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -16,7 +17,6 @@ pytestmark = pytest.mark.unit
 
 
 class TestAnalyseSentimentEdgeCases:
-
     def test_positive_compound(self):
         from anveshak.analyst.sentiment import analyse_sentiment
 
@@ -26,7 +26,9 @@ class TestAnalyseSentimentEdgeCases:
     def test_negative_compound(self):
         from anveshak.analyst.sentiment import analyse_sentiment
 
-        result = analyse_sentiment("Terrible disaster, awful destruction and horrible casualties reported")
+        result = analyse_sentiment(
+            "Terrible disaster, awful destruction and horrible casualties reported"
+        )
         assert result.compound < 0
 
     def test_neutral_returns_near_zero_compound(self):
@@ -37,7 +39,7 @@ class TestAnalyseSentimentEdgeCases:
 
     def test_returns_all_four_fields(self):
         """SentimentResult must have compound, positive, negative, neutral."""
-        from anveshak.analyst.sentiment import analyse_sentiment, SentimentResult
+        from anveshak.analyst.sentiment import SentimentResult, analyse_sentiment
 
         result = analyse_sentiment("This is a normal test sentence for analysis purposes")
         assert isinstance(result, SentimentResult)

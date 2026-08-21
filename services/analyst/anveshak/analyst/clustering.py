@@ -18,10 +18,11 @@ Performance:
   - Current items per cycle: O(new_items × existing_clusters) — NOT O(N²)
   - Full cluster fallback: O(N²) — only for fresh topics or staleness trigger
 """
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import NamedTuple
 
 import asyncpg
@@ -29,9 +30,10 @@ import igraph as ig
 import leidenalg
 import numpy as np
 import structlog
+from anveshak.db import DBConnection
 
 from .entity_minhash import minhash_similarity_matrix
-from .metrics import analyst_clustering_items, analyst_clustering_edges
+from .metrics import analyst_clustering_edges, analyst_clustering_items
 from .settings import settings
 
 log = structlog.get_logger(__name__)
@@ -160,6 +162,7 @@ SQL_TOPIC_CLUSTER_COUNT = """
 # Data structures
 # ---------------------------------------------------------------------------
 
+
 class EmbeddingRow(NamedTuple):
     content_item_id: str
     vector: np.ndarray
@@ -183,6 +186,7 @@ class ClusterData(NamedTuple):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _parse_pgvector(text: str) -> np.ndarray:
     """Parse pgvector '[x1,x2,...]' text representation to numpy array."""
@@ -227,6 +231,7 @@ def _compute_blended_similarity(rows: list[EmbeddingRow]) -> np.ndarray:
 # Load functions
 # ---------------------------------------------------------------------------
 
+
 async def load_embeddings(
     topic_id: str,
     pool: asyncpg.Pool,
@@ -237,7 +242,10 @@ async def load_embeddings(
     async with pool.acquire() as conn:
         if window_days > 0:
             rows = await conn.fetch(
-                SQL_TOPIC_EMBEDDINGS_WINDOWED, topic_id, relevance_threshold, window_days,
+                SQL_TOPIC_EMBEDDINGS_WINDOWED,
+                topic_id,
+                relevance_threshold,
+                window_days,
             )
         else:
             rows = await conn.fetch(SQL_TOPIC_EMBEDDINGS, topic_id, relevance_threshold)
@@ -254,7 +262,10 @@ async def load_unclustered_embeddings(
     async with pool.acquire() as conn:
         if window_days > 0:
             rows = await conn.fetch(
-                SQL_UNCLUSTERED_EMBEDDINGS_WINDOWED, topic_id, relevance_threshold, window_days,
+                SQL_UNCLUSTERED_EMBEDDINGS_WINDOWED,
+                topic_id,
+                relevance_threshold,
+                window_days,
             )
         else:
             rows = await conn.fetch(SQL_UNCLUSTERED_EMBEDDINGS, topic_id, relevance_threshold)
@@ -273,12 +284,14 @@ async def load_cluster_centroids(
     for row in rows:
         try:
             vec = _parse_pgvector(row["centroid_text"])
-            result.append(ClusterCentroid(
-                cluster_id=row["cluster_id"],
-                vector=vec,
-                isc=row["independent_source_count"],
-                item_count=row["item_count"],
-            ))
+            result.append(
+                ClusterCentroid(
+                    cluster_id=row["cluster_id"],
+                    vector=vec,
+                    isc=row["independent_source_count"],
+                    item_count=row["item_count"],
+                )
+            )
         except Exception as exc:
             log.warning(
                 "clustering.bad_centroid",
@@ -295,12 +308,14 @@ def _parse_embedding_rows(rows: list) -> list[EmbeddingRow]:
         try:
             vec = _parse_pgvector(row["embedding_text"])
             minhash = list(row["entity_minhash"]) if row.get("entity_minhash") else None
-            result.append(EmbeddingRow(
-                content_item_id=row["content_item_id"],
-                vector=vec,
-                source_id=row["source_id"],
-                entity_minhash=minhash,
-            ))
+            result.append(
+                EmbeddingRow(
+                    content_item_id=row["content_item_id"],
+                    vector=vec,
+                    source_id=row["source_id"],
+                    entity_minhash=minhash,
+                )
+            )
         except Exception as exc:
             log.warning(
                 "clustering.bad_embedding",
@@ -313,6 +328,7 @@ def _parse_embedding_rows(rows: list) -> list[EmbeddingRow]:
 # ---------------------------------------------------------------------------
 # Core functions
 # ---------------------------------------------------------------------------
+
 
 def find_narrative_clusters(
     rows: list[EmbeddingRow],
@@ -445,8 +461,9 @@ def build_cluster_data(
 # DB write
 # ---------------------------------------------------------------------------
 
+
 async def upsert_cluster(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     topic_id: str,
     cluster_id: str,
     cluster_data: ClusterData,
@@ -464,10 +481,15 @@ async def upsert_cluster(
 
     if duplicate_ids:
         filtered_source_ids = [
-            sid for cid, sid in zip(cluster_data.content_item_ids, cluster_data.source_ids)
+            sid
+            for cid, sid in zip(cluster_data.content_item_ids, cluster_data.source_ids)
             if cid not in duplicate_ids
         ]
-        isc = count_independent_sources(filtered_source_ids) if filtered_source_ids else count_independent_sources(cluster_data.source_ids)
+        isc = (
+            count_independent_sources(filtered_source_ids)
+            if filtered_source_ids
+            else count_independent_sources(cluster_data.source_ids)
+        )
     else:
         isc = count_independent_sources(cluster_data.source_ids)
 
@@ -518,9 +540,10 @@ async def update_cluster_with_assignments(
 
         # Recompute centroid as weighted average of old + new
         new_vectors = [r.vector for r in new_items]
-        all_vectors = [existing_centroid * existing_item_count] + new_vectors
         # Weighted: old centroid counts for existing_item_count items
-        raw = (existing_centroid * existing_item_count + np.sum(new_vectors, axis=0)) / (existing_item_count + len(new_items))
+        raw = (existing_centroid * existing_item_count + np.sum(new_vectors, axis=0)) / (
+            existing_item_count + len(new_items)
+        )
         norm = np.linalg.norm(raw)
         updated_centroid = (raw / norm if norm > 0 else raw).astype(np.float32)
 
@@ -573,13 +596,15 @@ async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
     Criteria 2.1–2.5, 2.9.
     """
     from .relevance import resolve_threshold
+
     async with pool.acquire() as conn:
         per_topic = await conn.fetchval(SQL_GET_TOPIC_RELEVANCE_THRESHOLD, topic_id)
     threshold = resolve_threshold(per_topic)
 
     # Step 1: Load only unclustered items
     new_rows = await load_unclustered_embeddings(
-        topic_id, pool,
+        topic_id,
+        pool,
         window_days=settings.clustering_window_days,
         relevance_threshold=threshold,
     )
@@ -595,7 +620,9 @@ async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
     if centroids:
         # --- Incremental path: assign to existing clusters first ---
         assigned, unassigned = assign_to_nearest_cluster(
-            new_rows, centroids, settings.cluster_assign_threshold,
+            new_rows,
+            centroids,
+            settings.cluster_assign_threshold,
         )
 
         # Update each cluster with newly assigned items
@@ -603,7 +630,11 @@ async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
         for cluster_id, items in assigned.items():
             c = centroid_map[cluster_id]
             await update_cluster_with_assignments(
-                pool, cluster_id, items, c.vector, c.item_count,
+                pool,
+                cluster_id,
+                items,
+                c.vector,
+                c.item_count,
             )
             cluster_ids.append(cluster_id)
 
@@ -622,7 +653,9 @@ async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
             min_size = settings.clustering_min_cluster_size
             if len(unassigned) >= min_size:
                 new_cluster_ids = await _leiden_and_persist(
-                    topic_id, pool, unassigned,
+                    topic_id,
+                    pool,
+                    unassigned,
                 )
                 cluster_ids.extend(new_cluster_ids)
             else:
@@ -635,7 +668,9 @@ async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
     else:
         # --- Fresh topic: full Leiden on all unclustered items ---
         new_cluster_ids = await _leiden_and_persist(
-            topic_id, pool, new_rows,
+            topic_id,
+            pool,
+            new_rows,
         )
         cluster_ids.extend(new_cluster_ids)
 
@@ -673,16 +708,19 @@ async def _leiden_and_persist(
         existing_count = await conn.fetchval(SQL_TOPIC_CLUSTER_COUNT, topic_id)
 
         from .dedup import get_duplicate_ids_for_cluster
+
         all_item_ids = [r.content_item_id for r in rows]
         duplicate_ids = await get_duplicate_ids_for_cluster(all_item_ids, conn)
 
         async with conn.transaction():
             for community_label, indices in groups.items():
                 cluster_data = build_cluster_data(rows, indices)
-                cluster_id = str(uuid.uuid5(
-                    uuid.NAMESPACE_URL,
-                    f"{topic_id}:{community_label}",
-                ))
+                cluster_id = str(
+                    uuid.uuid5(
+                        uuid.NAMESPACE_URL,
+                        f"{topic_id}:{community_label}",
+                    )
+                )
                 fallback_label = f"Cluster {existing_count + community_label + 1}"
 
                 await upsert_cluster(

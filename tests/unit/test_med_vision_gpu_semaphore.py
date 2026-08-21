@@ -3,6 +3,7 @@
 Concurrent deepfake inference on GPU causes CUDA kernel conflicts.
 A semaphore must serialize GPU-bound inference calls.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -13,7 +14,6 @@ pytestmark = pytest.mark.unit
 
 
 class TestVisionGPUSemaphore:
-
     def test_inference_semaphore_exists(self):
         """Vision jobs module must have an _inference_semaphore."""
         from anveshak.vision import jobs as vision_jobs
@@ -32,6 +32,4 @@ class TestVisionGPUSemaphore:
 
         sem = vision_jobs._inference_semaphore
         # Semaphore(1) has _value=1 initially
-        assert sem._value == 1, (
-            "Inference semaphore must be Semaphore(1) for GPU safety"
-        )
+        assert sem._value == 1, "Inference semaphore must be Semaphore(1) for GPU safety"

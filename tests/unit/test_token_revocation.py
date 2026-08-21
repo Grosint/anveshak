@@ -3,10 +3,11 @@
 Critical fix: is_token_revoked() exists but was never called in the auth
 pipeline. After logout, revoked tokens must be rejected with 401.
 """
+
 from __future__ import annotations
 
 import uuid
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 

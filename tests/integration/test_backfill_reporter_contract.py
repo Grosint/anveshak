@@ -10,11 +10,12 @@ pytest.mark.integration — requires running Docker Compose (postgres).
 Run with:
   uv run --package anveshak-tests pytest tests/integration/test_backfill_reporter_contract.py -v -m integration
 """
+
 from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 import numpy as np
 import pytest
@@ -28,6 +29,7 @@ LABELS_JSON = '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}
 # Helpers (same pattern as test_backfill_clustering_contract.py)
 # ---------------------------------------------------------------------------
 
+
 def _random_embedding(seed: int, dim: int = 384) -> list[float]:
     """L2-normalised random embedding."""
     rng = np.random.RandomState(seed)
@@ -39,9 +41,13 @@ def _random_embedding(seed: int, dim: int = 384) -> list[float]:
 async def _insert_content(pool, topic_id, source_id, text, embedding, language="en"):
     """Insert content_item with embedding. Returns item_id."""
     from tests.conftest import insert_content_item
+
     content_hash = hashlib.sha256(text.lower().strip().encode()).hexdigest()
     return await insert_content_item(
-        pool, topic_id, source_id, text,
+        pool,
+        topic_id,
+        source_id,
+        text,
         content_hash=content_hash,
         embedding=embedding,
         language=language,
@@ -55,13 +61,17 @@ async def _backfill_item(pool, topic_id, content_item_id, similarity=0.90):
             """INSERT INTO topic_content_items (topic_id, content_item_id, similarity_score, assigned_at)
                VALUES ($1, $2, $3, $4)
                ON CONFLICT (topic_id, content_item_id) DO NOTHING""",
-            topic_id, content_item_id, similarity, datetime.now(UTC),
+            topic_id,
+            content_item_id,
+            similarity,
+            datetime.now(UTC),
         )
 
 
 # ---------------------------------------------------------------------------
 # Test 1: Reporter RAG chunks include backfilled items (BUG 1)
 # ---------------------------------------------------------------------------
+
 
 class TestRAGChunksIncludeBackfilled:
     """SQL_FETCH_RAG_CHUNKS must include items from topic_content_items."""
@@ -82,7 +92,9 @@ class TestRAGChunksIncludeBackfilled:
         emb = _random_embedding(seed=500)
 
         item_id = await _insert_content(
-            db_pool, topic_a, source,
+            db_pool,
+            topic_a,
+            source,
             "PLA bridge construction at Pangong Tso sector detected by satellite",
             embedding=emb,
         )
@@ -91,7 +103,11 @@ class TestRAGChunksIncludeBackfilled:
 
         # Query RAG chunks for Topic B using same embedding as query vector
         results = await fetch_rag_chunks(
-            db_pool, topic_b, query_embedding=emb, credibility_min=0.0, top_k=10,
+            db_pool,
+            topic_b,
+            query_embedding=emb,
+            credibility_min=0.0,
+            top_k=10,
         )
 
         result_ids = [r["id"] for r in results]
@@ -101,7 +117,10 @@ class TestRAGChunksIncludeBackfilled:
         )
 
     async def test_rag_chunks_include_both_owned_and_backfilled(
-        self, db_pool, make_topic, make_source,
+        self,
+        db_pool,
+        make_topic,
+        make_source,
     ):
         """Topic B should see its own items AND backfilled items in RAG."""
         from anveshak.reporter.db import fetch_rag_chunks
@@ -115,26 +134,36 @@ class TestRAGChunksIncludeBackfilled:
 
         # 2 items owned by Topic B
         item_b1 = await _insert_content(
-            db_pool, topic_b, source_web,
+            db_pool,
+            topic_b,
+            source_web,
             "India monitors Chinese activity at Line of Actual Control edition one",
             embedding=base_emb,
         )
         item_b2 = await _insert_content(
-            db_pool, topic_b, source_web,
+            db_pool,
+            topic_b,
+            source_web,
             "India monitors Chinese activity at Line of Actual Control edition two",
             embedding=_random_embedding(seed=511),
         )
 
         # 1 item owned by Topic A, backfilled to B
         item_a = await _insert_content(
-            db_pool, topic_a, source_rss,
+            db_pool,
+            topic_a,
+            source_rss,
             "Reuters reports on Chinese military infrastructure near LAC",
             embedding=_random_embedding(seed=512),
         )
         await _backfill_item(db_pool, topic_b, item_a)
 
         results = await fetch_rag_chunks(
-            db_pool, topic_b, query_embedding=base_emb, credibility_min=0.0, top_k=10,
+            db_pool,
+            topic_b,
+            query_embedding=base_emb,
+            credibility_min=0.0,
+            top_k=10,
         )
 
         result_ids = {r["id"] for r in results}
@@ -147,6 +176,7 @@ class TestRAGChunksIncludeBackfilled:
 # ---------------------------------------------------------------------------
 # Test 2: Reporter location entities include backfilled items (BUG 2)
 # ---------------------------------------------------------------------------
+
 
 class TestLocationEntitiesIncludeBackfilled:
     """SQL_FETCH_TOPIC_LOCATION_ENTITIES must include backfilled items."""
@@ -166,7 +196,9 @@ class TestLocationEntitiesIncludeBackfilled:
 
         emb = _random_embedding(seed=520)
         item_id = await _insert_content(
-            db_pool, topic_a, source,
+            db_pool,
+            topic_a,
+            source,
             "PLA forces spotted near Pangong Tso lake in Ladakh region",
             embedding=emb,
         )
@@ -179,7 +211,13 @@ class TestLocationEntitiesIncludeBackfilled:
                 """INSERT INTO extracted_entities (id, content_item_id, entity_type, entity_text,
                    confidence, created_at, labels)
                    VALUES ($1, $2, $3, $4, $5, $6, $7)""",
-                entity_id, item_id, "GPE", "Pangong Tso", 0.95, now, LABELS_JSON,
+                entity_id,
+                item_id,
+                "GPE",
+                "Pangong Tso",
+                0.95,
+                now,
+                LABELS_JSON,
             )
 
         # Backfill to Topic B

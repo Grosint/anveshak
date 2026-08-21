@@ -4,20 +4,33 @@
       preventing Ollama from being invoked again.
 8C.10: Unit test verifying the idempotency guard works correctly.
 """
+
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # 8C.7 / 8C.10 — generate_report retry guard
 # ---------------------------------------------------------------------------
 
 _FAKE_DATA_BUNDLE = {
-    "topic_stats": {"name": "Test", "content_count": 5, "source_count": 2, "cluster_count": 1, "signal_count": 0},
-    "sources": [], "clusters": [], "signals": [], "entities": [],
-    "sentiment_trend": [], "keywords": [], "evidence_items": [], "language_breakdown": [],
+    "topic_stats": {
+        "name": "Test",
+        "content_count": 5,
+        "source_count": 2,
+        "cluster_count": 1,
+        "signal_count": 0,
+    },
+    "sources": [],
+    "clusters": [],
+    "signals": [],
+    "entities": [],
+    "sentiment_trend": [],
+    "keywords": [],
+    "evidence_items": [],
+    "language_breakdown": [],
 }
 
 
@@ -79,23 +92,47 @@ async def test_generate_report_idempotent_skip():
     with (
         patch.object(db_module, "fetch_report", AsyncMock(return_value=fake_report)),
         patch.object(db_module, "fetch_topic", AsyncMock(return_value=fake_topic)),
-        patch.object(db_module, "fetch_report_data_bundle", AsyncMock(return_value=_FAKE_DATA_BUNDLE)),
-        patch.object(db_module, "fetch_rag_chunks", AsyncMock(return_value=[
-            {"source_id": "s1", "clean_text": "text", "url": "http://example.com",
-             "credibility_score": 80.0, "captured_at": "2026-01-01T00:00:00Z"}
-        ])),
+        patch.object(
+            db_module, "fetch_report_data_bundle", AsyncMock(return_value=_FAKE_DATA_BUNDLE)
+        ),
+        patch.object(
+            db_module,
+            "fetch_rag_chunks",
+            AsyncMock(
+                return_value=[
+                    {
+                        "source_id": "s1",
+                        "clean_text": "text",
+                        "url": "http://example.com",
+                        "credibility_score": 80.0,
+                        "captured_at": "2026-01-01T00:00:00Z",
+                    }
+                ]
+            ),
+        ),
         patch.object(db_module, "fetch_sources_for_snapshot", AsyncMock(return_value={})),
         patch.object(db_module, "fetch_topic_identifiers", AsyncMock(return_value=[])),
         patch.object(db_module, "fetch_topic_template_matches", AsyncMock(return_value=[])),
         patch.object(db_module, "update_job_status", AsyncMock()),
-        patch.object(db_module, "set_report_generated", AsyncMock(side_effect=fake_set_report_generated_first)),
+        patch.object(
+            db_module,
+            "set_report_generated",
+            AsyncMock(side_effect=fake_set_report_generated_first),
+        ),
         patch.object(db_module, "set_report_failed", AsyncMock()),
         patch("anveshak.reporter.worker.call_ollama_for_bluf", fake_ollama),
-        patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock, return_value=[0.1] * 384),
+        patch(
+            "anveshak.reporter.worker.generate_query_embedding",
+            new_callable=AsyncMock,
+            return_value=[0.1] * 384,
+        ),
         patch("anveshak.reporter.worker.render_bluf_prompt", return_value="bluf prompt"),
         patch("anveshak.reporter.worker.extract_locations_from_text", return_value=[]),
         patch("anveshak.reporter.worker.geocode_locations", return_value=[]),
-        patch("anveshak.reporter.worker.build_geojson", return_value={"type": "FeatureCollection", "features": []}),
+        patch(
+            "anveshak.reporter.worker.build_geojson",
+            return_value={"type": "FeatureCollection", "features": []},
+        ),
     ):
         await worker_module.generate_report(ctx, "rep-1")
         assert ollama_call_count == 1, "First call should invoke Ollama"
@@ -104,23 +141,47 @@ async def test_generate_report_idempotent_skip():
     with (
         patch.object(db_module, "fetch_report", AsyncMock(return_value=fake_report)),
         patch.object(db_module, "fetch_topic", AsyncMock(return_value=fake_topic)),
-        patch.object(db_module, "fetch_report_data_bundle", AsyncMock(return_value=_FAKE_DATA_BUNDLE)),
-        patch.object(db_module, "fetch_rag_chunks", AsyncMock(return_value=[
-            {"source_id": "s1", "clean_text": "text", "url": "http://example.com",
-             "credibility_score": 80.0, "captured_at": "2026-01-01T00:00:00Z"}
-        ])),
+        patch.object(
+            db_module, "fetch_report_data_bundle", AsyncMock(return_value=_FAKE_DATA_BUNDLE)
+        ),
+        patch.object(
+            db_module,
+            "fetch_rag_chunks",
+            AsyncMock(
+                return_value=[
+                    {
+                        "source_id": "s1",
+                        "clean_text": "text",
+                        "url": "http://example.com",
+                        "credibility_score": 80.0,
+                        "captured_at": "2026-01-01T00:00:00Z",
+                    }
+                ]
+            ),
+        ),
         patch.object(db_module, "fetch_sources_for_snapshot", AsyncMock(return_value={})),
         patch.object(db_module, "fetch_topic_identifiers", AsyncMock(return_value=[])),
         patch.object(db_module, "fetch_topic_template_matches", AsyncMock(return_value=[])),
         patch.object(db_module, "update_job_status", AsyncMock()),
-        patch.object(db_module, "set_report_generated", AsyncMock(side_effect=fake_set_report_generated_second)),
+        patch.object(
+            db_module,
+            "set_report_generated",
+            AsyncMock(side_effect=fake_set_report_generated_second),
+        ),
         patch.object(db_module, "set_report_failed", AsyncMock()),
         patch("anveshak.reporter.worker.call_ollama_for_bluf", fake_ollama),
-        patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock, return_value=[0.1] * 384),
+        patch(
+            "anveshak.reporter.worker.generate_query_embedding",
+            new_callable=AsyncMock,
+            return_value=[0.1] * 384,
+        ),
         patch("anveshak.reporter.worker.render_bluf_prompt", return_value="bluf prompt"),
         patch("anveshak.reporter.worker.extract_locations_from_text", return_value=[]),
         patch("anveshak.reporter.worker.geocode_locations", return_value=[]),
-        patch("anveshak.reporter.worker.build_geojson", return_value={"type": "FeatureCollection", "features": []}),
+        patch(
+            "anveshak.reporter.worker.build_geojson",
+            return_value={"type": "FeatureCollection", "features": []},
+        ),
     ):
         await worker_module.generate_report(ctx, "rep-1")
         # Ollama WAS called again (the retry idempotency is in set_report_generated, not before Ollama)
@@ -137,8 +198,8 @@ def test_worker_settings_have_keep_result():
     that prevents import in the test process without the full service environment.
     Vision keep_result is verified by code inspection (set to 3600 in jobs.py).
     """
-    from anveshak.reporter.worker import WorkerSettings as ReporterWorker
     from anveshak.analyst.jobs import WorkerSettings as AnalystWorker
+    from anveshak.reporter.worker import WorkerSettings as ReporterWorker
     from anveshak.scraper.jobs import WorkerSettings as ScraperWorker
 
     assert ReporterWorker.keep_result == 3600, "reporter keep_result must be 3600"
@@ -149,10 +210,14 @@ def test_worker_settings_have_keep_result():
 @pytest.mark.unit
 def test_worker_settings_have_job_timeout():
     """8C.4 / 8C.5 — WorkerSettings job timeouts are correctly set."""
-    from anveshak.reporter.worker import WorkerSettings as ReporterWorker
     from anveshak.analyst.jobs import WorkerSettings as AnalystWorker
+    from anveshak.reporter.worker import WorkerSettings as ReporterWorker
     from anveshak.scraper.jobs import WorkerSettings as ScraperWorker
 
     assert ReporterWorker.job_timeout == 600  # 8C.4 — LLM report generation ceiling on CPU
-    assert AnalystWorker.job_timeout == 300   # 8C.2 — increased from 180s: NLLB translation adds ~30s per article on CPU
-    assert ScraperWorker.job_timeout == 300   # 8C.5 — increased for recursive scraping + link following
+    assert (
+        AnalystWorker.job_timeout == 300
+    )  # 8C.2 — increased from 180s: NLLB translation adds ~30s per article on CPU
+    assert (
+        ScraperWorker.job_timeout == 300
+    )  # 8C.5 — increased for recursive scraping + link following

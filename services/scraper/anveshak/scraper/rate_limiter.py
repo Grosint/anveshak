@@ -3,6 +3,7 @@
 Enforces a minimum gap between consecutive HTTP requests to the same domain.
 Used by the scraper to avoid WAF/rate-limit blocks when following article links.
 """
+
 from __future__ import annotations
 
 import asyncio

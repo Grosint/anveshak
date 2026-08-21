@@ -13,14 +13,17 @@ Design:
   (criterion 2.20) on reconnect.
 - Runs as an asyncio background task inside the API lifespan.
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, UTC
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 
 import asyncpg
 import structlog
+from anveshak.db import DBConnection
 
 log = structlog.get_logger(__name__)
 
@@ -70,9 +73,9 @@ def _build_ws_payload(row: asyncpg.Record) -> dict:
 
 
 async def _deliver_one(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     row: asyncpg.Record,
-    broadcast: object,  # Callable[[dict], Awaitable[None]]
+    broadcast: Callable[[dict], Awaitable[None]],
 ) -> None:
     """Broadcast a single signal via WebSocket + webhook, then mark delivered."""
     payload = _build_ws_payload(row)
@@ -90,6 +93,7 @@ async def _deliver_one(
     # Webhook notification — non-blocking, failures never prevent delivery
     try:
         from .notifications import send_webhook
+
         await send_webhook(payload)
     except Exception as exc:
         log.debug("signal_delivery.webhook_noop", signal_id=row["id"], error=str(exc))
@@ -98,7 +102,9 @@ async def _deliver_one(
     log.info("signal_delivery.delivered", signal_id=row["id"], topic_id=row["topic_id"])
 
 
-async def signal_delivery_loop(pool: asyncpg.Pool, broadcast) -> None:
+async def signal_delivery_loop(
+    pool: asyncpg.Pool, broadcast: Callable[[dict], Awaitable[None]]
+) -> None:
     """Infinite loop: poll for undelivered signals and push to WebSocket sessions.
 
     Criterion 2.18: signals are pushed to connected sessions within

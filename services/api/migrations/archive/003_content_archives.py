@@ -6,6 +6,7 @@ tracks what was archived: topic, month, file path, item count.
 
 Revision ID: 003
 """
+
 from alembic import op
 
 revision = "003"
@@ -26,7 +27,9 @@ def upgrade() -> None:
             UNIQUE (topic_id, month)
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_content_archives_topic ON content_archives(topic_id)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_content_archives_topic ON content_archives(topic_id)"
+    )
 
 
 def downgrade() -> None:

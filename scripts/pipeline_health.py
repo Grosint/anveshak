@@ -10,6 +10,7 @@ Usage:
     python scripts/pipeline_health.py --topic "LAC"    # filter by topic name substring
     python scripts/pipeline_health.py --summary        # full-period stats (since first content)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -18,7 +19,6 @@ import os
 import subprocess
 import sys
 from datetime import datetime, timezone
-
 
 # ---------------------------------------------------------------------------
 # Config
@@ -35,31 +35,34 @@ COMPOSE_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "infra",
 
 # Expected worker containers — if missing, pipeline stage is broken
 WORKER_CONTAINERS = {
-    "scrape-social-worker":    {"stage": 1, "role": "Social adapter polling (Telegram, X, Reddit, Instagram)"},
-    "scrape-web-worker":       {"stage": 1, "role": "Web/RSS/darkweb scraping"},
-    "analyse-worker":          {"stage": 2, "role": "NLP, embedding, identifiers, quality scoring"},
-    "analyse-scheduler":       {"stage": 3, "role": "Clustering, signals, convergence, orphan sweep"},
-    "report-worker":           {"stage": 5, "role": "LLM report generation"},
+    "scrape-social-worker": {
+        "stage": 1,
+        "role": "Social adapter polling (Telegram, X, Reddit, Instagram)",
+    },
+    "scrape-web-worker": {"stage": 1, "role": "Web/RSS/darkweb scraping"},
+    "analyse-worker": {"stage": 2, "role": "NLP, embedding, identifiers, quality scoring"},
+    "analyse-scheduler": {"stage": 3, "role": "Clustering, signals, convergence, orphan sweep"},
+    "report-worker": {"stage": 5, "role": "LLM report generation"},
 }
 
 # ARQ queues and their thresholds
 # ARQ default queue is "arq:queue" (social), named queues for scraper/analyst
 ARQ_QUEUES = {
-    "arq:queue":    {"warn": 50, "critical": 200, "stage": 1, "label": "social (default)"},
-    "arq:scraper":  {"warn": 30, "critical": 100, "stage": 1, "label": "scraper"},
-    "arq:analyst":  {"warn": 50, "critical": 200, "stage": 2, "label": "analyst"},
+    "arq:queue": {"warn": 50, "critical": 200, "stage": 1, "label": "social (default)"},
+    "arq:scraper": {"warn": 30, "critical": 100, "stage": 1, "label": "scraper"},
+    "arq:analyst": {"warn": 50, "critical": 200, "stage": 2, "label": "analyst"},
 }
 
 # Source staleness thresholds (seconds)
 SOURCE_STALENESS = {
-    "telegram": 3600,     # 1h (poll_interval=900s, 4× buffer)
-    "twitter":  7200,     # 2h
-    "reddit":   7200,     # 2h
-    "instagram": 7200,    # 2h
-    "bluesky":  7200,     # 2h
-    "rss":      21600,    # 6h
-    "web":      86400,    # 24h
-    "darkweb":  86400,    # 24h
+    "telegram": 3600,  # 1h (poll_interval=900s, 4× buffer)
+    "twitter": 7200,  # 2h
+    "reddit": 7200,  # 2h
+    "instagram": 7200,  # 2h
+    "bluesky": 7200,  # 2h
+    "rss": 21600,  # 6h
+    "web": 86400,  # 24h
+    "darkweb": 86400,  # 24h
 }
 
 # Exit codes
@@ -69,11 +72,23 @@ EXIT_CRITICAL = 2
 
 # Engine C identifier types (from migration 009)
 ENGINE_C_IDENTIFIER_TYPES = (
-    "PHONE_IN", "UPI", "EMAIL", "CRYPTO_BTC", "CRYPTO_ETH",
-    "CRYPTO_TRC20", "TELEGRAM_HANDLE", "INSTAGRAM_HANDLE",
-    "FACEBOOK_HANDLE", "X_HANDLE",
-    "URL_DOMAIN", "GSTIN", "UDYAM", "PAN", "IFSC",
-    "BANK_ACCOUNT", "SEBI_REG",
+    "PHONE_IN",
+    "UPI",
+    "EMAIL",
+    "CRYPTO_BTC",
+    "CRYPTO_ETH",
+    "CRYPTO_TRC20",
+    "TELEGRAM_HANDLE",
+    "INSTAGRAM_HANDLE",
+    "FACEBOOK_HANDLE",
+    "X_HANDLE",
+    "URL_DOMAIN",
+    "GSTIN",
+    "UDYAM",
+    "PAN",
+    "IFSC",
+    "BANK_ACCOUNT",
+    "SEBI_REG",
 )
 ENGINE_C_TYPES_SQL = ", ".join(f"'{t}'" for t in ENGINE_C_IDENTIFIER_TYPES)
 
@@ -96,13 +111,24 @@ AGENCY_DISPLAY = {
 # DB query helper
 # ---------------------------------------------------------------------------
 
+
 def _query(sql: str) -> list[dict]:
     """Run SQL via docker exec psql, return list of dicts."""
     cmd = [
-        "docker", "exec", POSTGRES_CONTAINER,
-        "psql", "-U", DB_USER, "-d", DB_NAME,
-        "-t", "-A", "-F", "\t",
-        "-c", sql,
+        "docker",
+        "exec",
+        POSTGRES_CONTAINER,
+        "psql",
+        "-U",
+        DB_USER,
+        "-d",
+        DB_NAME,
+        "-t",
+        "-A",
+        "-F",
+        "\t",
+        "-c",
+        sql,
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     if result.returncode != 0:
@@ -117,10 +143,19 @@ def _query(sql: str) -> list[dict]:
     # First query line is data (no header with -t flag)
     # We need column names — run with headers
     cmd_h = [
-        "docker", "exec", POSTGRES_CONTAINER,
-        "psql", "-U", DB_USER, "-d", DB_NAME,
-        "-A", "-F", "\t",
-        "-c", sql,
+        "docker",
+        "exec",
+        POSTGRES_CONTAINER,
+        "psql",
+        "-U",
+        DB_USER,
+        "-d",
+        DB_NAME,
+        "-A",
+        "-F",
+        "\t",
+        "-c",
+        sql,
     ]
     result_h = subprocess.run(cmd_h, capture_output=True, text=True, timeout=30)
     if result_h.returncode != 0:
@@ -143,10 +178,18 @@ def _query(sql: str) -> list[dict]:
 def _query_val(sql: str) -> str | None:
     """Run SQL that returns a single value."""
     cmd = [
-        "docker", "exec", POSTGRES_CONTAINER,
-        "psql", "-U", DB_USER, "-d", DB_NAME,
-        "-t", "-A",
-        "-c", sql,
+        "docker",
+        "exec",
+        POSTGRES_CONTAINER,
+        "psql",
+        "-U",
+        DB_USER,
+        "-d",
+        DB_NAME,
+        "-t",
+        "-A",
+        "-c",
+        sql,
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     if result.returncode != 0:
@@ -158,6 +201,7 @@ def _query_val(sql: str) -> str | None:
 # ---------------------------------------------------------------------------
 # Redis query helper
 # ---------------------------------------------------------------------------
+
 
 def _redis_cmd(args: list[str]) -> str | None:
     """Run a Redis command via docker exec, return stdout."""
@@ -194,15 +238,24 @@ def _redis_queue_depth(queue_name: str) -> int | None:
 # Stage 1: Container Liveness
 # ---------------------------------------------------------------------------
 
+
 def check_container_health() -> dict:
     """Check which worker containers are running and healthy."""
     stats: dict = {"containers": {}, "warnings": [], "criticals": []}
 
     try:
         cmd = [
-            "docker", "compose", "--env-file", ".env",
-            "-p", COMPOSE_PROJECT, "-f", COMPOSE_FILE,
-            "ps", "--format", "json",
+            "docker",
+            "compose",
+            "--env-file",
+            ".env",
+            "-p",
+            COMPOSE_PROJECT,
+            "-f",
+            COMPOSE_FILE,
+            "ps",
+            "--format",
+            "json",
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
         if result.returncode != 0:
@@ -260,6 +313,7 @@ def check_container_health() -> dict:
 # Stage 1-2: ARQ Queue Depth
 # ---------------------------------------------------------------------------
 
+
 def check_queue_depth() -> dict:
     """Check ARQ queue depths in Redis."""
     stats: dict = {"queues": {}, "warnings": [], "criticals": []}
@@ -295,6 +349,7 @@ def check_queue_depth() -> dict:
 # ---------------------------------------------------------------------------
 # Stage 2: Pipeline Flow Rate
 # ---------------------------------------------------------------------------
+
 
 def check_flow_rate(hours: int = 2) -> dict:
     """Compare items inserted vs items with embeddings in recent window."""
@@ -345,6 +400,7 @@ def check_flow_rate(hours: int = 2) -> dict:
 # ---------------------------------------------------------------------------
 # Stage 1: Per-Source Staleness
 # ---------------------------------------------------------------------------
+
 
 def check_source_staleness() -> dict:
     """Check when each active source last produced content."""
@@ -410,6 +466,7 @@ def check_source_staleness() -> dict:
 # Stage 3: Cluster Freshness
 # ---------------------------------------------------------------------------
 
+
 def check_cluster_freshness() -> dict:
     """Check if clustering is running by looking at most recent cluster update."""
     stats: dict = {"warnings": []}
@@ -424,9 +481,7 @@ def check_cluster_freshness() -> dict:
     elif stats["seconds_since_last_cluster"] > 7200:  # 2h
         hours = round(stats["seconds_since_last_cluster"] / 3600, 1)
         stats["status"] = "STALE"
-        stats["warnings"].append(
-            f"No cluster updates in {hours}h — analyse-scheduler may be stuck"
-        )
+        stats["warnings"].append(f"No cluster updates in {hours}h — analyse-scheduler may be stuck")
     else:
         stats["status"] = "OK"
 
@@ -442,6 +497,7 @@ def check_cluster_freshness() -> dict:
 # ---------------------------------------------------------------------------
 # Formatters — Pipeline Stage Health
 # ---------------------------------------------------------------------------
+
 
 def format_container_health(stats: dict) -> str:
     lines = ["  CONTAINERS:"]
@@ -479,13 +535,17 @@ def format_flow_rate(stats: dict) -> str:
     lines = [f"  PIPELINE FLOW (last {stats['hours']}h):"]
     lines.append(f"    Items inserted:           {stats['inserted']}")
     lines.append(f"    Items embedded:           {stats['embedded']} ({stats['embed_pct']}%)")
-    lines.append(f"    Items with identifiers:   {stats['with_identifiers']} ({stats['identifier_pct']}%)")
+    lines.append(
+        f"    Items with identifiers:   {stats['with_identifiers']} ({stats['identifier_pct']}%)"
+    )
     if stats["inserted"] > 0 and stats["embed_pct"] >= 80:
-        lines.append(f"    Analyst throughput:        OK")
+        lines.append("    Analyst throughput:        OK")
     elif stats["inserted"] == 0:
-        lines.append(f"    Analyst throughput:        no recent content to evaluate")
+        lines.append("    Analyst throughput:        no recent content to evaluate")
     else:
-        lines.append(f"    Analyst throughput:        DEGRADED — check analyse-worker + arq:analyst queue")
+        lines.append(
+            "    Analyst throughput:        DEGRADED — check analyse-worker + arq:analyst queue"
+        )
     return "\n".join(lines)
 
 
@@ -536,7 +596,9 @@ def format_cluster_freshness(stats: dict) -> str:
     elif secs < 3600:
         lines.append(f"    Narrative clusters:        updated {int(secs / 60)} min ago  OK")
     else:
-        lines.append(f"    Narrative clusters:        updated {round(secs / 3600, 1)}h ago  {'WARNING' if secs > 7200 else 'OK'}")
+        lines.append(
+            f"    Narrative clusters:        updated {round(secs / 3600, 1)}h ago  {'WARNING' if secs > 7200 else 'OK'}"
+        )
 
     id_secs = stats["seconds_since_last_id_cluster"]
     if id_secs is None:
@@ -544,13 +606,20 @@ def format_cluster_freshness(stats: dict) -> str:
     elif id_secs < 3600:
         lines.append(f"    Identifier clusters:       updated {int(id_secs / 60)} min ago  OK")
     else:
-        lines.append(f"    Identifier clusters:       updated {round(id_secs / 3600, 1)}h ago  {'WARNING' if id_secs > 7200 else 'OK'}")
+        lines.append(
+            f"    Identifier clusters:       updated {round(id_secs / 3600, 1)}h ago  {'WARNING' if id_secs > 7200 else 'OK'}"
+        )
 
     return "\n".join(lines)
 
 
-def format_stage_report(container_stats: dict, queue_stats: dict, flow_stats: dict,
-                        staleness_stats: dict, cluster_stats: dict) -> str:
+def format_stage_report(
+    container_stats: dict,
+    queue_stats: dict,
+    flow_stats: dict,
+    staleness_stats: dict,
+    cluster_stats: dict,
+) -> str:
     """Combine all stage checks into one block."""
     sep = "=" * 60
     lines = [
@@ -571,12 +640,20 @@ def format_stage_report(container_stats: dict, queue_stats: dict, flow_stats: di
     ]
 
     # Collect all warnings/criticals
-    all_w = (container_stats.get("warnings", []) + queue_stats.get("warnings", []) +
-             flow_stats.get("warnings", []) + staleness_stats.get("warnings", []) +
-             cluster_stats.get("warnings", []))
-    all_c = (container_stats.get("criticals", []) + queue_stats.get("criticals", []) +
-             flow_stats.get("criticals", []) + staleness_stats.get("criticals", []) +
-             cluster_stats.get("criticals", []))
+    all_w = (
+        container_stats.get("warnings", [])
+        + queue_stats.get("warnings", [])
+        + flow_stats.get("warnings", [])
+        + staleness_stats.get("warnings", [])
+        + cluster_stats.get("warnings", [])
+    )
+    all_c = (
+        container_stats.get("criticals", [])
+        + queue_stats.get("criticals", [])
+        + flow_stats.get("criticals", [])
+        + staleness_stats.get("criticals", [])
+        + cluster_stats.get("criticals", [])
+    )
 
     if all_c:
         lines.append("  STAGE CRITICALS:")
@@ -598,6 +675,7 @@ def format_stage_report(container_stats: dict, queue_stats: dict, flow_stats: di
 # Diagnostics (existing)
 # ---------------------------------------------------------------------------
 
+
 def get_topics(name_filter: str | None = None) -> list[dict]:
     sql = "SELECT id, name, signal_threshold, credibility_min, topic_relevance_threshold FROM topics WHERE status = 'active' ORDER BY name"
     topics = _query(sql)
@@ -606,7 +684,13 @@ def get_topics(name_filter: str | None = None) -> list[dict]:
     return topics
 
 
-def report_topic(topic_id: str, topic_name: str, signal_threshold: int, hours: int | None, relevance_threshold: float = 0.35) -> dict:
+def report_topic(
+    topic_id: str,
+    topic_name: str,
+    signal_threshold: int,
+    hours: int | None,
+    relevance_threshold: float = 0.35,
+) -> dict:
     """Generate diagnostics for one topic. Returns stats dict."""
     time_clause = f"AND captured_at >= NOW() - INTERVAL '{hours} hours'" if hours else ""
     time_clause_created = f"AND created_at >= NOW() - INTERVAL '{hours} hours'" if hours else ""
@@ -701,7 +785,9 @@ def report_topic(topic_id: str, topic_name: str, signal_threshold: int, hours: i
         LIMIT 5
     """)
     stats["reports"] = reports
-    failed_reports = [r for r in reports if r.get("generation_error") and r.get("generation_error") != ""]
+    failed_reports = [
+        r for r in reports if r.get("generation_error") and r.get("generation_error") != ""
+    ]
     if failed_reports:
         stats["warnings"].append(f"{len(failed_reports)} report(s) with generation errors")
 
@@ -710,7 +796,7 @@ def report_topic(topic_id: str, topic_name: str, signal_threshold: int, hours: i
         SELECT s.platform, COUNT(*) as cnt
         FROM content_items ci
         JOIN sources s ON ci.source_id = s.id
-        WHERE ci.topic_id = '{topic_id}' {time_clause.replace('captured_at', 'ci.captured_at')}
+        WHERE ci.topic_id = '{topic_id}' {time_clause.replace("captured_at", "ci.captured_at")}
         GROUP BY s.platform ORDER BY cnt DESC
     """)
     stats["by_platform"] = by_platform
@@ -765,7 +851,9 @@ def report_global(hours: int | None) -> dict:
     stats["media_total"] = int(media_total or 0)
 
     # Vision results
-    vision_processed = _query_val(f"SELECT COUNT(*) FROM vision_results WHERE 1=1 {time_clause_media.replace('created_at', 'processed_at')}")
+    vision_processed = _query_val(
+        f"SELECT COUNT(*) FROM vision_results WHERE 1=1 {time_clause_media.replace('created_at', 'processed_at')}"
+    )
     stats["vision_processed"] = int(vision_processed or 0)
 
     # Deepfake distribution
@@ -793,6 +881,7 @@ def report_global(hours: int | None) -> dict:
 # ---------------------------------------------------------------------------
 # Engine C Diagnostics
 # ---------------------------------------------------------------------------
+
 
 def _engine_c_available() -> bool:
     """Check if Engine C migration (009) has been applied."""
@@ -823,7 +912,7 @@ def report_topic_engine_c(topic_id: str, content_total: int, hours: int | None) 
     no_ids = _query_val(f"""
         SELECT COUNT(*) FROM content_items ci
         WHERE ci.topic_id = '{topic_id}'
-        {time_clause.replace('ci.captured_at', 'captured_at') if not time_clause else time_clause}
+        {time_clause.replace("ci.captured_at", "captured_at") if not time_clause else time_clause}
         AND NOT EXISTS (
             SELECT 1 FROM extracted_entities ee
             WHERE ee.content_item_id = ci.id
@@ -838,7 +927,7 @@ def report_topic_engine_c(topic_id: str, content_total: int, hours: int | None) 
         FROM content_items
         WHERE topic_id = '{topic_id}'
         AND labels->>'scam_template' IS NOT NULL
-        {time_clause.replace('ci.captured_at', 'captured_at') if not time_clause else time_clause.replace('ci.', '')}
+        {time_clause.replace("ci.captured_at", "captured_at") if not time_clause else time_clause.replace("ci.", "")}
         GROUP BY labels->>'scam_template' ORDER BY cnt DESC
     """)
     stats["template_matches"] = tpl_matches
@@ -846,7 +935,9 @@ def report_topic_engine_c(topic_id: str, content_total: int, hours: int | None) 
 
     # 4. Template coverage
     if content_total > 0:
-        stats["template_coverage_pct"] = round(stats["template_match_total"] / content_total * 100, 1)
+        stats["template_coverage_pct"] = round(
+            stats["template_match_total"] / content_total * 100, 1
+        )
     else:
         stats["template_coverage_pct"] = 0.0
 
@@ -880,11 +971,17 @@ def report_topic_engine_c(topic_id: str, content_total: int, hours: int | None) 
 
     # 7. Warnings
     if content_total > 0 and stats["identifiers_total"] == 0:
-        stats["warnings"].append("Content exists but 0 identifiers extracted — Engine C extraction may not be running")
+        stats["warnings"].append(
+            "Content exists but 0 identifiers extracted — Engine C extraction may not be running"
+        )
     if stats["id_cluster_count"] > 0 and stats["id_convergence_count"] == 0:
-        stats["warnings"].append("Identifier clusters exist but 0 identifier_convergence signals — check signal engine")
+        stats["warnings"].append(
+            "Identifier clusters exist but 0 identifier_convergence signals — check signal engine"
+        )
     if stats["template_match_total"] > 0 and stats["tpl_match_signal_count"] == 0:
-        stats["warnings"].append("Template matches exist but 0 scam_template_match signals — check signal engine")
+        stats["warnings"].append(
+            "Template matches exist but 0 scam_template_match signals — check signal engine"
+        )
 
     return stats
 
@@ -898,7 +995,7 @@ def report_global_engine_c(hours: int | None) -> dict:
     id_global = _query(f"""
         SELECT entity_type, COUNT(*) as cnt FROM extracted_entities
         WHERE entity_type IN ({ENGINE_C_TYPES_SQL})
-        {time_clause.replace('ee.', '')}
+        {time_clause.replace("ee.", "")}
         GROUP BY entity_type ORDER BY cnt DESC
     """)
     stats["identifiers_global"] = id_global
@@ -959,7 +1056,9 @@ def report_global_engine_c(hours: int | None) -> dict:
         stats["templates_custom"] = 0
 
     if stats["templates_builtin"] != 11:
-        stats["warnings"].append(f"Expected 11 built-in templates, found {stats['templates_builtin']} — check migration 009 seed data")
+        stats["warnings"].append(
+            f"Expected 11 built-in templates, found {stats['templates_builtin']} — check migration 009 seed data"
+        )
 
     return stats
 
@@ -1094,9 +1193,14 @@ def check_gpu() -> str | None:
     """Check GPU utilization via nvidia-smi."""
     try:
         result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=name,memory.used,memory.total,utilization.gpu",
-             "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, timeout=5,
+            [
+                "nvidia-smi",
+                "--query-gpu=name,memory.used,memory.total,utilization.gpu",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode == 0:
             return result.stdout.strip()
@@ -1109,12 +1213,17 @@ def check_gpu() -> str | None:
 # Formatters
 # ---------------------------------------------------------------------------
 
+
 def format_topic_report(name: str, signal_threshold: int, stats: dict, hours: int | None) -> str:
     period = f"last {hours}h" if hours else "all time"
     lines = [
         f"TOPIC: {name}",
         f"  Content scraped ({period}):  {stats['content_total']} items"
-        + (f" (+{stats['content_backfilled']} backfilled)" if stats['content_backfilled'] > 0 else ""),
+        + (
+            f" (+{stats['content_backfilled']} backfilled)"
+            if stats["content_backfilled"] > 0
+            else ""
+        ),
         f"  Quality-filtered out:       {stats['quality_filtered']} items",
         f"  Embeddings NULL:            {stats['embeddings_null']} items (orphans)",
         f"  Relevance-filtered:         {stats['relevance_filtered']} items (score < {stats['relevance_threshold']})",
@@ -1140,7 +1249,9 @@ def format_topic_report(name: str, signal_threshold: int, stats: dict, hours: in
         items = int(c.get("item_count", 0))
         threshold_met = isc >= signal_threshold
         marker = "SIGNAL" if threshold_met else f"ISC below {signal_threshold}"
-        lines.append(f"    - \"{label}\": {items} items, ISC={isc} {'OK' if threshold_met else 'x'} {marker}")
+        lines.append(
+            f'    - "{label}": {items} items, ISC={isc} {"OK" if threshold_met else "x"} {marker}'
+        )
 
     lines.append(f"  Unassigned items:           {stats['unassigned']} (not in any cluster)")
 
@@ -1163,7 +1274,7 @@ def format_topic_report(name: str, signal_threshold: int, stats: dict, hours: in
             else:
                 lines.append(f"  Report: {r['report_type']} — pending")
     else:
-        lines.append(f"  Reports generated:          None")
+        lines.append("  Reports generated:          None")
 
     # Warnings / criticals
     for w in stats["warnings"]:
@@ -1174,7 +1285,9 @@ def format_topic_report(name: str, signal_threshold: int, stats: dict, hours: in
     # Bottleneck analysis
     if stats["unassigned"] > 10 and stats["content_total"] > 20:
         pct = round(stats["unassigned"] / stats["content_total"] * 100)
-        lines.append(f"\n  BOTTLENECK: {pct}% items unassigned — consider lowering clustering_similarity_threshold")
+        lines.append(
+            f"\n  BOTTLENECK: {pct}% items unassigned — consider lowering clustering_similarity_threshold"
+        )
 
     return "\n".join(lines)
 
@@ -1205,9 +1318,11 @@ def format_global_report(stats: dict) -> str:
     # Deepfake
     df = stats.get("deepfake", {})
     if df:
-        lines.append(f"  Deepfake scores:            {df.get('total_scored', 0)} scored"
-                      f", {df.get('suspicious', 0)} suspicious (>0.5)"
-                      f", {df.get('high_risk', 0)} high-risk (>0.8)")
+        lines.append(
+            f"  Deepfake scores:            {df.get('total_scored', 0)} scored"
+            f", {df.get('suspicious', 0)} suspicious (>0.5)"
+            f", {df.get('high_risk', 0)} high-risk (>0.8)"
+        )
 
     # Analysis jobs
     if stats["analysis_jobs"]:
@@ -1232,7 +1347,7 @@ def format_topic_engine_c(ec: dict) -> str:
         parts = ", ".join(f"{r['entity_type']}={r['cnt']}" for r in ec["identifiers_by_type"])
         lines.append(f"  Identifiers extracted:      {ec['identifiers_total']} ({parts})")
     else:
-        lines.append(f"  Identifiers extracted:      0")
+        lines.append("  Identifiers extracted:      0")
 
     lines.append(f"  Content w/o identifiers:    {ec['content_no_identifiers']} items")
 
@@ -1241,7 +1356,7 @@ def format_topic_engine_c(ec: dict) -> str:
         parts = ", ".join(f"{r['tpl']}={r['cnt']}" for r in ec["template_matches"])
         lines.append(f"  Template matches:           {ec['template_match_total']} ({parts})")
     else:
-        lines.append(f"  Template matches:           0")
+        lines.append("  Template matches:           0")
     lines.append(f"  Template coverage:          {ec['template_coverage_pct']}%")
 
     # Identifier clusters
@@ -1250,14 +1365,16 @@ def format_topic_engine_c(ec: dict) -> str:
         val = c["identifier_value"]
         if len(val) > 30:
             val = val[:27] + "..."
-        lines.append(f"    - {c['identifier_type']} / {val}: {c['source_count']} sources, {c['content_item_count']} items")
+        lines.append(
+            f"    - {c['identifier_type']} / {val}: {c['source_count']} sources, {c['content_item_count']} items"
+        )
 
     # Engine C signals
     if ec["ec_signals"]:
         parts = ", ".join(f"{r['signal_type']}={r['cnt']}" for r in ec["ec_signals"])
         lines.append(f"  Engine C signals:           {parts}")
     else:
-        lines.append(f"  Engine C signals:           0")
+        lines.append("  Engine C signals:           0")
 
     for w in ec["warnings"]:
         lines.append(f"  WARNING: {w}")
@@ -1272,10 +1389,16 @@ def format_global_engine_c(ec: dict) -> str:
     # Identifiers
     if ec["identifiers_global"]:
         parts = ", ".join(f"{r['entity_type']}={r['cnt']}" for r in ec["identifiers_global"][:6])
-        extra = f", +{len(ec['identifiers_global']) - 6} more" if len(ec["identifiers_global"]) > 6 else ""
-        lines.append(f"  Identifiers (all topics):   {ec['identifiers_global_total']} ({parts}{extra})")
+        extra = (
+            f", +{len(ec['identifiers_global']) - 6} more"
+            if len(ec["identifiers_global"]) > 6
+            else ""
+        )
+        lines.append(
+            f"  Identifiers (all topics):   {ec['identifiers_global_total']} ({parts}{extra})"
+        )
     else:
-        lines.append(f"  Identifiers (all topics):   0")
+        lines.append("  Identifiers (all topics):   0")
 
     # Templates
     if ec["templates_global"]:
@@ -1283,17 +1406,21 @@ def format_global_engine_c(ec: dict) -> str:
         lines.append(f"  Template matches (global):  {parts}")
         lines.append(f"  Most active template:       {ec['most_active_template']}")
     else:
-        lines.append(f"  Template matches (global):  0")
+        lines.append("  Template matches (global):  0")
 
     # Clusters
-    lines.append(f"  Identifier clusters:        {ec['clusters_total']} total, avg {ec['clusters_avg_sc']} sources/cluster")
+    lines.append(
+        f"  Identifier clusters:        {ec['clusters_total']} total, avg {ec['clusters_avg_sc']} sources/cluster"
+    )
 
     # Adapters
     lines.append(f"  Tipline items ingested:     {ec['tipline_count']}")
     lines.append(f"  Instagram items:            {ec['instagram_total']}")
 
     # Template health
-    lines.append(f"  Scam templates:             {ec['templates_builtin']} built-in, {ec['templates_custom']} custom")
+    lines.append(
+        f"  Scam templates:             {ec['templates_builtin']} built-in, {ec['templates_custom']} custom"
+    )
 
     for w in ec["warnings"]:
         lines.append(f"  WARNING: {w}")
@@ -1310,24 +1437,32 @@ def format_agency_summary(agency_stats: dict) -> str:
         if agency_stats.get("languages"):
             parts = ", ".join(f"{r['language']}={r['cnt']}" for r in agency_stats["languages"])
             lines.append(f"  Languages:                  {parts}")
-        lines.append(f"  Non-English content:        {agency_stats.get('non_english_count', 0)} items")
-        lines.append(f"  Translated:                 {agency_stats.get('translated_count', 0)} items")
-        lines.append(f"  Narrative clusters:         {agency_stats.get('narrative_cluster_count', 0)}")
+        lines.append(
+            f"  Non-English content:        {agency_stats.get('non_english_count', 0)} items"
+        )
+        lines.append(
+            f"  Translated:                 {agency_stats.get('translated_count', 0)} items"
+        )
+        lines.append(
+            f"  Narrative clusters:         {agency_stats.get('narrative_cluster_count', 0)}"
+        )
 
     elif agency == "cyber":
         if agency_stats.get("top_identifiers"):
-            lines.append(f"  Top identifiers (by source count):")
+            lines.append("  Top identifiers (by source count):")
             for r in agency_stats["top_identifiers"][:5]:
-                lines.append(f"    {r['identifier_type']} / {r['identifier_value']}: {r['source_count']} sources")
+                lines.append(
+                    f"    {r['identifier_type']} / {r['identifier_value']}: {r['source_count']} sources"
+                )
         if agency_stats.get("fraud_templates"):
             parts = ", ".join(f"{r['tpl']}={r['cnt']}" for r in agency_stats["fraud_templates"])
             lines.append(f"  Fraud templates:            {parts}")
         else:
-            lines.append(f"  Fraud templates:            0 matches")
+            lines.append("  Fraud templates:            0 matches")
 
     elif agency == "sebi":
         if agency_stats.get("finfluencer_handles"):
-            lines.append(f"  Finfluencer handles:")
+            lines.append("  Finfluencer handles:")
             for r in agency_stats["finfluencer_handles"]:
                 lines.append(f"    {r['identifier_value']}: {r['source_count']} sources")
         lines.append(f"  Pump-and-dump matches:      {agency_stats.get('pump_and_dump_count', 0)}")
@@ -1336,14 +1471,14 @@ def format_agency_summary(agency_stats: dict) -> str:
     elif agency == "ncb":
         lines.append(f"  Drug template matches:      {agency_stats.get('drug_template_count', 0)}")
         if agency_stats.get("crypto_wallets"):
-            lines.append(f"  Crypto wallets:")
+            lines.append("  Crypto wallets:")
             for r in agency_stats["crypto_wallets"]:
                 val = r["identifier_value"]
                 if len(val) > 20:
                     val = val[:17] + "..."
                 lines.append(f"    {r['identifier_type']} / {val}: {r['source_count']} sources")
         if agency_stats.get("dealer_phones"):
-            lines.append(f"  Dealer phones:")
+            lines.append("  Dealer phones:")
             for r in agency_stats["dealer_phones"]:
                 lines.append(f"    {r['identifier_value']}: {r['source_count']} sources")
         lines.append(f"  Dark web content:           {agency_stats.get('darkweb_count', 0)} items")
@@ -1355,9 +1490,12 @@ def format_agency_summary(agency_stats: dict) -> str:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Anveshak pipeline health diagnostics")
-    parser.add_argument("--hours", type=int, default=24, help="Look-back window in hours (default: 24)")
+    parser.add_argument(
+        "--hours", type=int, default=24, help="Look-back window in hours (default: 24)"
+    )
     parser.add_argument("--topic", type=str, default=None, help="Filter topics by name substring")
     parser.add_argument("--summary", action="store_true", help="Full-period stats (ignore --hours)")
     args = parser.parse_args()
@@ -1387,7 +1525,11 @@ def main() -> int:
     cluster_stats = check_cluster_freshness()
 
     stage_report, stage_warnings, stage_criticals = format_stage_report(
-        container_stats, queue_stats, flow_stats, staleness_stats, cluster_stats,
+        container_stats,
+        queue_stats,
+        flow_stats,
+        staleness_stats,
+        cluster_stats,
     )
     print(stage_report)
     all_warnings = list(stage_warnings)
@@ -1417,15 +1559,20 @@ def main() -> int:
         raw_threshold = topic.get("topic_relevance_threshold")
         rel_threshold = float(raw_threshold) if raw_threshold else 0.35
         stats = report_topic(
-            topic["id"], topic["name"],
+            topic["id"],
+            topic["name"],
             int(topic["signal_threshold"]),
             hours,
             relevance_threshold=rel_threshold,
         )
-        print(format_topic_report(
-            topic["name"], int(topic["signal_threshold"]),
-            stats, hours,
-        ))
+        print(
+            format_topic_report(
+                topic["name"],
+                int(topic["signal_threshold"]),
+                stats,
+                hours,
+            )
+        )
 
         # Engine C per-topic diagnostics
         if engine_c_ok:

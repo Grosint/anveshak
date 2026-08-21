@@ -6,6 +6,7 @@ must be actionable.
 
 pytest.mark.unit — imports only; does NOT load actual model weights.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -14,7 +15,6 @@ pytestmark = pytest.mark.unit
 
 
 class TestGetDeepfakeDetector:
-
     def test_unknown_model_type_raises_valueerror(self):
         """Unknown model type must raise ValueError listing valid options."""
         from anveshak.vision.detectors import get_deepfake_detector

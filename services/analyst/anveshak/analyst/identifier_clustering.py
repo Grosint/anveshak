@@ -6,6 +6,7 @@ from different sources → same actor/operation.
 
 Pure functions — no DB, no I/O. Safe to unit-test without infrastructure.
 """
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -13,20 +14,20 @@ from dataclasses import dataclass
 from datetime import datetime
 from itertools import combinations
 
-
 # ---------------------------------------------------------------------------
 # Data models
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class ContentIdentifier:
     """An identifier extracted from a specific content item."""
 
-    identifier_type: str       # PHONE_IN, UPI, CRYPTO_BTC, etc.
-    normalized_value: str      # canonical form
-    content_item_id: str       # which content item
-    source_id: str             # which source
-    seen_at: datetime          # when content was captured
+    identifier_type: str  # PHONE_IN, UPI, CRYPTO_BTC, etc.
+    normalized_value: str  # canonical form
+    content_item_id: str  # which content item
+    source_id: str  # which source
+    seen_at: datetime  # when content was captured
 
 
 @dataclass(frozen=True)
@@ -58,6 +59,7 @@ class NetworkEdge:
 # ---------------------------------------------------------------------------
 # Cluster building
 # ---------------------------------------------------------------------------
+
 
 def build_clusters(
     identifiers: list[ContentIdentifier],
@@ -100,16 +102,18 @@ def build_clusters(
         if len(source_ids) < min_sources:
             continue
 
-        clusters.append(IdentifierCluster(
-            identifier_type=id_type,
-            identifier_value=id_value,
-            content_item_ids=content_item_ids,
-            source_ids=source_ids,
-            source_count=len(source_ids),
-            content_item_count=len(content_item_ids),
-            first_seen_at=min(timestamps),
-            last_seen_at=max(timestamps),
-        ))
+        clusters.append(
+            IdentifierCluster(
+                identifier_type=id_type,
+                identifier_value=id_value,
+                content_item_ids=content_item_ids,
+                source_ids=source_ids,
+                source_count=len(source_ids),
+                content_item_count=len(content_item_ids),
+                first_seen_at=min(timestamps),
+                last_seen_at=max(timestamps),
+            )
+        )
 
     clusters.sort(key=lambda c: c.source_count, reverse=True)
     return clusters
@@ -118,6 +122,7 @@ def build_clusters(
 # ---------------------------------------------------------------------------
 # Incremental merge
 # ---------------------------------------------------------------------------
+
 
 def merge_into_cluster(
     cluster: IdentifierCluster,
@@ -137,13 +142,11 @@ def merge_into_cluster(
     """
     if new_item.identifier_type != cluster.identifier_type:
         raise ValueError(
-            f"type mismatch: cluster={cluster.identifier_type}, "
-            f"item={new_item.identifier_type}"
+            f"type mismatch: cluster={cluster.identifier_type}, item={new_item.identifier_type}"
         )
     if new_item.normalized_value != cluster.identifier_value:
         raise ValueError(
-            f"value mismatch: cluster={cluster.identifier_value}, "
-            f"item={new_item.normalized_value}"
+            f"value mismatch: cluster={cluster.identifier_value}, item={new_item.normalized_value}"
         )
 
     new_content_ids = cluster.content_item_ids | {new_item.content_item_id}
@@ -165,6 +168,7 @@ def merge_into_cluster(
 # Co-occurrence detection
 # ---------------------------------------------------------------------------
 
+
 def find_co_occurrences(
     identifiers: list[ContentIdentifier],
 ) -> list[NetworkEdge]:
@@ -182,9 +186,7 @@ def find_co_occurrences(
     # Map: content_item_id → set of (type, value) tuples
     content_to_ids: dict[str, set[tuple[str, str]]] = defaultdict(set)
     for ident in identifiers:
-        content_to_ids[ident.content_item_id].add(
-            (ident.identifier_type, ident.normalized_value)
-        )
+        content_to_ids[ident.content_item_id].add((ident.identifier_type, ident.normalized_value))
 
     # Count shared content items per identifier pair
     pair_contents: dict[tuple[tuple[str, str], tuple[str, str]], set[str]] = defaultdict(set)
@@ -195,14 +197,16 @@ def find_co_occurrences(
 
     edges: list[NetworkEdge] = []
     for (a, b), content_ids in pair_contents.items():
-        edges.append(NetworkEdge(
-            identifier_a_type=a[0],
-            identifier_a_value=a[1],
-            identifier_b_type=b[0],
-            identifier_b_value=b[1],
-            shared_content_item_ids=frozenset(content_ids),
-            shared_count=len(content_ids),
-        ))
+        edges.append(
+            NetworkEdge(
+                identifier_a_type=a[0],
+                identifier_a_value=a[1],
+                identifier_b_type=b[0],
+                identifier_b_value=b[1],
+                shared_content_item_ids=frozenset(content_ids),
+                shared_count=len(content_ids),
+            )
+        )
 
     edges.sort(key=lambda e: e.shared_count, reverse=True)
     return edges
@@ -211,6 +215,7 @@ def find_co_occurrences(
 # ---------------------------------------------------------------------------
 # Full network builder
 # ---------------------------------------------------------------------------
+
 
 def build_identifier_network(
     identifiers: list[ContentIdentifier],
@@ -229,7 +234,9 @@ def build_identifier_network(
         Tuple of (clusters, edges).
     """
     clusters = build_clusters(
-        identifiers, min_sources=min_sources, min_items=min_items,
+        identifiers,
+        min_sources=min_sources,
+        min_items=min_items,
     )
     edges = find_co_occurrences(identifiers)
     return clusters, edges

@@ -7,18 +7,18 @@ Exposes:
 The heavy ML pipeline (YOLO, deepfake, CLIP) runs in the ARQ worker (jobs.py).
 This FastAPI app handles health + direct-upload file storage only.
 """
+
 from __future__ import annotations
 
 import hashlib
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 import structlog
+from anveshak.logging import configure_logging
 from arq import create_pool as arq_create_pool
 from arq.connections import RedisSettings
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from prometheus_client import make_asgi_app
-from anveshak.logging import configure_logging
 
 configure_logging("vision")
 
@@ -35,9 +35,7 @@ _VID_EXTS: frozenset[str] = frozenset({".mp4", ".avi", ".mov", ".webm", ".mkv"})
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.db_pool = await create_pool()
-    app.state.arq_pool = await arq_create_pool(
-        RedisSettings.from_dsn(settings.redis_url)
-    )
+    app.state.arq_pool = await arq_create_pool(RedisSettings.from_dsn(settings.redis_url))
     log.info(
         "anveshak_vision.ready",
         device=settings.vision_device,
@@ -98,13 +96,15 @@ async def analyse_upload(file: UploadFile = File(...)):
     filename = file.filename or "upload.bin"
 
     # Validate actual file content via magic bytes — reject non-image/video
-    from .mime_check import validate_upload_mime, UnsafeMimeError
+    from .mime_check import UnsafeMimeError, validate_upload_mime
+
     try:
         detected_mime, ext = validate_upload_mime(image_bytes, filename)
     except UnsafeMimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    from datetime import datetime, UTC
+    from datetime import UTC, datetime
+
     now = datetime.now(UTC)
     storage_path = (
         settings.media_storage_root
@@ -141,4 +141,6 @@ async def analyse_upload(file: UploadFile = File(...)):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=settings.port)  # nosec B104 — containerized service must bind all interfaces; network isolation enforced by Docker/k3s
+
+    # containerized service must bind all interfaces; network isolation enforced by Docker/k3s
+    uvicorn.run(app, host="0.0.0.0", port=settings.port)  # nosec B104

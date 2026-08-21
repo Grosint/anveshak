@@ -5,17 +5,18 @@ analyst-owned objects that survive re-clustering cycles.
 
 pytest.mark.unit — no external dependencies.
 """
+
 from __future__ import annotations
 
-import re
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 
 class _FakeRecord(dict):
     """Mimics asyncpg.Record: dict() conversion works."""
+
     pass
 
 
@@ -27,38 +28,55 @@ def asyncpg_record(data: dict) -> _FakeRecord:
 # 1. Migration / Schema: SQL constants exist and are well-formed
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestTrackerSQLConstants:
     """SQL constants for trackers must exist and match table schema."""
 
     def test_sql_insert_tracker_exists(self):
         from anveshak.api.db.trackers import SQL_INSERT_TRACKER
+
         sql = SQL_INSERT_TRACKER.lower()
         assert "insert into trackers" in sql
 
     def test_sql_insert_tracker_has_required_columns(self):
         from anveshak.api.db.trackers import SQL_INSERT_TRACKER
+
         sql = SQL_INSERT_TRACKER.lower()
-        for col in ["id", "case_number", "org_id", "topic_id", "title",
-                     "status", "priority", "created_by", "created_at",
-                     "updated_at", "labels"]:
+        for col in [
+            "id",
+            "case_number",
+            "org_id",
+            "topic_id",
+            "title",
+            "status",
+            "priority",
+            "created_by",
+            "created_at",
+            "updated_at",
+            "labels",
+        ]:
             assert col in sql, f"SQL_INSERT_TRACKER must include {col}"
 
     def test_sql_insert_tracker_has_centroid(self):
         from anveshak.api.db.trackers import SQL_INSERT_TRACKER
+
         sql = SQL_INSERT_TRACKER.lower()
         assert "centroid" in sql, "SQL_INSERT_TRACKER must include centroid for cluster seeding"
 
     def test_sql_get_tracker_exists(self):
         from anveshak.api.db.trackers import SQL_GET_TRACKER
+
         sql = SQL_GET_TRACKER.lower()
         assert "trackers" in sql
-        assert "content_count" in sql or "tracker_content_items" in sql, \
+        assert "content_count" in sql or "tracker_content_items" in sql, (
             "SQL_GET_TRACKER should compute content/pending counts"
+        )
 
     def test_sql_get_tracker_includes_topic_name(self):
         """SQL_GET_TRACKER must JOIN topics to get topic_name."""
         from anveshak.api.db.trackers import SQL_GET_TRACKER
+
         sql = SQL_GET_TRACKER.lower()
         assert "topic_name" in sql, "SQL_GET_TRACKER must select topic_name"
         assert "topics" in sql, "SQL_GET_TRACKER must JOIN topics table"
@@ -66,11 +84,13 @@ class TestTrackerSQLConstants:
     def test_sql_list_trackers_includes_topic_name(self):
         """SQL_LIST_TRACKERS_BY_ORG must include topic_name."""
         from anveshak.api.db.trackers import SQL_LIST_TRACKERS_BY_ORG
+
         sql = SQL_LIST_TRACKERS_BY_ORG.lower()
         assert "topic_name" in sql, "SQL_LIST_TRACKERS_BY_ORG must select topic_name"
 
     def test_sql_list_trackers_exists(self):
         from anveshak.api.db.trackers import SQL_LIST_TRACKERS_BY_ORG
+
         sql = SQL_LIST_TRACKERS_BY_ORG.lower()
         assert "trackers" in sql
         assert "org_id" in sql or "$1" in sql
@@ -78,12 +98,14 @@ class TestTrackerSQLConstants:
     def test_sql_list_tracker_reports_exists(self):
         """SQL constant for listing reports by tracker must exist."""
         from anveshak.api.db.trackers import SQL_LIST_TRACKER_REPORTS
+
         sql = SQL_LIST_TRACKER_REPORTS.lower()
         assert "reports" in sql
         assert "tracker_id" in sql
 
     def test_sql_insert_tracker_content_exists(self):
         from anveshak.api.db.trackers import SQL_INSERT_TRACKER_CONTENT
+
         sql = SQL_INSERT_TRACKER_CONTENT.lower()
         assert "tracker_content_items" in sql
         assert "attached_by" in sql
@@ -91,29 +113,34 @@ class TestTrackerSQLConstants:
 
     def test_sql_confirm_content_exists(self):
         from anveshak.api.db.trackers import SQL_CONFIRM_CONTENT
+
         sql = SQL_CONFIRM_CONTENT.lower()
         assert "tracker_content_items" in sql
         assert "confirmed" in sql
 
     def test_sql_insert_exclusion_exists(self):
         from anveshak.api.db.trackers import SQL_INSERT_EXCLUSION
+
         sql = SQL_INSERT_EXCLUSION.lower()
         assert "tracker_content_exclusions" in sql
 
     def test_sql_insert_note_exists(self):
         from anveshak.api.db.trackers import SQL_INSERT_NOTE
+
         sql = SQL_INSERT_NOTE.lower()
         assert "tracker_notes" in sql
         assert "body" in sql
 
     def test_sql_insert_audit_log_exists(self):
         from anveshak.api.db.trackers import SQL_INSERT_AUDIT_LOG
+
         sql = SQL_INSERT_AUDIT_LOG.lower()
         assert "tracker_audit_log" in sql
         assert "action" in sql
 
     def test_sql_seed_from_cluster_exists(self):
         from anveshak.api.db.trackers import SQL_SEED_FROM_CLUSTER
+
         sql = SQL_SEED_FROM_CLUSTER.lower()
         assert "tracker_content_items" in sql
         assert "narrative_cluster" in sql or "content_items" in sql
@@ -122,6 +149,7 @@ class TestTrackerSQLConstants:
 # ---------------------------------------------------------------------------
 # 2. Case number generation
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestCaseNumberGeneration:
@@ -154,6 +182,7 @@ class TestCaseNumberGeneration:
 # 3. Repository functions
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestTrackerRepository:
     """Core repository functions for trackers."""
@@ -162,12 +191,14 @@ class TestTrackerRepository:
     async def test_create_tracker_returns_dict(self):
         from anveshak.api.db.trackers import create_tracker
 
-        fake_row = asyncpg_record({
-            "id": "trk-1",
-            "case_number": "TRK-2026-0001",
-            "title": "Test Tracker",
-            "status": "watching",
-        })
+        fake_row = asyncpg_record(
+            {
+                "id": "trk-1",
+                "case_number": "TRK-2026-0001",
+                "title": "Test Tracker",
+                "status": "watching",
+            }
+        )
         conn = AsyncMock()
         conn.fetchval = AsyncMock(return_value=1)  # sequence
         conn.fetchrow = AsyncMock(return_value=fake_row)
@@ -197,14 +228,16 @@ class TestTrackerRepository:
     async def test_get_tracker_returns_dict(self):
         from anveshak.api.db.trackers import get_tracker
 
-        fake_row = asyncpg_record({
-            "id": "trk-1",
-            "case_number": "TRK-2026-0001",
-            "title": "Test",
-            "status": "active",
-            "content_count": 10,
-            "pending_count": 3,
-        })
+        fake_row = asyncpg_record(
+            {
+                "id": "trk-1",
+                "case_number": "TRK-2026-0001",
+                "title": "Test",
+                "status": "active",
+                "content_count": 10,
+                "pending_count": 3,
+            }
+        )
         conn = AsyncMock()
         conn.fetchrow = AsyncMock(return_value=fake_row)
 
@@ -237,17 +270,24 @@ class TestTrackerRepository:
 
         await reject_content(conn, "trk-1", "ci-1", "user-1")
 
-        # Must have called execute at least twice (delete + insert exclusion + audit log)
-        assert conn.execute.call_count >= 2
+        # delete + insert exclusion + audit log
+        assert conn.execute.call_count >= 3
         calls_sql = [str(c) for c in conn.execute.call_args_list]
+
+        has_delete = any("DELETE" in s and "tracker_content_items" in s for s in calls_sql)
+        assert has_delete, "Must delete from tracker_content_items"
+
         has_exclusion = any("tracker_content_exclusions" in s for s in calls_sql)
-        has_delete = any("DELETE" in s.upper() or "tracker_content_items" in s for s in calls_sql)
         assert has_exclusion, "Must insert into tracker_content_exclusions"
+
+        has_audit = any("tracker_audit_log" in s for s in calls_sql)
+        assert has_audit, "Must write a tracker_audit_log row"
 
 
 # ---------------------------------------------------------------------------
 # 4. Status transitions
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestStatusTransitions:
@@ -263,7 +303,10 @@ class TestStatusTransitions:
 
         with pytest.raises((ValueError, Exception)):
             await update_tracker_status(
-                conn, "trk-1", "concluded", "user-1",
+                conn,
+                "trk-1",
+                "concluded",
+                "user-1",
                 closing_summary=None,
             )
 
@@ -276,7 +319,10 @@ class TestStatusTransitions:
 
         # Should not raise
         await update_tracker_status(
-            conn, "trk-1", "concluded", "user-1",
+            conn,
+            "trk-1",
+            "concluded",
+            "user-1",
             closing_summary="Case closed. Chargesheet filed.",
         )
         assert conn.execute.called
@@ -285,6 +331,7 @@ class TestStatusTransitions:
 # ---------------------------------------------------------------------------
 # 5. Access control
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestTrackerAccess:
@@ -319,47 +366,56 @@ class TestTrackerAccess:
 # 6. Notes immutability (no update/delete SQL exists)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestNotesImmutability:
     """Tracker notes must be append-only — no update or delete operations."""
 
     def test_no_update_note_sql(self):
         from anveshak.api.db import trackers
+
         # There must be no SQL constant for updating notes
         attrs = [a for a in dir(trackers) if a.startswith("SQL_")]
         update_note = [a for a in attrs if "UPDATE" in a and "NOTE" in a]
-        assert len(update_note) == 0, \
+        assert len(update_note) == 0, (
             f"Notes are immutable — no UPDATE SQL allowed, found: {update_note}"
+        )
 
     def test_no_delete_note_sql(self):
         from anveshak.api.db import trackers
+
         attrs = [a for a in dir(trackers) if a.startswith("SQL_")]
         delete_note = [a for a in attrs if "DELETE" in a and "NOTE" in a]
-        assert len(delete_note) == 0, \
+        assert len(delete_note) == 0, (
             f"Notes are immutable — no DELETE SQL allowed, found: {delete_note}"
+        )
 
 
 # ---------------------------------------------------------------------------
 # 7. SDK Pydantic model
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestTrackerModel:
-    """Tracker Pydantic model must follow CLAUDE.md rules."""
+    """Tracker Pydantic model must follow AGENTS.md rules."""
 
     def test_tracker_model_has_labels(self):
         """Every Pydantic model MUST have labels: Labels (non-Optional)."""
-        from anveshak.models.tracker import Tracker
         import typing
+
+        from anveshak.models.tracker import Tracker
+
         hints = typing.get_type_hints(Tracker)
         assert "labels" in hints, "Tracker model must have labels field"
 
     def test_tracker_model_has_required_fields(self):
-        from anveshak.models.tracker import Tracker
         import typing
+
+        from anveshak.models.tracker import Tracker
+
         hints = typing.get_type_hints(Tracker)
-        for field in ["case_number", "topic_id", "title", "status",
-                      "priority", "created_by"]:
+        for field in ["case_number", "topic_id", "title", "status", "priority", "created_by"]:
             assert field in hints, f"Tracker model must have {field}"
 
 
@@ -367,25 +423,31 @@ class TestTrackerModel:
 # 8. Scheduler: tracker matching SQL
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestTrackerMatching:
     """Auto-matching cycle must exist in scheduler."""
 
     def test_tracker_matching_function_exists(self):
         from anveshak.analyst.scheduler import _run_tracker_matching_cycle
+
         assert callable(_run_tracker_matching_cycle)
 
     def test_tracker_matching_loop_exists(self):
         from anveshak.analyst.scheduler import tracker_matching_loop
+
         assert callable(tracker_matching_loop)
 
     def test_tracker_matching_registered_in_lifespan(self):
         """tracker_matching_loop must be registered in the scheduler lifespan."""
         import inspect
+
         from anveshak.analyst import scheduler
+
         source = inspect.getsource(scheduler.lifespan)
-        assert "tracker_matching_loop" in source, \
+        assert "tracker_matching_loop" in source, (
             "tracker_matching_loop must be registered in lifespan task list"
+        )
 
     @pytest.mark.asyncio
     async def test_tracker_matching_skips_when_no_trackers(self):

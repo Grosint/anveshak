@@ -7,12 +7,12 @@ Fetch strategy per entry:
      (Crawl4AI → trafilatura fallback already handled there).
   4. If full fetch fails → fall back to summary anyway — never discard an entry.
 """
+
 from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional
 
 import httpx
 import structlog
@@ -34,7 +34,7 @@ _BROWSER_UA = (
 class RssItem:
     url: str
     title: str
-    raw_text: str          # summary or full article text
+    raw_text: str  # summary or full article text
     published_at: datetime  # always timezone-aware
 
 
@@ -68,12 +68,14 @@ def _parse_feed_sync(xml_bytes: bytes, feed_url: str) -> list[RssItem]:
         else:
             published_at = datetime.now(timezone.utc)
 
-        items.append(RssItem(
-            url=url,
-            title=title,
-            raw_text=raw_summary,
-            published_at=published_at,
-        ))
+        items.append(
+            RssItem(
+                url=url,
+                title=title,
+                raw_text=raw_summary,
+                published_at=published_at,
+            )
+        )
 
     return items
 
@@ -127,24 +129,28 @@ async def fetch_rss_items(feed_url: str) -> list[RssItem]:
                 if is_paywall_page(stripped):
                     log.warning("rss.paywall_detected", url=item.url)
                 else:
-                    enriched.append(RssItem(
-                        url=item.url,
-                        title=item.title,
-                        raw_text=stripped,
-                        published_at=item.published_at,
-                    ))
+                    enriched.append(
+                        RssItem(
+                            url=item.url,
+                            title=item.title,
+                            raw_text=stripped,
+                            published_at=item.published_at,
+                        )
+                    )
                     continue
         except Exception as exc:
             log.debug("rss.full_fetch_failed", url=item.url, error=str(exc))
 
         # Full fetch failed or still too short — keep summary if it has any content
         if item.raw_text or item.title:
-            enriched.append(RssItem(
-                url=item.url,
-                title=item.title,
-                raw_text=item.raw_text or item.title,
-                published_at=item.published_at,
-            ))
+            enriched.append(
+                RssItem(
+                    url=item.url,
+                    title=item.title,
+                    raw_text=item.raw_text or item.title,
+                    published_at=item.published_at,
+                )
+            )
 
     log.debug("rss.items_fetched", feed_url=feed_url, count=len(enriched))
     return enriched

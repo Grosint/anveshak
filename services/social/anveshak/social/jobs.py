@@ -4,21 +4,22 @@ WorkerSettings is the entry point for `arq anveshak.social.jobs.WorkerSettings`.
 
 poll_social_topic: polls all enabled adapters for a given topic.
 """
+
 from __future__ import annotations
 
-import asyncio
 import json
 import uuid
-import structlog
+from datetime import UTC, datetime
+
 import asyncpg
-from datetime import datetime, UTC
+import structlog
 from arq import ArqRedis
 from arq.connections import RedisSettings
 
-from .adapters.base import AdapterAuthError, AdapterRateLimitError, AdapterDegradedError
+from .adapters.base import AdapterAuthError, AdapterDegradedError, AdapterRateLimitError
 from .circuit_breaker import AdapterCircuitBreaker
 from .ingest import ingest_raw_item
-from .metrics import social_api_calls_total, social_rate_limit_total, social_poll_duration_seconds
+from .metrics import social_api_calls_total, social_poll_duration_seconds, social_rate_limit_total
 from .settings import settings
 
 log = structlog.get_logger(__name__)
@@ -44,7 +45,7 @@ SQL_GET_SOURCES_FOR_PLATFORM = """
 # Global adapter registry (populated at worker startup)
 # ---------------------------------------------------------------------------
 
-_ADAPTERS: dict = {}   # adapter_id → SourceAdapterBase instance
+_ADAPTERS: dict = {}  # adapter_id → SourceAdapterBase instance
 _CIRCUIT_BREAKERS: dict[str, AdapterCircuitBreaker] = {}  # adapter_id → breaker
 
 
@@ -98,45 +99,65 @@ def _validate_adapter_credentials(adapter_name: str, s) -> list[str]:
 # ARQ startup / shutdown hooks
 # ---------------------------------------------------------------------------
 
+
 async def startup(ctx: dict) -> None:
     """Initialise DB pool, ARQ pool, and authenticate all enabled adapters."""
     from anveshak.db import create_db_pool
+
     ctx["db_pool"] = await create_db_pool(settings.postgres_url)
-    ctx["arq_pool"] = ctx["redis"]   # ARQ passes redis connection in ctx["redis"]
+    ctx["arq_pool"] = ctx["redis"]  # ARQ passes redis connection in ctx["redis"]
 
     # Import adapters here to avoid circular imports
-    from .adapters.reddit import RedditAdapter
     from .adapters.bluesky import BlueskyAdapter
-    from .adapters.telegram import TelegramAdapter
-    from .adapters.x_adapter import make_x_adapter
     from .adapters.instagram import (
-        InstagramAdapter, InstagramRateLimitGuard,
-        INSTAGRAM_CIRCUIT_BREAKER_THRESHOLD, INSTAGRAM_CIRCUIT_BREAKER_COOLDOWN_S,
+        INSTAGRAM_CIRCUIT_BREAKER_COOLDOWN_S,
+        INSTAGRAM_CIRCUIT_BREAKER_THRESHOLD,
+        InstagramAdapter,
+        InstagramRateLimitGuard,
     )
-    from .adapters.youtube_adapter import YouTubeAdapter, YouTubeQuotaGuard
+    from .adapters.reddit import RedditAdapter
+    from .adapters.telegram import TelegramAdapter
     from .adapters.whatsapp import WhatsAppAdapter
+    from .adapters.x_adapter import make_x_adapter
+    from .adapters.youtube_adapter import YouTubeAdapter, YouTubeQuotaGuard
 
     candidates: list = []
 
     # Validate credentials before instantiation — clear warnings, no crash
     adapter_configs = [
         (settings.reddit_adapter_enabled, "reddit", lambda: RedditAdapter()),
-        (settings.bluesky_adapter_enabled, "bluesky", lambda: BlueskyAdapter(
-            quota_guard=__import__("anveshak.social.adapters.bluesky", fromlist=["BlueskyQuotaGuard"]).BlueskyQuotaGuard(
-                ctx["arq_pool"], settings.bluesky_daily_call_cap
-            )
-        )),
+        (
+            settings.bluesky_adapter_enabled,
+            "bluesky",
+            lambda: BlueskyAdapter(
+                quota_guard=__import__(
+                    "anveshak.social.adapters.bluesky", fromlist=["BlueskyQuotaGuard"]
+                ).BlueskyQuotaGuard(ctx["arq_pool"], settings.bluesky_daily_call_cap)
+            ),
+        ),
         (settings.telegram_adapter_enabled, "telegram", lambda: TelegramAdapter()),
         (settings.x_adapter_enabled, "x", lambda: make_x_adapter(ctx["arq_pool"])),
-        (settings.instagram_adapter_enabled, "instagram", lambda: InstagramAdapter(
-            rate_guard=InstagramRateLimitGuard(ctx["arq_pool"], settings.instagram_hourly_call_cap)
-        )),
-        (settings.youtube_adapter_enabled, "youtube", lambda: YouTubeAdapter(
-            quota_guard=YouTubeQuotaGuard(ctx["arq_pool"], settings.youtube_daily_quota_cap)
-        )),
-        (settings.whatsapp_adapter_enabled, "whatsapp", lambda: WhatsAppAdapter(
-            redis=ctx["arq_pool"]
-        )),
+        (
+            settings.instagram_adapter_enabled,
+            "instagram",
+            lambda: InstagramAdapter(
+                rate_guard=InstagramRateLimitGuard(
+                    ctx["arq_pool"], settings.instagram_hourly_call_cap
+                )
+            ),
+        ),
+        (
+            settings.youtube_adapter_enabled,
+            "youtube",
+            lambda: YouTubeAdapter(
+                quota_guard=YouTubeQuotaGuard(ctx["arq_pool"], settings.youtube_daily_quota_cap)
+            ),
+        ),
+        (
+            settings.whatsapp_adapter_enabled,
+            "whatsapp",
+            lambda: WhatsAppAdapter(redis=ctx["arq_pool"]),
+        ),
     ]
 
     for enabled, name, factory in adapter_configs:
@@ -211,16 +232,22 @@ async def _fire_adapter_logout_signal(
     signal_id = str(uuid.uuid4())
     now = datetime.now(UTC)
     description = f"{platform.title()} adapter logged out — re-scan QR to resume monitoring"
-    evidence = json.dumps({
-        "adapter_id": adapter_id,
-        "platform": platform,
-        "reason": reason,
-    })
+    evidence = json.dumps(
+        {
+            "adapter_id": adapter_id,
+            "platform": platform,
+            "reason": reason,
+        }
+    )
     try:
         async with pool.acquire() as conn:
             await conn.execute(
                 SQL_INSERT_ADAPTER_ALERT_SIGNAL,
-                signal_id, topic_id, description, evidence, now,
+                signal_id,
+                topic_id,
+                description,
+                evidence,
+                now,
             )
         log.warning("social.adapter_logout_signal_fired", topic_id=topic_id, adapter_id=adapter_id)
     except Exception as exc:
@@ -230,6 +257,7 @@ async def _fire_adapter_logout_signal(
 # ---------------------------------------------------------------------------
 # ARQ job: poll_social_topic
 # ---------------------------------------------------------------------------
+
 
 async def poll_social_topic(ctx: dict, topic_id: str, include_x: bool = True) -> dict:
     """Poll all enabled adapters for a single topic.
@@ -266,25 +294,31 @@ async def poll_social_topic(ctx: dict, topic_id: str, include_x: bool = True) ->
 
         # Respect X-specific poll interval — skip if not yet due (criteria 3.25)
         if platform == "twitter" and not include_x:
-            log.debug("social.x_poll_skipped", adapter_id=adapter_id,
-                      reason="x_poll_interval_s not elapsed")
+            log.debug(
+                "social.x_poll_skipped",
+                adapter_id=adapter_id,
+                reason="x_poll_interval_s not elapsed",
+            )
             continue
 
         async with db_pool.acquire() as conn:
-            source_rows = await conn.fetch(
-                SQL_GET_SOURCES_FOR_PLATFORM, platform, topic_id
-            )
+            source_rows = await conn.fetch(SQL_GET_SOURCES_FOR_PLATFORM, platform, topic_id)
         source_handles = [r["url_or_handle"] for r in source_rows]
 
         inserted = 0
         import time as _time
+
         _poll_t0 = _time.monotonic()
         try:
             social_api_calls_total.labels(platform=platform).inc()
             async for raw_item in adapter.collect(keywords, source_handles, topic_id):
                 try:
                     new = await ingest_raw_item(
-                        raw_item, topic_id, db_pool, arq_pool, adapter_id,
+                        raw_item,
+                        topic_id,
+                        db_pool,
+                        arq_pool,
+                        adapter_id,
                         org_id=topic_org_id,
                     )
                     if new:
@@ -331,9 +365,7 @@ async def poll_social_topic(ctx: dict, topic_id: str, include_x: bool = True) ->
             if cb:
                 await cb.record_success()
 
-        social_poll_duration_seconds.labels(platform=platform).observe(
-            _time.monotonic() - _poll_t0
-        )
+        social_poll_duration_seconds.labels(platform=platform).observe(_time.monotonic() - _poll_t0)
         summary[platform] = inserted
         log.info(
             "social.poll.done",
@@ -348,6 +380,7 @@ async def poll_social_topic(ctx: dict, topic_id: str, include_x: bool = True) ->
 # ---------------------------------------------------------------------------
 # ARQ job: fetch_source_metadata — on-demand profile metadata for assessments
 # ---------------------------------------------------------------------------
+
 
 async def fetch_source_metadata(
     ctx: dict,
@@ -383,6 +416,7 @@ async def fetch_source_metadata(
 
     # Store in assessment row
     import json
+
     pool = ctx.get("db_pool")
     if pool:
         async with pool.acquire() as conn:
@@ -404,6 +438,7 @@ async def fetch_source_metadata(
 # ---------------------------------------------------------------------------
 # ARQ WorkerSettings
 # ---------------------------------------------------------------------------
+
 
 class WorkerSettings:
     queue_name = "arq:social"  # Isolated queue — avoids cross-worker job theft

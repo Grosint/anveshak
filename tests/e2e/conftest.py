@@ -5,6 +5,7 @@ pytest.mark.e2e — requires running Docker Compose services with seeded demo da
   make up seed-demo
   uv run --package anveshak-tests pytest tests/e2e/ -v -m e2e
 """
+
 from __future__ import annotations
 
 import json
@@ -26,7 +27,9 @@ DEMO_VISION_JOB_ID = "f0000000-0000-0000-0000-000000000001"
 DEMO_SIGNAL_ID = "11000000-0000-0000-0000-000000000001"
 
 
-def _http(method: str, url: str, data: bytes | None = None, headers: dict | None = None, timeout: int = 10) -> tuple[int, dict | list]:
+def _http(
+    method: str, url: str, data: bytes | None = None, headers: dict | None = None, timeout: int = 10
+) -> tuple[int, dict | list]:
     req = urllib.request.Request(
         url,
         data=data,
@@ -47,12 +50,18 @@ def _http(method: str, url: str, data: bytes | None = None, headers: dict | None
 @pytest.fixture(scope="session")
 def api_token() -> str:
     """Obtain a JWT for the demo analyst account."""
-    data = json.dumps({
-        "username": DEMO_EMAIL,
-        "password": DEMO_PASSWORD,
-    }).encode()
-    status, body = _http("POST", f"{API_BASE}/api/v1/auth/login", data=data,
-                         headers={"Content-Type": "application/json"})
+    data = json.dumps(
+        {
+            "username": DEMO_EMAIL,
+            "password": DEMO_PASSWORD,
+        }
+    ).encode()
+    status, body = _http(
+        "POST",
+        f"{API_BASE}/api/v1/auth/login",
+        data=data,
+        headers={"Content-Type": "application/json"},
+    )
     if status != 200 or not body.get("access_token"):
         pytest.skip(f"Demo login failed (HTTP {status}) — is `make up seed-demo` done?")
     return body["access_token"]

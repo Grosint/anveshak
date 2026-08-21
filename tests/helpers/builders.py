@@ -6,11 +6,12 @@ Usage:
 
 Eliminates the 10+ line INSERT statements duplicated across integration tests.
 """
+
 from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any
 
 LABELS_JSON = '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'
@@ -90,10 +91,20 @@ class ContentItemBuilder:
                 ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,{embedding_val}$11,$12,$13,$14)
                 ON CONFLICT(content_hash) DO NOTHING
                 """,
-                data["id"], topic_id, source_id, data["raw_text"], data["clean_text"],
-                data["language"], data["content_hash"], data["url"], now,
-                data["credibility_score_at_capture"], data["narrative_cluster_id"],
-                now, now, LABELS_JSON,
+                data["id"],
+                topic_id,
+                source_id,
+                data["raw_text"],
+                data["clean_text"],
+                data["language"],
+                data["content_hash"],
+                data["url"],
+                now,
+                data["credibility_score_at_capture"],
+                data["narrative_cluster_id"],
+                now,
+                now,
+                LABELS_JSON,
             )
         return data["id"]
 
@@ -136,8 +147,14 @@ class SourceBuilder:
                     created_at, updated_at, labels
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 """,
-                source_id, self._name, handle, self._platform,
-                self._score, now, now, LABELS_JSON,
+                source_id,
+                self._name,
+                handle,
+                self._platform,
+                self._score,
+                now,
+                now,
+                LABELS_JSON,
             )
         return source_id
 
@@ -174,7 +191,13 @@ class TopicBuilder:
                                     created_at, updated_at, labels)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 """,
-                topic_id, self._name, self._keywords,
-                self._threshold, self._status, now, now, LABELS_JSON,
+                topic_id,
+                self._name,
+                self._keywords,
+                self._threshold,
+                self._status,
+                now,
+                now,
+                LABELS_JSON,
             )
         return topic_id

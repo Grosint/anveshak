@@ -2,24 +2,23 @@
 
 TDD RED phase: these tests define the expected behavior of WhatsAppAdapter.
 """
+
 from __future__ import annotations
 
 import json
-import pytest
-from datetime import datetime, UTC, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from anveshak.social.adapters.base import AdapterAuthError, RawItem
+import pytest
+from anveshak.social.adapters.base import AdapterAuthError
 from anveshak.social.adapters.whatsapp import (
     WhatsAppAdapter,
     WhatsAppBufferMessage,
-    BUFFER_KEY,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _bridge_health(status: str = "connected", groups: int = 3) -> dict:
     return {"status": status, "groups": groups, "buffer_length": 0}
@@ -64,8 +63,8 @@ def _make_adapter(redis_mock: AsyncMock | None = None) -> WhatsAppAdapter:
 # WhatsAppBufferMessage model tests
 # ---------------------------------------------------------------------------
 
-class TestWhatsAppBufferMessage:
 
+class TestWhatsAppBufferMessage:
     @pytest.mark.unit
     def test_parse_valid_message(self):
         raw = _buffer_msg()
@@ -97,8 +96,8 @@ class TestWhatsAppBufferMessage:
 # authenticate() tests
 # ---------------------------------------------------------------------------
 
-class TestWhatsAppAuthenticate:
 
+class TestWhatsAppAuthenticate:
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_auth_success(self):
@@ -185,18 +184,20 @@ class TestWhatsAppAuthenticate:
 # collect() tests
 # ---------------------------------------------------------------------------
 
-class TestWhatsAppCollect:
 
+class TestWhatsAppCollect:
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_collect_drains_buffer(self):
         redis_mock = AsyncMock()
-        redis_mock.lpop = AsyncMock(side_effect=[
-            _buffer_msg(text="msg1"),
-            _buffer_msg(text="msg2"),
-            _buffer_msg(text="msg3"),
-            None,
-        ])
+        redis_mock.lpop = AsyncMock(
+            side_effect=[
+                _buffer_msg(text="msg1"),
+                _buffer_msg(text="msg2"),
+                _buffer_msg(text="msg3"),
+                None,
+            ]
+        )
         adapter = _make_adapter(redis_mock)
 
         with patch("anveshak.social.adapters.whatsapp.settings") as ms:
@@ -214,9 +215,12 @@ class TestWhatsAppCollect:
                 mock_client.get = AsyncMock(return_value=mock_resp)
                 mock_client_cls.return_value = mock_client
 
-                items = [item async for item in adapter.collect(
-                    ["keywords"], ["120363001234567890@g.us"], "topic-1"
-                )]
+                items = [
+                    item
+                    async for item in adapter.collect(
+                        ["keywords"], ["120363001234567890@g.us"], "topic-1"
+                    )
+                ]
 
         assert len(items) == 3
         assert items[0].raw_text == "msg1"
@@ -227,11 +231,13 @@ class TestWhatsAppCollect:
     @pytest.mark.asyncio
     async def test_collect_filters_by_source_handles(self):
         redis_mock = AsyncMock()
-        redis_mock.lpop = AsyncMock(side_effect=[
-            _buffer_msg(group_jid="group-a@g.us", text="wanted"),
-            _buffer_msg(group_jid="group-b@g.us", text="unwanted"),
-            None,
-        ])
+        redis_mock.lpop = AsyncMock(
+            side_effect=[
+                _buffer_msg(group_jid="group-a@g.us", text="wanted"),
+                _buffer_msg(group_jid="group-b@g.us", text="unwanted"),
+                None,
+            ]
+        )
         adapter = _make_adapter(redis_mock)
 
         with patch("anveshak.social.adapters.whatsapp.settings") as ms:
@@ -249,9 +255,7 @@ class TestWhatsAppCollect:
                 mock_client.get = AsyncMock(return_value=mock_resp)
                 mock_client_cls.return_value = mock_client
 
-                items = [item async for item in adapter.collect(
-                    [], ["group-a@g.us"], "topic-1"
-                )]
+                items = [item async for item in adapter.collect([], ["group-a@g.us"], "topic-1")]
 
         assert len(items) == 1
         assert items[0].raw_text == "wanted"
@@ -261,9 +265,9 @@ class TestWhatsAppCollect:
     async def test_collect_respects_drain_max(self):
         redis_mock = AsyncMock()
         # More messages than drain_max
-        redis_mock.lpop = AsyncMock(side_effect=[
-            _buffer_msg(text=f"msg{i}") for i in range(10)
-        ] + [None])
+        redis_mock.lpop = AsyncMock(
+            side_effect=[_buffer_msg(text=f"msg{i}") for i in range(10)] + [None]
+        )
         adapter = _make_adapter(redis_mock)
 
         with patch("anveshak.social.adapters.whatsapp.settings") as ms:
@@ -281,9 +285,7 @@ class TestWhatsAppCollect:
                 mock_client.get = AsyncMock(return_value=mock_resp)
                 mock_client_cls.return_value = mock_client
 
-                items = [item async for item in adapter.collect(
-                    [], ["120363001234567890@g.us"], "topic-1"
-                )]
+                [item async for item in adapter.collect([], ["120363001234567890@g.us"], "topic-1")]
 
         # Should have called lpop at most drain_max times
         assert redis_mock.lpop.call_count == 2
@@ -310,9 +312,10 @@ class TestWhatsAppCollect:
                 mock_client.get = AsyncMock(return_value=mock_resp)
                 mock_client_cls.return_value = mock_client
 
-                items = [item async for item in adapter.collect(
-                    [], ["120363001234567890@g.us"], "topic-1"
-                )]
+                items = [
+                    item
+                    async for item in adapter.collect([], ["120363001234567890@g.us"], "topic-1")
+                ]
 
         assert len(items) == 0
 
@@ -320,10 +323,12 @@ class TestWhatsAppCollect:
     @pytest.mark.asyncio
     async def test_collect_media_only_message(self):
         redis_mock = AsyncMock()
-        redis_mock.lpop = AsyncMock(side_effect=[
-            _buffer_msg(text=None, media_path="/app/media/group/2026/06/24/abc.jpg"),
-            None,
-        ])
+        redis_mock.lpop = AsyncMock(
+            side_effect=[
+                _buffer_msg(text=None, media_path="/app/media/group/2026/06/24/abc.jpg"),
+                None,
+            ]
+        )
         adapter = _make_adapter(redis_mock)
 
         with patch("anveshak.social.adapters.whatsapp.settings") as ms:
@@ -341,9 +346,10 @@ class TestWhatsAppCollect:
                 mock_client.get = AsyncMock(return_value=mock_resp)
                 mock_client_cls.return_value = mock_client
 
-                items = [item async for item in adapter.collect(
-                    [], ["120363001234567890@g.us"], "topic-1"
-                )]
+                items = [
+                    item
+                    async for item in adapter.collect([], ["120363001234567890@g.us"], "topic-1")
+                ]
 
         assert len(items) == 1
         assert "[media:image]" in items[0].raw_text
@@ -353,10 +359,12 @@ class TestWhatsAppCollect:
     @pytest.mark.asyncio
     async def test_collect_skip_no_text_no_media(self):
         redis_mock = AsyncMock()
-        redis_mock.lpop = AsyncMock(side_effect=[
-            _buffer_msg(text=None, media_path=None),  # should be skipped
-            None,
-        ])
+        redis_mock.lpop = AsyncMock(
+            side_effect=[
+                _buffer_msg(text=None, media_path=None),  # should be skipped
+                None,
+            ]
+        )
         adapter = _make_adapter(redis_mock)
 
         with patch("anveshak.social.adapters.whatsapp.settings") as ms:
@@ -374,9 +382,10 @@ class TestWhatsAppCollect:
                 mock_client.get = AsyncMock(return_value=mock_resp)
                 mock_client_cls.return_value = mock_client
 
-                items = [item async for item in adapter.collect(
-                    [], ["120363001234567890@g.us"], "topic-1"
-                )]
+                items = [
+                    item
+                    async for item in adapter.collect([], ["120363001234567890@g.us"], "topic-1")
+                ]
 
         assert len(items) == 0
 
@@ -384,11 +393,13 @@ class TestWhatsAppCollect:
     @pytest.mark.asyncio
     async def test_collect_malformed_json_skipped(self):
         redis_mock = AsyncMock()
-        redis_mock.lpop = AsyncMock(side_effect=[
-            b"not-valid-json{{{",
-            _buffer_msg(text="valid"),
-            None,
-        ])
+        redis_mock.lpop = AsyncMock(
+            side_effect=[
+                b"not-valid-json{{{",
+                _buffer_msg(text="valid"),
+                None,
+            ]
+        )
         adapter = _make_adapter(redis_mock)
 
         with patch("anveshak.social.adapters.whatsapp.settings") as ms:
@@ -406,9 +417,10 @@ class TestWhatsAppCollect:
                 mock_client.get = AsyncMock(return_value=mock_resp)
                 mock_client_cls.return_value = mock_client
 
-                items = [item async for item in adapter.collect(
-                    [], ["120363001234567890@g.us"], "topic-1"
-                )]
+                items = [
+                    item
+                    async for item in adapter.collect([], ["120363001234567890@g.us"], "topic-1")
+                ]
 
         assert len(items) == 1
         assert items[0].raw_text == "valid"
@@ -417,10 +429,12 @@ class TestWhatsAppCollect:
     @pytest.mark.asyncio
     async def test_collect_timestamp_utc(self):
         redis_mock = AsyncMock()
-        redis_mock.lpop = AsyncMock(side_effect=[
-            _buffer_msg(text="msg", timestamp=1719200400),
-            None,
-        ])
+        redis_mock.lpop = AsyncMock(
+            side_effect=[
+                _buffer_msg(text="msg", timestamp=1719200400),
+                None,
+            ]
+        )
         adapter = _make_adapter(redis_mock)
 
         with patch("anveshak.social.adapters.whatsapp.settings") as ms:
@@ -438,9 +452,10 @@ class TestWhatsAppCollect:
                 mock_client.get = AsyncMock(return_value=mock_resp)
                 mock_client_cls.return_value = mock_client
 
-                items = [item async for item in adapter.collect(
-                    [], ["120363001234567890@g.us"], "topic-1"
-                )]
+                items = [
+                    item
+                    async for item in adapter.collect([], ["120363001234567890@g.us"], "topic-1")
+                ]
 
         assert items[0].captured_at.tzinfo is not None
 
@@ -448,10 +463,12 @@ class TestWhatsAppCollect:
     @pytest.mark.asyncio
     async def test_collect_media_path_traversal_rejected(self):
         redis_mock = AsyncMock()
-        redis_mock.lpop = AsyncMock(side_effect=[
-            _buffer_msg(text="has media", media_path="/../../../etc/passwd"),
-            None,
-        ])
+        redis_mock.lpop = AsyncMock(
+            side_effect=[
+                _buffer_msg(text="has media", media_path="/../../../etc/passwd"),
+                None,
+            ]
+        )
         adapter = _make_adapter(redis_mock)
 
         with patch("anveshak.social.adapters.whatsapp.settings") as ms:
@@ -469,9 +486,10 @@ class TestWhatsAppCollect:
                 mock_client.get = AsyncMock(return_value=mock_resp)
                 mock_client_cls.return_value = mock_client
 
-                items = [item async for item in adapter.collect(
-                    [], ["120363001234567890@g.us"], "topic-1"
-                )]
+                items = [
+                    item
+                    async for item in adapter.collect([], ["120363001234567890@g.us"], "topic-1")
+                ]
 
         # Item is still yielded (has text) but media_urls should be empty
         assert len(items) == 1
@@ -481,9 +499,11 @@ class TestWhatsAppCollect:
     @pytest.mark.asyncio
     async def test_collect_logout_sentinel_raises(self):
         redis_mock = AsyncMock()
-        redis_mock.lpop = AsyncMock(side_effect=[
-            _logout_sentinel(),
-        ])
+        redis_mock.lpop = AsyncMock(
+            side_effect=[
+                _logout_sentinel(),
+            ]
+        )
         adapter = _make_adapter(redis_mock)
 
         with patch("anveshak.social.adapters.whatsapp.settings") as ms:
@@ -502,9 +522,12 @@ class TestWhatsAppCollect:
                 mock_client_cls.return_value = mock_client
 
                 with pytest.raises(AdapterAuthError, match="logged out"):
-                    [item async for item in adapter.collect(
-                        [], ["120363001234567890@g.us"], "topic-1"
-                    )]
+                    [
+                        item
+                        async for item in adapter.collect(
+                            [], ["120363001234567890@g.us"], "topic-1"
+                        )
+                    ]
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -528,18 +551,23 @@ class TestWhatsAppCollect:
                 mock_client_cls.return_value = mock_client
 
                 with pytest.raises(AdapterAuthError, match="logged out"):
-                    [item async for item in adapter.collect(
-                        [], ["120363001234567890@g.us"], "topic-1"
-                    )]
+                    [
+                        item
+                        async for item in adapter.collect(
+                            [], ["120363001234567890@g.us"], "topic-1"
+                        )
+                    ]
 
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_collect_author_fields(self):
         redis_mock = AsyncMock()
-        redis_mock.lpop = AsyncMock(side_effect=[
-            _buffer_msg(text="test", sender="919876543210@s.whatsapp.net", sender_name="Ravi"),
-            None,
-        ])
+        redis_mock.lpop = AsyncMock(
+            side_effect=[
+                _buffer_msg(text="test", sender="919876543210@s.whatsapp.net", sender_name="Ravi"),
+                None,
+            ]
+        )
         adapter = _make_adapter(redis_mock)
 
         with patch("anveshak.social.adapters.whatsapp.settings") as ms:
@@ -557,9 +585,10 @@ class TestWhatsAppCollect:
                 mock_client.get = AsyncMock(return_value=mock_resp)
                 mock_client_cls.return_value = mock_client
 
-                items = [item async for item in adapter.collect(
-                    [], ["120363001234567890@g.us"], "topic-1"
-                )]
+                items = [
+                    item
+                    async for item in adapter.collect([], ["120363001234567890@g.us"], "topic-1")
+                ]
 
         assert items[0].author_id == "919876543210@s.whatsapp.net"
         assert items[0].author_handle == "Ravi"
@@ -569,8 +598,8 @@ class TestWhatsAppCollect:
 # health() tests
 # ---------------------------------------------------------------------------
 
-class TestWhatsAppHealth:
 
+class TestWhatsAppHealth:
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_health_connected(self):

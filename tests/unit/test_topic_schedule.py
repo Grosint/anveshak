@@ -8,6 +8,7 @@ Tests:
 
 pytest.mark.unit — mock DB.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock
@@ -23,6 +24,7 @@ class TestUpdateTopicScheduleDB:
     @pytest.mark.asyncio
     async def test_function_exists(self):
         from anveshak.api.db.topics import update_topic_schedule
+
         assert callable(update_topic_schedule)
 
     @pytest.mark.asyncio
@@ -32,9 +34,7 @@ class TestUpdateTopicScheduleDB:
         mock_conn = AsyncMock()
         mock_conn.execute = AsyncMock()
 
-        await update_topic_schedule(
-            mock_conn, "topic-1", "0 9 * * MON", "weekly_digest"
-        )
+        await update_topic_schedule(mock_conn, "topic-1", "0 9 * * MON", "weekly_digest")
         mock_conn.execute.assert_awaited_once()
         call_args = mock_conn.execute.call_args[0]
         assert call_args[1] == "0 9 * * MON"
@@ -60,6 +60,7 @@ class TestScheduleEndpointValidation:
     def test_valid_cron_accepted(self):
         """croniter must accept the expression."""
         from croniter import croniter
+
         # Should not raise
         croniter("0 9 * * MON")
         croniter("*/15 * * * *")
@@ -68,5 +69,6 @@ class TestScheduleEndpointValidation:
     def test_invalid_cron_rejected(self):
         """croniter rejects malformed cron expressions."""
         from croniter import croniter
+
         with pytest.raises((ValueError, KeyError)):
             croniter("INVALID CRON")

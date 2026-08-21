@@ -3,10 +3,11 @@
 Retry suffix must replace (not append) on each attempt to prevent
 3x bloat after 3 retries.
 """
+
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -23,7 +24,6 @@ VALID_LLM_RESPONSE = {
 
 
 class TestRetryPromptReplace:
-
     @pytest.mark.asyncio
     async def test_retry_prompt_does_not_grow(self):
         """After N retries, prompt length must not exceed original + one suffix."""

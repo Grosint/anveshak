@@ -2,15 +2,14 @@
 
 All tests are pure — no DB, no network.
 """
-import pytest
 
 from anveshak.analyst.credibility import clamp_score, compute_new_score
 from anveshak.analyst.settings import AnalystSettings
 
-
 # ---------------------------------------------------------------------------
 # clamp_score (7.5)
 # ---------------------------------------------------------------------------
+
 
 def test_clamp_score_ceiling():
     assert clamp_score(105.0) == 100.0
@@ -36,6 +35,7 @@ def test_clamp_score_exactly_0():
 # compute_new_score — deepfake drop now uses clamp_score (7.5 ceiling fix)
 # ---------------------------------------------------------------------------
 
+
 def test_compute_new_score_floored():
     """Very large deepfake count — result should not go below 0.0."""
     result = compute_new_score(5.0, deepfake_count=100)
@@ -58,6 +58,7 @@ def test_compute_new_score_ceiling_not_exceeded():
 # ---------------------------------------------------------------------------
 # Cross-verification boost guard (7.1) — settings interaction
 # ---------------------------------------------------------------------------
+
 
 def test_cross_verify_boost_uses_separate_min_threshold():
     """credibility_min_auto_boost must be < credibility_cross_verify_boost
@@ -94,6 +95,7 @@ def test_cross_verify_boost_skip_logic():
 # Contradiction drop guard (7.2) — noise ratio logic
 # ---------------------------------------------------------------------------
 
+
 def test_contradiction_noise_ratio_below_threshold_skips():
     """Source with noise ratio 0.4 should NOT be penalised when threshold is 0.6."""
     s = AnalystSettings()
@@ -128,10 +130,11 @@ def test_contradiction_drop_floored_at_zero():
 # New source default (7.7)
 # ---------------------------------------------------------------------------
 
+
 def test_new_source_default_credibility_score():
     """SDK Source model must default credibility_score to 50.0 (7.7)."""
-    from anveshak.models.source import Source
     from anveshak.models.base import Labels
+    from anveshak.models.source import Source
 
     labels = Labels(classification="OPEN", domain="osint", owner_org="anveshak")
     source = Source(

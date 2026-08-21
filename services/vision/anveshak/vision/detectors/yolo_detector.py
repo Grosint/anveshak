@@ -10,10 +10,10 @@ Criteria 4.7–4.11:
 Hardware: YOLOv8n (nano) on CPU by default.
 Upgrade:  YOLO_MODEL_SIZE=xlarge → YOLOv8x (see hardware.md).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 import structlog
 
@@ -23,21 +23,30 @@ log = structlog.get_logger(__name__)
 
 # COCO class IDs relevant to OSINT / defence monitoring — tagged in content_items.labels
 # YOLOv8 COCO classes: https://github.com/ultralytics/ultralytics/blob/main/ultralytics/cfg/datasets/coco.yaml
-_HIGH_INTEREST_LABELS: frozenset[str] = frozenset({
-    "person",
-    "car", "truck", "bus", "motorcycle",
-    "airplane", "helicopter",
-    "boat", "ship",
-    "military vehicle",
-    "gun", "knife", "rifle",       # not in standard COCO but appear in custom fine-tuned
-})
+_HIGH_INTEREST_LABELS: frozenset[str] = frozenset(
+    {
+        "person",
+        "car",
+        "truck",
+        "bus",
+        "motorcycle",
+        "airplane",
+        "helicopter",
+        "boat",
+        "ship",
+        "military vehicle",
+        "gun",
+        "knife",
+        "rifle",  # not in standard COCO but appear in custom fine-tuned
+    }
+)
 
 
 @dataclass
 class YOLODetection:
     label: str
-    confidence: float   # 0.0–1.0
-    bbox: list[float]   # [x1, y1, x2, y2] in pixel coordinates
+    confidence: float  # 0.0–1.0
+    bbox: list[float]  # [x1, y1, x2, y2] in pixel coordinates
 
 
 class YOLODetector:
@@ -77,8 +86,14 @@ class YOLODetector:
         """
         if self._model is None:
             self._load_model()
+        if self._model is None:
+            # Reachable when the model volume is mounted but empty, which is the
+            # state on a first deploy. Fail loudly rather than raising an opaque
+            # AttributeError on None further down.
+            raise RuntimeError("YOLO model failed to load - check the mounted model cache")
 
         import io
+
         import numpy as np
         from PIL import Image
 
@@ -126,7 +141,4 @@ class YOLODetector:
 
     def to_jsonb(self, detections: list[YOLODetection]) -> list[dict]:
         """Serialise detections for vision_results.yolo_detections JSONB column."""
-        return [
-            {"label": d.label, "confidence": d.confidence, "bbox": d.bbox}
-            for d in detections
-        ]
+        return [{"label": d.label, "confidence": d.confidence, "bbox": d.bbox} for d in detections]

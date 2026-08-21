@@ -7,19 +7,20 @@ Includes:
   - JWT secret validation (startup guard)
   - Password hashing (bcrypt)
 """
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from typing import Optional
 
 import bcrypt as _bcrypt
-from jose import JWTError, jwt
-from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from ..settings import settings
-
 import structlog
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
+
+from ..settings import settings
 
 _log = structlog.get_logger(__name__)
 
@@ -46,9 +47,7 @@ def create_access_token(
     expires_delta: Optional[timedelta] = None,
 ) -> str:
     """Create a JWT with sub, username, role, org_id, jti, exp, iat."""
-    expire = datetime.now(UTC) + (
-        expires_delta or timedelta(minutes=settings.jwt_expire_minutes)
-    )
+    expire = datetime.now(UTC) + (expires_delta or timedelta(minutes=settings.jwt_expire_minutes))
     payload = {
         "sub": subject,
         "username": username,
@@ -64,9 +63,7 @@ def create_access_token(
 def verify_token(token: str) -> dict:
     """Decode and verify a JWT. Raises 401 on invalid/expired."""
     try:
-        return jwt.decode(
-            token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
-        )
+        return jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
     except JWTError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -111,6 +108,7 @@ async def get_current_user(
 # Token revocation (Redis-backed)
 # ---------------------------------------------------------------------------
 
+
 async def revoke_token(redis, jti: str, ttl_seconds: int) -> None:
     """Add a jti to the Redis blocklist with TTL matching token expiry."""
     await redis.setex(f"blocklist:{jti}", ttl_seconds, "1")
@@ -124,6 +122,7 @@ async def is_token_revoked(redis, jti: str) -> bool:
 # ---------------------------------------------------------------------------
 # Startup guard
 # ---------------------------------------------------------------------------
+
 
 def validate_jwt_secret(secret: str) -> None:
     """Raise ValueError if the JWT secret is the insecure default.

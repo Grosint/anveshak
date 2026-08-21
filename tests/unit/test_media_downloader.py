@@ -2,10 +2,12 @@
 
 Criteria 4.4: content_hash is SHA-256 of raw bytes (not text hash, not URL hash).
 """
+
 import hashlib
-import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 class TestMediaDownloaderContentHash:
@@ -31,6 +33,7 @@ class TestMediaDownloaderContentHash:
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             from anveshak.media.downloader import download_media_asset
+
             result = asyncio.get_event_loop().run_until_complete(
                 download_media_asset(
                     url="http://example.com/image.png",
@@ -47,7 +50,6 @@ class TestMediaDownloaderContentHash:
     @pytest.mark.unit
     def test_content_hash_differs_from_text_hash(self, tmp_path):
         """SHA-256 of raw bytes ≠ SHA-256 of text string (bytes are the ground truth)."""
-        import asyncio
 
         # For binary data, the byte hash and text-decoded hash will differ
         raw_bytes = b"\xff\xd8\xff\xe0JPEG binary data"
@@ -72,6 +74,7 @@ class TestMediaDownloaderContentHash:
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             from anveshak.media.downloader import download_media_asset
+
             result = asyncio.get_event_loop().run_until_complete(
                 download_media_asset(
                     url="http://example.com/page.html",
@@ -85,6 +88,7 @@ class TestMediaDownloaderContentHash:
     def test_returns_none_on_http_error(self, tmp_path):
         """Returns None (not exception) on HTTP failure."""
         import asyncio
+
         import httpx
 
         mock_client = AsyncMock()
@@ -94,6 +98,7 @@ class TestMediaDownloaderContentHash:
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             from anveshak.media.downloader import download_media_asset
+
             result = asyncio.get_event_loop().run_until_complete(
                 download_media_asset(
                     url="http://unreachable.example.com/img.jpg",
@@ -126,15 +131,18 @@ class TestMediaDownloaderContentHash:
 
             with patch("httpx.AsyncClient", return_value=mock_client):
                 from anveshak.media.downloader import download_media_asset
+
                 result = asyncio.get_event_loop().run_until_complete(
                     download_media_asset(
-                        url=f"http://example.com/file",
+                        url="http://example.com/file",
                         topic_id="t",
                         storage_root=tmp_path,
                     )
                 )
             if result:
-                assert result.asset_type == expected_type, f"Expected {expected_type} for {content_type}"
+                assert result.asset_type == expected_type, (
+                    f"Expected {expected_type} for {content_type}"
+                )
 
 
 class TestLocalFilePathSupport:
@@ -144,6 +152,7 @@ class TestLocalFilePathSupport:
     def test_local_file_returns_result(self, tmp_path):
         """Local .jpg file inside media volume returns valid MediaDownloadResult."""
         import asyncio
+
         from anveshak.media.downloader import download_media_asset
 
         # Setup: create a file inside storage_root/media/topic/...
@@ -169,6 +178,7 @@ class TestLocalFilePathSupport:
     def test_local_file_not_found_returns_none(self, tmp_path):
         """Non-existent local path returns None."""
         import asyncio
+
         from anveshak.media.downloader import download_media_asset
 
         # Path inside volume but file doesn't exist
@@ -187,6 +197,7 @@ class TestLocalFilePathSupport:
     def test_local_file_path_traversal_rejected(self, tmp_path):
         """Path traversal attempt (../../etc/passwd) returns None."""
         import asyncio
+
         from anveshak.media.downloader import download_media_asset
 
         # Create a file OUTSIDE the media volume
@@ -211,6 +222,7 @@ class TestLocalFilePathSupport:
         """File that exists but is outside storage_root returns None."""
         import asyncio
         import tempfile
+
         from anveshak.media.downloader import download_media_asset
 
         # Create file in a completely separate directory (outside storage_root)
@@ -231,6 +243,7 @@ class TestLocalFilePathSupport:
     def test_local_video_file_detected(self, tmp_path):
         """Local .mp4 file returns asset_type='video'."""
         import asyncio
+
         from anveshak.media.downloader import download_media_asset
 
         media_dir = tmp_path / "media" / "test-topic"
@@ -253,6 +266,7 @@ class TestLocalFilePathSupport:
     def test_local_file_directly_under_storage_root(self, tmp_path):
         """File at storage_root/group_id/date/hash.jpg (WhatsApp bridge pattern)."""
         import asyncio
+
         from anveshak.media.downloader import download_media_asset
 
         # WhatsApp bridge stores at /app/media/{group_id}/{date}/{hash}.jpg
@@ -290,6 +304,7 @@ class TestLocalFilePathSupport:
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             from anveshak.media.downloader import download_media_asset
+
             result = asyncio.get_event_loop().run_until_complete(
                 download_media_asset(
                     url="http://example.com/image.png",

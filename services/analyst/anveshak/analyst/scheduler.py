@@ -11,6 +11,7 @@ The sentence-transformers encoder is lazy-loaded on first /internal/embed reques
 
 Entry point: python -m anveshak.analyst.scheduler
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -25,23 +26,29 @@ from pathlib import Path
 import asyncpg
 import structlog
 import uvicorn
+from anveshak.logging import configure_logging
+from arq import ArqRedis
 from arq import create_pool as create_redis_pool
 from arq.connections import RedisSettings
 from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict
-from anveshak.logging import configure_logging
 
 configure_logging("analyst-scheduler")
 from prometheus_client import generate_latest
 
 from .clustering import run_clustering
 from .dedup import detect_near_duplicates, upsert_near_duplicates
-from .identifier_clustering import build_clusters, ContentIdentifier
-from .labeller import check_label_staleness
-from .metrics import REGISTRY as ANALYST_REGISTRY, analyst_orphan_sweep_total, analyst_identifier_clusters_total
-from .settings import settings
-from .discovery import discover_snowball_sources, discover_telegram_channels, discover_entity_sources  # noqa: E501
+from .discovery import (  # noqa: E501
+    discover_entity_sources,
+    discover_snowball_sources,
+    discover_telegram_channels,
+)
 from .effectiveness import compute_source_effectiveness
+from .identifier_clustering import ContentIdentifier, build_clusters
+from .labeller import check_label_staleness
+from .metrics import REGISTRY as ANALYST_REGISTRY
+from .metrics import analyst_identifier_clusters_total, analyst_orphan_sweep_total
+from .settings import settings
 from .signal_engine import signal_engine_loop
 
 log = structlog.get_logger(__name__)
@@ -156,6 +163,7 @@ class EmbedResponse(BaseModel):
 # No-op broadcast — signal engine needs a broadcast fn but scheduler has no WS
 # ---------------------------------------------------------------------------
 
+
 async def _noop_broadcast(payload: dict) -> None:
     """No-op broadcast: API service owns WebSocket delivery, not the scheduler."""
     pass
@@ -165,8 +173,12 @@ async def _noop_broadcast(payload: dict) -> None:
 # Loops
 # ---------------------------------------------------------------------------
 
+
 def write_archive_batch(
-    topic_id: str, month: str, items: list[dict], archive_root: str,
+    topic_id: str,
+    month: str,
+    items: list[dict],
+    archive_root: str,
 ) -> str:
     """Write items to a gzipped JSONL archive file. Returns the file path."""
     topic_dir = Path(archive_root) / topic_id
@@ -202,7 +214,8 @@ async def archive_and_delete_expired(pool: asyncpg.Pool) -> dict:
 
     async with pool.acquire() as conn:
         expired_rows = await conn.fetch(
-            SQL_EXPIRED_CONTENT_ITEMS, settings.content_retention_days,
+            SQL_EXPIRED_CONTENT_ITEMS,
+            settings.content_retention_days,
         )
 
     if not expired_rows:
@@ -227,7 +240,10 @@ async def archive_and_delete_expired(pool: asyncpg.Pool) -> dict:
 
             # Write to compressed JSONL
             path = write_archive_batch(
-                topic_id, month, items, settings.content_archive_root,
+                topic_id,
+                month,
+                items,
+                settings.content_archive_root,
             )
             file_size = os.path.getsize(path)
 
@@ -235,14 +251,19 @@ async def archive_and_delete_expired(pool: asyncpg.Pool) -> dict:
             async with pool.acquire() as conn:
                 await conn.execute(
                     SQL_UPSERT_CONTENT_ARCHIVE,
-                    str(uuid.uuid4()), topic_id, month, path,
-                    len(items), file_size,
+                    str(uuid.uuid4()),
+                    topic_id,
+                    month,
+                    path,
+                    len(items),
+                    file_size,
                     '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}',
                 )
 
                 # Delete from PostgreSQL (CASCADE handles children)
                 result = await conn.execute(
-                    "DELETE FROM content_items WHERE id = ANY($1)", item_ids,
+                    "DELETE FROM content_items WHERE id = ANY($1)",
+                    item_ids,
                 )
                 count = int(result.split()[-1]) if result else 0
                 deleted += count
@@ -250,21 +271,28 @@ async def archive_and_delete_expired(pool: asyncpg.Pool) -> dict:
             archived += len(items)
             log.info(
                 "scheduler.content_retention.batch",
-                topic_id=topic_id, month=month,
-                archived=len(items), deleted=count, path=path,
+                topic_id=topic_id,
+                month=month,
+                archived=len(items),
+                deleted=count,
+                path=path,
             )
 
         except Exception as exc:
             errors += 1
             log.warning(
                 "scheduler.content_retention.batch_error",
-                topic_id=topic_id, month=month, error=str(exc),
+                topic_id=topic_id,
+                month=month,
+                error=str(exc),
             )
 
     log.info(
         "scheduler.content_retention.complete",
         cutoff_days=settings.content_retention_days,
-        archived=archived, deleted=deleted, errors=errors,
+        archived=archived,
+        deleted=deleted,
+        errors=errors,
     )
     return {"archived": archived, "deleted": deleted, "errors": errors}
 
@@ -296,7 +324,7 @@ async def content_retention_loop(pool: asyncpg.Pool) -> None:
             log.error("scheduler.content_retention.error", error=str(exc))
 
 
-async def cluster_loop(pool: asyncpg.Pool, redis: object) -> None:
+async def cluster_loop(pool: asyncpg.Pool, redis: ArqRedis) -> None:
     """Cluster content_items by topic using Leiden community detection (criteria 2.1-2.5).
 
     After clustering, enqueues label generation and cross-verification
@@ -391,7 +419,7 @@ async def convergence_loop(pool: asyncpg.Pool) -> None:
             log.error("scheduler.convergence_loop.error", error=str(exc))
 
 
-async def orphan_sweep(pool: asyncpg.Pool, redis: object) -> None:
+async def orphan_sweep(pool: asyncpg.Pool, redis: ArqRedis) -> None:
     """Safety net: re-enqueue content_items that missed ARQ enqueue after insert.
 
     Catches items where the scraper/social inserted a row but the
@@ -434,6 +462,7 @@ async def orphan_sweep(pool: asyncpg.Pool, redis: object) -> None:
 # Relevance threshold auto-calibration
 # ---------------------------------------------------------------------------
 
+
 async def relevance_calibration_loop(pool: asyncpg.Pool) -> None:
     """Periodically calibrate per-topic relevance thresholds from score distributions."""
     from .relevance import calibrate_topic_thresholds
@@ -468,10 +497,24 @@ async def relevance_calibration_loop(pool: asyncpg.Pool) -> None:
 
 # Engine C identifier types (must match identifiers.py extraction output)
 _ENGINE_C_TYPES = (
-    "PHONE_IN", "PHONE_INTL", "UPI", "EMAIL", "CRYPTO_BTC", "CRYPTO_ETH",
-    "CRYPTO_TRC20", "TELEGRAM_HANDLE", "INSTAGRAM_HANDLE",
-    "FACEBOOK_HANDLE", "X_HANDLE", "URL_DOMAIN",
-    "GSTIN", "UDYAM", "PAN", "BANK_ACCOUNT", "SEBI_REG", "IFSC",
+    "PHONE_IN",
+    "PHONE_INTL",
+    "UPI",
+    "EMAIL",
+    "CRYPTO_BTC",
+    "CRYPTO_ETH",
+    "CRYPTO_TRC20",
+    "TELEGRAM_HANDLE",
+    "INSTAGRAM_HANDLE",
+    "FACEBOOK_HANDLE",
+    "X_HANDLE",
+    "URL_DOMAIN",
+    "GSTIN",
+    "UDYAM",
+    "PAN",
+    "BANK_ACCOUNT",
+    "SEBI_REG",
+    "IFSC",
 )
 
 SQL_UNCLUSTERED_IDENTIFIERS = """
@@ -579,8 +622,7 @@ async def _run_identifier_cluster_cycle(pool: asyncpg.Pool) -> int:
                         for ci_id in cluster.content_item_ids:
                             # Find the source_id for this content item
                             source_id = next(
-                                (i.source_id for i in identifiers
-                                 if i.content_item_id == ci_id),
+                                (i.source_id for i in identifiers if i.content_item_id == ci_id),
                                 None,
                             )
                             if source_id:
@@ -727,12 +769,12 @@ async def tracker_matching_loop(pool: asyncpg.Pool) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def discovery_loop(pool: asyncpg.Pool, redis: object) -> None:
+async def discovery_loop(pool: asyncpg.Pool, redis: ArqRedis) -> None:
     """Daily loop: run all discovery methods for each active topic.
 
     Runs once immediately on startup, then every 24 hours.
     Snowball + forwarding run inline (lightweight SQL).
-    LLM suggestions dispatched via ARQ (CLAUDE.md rule 5).
+    LLM suggestions dispatched via ARQ (AGENTS.md rule 5).
     """
     while True:
         try:
@@ -747,12 +789,14 @@ async def discovery_loop(pool: asyncpg.Pool, redis: object) -> None:
                     await discover_entity_sources(pool, topic_id)
                     # LLM suggestions dispatched to ARQ worker (rule 5: async LLM)
                     await redis.enqueue_job(
-                        "suggest_source_types_job", topic_id,
+                        "suggest_source_types_job",
+                        topic_id,
                         _queue_name="arq:analyst",
                     )
                 except Exception as exc:
-                    log.warning("scheduler.discovery.topic_error",
-                                topic_id=topic_id, error=str(exc))
+                    log.warning(
+                        "scheduler.discovery.topic_error", topic_id=topic_id, error=str(exc)
+                    )
 
         except Exception as exc:
             log.error("scheduler.discovery.error", error=str(exc))
@@ -774,10 +818,12 @@ async def effectiveness_loop(pool: asyncpg.Pool) -> None:
 
 # ---------------------------------------------------------------------------
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start scheduler loops as background tasks."""
     from anveshak.db import create_db_pool
+
     pool = await create_db_pool(settings.postgres_url)
     redis = await create_redis_pool(RedisSettings.from_dsn(settings.redis_url))
 
@@ -837,11 +883,13 @@ async def embed(req: EmbedRequest):
 # Main
 # ---------------------------------------------------------------------------
 
+
 async def main() -> None:
     """Start the analyst scheduler with FastAPI + background loops."""
     config = uvicorn.Config(
         app,
-        host="0.0.0.0",
+        # metrics endpoint inside a container; must bind all interfaces to be reachable
+        host="0.0.0.0",  # nosec B104
         port=settings.metrics_port,
         log_level="warning",
     )

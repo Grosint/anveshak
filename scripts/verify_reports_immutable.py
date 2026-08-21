@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Verify report immutability invariants.
 
-CLAUDE.md rule 4: Reports are immutable. Once `generated_at` is set, it is
+AGENTS.md rule 4: Reports are immutable. Once `generated_at` is set, it is
 NEVER updated. A report is a point-in-time snapshot. `source_snapshot` captures
 credibility scores at generation time.
 
@@ -15,10 +15,10 @@ Usage:
     python scripts/verify_reports_immutable.py
     uv run --package anveshak-sdk python scripts/verify_reports_immutable.py
 """
+
 import ast
 import sys
 from pathlib import Path
-
 
 ROOT = Path(__file__).parent.parent
 
@@ -52,17 +52,13 @@ def check_report_model() -> list[str]:
             annotation = fields["generated_at"].annotation
             annotation_str = ast.unparse(annotation)
             if "Optional" not in annotation_str and "None" not in annotation_str:
-                violations.append(
-                    f"Report.generated_at must be Optional — got: {annotation_str}"
-                )
+                violations.append(f"Report.generated_at must be Optional — got: {annotation_str}")
 
         # source_snapshot must exist
         if "source_snapshot" not in fields:
             violations.append("Report model is missing `source_snapshot` field")
 
-    if not any(
-        isinstance(n, ast.ClassDef) and n.name == "Report" for n in ast.walk(tree)
-    ):
+    if not any(isinstance(n, ast.ClassDef) and n.name == "Report" for n in ast.walk(tree)):
         violations.append(f"No Report class found in {model_file}")
 
     return violations
@@ -81,15 +77,12 @@ def check_no_generated_at_update() -> list[str]:
         lines = source.splitlines()
         for i, line in enumerate(lines, 1):
             if "generated_at" in line and (
-                "UPDATE" in line.upper()
-                or "SET" in line.upper()
-                or "execute" in line
+                "UPDATE" in line.upper() or "SET" in line.upper() or "execute" in line
             ):
                 # Allow INSERT (first-time write) but not UPDATE
                 if "INSERT" not in line.upper() and "SELECT" not in line.upper():
                     violations.append(
-                        f"Potential generated_at mutation in {py_file.name}:{i}\n"
-                        f"  {line.strip()}"
+                        f"Potential generated_at mutation in {py_file.name}:{i}\n  {line.strip()}"
                     )
 
     return violations
@@ -164,7 +157,7 @@ def main() -> int:
     if all_violations:
         print(f"FAILED — {len(all_violations)} violation(s) found.")
         print(
-            "Fix: Report immutability is a CLAUDE.md rule. "
+            "Fix: Report immutability is an AGENTS.md rule. "
             "generated_at is set ONCE by the ARQ report-generation job. "
             "It must never be updated. Use report_source_warnings for retroactive flags."
         )

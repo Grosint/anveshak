@@ -1,4 +1,5 @@
 """Unit tests for Telegram forwarding chain discovery."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
@@ -12,10 +13,12 @@ pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 # RawItem forwarding fields
 # ---------------------------------------------------------------------------
 
+
 def test_raw_item_has_forwarding_fields():
     """RawItem must have optional forwarded_from_channel_id and forwarded_from_channel_name."""
+    from datetime import UTC, datetime
+
     from anveshak.social.adapters.base import RawItem
-    from datetime import datetime, UTC
 
     # Without forwarding (default)
     item = RawItem(
@@ -46,6 +49,7 @@ def test_raw_item_has_forwarding_fields():
 # Telegram forwarding discovery job
 # ---------------------------------------------------------------------------
 
+
 async def test_discover_telegram_channels_upserts():
     """discover_telegram_channels aggregates forwarding data and upserts."""
     from anveshak.analyst.discovery import discover_telegram_channels
@@ -56,15 +60,25 @@ async def test_discover_telegram_channels_upserts():
     mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
     mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
 
-    mock_conn.fetch = AsyncMock(side_effect=[
-        # SQL_FORWARDING_AGGREGATION results
-        [
-            {"forwarded_from_channel_id": "origin1", "forwarded_from_channel_name": "Origin One", "forward_count": 12},
-            {"forwarded_from_channel_id": "origin2", "forwarded_from_channel_name": "Origin Two", "forward_count": 5},
-        ],
-        # SQL_EXISTING_SOURCE_URLS
-        [],
-    ])
+    mock_conn.fetch = AsyncMock(
+        side_effect=[
+            # SQL_FORWARDING_AGGREGATION results
+            [
+                {
+                    "forwarded_from_channel_id": "origin1",
+                    "forwarded_from_channel_name": "Origin One",
+                    "forward_count": 12,
+                },
+                {
+                    "forwarded_from_channel_id": "origin2",
+                    "forwarded_from_channel_name": "Origin Two",
+                    "forward_count": 5,
+                },
+            ],
+            # SQL_EXISTING_SOURCE_URLS
+            [],
+        ]
+    )
     mock_conn.execute = AsyncMock()
 
     count = await discover_telegram_channels(mock_pool, "topic-1")
@@ -82,13 +96,19 @@ async def test_discover_telegram_skips_registered():
     mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
     mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
 
-    mock_conn.fetch = AsyncMock(side_effect=[
-        [
-            {"forwarded_from_channel_id": "registered_channel", "forwarded_from_channel_name": "Already There", "forward_count": 20},
-        ],
-        # Already registered
-        [{"url_or_handle": "@registered_channel"}],
-    ])
+    mock_conn.fetch = AsyncMock(
+        side_effect=[
+            [
+                {
+                    "forwarded_from_channel_id": "registered_channel",
+                    "forwarded_from_channel_name": "Already There",
+                    "forward_count": 20,
+                },
+            ],
+            # Already registered
+            [{"url_or_handle": "@registered_channel"}],
+        ]
+    )
     mock_conn.execute = AsyncMock()
 
     count = await discover_telegram_channels(mock_pool, "topic-1")

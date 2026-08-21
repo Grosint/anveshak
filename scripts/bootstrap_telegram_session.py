@@ -18,6 +18,7 @@ Output:
 
 Copy the output line into your .env file. Never commit it to git.
 """
+
 import asyncio
 import os
 import sys
@@ -44,7 +45,7 @@ async def bootstrap() -> None:
     print("You will receive an OTP in your Telegram app.\n")
 
     client = TelegramClient(StringSession(), api_id, api_hash)
-    await client.start()   # interactive: prompts for phone + OTP
+    await client.start()  # interactive: prompts for phone + OTP
 
     session_string = client.session.save()
     await client.disconnect()

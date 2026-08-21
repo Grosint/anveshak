@@ -3,19 +3,20 @@
 pytest.mark.unit -- no external dependencies, no DB, no network.
 All DB and ML functions are mocked.
 """
+
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, UTC
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class _FakeEntity:
@@ -93,6 +94,7 @@ _MOD = "anveshak.analyst.jobs"
 # Tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestAnalyseContentHappyPath:
     """Full English pipeline -- all 9 params written to DB in correct order."""
@@ -110,26 +112,31 @@ class TestAnalyseContentHappyPath:
             patch(f"{_MOD}.detect_language", return_value="en"),
             patch(f"{_MOD}.needs_translation", return_value=False),
             patch(f"{_MOD}.is_model_loaded", return_value=True),
-            patch(f"{_MOD}.parse_entities", return_value=[
-                _FakeEntity("ORG", "DRDO", 1.0, "en"),
-            ]),
+            patch(
+                f"{_MOD}.parse_entities",
+                return_value=[
+                    _FakeEntity("ORG", "DRDO", 1.0, "en"),
+                ],
+            ),
             patch(f"{_MOD}.encode_text", return_value=fake_embedding),
             patch(f"{_MOD}.build_topic_query_embedding", return_value=[0.2] * 384),
             patch(f"{_MOD}.compute_topic_relevance", return_value=0.78),
             patch(f"{_MOD}.analyse_sentiment", return_value=_FakeSentiment(0.5, 0.6, 0.1, 0.3)),
             patch(f"{_MOD}.extract_keywords", return_value=[_FakeKeyword("missile", 0.01)]),
             patch(f"{_MOD}.compute_entity_minhash", return_value=[123, 456]),
-            patch(f"{_MOD}.analyst_nlp_jobs_total") as mock_counter,
+            patch(f"{_MOD}.analyst_nlp_jobs_total"),
             patch(f"{_MOD}.analyst_nlp_duration_seconds"),
             patch(f"{_MOD}.analyst_relevance_score"),
         ):
             from anveshak.analyst.jobs import analyse_content
+
             await analyse_content(ctx, "ci-1")
 
         # Verify SQL_UPDATE_CONTENT_NLP was called
         conn = pool.acquire().__aenter__.return_value
         update_calls = [
-            c for c in conn.execute.call_args_list
+            c
+            for c in conn.execute.call_args_list
             if len(c.args) > 1 and "UPDATE content_items" in str(c.args[0])
         ]
         assert len(update_calls) >= 1, "SQL_UPDATE_CONTENT_NLP not called"
@@ -171,6 +178,7 @@ class TestAnalyseContentNotFound:
             patch(f"{_MOD}.is_quality_content") as mock_quality,
         ):
             from anveshak.analyst.jobs import analyse_content
+
             await analyse_content(ctx, "nonexistent-id")
 
         # Quality gate should never be reached
@@ -196,6 +204,7 @@ class TestAnalyseContentQualityGate:
             patch(f"{_MOD}.analyst_nlp_jobs_total") as mock_counter,
         ):
             from anveshak.analyst.jobs import analyse_content
+
             await analyse_content(ctx, "ci-1")
 
         # Pipeline functions should never be called
@@ -237,6 +246,7 @@ class TestAnalyseContentTranslationFallback:
             mock_settings.translation_enabled = True
             mock_settings.minhash_num_perm = 128
             from anveshak.analyst.jobs import analyse_content
+
             await analyse_content(ctx, "ci-1")
 
         # NER and embedding should receive the original text (fallback)
@@ -282,6 +292,7 @@ class TestAnalyseContentTranslationSuccess:
             mock_settings.translation_model = "facebook/nllb-200-distilled-600M"
             mock_settings.minhash_num_perm = 128
             from anveshak.analyst.jobs import analyse_content
+
             await analyse_content(ctx, "ci-1")
 
         # NER must use English model ("en") with translated text
@@ -292,7 +303,8 @@ class TestAnalyseContentTranslationSuccess:
         # DB write: $3 = translated_text, $4 = translation_model
         conn = pool.acquire().__aenter__.return_value
         update_calls = [
-            c for c in conn.execute.call_args_list
+            c
+            for c in conn.execute.call_args_list
             if len(c.args) > 1 and "UPDATE content_items" in str(c.args[0])
         ]
         assert len(update_calls) >= 1
@@ -328,6 +340,7 @@ class TestAnalyseContentNERUnavailable:
             patch(f"{_MOD}.analyst_relevance_score"),
         ):
             from anveshak.analyst.jobs import analyse_content
+
             await analyse_content(ctx, "ci-1")
 
         # parse_entities must NOT be called when model is not loaded
@@ -361,9 +374,12 @@ class TestAnalyseContentSQLParamOrder:
             patch(f"{_MOD}.detect_language", return_value="en"),
             patch(f"{_MOD}.needs_translation", return_value=False),
             patch(f"{_MOD}.is_model_loaded", return_value=True),
-            patch(f"{_MOD}.parse_entities", return_value=[
-                _FakeEntity("PERSON", "Narendra Modi", 1.0, "en"),
-            ]),
+            patch(
+                f"{_MOD}.parse_entities",
+                return_value=[
+                    _FakeEntity("PERSON", "Narendra Modi", 1.0, "en"),
+                ],
+            ),
             patch(f"{_MOD}.encode_text", return_value=[0.5] * 384),
             patch(f"{_MOD}.build_topic_query_embedding", return_value=[0.2] * 384),
             patch(f"{_MOD}.compute_topic_relevance", return_value=0.91),
@@ -375,11 +391,13 @@ class TestAnalyseContentSQLParamOrder:
             patch(f"{_MOD}.analyst_relevance_score"),
         ):
             from anveshak.analyst.jobs import analyse_content
+
             await analyse_content(ctx, "ci-1")
 
         conn = pool.acquire().__aenter__.return_value
         update_calls = [
-            c for c in conn.execute.call_args_list
+            c
+            for c in conn.execute.call_args_list
             if len(c.args) > 1 and "UPDATE content_items" in str(c.args[0])
         ]
         assert len(update_calls) >= 1

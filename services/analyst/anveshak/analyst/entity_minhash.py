@@ -8,11 +8,11 @@ both mentioning "AIIMS" + "Delhi").
 
 The MinHash is stored as INTEGER[] in content_items.entity_minhash.
 """
+
 from __future__ import annotations
 
-from datasketch import MinHash
-
 import numpy as np
+from datasketch import MinHash
 
 
 def compute_entity_minhash(

@@ -8,6 +8,7 @@ Tests:
   - Correct timeout/concurrency settings
   - Dark web health check
 """
+
 from __future__ import annotations
 
 import pytest
@@ -19,8 +20,8 @@ pytestmark = pytest.mark.unit
 # URL validation — DNS leak prevention
 # ---------------------------------------------------------------------------
 
-class TestOnionURLValidation:
 
+class TestOnionURLValidation:
     def test_valid_http_onion_url(self):
         from anveshak.scraper.fetch import validate_onion_url
 
@@ -67,8 +68,8 @@ class TestOnionURLValidation:
 # fetch_url_via_tor — DNS leak prevention at fetch level
 # ---------------------------------------------------------------------------
 
-class TestFetchURLViaTor:
 
+class TestFetchURLViaTor:
     @pytest.mark.asyncio
     async def test_rejects_clearnet_url(self):
         """fetch_url_via_tor must raise ValueError for non-.onion URLs."""
@@ -82,8 +83,8 @@ class TestFetchURLViaTor:
 # SQL query — darkweb sources only
 # ---------------------------------------------------------------------------
 
-class TestDarkwebSQLFilter:
 
+class TestDarkwebSQLFilter:
     def test_darkweb_query_filters_platform(self):
         from anveshak.scraper.jobs import SQL_GET_DARKWEB_SOURCES
 
@@ -110,10 +111,11 @@ class TestDarkwebSQLFilter:
 # Labels — RESTRICTED classification for dark web content
 # ---------------------------------------------------------------------------
 
-class TestDarkwebLabels:
 
+class TestDarkwebLabels:
     def test_darkweb_labels_classification_restricted(self):
         import json
+
         from anveshak.scraper.jobs import _DARKWEB_LABELS_JSON
 
         labels = json.loads(_DARKWEB_LABELS_JSON)
@@ -121,6 +123,7 @@ class TestDarkwebLabels:
 
     def test_darkweb_labels_domain_darkweb(self):
         import json
+
         from anveshak.scraper.jobs import _DARKWEB_LABELS_JSON
 
         labels = json.loads(_DARKWEB_LABELS_JSON)
@@ -128,6 +131,7 @@ class TestDarkwebLabels:
 
     def test_darkweb_labels_has_owner_org(self):
         import json
+
         from anveshak.scraper.jobs import _DARKWEB_LABELS_JSON
 
         labels = json.loads(_DARKWEB_LABELS_JSON)
@@ -136,6 +140,7 @@ class TestDarkwebLabels:
     def test_web_labels_classification_open(self):
         """Web labels must remain OPEN — dark web change must not affect them."""
         import json
+
         from anveshak.scraper.jobs import _LABELS_JSON
 
         labels = json.loads(_LABELS_JSON)
@@ -146,8 +151,8 @@ class TestDarkwebLabels:
 # Settings — dark web specific config
 # ---------------------------------------------------------------------------
 
-class TestDarkwebSettings:
 
+class TestDarkwebSettings:
     def test_darkweb_timeout_higher_than_web(self):
         from anveshak.scraper.settings import settings
 
@@ -179,8 +184,8 @@ class TestDarkwebSettings:
 # Metrics — dark web histogram exists
 # ---------------------------------------------------------------------------
 
-class TestDarkwebMetrics:
 
+class TestDarkwebMetrics:
     def test_darkweb_fetch_duration_metric_exists(self):
         from anveshak.scraper.metrics import scraper_darkweb_fetch_duration_seconds
 
@@ -202,8 +207,8 @@ class TestDarkwebMetrics:
 # Health check — dark web included in daily checks
 # ---------------------------------------------------------------------------
 
-class TestDarkwebHealthCheck:
 
+class TestDarkwebHealthCheck:
     def test_health_sql_includes_darkweb(self):
         from anveshak.scraper.health import SQL_GET_ALL_ACTIVE_SOURCES
 
@@ -222,8 +227,8 @@ class TestDarkwebHealthCheck:
 # Worker registration
 # ---------------------------------------------------------------------------
 
-class TestDarkwebWorkerRegistration:
 
+class TestDarkwebWorkerRegistration:
     def test_scrape_darkweb_topic_registered(self):
         from anveshak.scraper.jobs import WorkerSettings
 

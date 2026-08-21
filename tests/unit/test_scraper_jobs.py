@@ -2,11 +2,11 @@
 
 pytest.mark.unit — no external dependencies, no DB, no network.
 """
-import pytest
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from anveshak.scraper.jobs import _extract_media_urls, scrape_topic
-
 
 # ---------------------------------------------------------------------------
 # _extract_media_urls — pure function tests (no mocks needed)
@@ -40,10 +40,7 @@ class TestExtractMediaUrls:
     @pytest.mark.unit
     def test_skips_data_uris(self):
         """data: scheme URLs not included."""
-        html = (
-            '<img src="data:image/png;base64,iVBOR...">'
-            '<img src="https://example.com/real.jpg">'
-        )
+        html = '<img src="data:image/png;base64,iVBOR..."><img src="https://example.com/real.jpg">'
         urls = _extract_media_urls(html, "https://example.com")
         assert len(urls) == 1
         assert "real.jpg" in urls[0]
@@ -144,11 +141,13 @@ class TestScrapeTopic:
 
         mock_fetch_url.return_value = "Fallback article content for testing purposes."
 
-        source = _make_fake_record({
-            "id": "src-1",
-            "url_or_handle": "https://example.com/article",
-            "credibility_score": 0.8,
-        })
+        source = _make_fake_record(
+            {
+                "id": "src-1",
+                "url_or_handle": "https://example.com/article",
+                "credibility_score": 0.8,
+            }
+        )
 
         mock_conn = AsyncMock()
         call_count = {"n": 0}
@@ -177,18 +176,18 @@ class TestScrapeTopic:
     @patch("anveshak.scraper.jobs.create_shared_crawler")
     async def test_dedup_via_content_hash(self, mock_crawler, mock_fetch_url):
         """ON CONFLICT DO NOTHING → counter not incremented on duplicate."""
-        mock_crawler.return_value.__aenter__ = AsyncMock(
-            side_effect=RuntimeError("force fallback")
-        )
+        mock_crawler.return_value.__aenter__ = AsyncMock(side_effect=RuntimeError("force fallback"))
         mock_crawler.return_value.__aexit__ = AsyncMock(return_value=False)
 
         mock_fetch_url.return_value = "Duplicate article content."
 
-        source = _make_fake_record({
-            "id": "src-1",
-            "url_or_handle": "https://example.com/dupe",
-            "credibility_score": 0.7,
-        })
+        source = _make_fake_record(
+            {
+                "id": "src-1",
+                "url_or_handle": "https://example.com/dupe",
+                "credibility_score": 0.7,
+            }
+        )
 
         mock_conn = AsyncMock()
         call_count = {"n": 0}
@@ -221,22 +220,26 @@ class TestLanguageDetection:
     @patch("anveshak.scraper.jobs.create_shared_crawler")
     @patch("anveshak.scraper.jobs.detect_language")
     async def test_language_detected_not_hardcoded(
-        self, mock_detect, mock_crawler, mock_fetch_url, mock_robots,
+        self,
+        mock_detect,
+        mock_crawler,
+        mock_fetch_url,
+        mock_robots,
     ):
         """Language should be detected from text, not hardcoded to 'en'."""
-        mock_crawler.return_value.__aenter__ = AsyncMock(
-            side_effect=RuntimeError("force fallback")
-        )
+        mock_crawler.return_value.__aenter__ = AsyncMock(side_effect=RuntimeError("force fallback"))
         mock_crawler.return_value.__aexit__ = AsyncMock(return_value=False)
 
         mock_fetch_url.return_value = "Ceci est un article en français avec suffisamment de texte."
         mock_detect.return_value = "fr"
 
-        source = _make_fake_record({
-            "id": "src-1",
-            "url_or_handle": "https://example.fr/article",
-            "credibility_score": 0.8,
-        })
+        source = _make_fake_record(
+            {
+                "id": "src-1",
+                "url_or_handle": "https://example.fr/article",
+                "credibility_score": 0.8,
+            }
+        )
 
         mock_conn = AsyncMock()
         call_count = {"n": 0}
@@ -253,8 +256,10 @@ class TestLanguageDetection:
         mock_pool = _make_pool_mock(mock_conn)
         ctx = {"db_pool": mock_pool, "redis": AsyncMock()}
 
-        with patch("anveshak.scraper.jobs.asyncio.sleep", new_callable=AsyncMock), \
-             patch("anveshak.scraper.jobs.settings") as mock_settings:
+        with (
+            patch("anveshak.scraper.jobs.asyncio.sleep", new_callable=AsyncMock),
+            patch("anveshak.scraper.jobs.settings") as mock_settings,
+        ):
             mock_settings.scraper_default_delay_s = 0
             mock_settings.scraper_concurrency = 5
             mock_settings.scraper_request_timeout_s = 30
@@ -262,7 +267,7 @@ class TestLanguageDetection:
             mock_settings.scraper_follow_links = False
             mock_settings.respect_robots_txt = True
 
-            result = await scrape_topic(ctx, "topic-1")
+            await scrape_topic(ctx, "topic-1")
 
             mock_detect.assert_called_once()
             # Verify the INSERT got "fr" not "en"
@@ -284,7 +289,12 @@ class TestSourcePageNotStored:
     @patch("anveshak.scraper.jobs.fetch_url_with_crawler", new_callable=AsyncMock)
     @patch("anveshak.scraper.jobs.create_shared_crawler")
     async def test_source_page_not_inserted_when_follow_links(
-        self, mock_crawler, mock_fetch_crawler, mock_extract, mock_fetch_html, mock_robots,
+        self,
+        mock_crawler,
+        mock_fetch_crawler,
+        mock_extract,
+        mock_fetch_html,
+        mock_robots,
     ):
         """When follow_links=True, _insert_content is only called for article links."""
         # Setup crawler to work normally
@@ -300,13 +310,17 @@ class TestSourcePageNotStored:
         mock_extract.return_value = ["https://example.com/article1"]
 
         # Article link fetch returns content
-        mock_fetch_crawler.return_value = "Real article content about defence operations in the region."
+        mock_fetch_crawler.return_value = (
+            "Real article content about defence operations in the region."
+        )
 
-        source = _make_fake_record({
-            "id": "src-1",
-            "url_or_handle": "https://example.com",
-            "credibility_score": 0.8,
-        })
+        source = _make_fake_record(
+            {
+                "id": "src-1",
+                "url_or_handle": "https://example.com",
+                "credibility_score": 0.8,
+            }
+        )
 
         mock_conn = AsyncMock()
         call_count = {"n": 0}
@@ -355,20 +369,23 @@ class TestSourcePageNotStored:
     @patch("anveshak.scraper.jobs.fetch_url", new_callable=AsyncMock)
     @patch("anveshak.scraper.jobs.create_shared_crawler")
     async def test_source_page_stored_when_follow_links_false(
-        self, mock_crawler, mock_fetch_url, mock_robots,
+        self,
+        mock_crawler,
+        mock_fetch_url,
+        mock_robots,
     ):
         """When follow_links=False, source URL IS the content (existing behavior)."""
-        mock_crawler.return_value.__aenter__ = AsyncMock(
-            side_effect=RuntimeError("force fallback")
-        )
+        mock_crawler.return_value.__aenter__ = AsyncMock(side_effect=RuntimeError("force fallback"))
         mock_crawler.return_value.__aexit__ = AsyncMock(return_value=False)
         mock_fetch_url.return_value = "Direct article content for testing."
 
-        source = _make_fake_record({
-            "id": "src-1",
-            "url_or_handle": "https://example.com/specific-article",
-            "credibility_score": 0.8,
-        })
+        source = _make_fake_record(
+            {
+                "id": "src-1",
+                "url_or_handle": "https://example.com/specific-article",
+                "credibility_score": 0.8,
+            }
+        )
 
         mock_conn = AsyncMock()
         call_count = {"n": 0}
@@ -385,8 +402,10 @@ class TestSourcePageNotStored:
         mock_pool = _make_pool_mock(mock_conn)
         ctx = {"db_pool": mock_pool, "redis": AsyncMock()}
 
-        with patch("anveshak.scraper.jobs.asyncio.sleep", new_callable=AsyncMock), \
-             patch("anveshak.scraper.jobs.settings") as mock_settings:
+        with (
+            patch("anveshak.scraper.jobs.asyncio.sleep", new_callable=AsyncMock),
+            patch("anveshak.scraper.jobs.settings") as mock_settings,
+        ):
             mock_settings.scraper_default_delay_s = 0
             mock_settings.scraper_concurrency = 5
             mock_settings.scraper_request_timeout_s = 30
@@ -409,7 +428,12 @@ class TestUrlSeenTracking:
     @patch("anveshak.scraper.jobs.fetch_url_with_crawler", new_callable=AsyncMock)
     @patch("anveshak.scraper.jobs.create_shared_crawler")
     async def test_seen_url_skipped(
-        self, mock_crawler, mock_fetch_crawler, mock_extract, mock_fetch_html, mock_robots,
+        self,
+        mock_crawler,
+        mock_fetch_crawler,
+        mock_extract,
+        mock_fetch_html,
+        mock_robots,
     ):
         """URL already in Redis → not fetched again."""
         crawler_obj = AsyncMock()
@@ -422,11 +446,13 @@ class TestUrlSeenTracking:
         mock_fetch_html.return_value = "<html><a href='/art1'>A</a></html>"
         mock_extract.return_value = ["https://example.com/art1"]
 
-        source = _make_fake_record({
-            "id": "src-1",
-            "url_or_handle": "https://example.com",
-            "credibility_score": 0.8,
-        })
+        source = _make_fake_record(
+            {
+                "id": "src-1",
+                "url_or_handle": "https://example.com",
+                "credibility_score": 0.8,
+            }
+        )
 
         mock_conn = AsyncMock()
         mock_conn.fetchrow = AsyncMock(side_effect=[{"id": "topic-1", "org_id": "org-1"}])
@@ -463,7 +489,12 @@ class TestUrlSeenTracking:
     @patch("anveshak.scraper.jobs.fetch_url_with_crawler", new_callable=AsyncMock)
     @patch("anveshak.scraper.jobs.create_shared_crawler")
     async def test_new_url_marked_seen_after_fetch(
-        self, mock_crawler, mock_fetch_crawler, mock_extract, mock_fetch_html, mock_robots,
+        self,
+        mock_crawler,
+        mock_fetch_crawler,
+        mock_extract,
+        mock_fetch_html,
+        mock_robots,
     ):
         """New URL → fetched, then marked in Redis with TTL."""
         crawler_obj = AsyncMock()
@@ -477,11 +508,13 @@ class TestUrlSeenTracking:
         mock_extract.return_value = ["https://example.com/new"]
         mock_fetch_crawler.return_value = "Fresh article about military exercises in the region."
 
-        source = _make_fake_record({
-            "id": "src-1",
-            "url_or_handle": "https://example.com",
-            "credibility_score": 0.8,
-        })
+        source = _make_fake_record(
+            {
+                "id": "src-1",
+                "url_or_handle": "https://example.com",
+                "credibility_score": 0.8,
+            }
+        )
 
         mock_conn = AsyncMock()
         call_count = {"n": 0}
@@ -519,7 +552,11 @@ class TestUrlSeenTracking:
         # redis.set was called to mark URL as seen
         mock_redis.set.assert_called_once()
         set_call = mock_redis.set.call_args
-        assert set_call[1].get("ex") == 86400 or set_call[0][2] if len(set_call[0]) > 2 else set_call[1].get("ex") == 86400
+        assert (
+            set_call[1].get("ex") == 86400 or set_call[0][2]
+            if len(set_call[0]) > 2
+            else set_call[1].get("ex") == 86400
+        )
 
 
 class TestRateDelay:
@@ -532,18 +569,18 @@ class TestRateDelay:
     @patch("anveshak.scraper.jobs.create_shared_crawler")
     async def test_delay_called_after_fetch(self, mock_crawler, mock_fetch_url, mock_robots):
         """asyncio.sleep called with scraper_default_delay_s after successful fetch."""
-        mock_crawler.return_value.__aenter__ = AsyncMock(
-            side_effect=RuntimeError("force fallback")
-        )
+        mock_crawler.return_value.__aenter__ = AsyncMock(side_effect=RuntimeError("force fallback"))
         mock_crawler.return_value.__aexit__ = AsyncMock(return_value=False)
 
         mock_fetch_url.return_value = "Article content sufficient for testing delay."
 
-        source = _make_fake_record({
-            "id": "src-1",
-            "url_or_handle": "https://example.com/article",
-            "credibility_score": 0.8,
-        })
+        source = _make_fake_record(
+            {
+                "id": "src-1",
+                "url_or_handle": "https://example.com/article",
+                "credibility_score": 0.8,
+            }
+        )
 
         mock_conn = AsyncMock()
         call_count = {"n": 0}
@@ -560,8 +597,10 @@ class TestRateDelay:
         mock_pool = _make_pool_mock(mock_conn)
         ctx = {"db_pool": mock_pool, "redis": AsyncMock()}
 
-        with patch("anveshak.scraper.jobs.asyncio.sleep", new_callable=AsyncMock) as mock_sleep, \
-             patch("anveshak.scraper.jobs.settings") as mock_settings:
+        with (
+            patch("anveshak.scraper.jobs.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch("anveshak.scraper.jobs.settings") as mock_settings,
+        ):
             mock_settings.scraper_default_delay_s = 2.0
             mock_settings.scraper_concurrency = 5
             mock_settings.scraper_request_timeout_s = 30

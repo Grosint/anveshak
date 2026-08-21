@@ -104,7 +104,7 @@
       "id": 30,
       "description": "Logs from the reporter service when a source used in a report has since been downgraded. Each entry corresponds to a report_source_warnings insert. High volume means many reports reference now-questionable sources.",
       "options": {"dedupStrategy": "none", "enableLogDetails": true, "showLabels": true, "showTime": true, "sortOrder": "Descending"},
-      "title": "Report Source Warning Insertions (CLAUDE.md Rule 8)",
+      "title": "Report Source Warning Insertions (AGENTS.md Rule 8)",
       "type": "logs",
       "targets": [
         {"datasource": {"type": "loki", "uid": "loki"}, "expr": "{job=\"anveshak\", service=\"reporter\"} |= \"warning\" | json | event =~ \".*source_warn.*\"", "refId": "A"}

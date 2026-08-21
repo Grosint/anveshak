@@ -3,6 +3,7 @@
 Uses an isolated CollectorRegistry so this module can be imported alongside
 other service metrics modules in the same test process without name conflicts.
 """
+
 from prometheus_client import CollectorRegistry, Counter, Histogram
 
 # 8A.18 — isolated registry prevents cross-service duplicate registration

@@ -6,6 +6,7 @@ as production. Outputs JSON to stdout for the host orchestrator.
 Usage (from host):
     docker exec anveshak-scrape-social-scheduler-1 python /tmp/test_scrape_social.py
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -20,8 +21,14 @@ from typing import Any
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _result(
-    source_type: str, name: str, passed: bool, chars: int, reason: str, elapsed: float,
+    source_type: str,
+    name: str,
+    passed: bool,
+    chars: int,
+    reason: str,
+    elapsed: float,
 ) -> dict[str, Any]:
     return {
         "type": source_type,
@@ -37,15 +44,15 @@ def _result(
 # Telegram test — uses real TelegramAdapter.authenticate() + collect()
 # ---------------------------------------------------------------------------
 
+
 async def test_telegram() -> list[dict]:
     from anveshak.social.settings import settings
 
     if not settings.telegram_adapter_enabled:
-        return [_result("telegram", "(disabled)", False, 0,
-                        "TELEGRAM_ADAPTER_ENABLED=false", 0)]
+        return [_result("telegram", "(disabled)", False, 0, "TELEGRAM_ADAPTER_ENABLED=false", 0)]
 
-    from anveshak.social.adapters.telegram import TelegramAdapter
     from anveshak.social.adapters.base import AdapterAuthError
+    from anveshak.social.adapters.telegram import TelegramAdapter
 
     adapter = TelegramAdapter()
     results = []
@@ -88,15 +95,27 @@ async def test_telegram() -> list[dict]:
             elapsed = time.monotonic() - t0
             if items:
                 total_chars = sum(len(it.raw_text) for it in items)
-                results.append(_result(
-                    "telegram", test_channel, True, total_chars,
-                    f"{len(items)} messages fetched", elapsed,
-                ))
+                results.append(
+                    _result(
+                        "telegram",
+                        test_channel,
+                        True,
+                        total_chars,
+                        f"{len(items)} messages fetched",
+                        elapsed,
+                    )
+                )
             else:
-                results.append(_result(
-                    "telegram", test_channel, False, 0,
-                    "No messages returned", elapsed,
-                ))
+                results.append(
+                    _result(
+                        "telegram",
+                        test_channel,
+                        False,
+                        0,
+                        "No messages returned",
+                        elapsed,
+                    )
+                )
         except Exception as exc:
             elapsed = time.monotonic() - t0
             results.append(_result("telegram", test_channel, False, 0, str(exc)[:120], elapsed))
@@ -114,21 +133,20 @@ async def test_telegram() -> list[dict]:
 # X/Twitter test — uses real make_x_adapter() + authenticate() + collect()
 # ---------------------------------------------------------------------------
 
+
 async def test_x() -> list[dict]:
     from anveshak.social.settings import settings
 
     if not settings.x_adapter_enabled:
-        return [_result("x", "(disabled)", False, 0,
-                        "X_ADAPTER_ENABLED=false", 0)]
+        return [_result("x", "(disabled)", False, 0, "X_ADAPTER_ENABLED=false", 0)]
 
     if not settings.x_bearer_token:
-        return [_result("x", "(no token)", False, 0,
-                        "X_BEARER_TOKEN not set", 0)]
+        return [_result("x", "(no token)", False, 0, "X_BEARER_TOKEN not set", 0)]
 
+    from anveshak.social.adapters.base import AdapterAuthError, AdapterRateLimitError
+    from anveshak.social.adapters.x_adapter import make_x_adapter
     from arq import create_pool
     from arq.connections import RedisSettings
-    from anveshak.social.adapters.x_adapter import make_x_adapter
-    from anveshak.social.adapters.base import AdapterAuthError, AdapterRateLimitError
 
     results = []
 
@@ -173,23 +191,42 @@ async def test_x() -> list[dict]:
         elapsed = time.monotonic() - t0
         if items:
             total_chars = sum(len(it.raw_text) for it in items)
-            results.append(_result(
-                "x", f"keywords: {display_name}", True, total_chars,
-                f"{len(items)} tweets found", elapsed,
-            ))
+            results.append(
+                _result(
+                    "x",
+                    f"keywords: {display_name}",
+                    True,
+                    total_chars,
+                    f"{len(items)} tweets found",
+                    elapsed,
+                )
+            )
         else:
-            results.append(_result(
-                "x", f"keywords: {display_name}", False, 0,
-                "No tweets returned (spend cap / no results / API tier)", elapsed,
-            ))
+            results.append(
+                _result(
+                    "x",
+                    f"keywords: {display_name}",
+                    False,
+                    0,
+                    "No tweets returned (spend cap / no results / API tier)",
+                    elapsed,
+                )
+            )
     except AdapterRateLimitError as exc:
         elapsed = time.monotonic() - t0
-        results.append(_result("x", f"keywords: {display_name}", False, 0,
-                               f"Rate limited: {str(exc)[:80]}", elapsed))
+        results.append(
+            _result(
+                "x",
+                f"keywords: {display_name}",
+                False,
+                0,
+                f"Rate limited: {str(exc)[:80]}",
+                elapsed,
+            )
+        )
     except Exception as exc:
         elapsed = time.monotonic() - t0
-        results.append(_result("x", f"keywords: {display_name}", False, 0,
-                               str(exc)[:120], elapsed))
+        results.append(_result("x", f"keywords: {display_name}", False, 0, str(exc)[:120], elapsed))
 
     await redis.close()
     return results
@@ -199,19 +236,27 @@ async def test_x() -> list[dict]:
 # Reddit test — uses real RedditAdapter.authenticate() + collect()
 # ---------------------------------------------------------------------------
 
+
 async def test_reddit() -> list[dict]:
     from anveshak.social.settings import settings
 
     if not settings.reddit_adapter_enabled:
-        return [_result("reddit", "(disabled)", False, 0,
-                        "REDDIT_ADAPTER_ENABLED=false", 0)]
+        return [_result("reddit", "(disabled)", False, 0, "REDDIT_ADAPTER_ENABLED=false", 0)]
 
     if not settings.reddit_client_id or not settings.reddit_client_secret:
-        return [_result("reddit", "(no credentials)", False, 0,
-                        "REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET not set", 0)]
+        return [
+            _result(
+                "reddit",
+                "(no credentials)",
+                False,
+                0,
+                "REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET not set",
+                0,
+            )
+        ]
 
-    from anveshak.social.adapters.reddit import RedditAdapter
     from anveshak.social.adapters.base import AdapterAuthError
+    from anveshak.social.adapters.reddit import RedditAdapter
 
     adapter = RedditAdapter()
     results = []
@@ -247,15 +292,27 @@ async def test_reddit() -> list[dict]:
         elapsed = time.monotonic() - t0
         if items:
             total_chars = sum(len(it.raw_text) for it in items)
-            results.append(_result(
-                "reddit", test_sub, True, total_chars,
-                f"{len(items)} posts fetched", elapsed,
-            ))
+            results.append(
+                _result(
+                    "reddit",
+                    test_sub,
+                    True,
+                    total_chars,
+                    f"{len(items)} posts fetched",
+                    elapsed,
+                )
+            )
         else:
-            results.append(_result(
-                "reddit", test_sub, False, 0,
-                "No posts returned", elapsed,
-            ))
+            results.append(
+                _result(
+                    "reddit",
+                    test_sub,
+                    False,
+                    0,
+                    "No posts returned",
+                    elapsed,
+                )
+            )
     except Exception as exc:
         elapsed = time.monotonic() - t0
         results.append(_result("reddit", test_sub, False, 0, str(exc)[:120], elapsed))
@@ -266,6 +323,7 @@ async def test_reddit() -> list[dict]:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 async def main() -> list[dict]:
     results: list[dict] = []
@@ -280,12 +338,18 @@ if __name__ == "__main__":
         results = asyncio.run(main())
         print(json.dumps(results))
     except Exception:
-        print(json.dumps([{
-            "type": "error",
-            "name": "social_test",
-            "status": "FAIL",
-            "chars": 0,
-            "reason": traceback.format_exc()[-200:],
-            "elapsed_s": 0,
-        }]))
+        print(
+            json.dumps(
+                [
+                    {
+                        "type": "error",
+                        "name": "social_test",
+                        "status": "FAIL",
+                        "chars": 0,
+                        "reason": traceback.format_exc()[-200:],
+                        "elapsed_s": 0,
+                    }
+                ]
+            )
+        )
         sys.exit(1)

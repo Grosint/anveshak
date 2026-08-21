@@ -2,12 +2,12 @@
 
 pytest.mark.unit — mocked asyncpg, no real DB.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 
@@ -121,13 +121,16 @@ class TestBatchLookupGeocodedLocations:
 
         pool, conn = _make_pool()
         conn.fetch.return_value = [
-            {"entity_text_normalized": "mumbai", "entity_type": "GPE",
-             "latitude": 19.07, "longitude": 72.88,
-             "geocode_confidence": 0.9, "geocode_source": "geonamescache"},
+            {
+                "entity_text_normalized": "mumbai",
+                "entity_type": "GPE",
+                "latitude": 19.07,
+                "longitude": 72.88,
+                "geocode_confidence": 0.9,
+                "geocode_source": "geonamescache",
+            },
         ]
-        result = await batch_lookup_geocoded_locations(
-            pool, [("mumbai", "GPE"), ("delhi", "GPE")]
-        )
+        result = await batch_lookup_geocoded_locations(pool, [("mumbai", "GPE"), ("delhi", "GPE")])
         assert "mumbai:GPE" in result
         assert "delhi:GPE" not in result
 

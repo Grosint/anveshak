@@ -2,9 +2,9 @@
 
 The retry loop must not continue indefinitely after exhausting backoff steps.
 """
+
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -13,7 +13,6 @@ pytestmark = pytest.mark.unit
 
 
 class TestRedditRetryLimit:
-
     def test_backoff_has_explicit_max_retries(self):
         """_BACKOFF_SECONDS length must match the retry limit."""
         from anveshak.social.adapters.reddit import _BACKOFF_SECONDS
@@ -25,9 +24,9 @@ class TestRedditRetryLimit:
     @pytest.mark.asyncio
     async def test_rate_limit_exhaustion_raises_after_max_retries(self):
         """After exhausting all backoff steps, must raise AdapterRateLimitError."""
-        from anveshak.social.adapters.reddit import RedditAdapter, _BACKOFF_SECONDS
-        from anveshak.social.adapters.base import AdapterRateLimitError
         import praw.exceptions
+        from anveshak.social.adapters.base import AdapterRateLimitError
+        from anveshak.social.adapters.reddit import RedditAdapter
 
         adapter = RedditAdapter.__new__(RedditAdapter)
         adapter._reddit = MagicMock()
@@ -51,9 +50,9 @@ class TestRedditRetryLimit:
     @pytest.mark.asyncio
     async def test_retry_count_matches_backoff_steps(self):
         """Number of fetch attempts must equal 1 (initial) + len(_BACKOFF_SECONDS)."""
-        from anveshak.social.adapters.reddit import RedditAdapter, _BACKOFF_SECONDS
-        from anveshak.social.adapters.base import AdapterRateLimitError
         import praw.exceptions
+        from anveshak.social.adapters.base import AdapterRateLimitError
+        from anveshak.social.adapters.reddit import _BACKOFF_SECONDS, RedditAdapter
 
         adapter = RedditAdapter.__new__(RedditAdapter)
         adapter._reddit = MagicMock()

@@ -8,10 +8,11 @@ Reuses the same pattern as backfill.py — encode topic keywords, dot-product
 against content embeddings. Both vectors are L2-normalized by encode_text(),
 so cosine similarity = dot product.
 """
+
 from __future__ import annotations
 
-import numpy as np
 import asyncpg
+import numpy as np
 import structlog
 
 from .embeddings import encode_text
@@ -78,7 +79,8 @@ async def calibrate_topic_thresholds(pool: asyncpg.Pool) -> int:
             # Skip update if threshold hasn't changed meaningfully
             if old is not None and abs(float(old) - clamped) < 0.005:
                 analyst_topic_threshold.labels(
-                    topic_id=topic_id, topic_name=topic_name,
+                    topic_id=topic_id,
+                    topic_name=topic_name,
                 ).set(clamped)
                 continue
 
@@ -95,7 +97,8 @@ async def calibrate_topic_thresholds(pool: asyncpg.Pool) -> int:
                 item_count=row["item_count"],
             )
             analyst_topic_threshold.labels(
-                topic_id=topic_id, topic_name=topic_name,
+                topic_id=topic_id,
+                topic_name=topic_name,
             ).set(clamped)
 
     if not rows:

@@ -17,6 +17,7 @@ Usage:
     make validate-vision
     python scripts/validate_vision.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -31,13 +32,12 @@ import zlib
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-
-BASE       = "http://localhost:8000"
-DEMO_USER  = "demo@anveshak.local"
-DEMO_PASS  = "AnveshakDemo2024!"
+BASE = "http://localhost:8000"
+DEMO_USER = "demo@anveshak.local"
+DEMO_PASS = "AnveshakDemo2024!"
 
 JOB_POLL_INTERVAL_S = 5
-JOB_TIMEOUT_S       = 120
+JOB_TIMEOUT_S = 120
 
 
 @dataclass
@@ -53,6 +53,7 @@ class Check:
 # A PNG file: signature + IHDR chunk + IDAT chunk + IEND chunk.
 # ---------------------------------------------------------------------------
 
+
 def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
     crc = zlib.crc32(chunk_type + data) & 0xFFFFFFFF
     return struct.pack(">I", len(data)) + chunk_type + data + struct.pack(">I", crc)
@@ -60,10 +61,10 @@ def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
 
 def _make_solid_png(width: int = 32, height: int = 32, rgb: tuple = (128, 160, 128)) -> bytes:
     """32×32 solid-colour RGB PNG — stands in for a 'real' image in pipeline tests."""
-    sig  = b"\x89PNG\r\n\x1a\n"
+    sig = b"\x89PNG\r\n\x1a\n"
     ihdr = _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
     # Each scanline: 1-byte filter (0=None) + width * 3 RGB bytes
-    raw  = b"".join(b"\x00" + bytes(list(rgb) * width) for _ in range(height))
+    raw = b"".join(b"\x00" + bytes(list(rgb) * width) for _ in range(height))
     idat = _png_chunk(b"IDAT", zlib.compress(raw))
     iend = _png_chunk(b"IEND", b"")
     return sig + ihdr + idat + iend
@@ -79,9 +80,9 @@ def _make_noise_png(width: int = 32, height: int = 32, seed: int = 2024) -> byte
         state = (1664525 * state + 1013904223) & 0xFFFFFFFF
         return (state >> 24) & 0xFF
 
-    sig  = b"\x89PNG\r\n\x1a\n"
+    sig = b"\x89PNG\r\n\x1a\n"
     ihdr = _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
-    raw  = b""
+    raw = b""
     for _ in range(height):
         raw += b"\x00"
         raw += bytes([_byte() for _ in range(width * 3)])
@@ -94,15 +95,14 @@ def _make_noise_png(width: int = 32, height: int = 32, seed: int = 2024) -> byte
 # HTTP helpers (stdlib only — same pattern as validate_pipeline.py)
 # ---------------------------------------------------------------------------
 
+
 def http_get(
     url: str,
     headers: dict | None = None,
     timeout: int = 10,
 ) -> tuple[int, dict]:
     try:
-        req = urllib.request.Request(
-            url, headers={"Accept": "application/json", **(headers or {})}
-        )
+        req = urllib.request.Request(url, headers={"Accept": "application/json", **(headers or {})})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             raw = resp.read().decode()
             try:
@@ -130,11 +130,15 @@ def http_post_multipart(
     """POST a file as multipart/form-data (stdlib only)."""
     boundary = uuid.uuid4().hex
     body = (
-        f"--{boundary}\r\n"
-        f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
-        f"Content-Type: {content_type}\r\n"
-        f"\r\n"
-    ).encode() + file_bytes + f"\r\n--{boundary}--\r\n".encode()
+        (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+            f"Content-Type: {content_type}\r\n"
+            f"\r\n"
+        ).encode()
+        + file_bytes
+        + f"\r\n--{boundary}--\r\n".encode()
+    )
 
     headers = {
         **auth_headers,
@@ -162,6 +166,7 @@ def _auth(token: str) -> dict:
 # ---------------------------------------------------------------------------
 # Stage helpers
 # ---------------------------------------------------------------------------
+
 
 def login() -> tuple[Check, str | None]:
     try:
@@ -208,8 +213,8 @@ def upload_image(
             False,
             f"HTTP {status} — {body.get('detail', body)}",
         ), {}
-    job_id       = body.get("job_id", "?")
-    asset_id     = body.get("media_asset_id", "?")
+    job_id = body.get("job_id", "?")
+    asset_id = body.get("media_asset_id", "?")
     return Check(
         f"Upload {filename}",
         True,
@@ -219,13 +224,11 @@ def upload_image(
 
 def poll_job(job_id: str, token: str, label: str = "") -> tuple[Check, dict]:
     """Poll GET /api/v1/vision/jobs/{job_id} until complete or timeout."""
-    deadline    = time.time() + JOB_TIMEOUT_S
+    deadline = time.time() + JOB_TIMEOUT_S
     last_status = "unknown"
 
     while time.time() < deadline:
-        status, body = http_get(
-            f"{BASE}/api/v1/vision/jobs/{job_id}", headers=_auth(token)
-        )
+        status, body = http_get(f"{BASE}/api/v1/vision/jobs/{job_id}", headers=_auth(token))
         if status != 200:
             return Check(f"Job ({label})", False, f"poll returned HTTP {status}"), {}
 
@@ -233,14 +236,12 @@ def poll_job(job_id: str, token: str, label: str = "") -> tuple[Check, dict]:
 
         if last_status == "complete":
             result = body.get("result") or {}
-            error  = body.get("error")
+            error = body.get("error")
             if error:
                 return Check(f"Job ({label})", False, f"job failed: {error}"), {}
-            score     = result.get("deepfake_score")
+            score = result.get("deepfake_score")
             score_str = f"{score:.3f}" if isinstance(score, (int, float)) else str(score)
-            return Check(
-                f"Job ({label})", True, f"complete — deepfake_score={score_str}"
-            ), result
+            return Check(f"Job ({label})", True, f"complete — deepfake_score={score_str}"), result
 
         if last_status == "not_found":
             return Check(f"Job ({label})", False, "job not found in Redis"), {}
@@ -261,39 +262,52 @@ def validate_result_fields(result: dict, label: str) -> list[Check]:
     checks = []
 
     score = result.get("deepfake_score")
-    checks.append(Check(
-        f"{label} deepfake_score",
-        isinstance(score, (int, float)),
-        f"{score:.4f}" if isinstance(score, (int, float))
-        else f"missing or wrong type ({type(score).__name__})",
-    ))
+    checks.append(
+        Check(
+            f"{label} deepfake_score",
+            isinstance(score, (int, float)),
+            f"{score:.4f}"
+            if isinstance(score, (int, float))
+            else f"missing or wrong type ({type(score).__name__})",
+        )
+    )
 
     model = result.get("deepfake_model", "")
     model_missing = not bool(model)
-    model_error   = model == "error"
-    checks.append(Check(
-        f"{label} deepfake_model",
-        not model_missing,   # FAIL only if field is missing entirely
-        model if (bool(model) and not model_error)
-        else ("field missing — job result incomplete" if model_missing
-              else f"'error' — ML model files not downloaded. Fix: make download-models"),
-        warning=model_error,  # 'error' = WARN (models not downloaded), not a pipeline failure
-    ))
+    model_error = model == "error"
+    checks.append(
+        Check(
+            f"{label} deepfake_model",
+            not model_missing,  # FAIL only if field is missing entirely
+            model
+            if (bool(model) and not model_error)
+            else (
+                "field missing — job result incomplete"
+                if model_missing
+                else "'error' — ML model files not downloaded. Fix: make download-models"
+            ),
+            warning=model_error,  # 'error' = WARN (models not downloaded), not a pipeline failure
+        )
+    )
 
     yolo = result.get("yolo_detections")
-    checks.append(Check(
-        f"{label} yolo ran",
-        yolo is not None and yolo >= 0,
-        f"{yolo} object(s) detected" if (yolo is not None) else "missing — YOLO skipped",
-    ))
+    checks.append(
+        Check(
+            f"{label} yolo ran",
+            yolo is not None and yolo >= 0,
+            f"{yolo} object(s) detected" if (yolo is not None) else "missing — YOLO skipped",
+        )
+    )
 
     phash = result.get("phash")
-    checks.append(Check(
-        f"{label} phash computed",
-        phash is not None,
-        f"phash={hex(phash)}" if phash is not None else "None — pHash failed",
-        warning=(phash is None),  # warn but don't fail (some images are pHash-unfriendly)
-    ))
+    checks.append(
+        Check(
+            f"{label} phash computed",
+            phash is not None,
+            f"phash={hex(phash)}" if phash is not None else "None — pHash failed",
+            warning=(phash is None),  # warn but don't fail (some images are pHash-unfriendly)
+        )
+    )
 
     return checks
 
@@ -302,17 +316,18 @@ def validate_result_fields(result: dict, label: str) -> list[Check]:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Anveshak M4 vision pipeline E2E validation"
+    parser = argparse.ArgumentParser(description="Anveshak M4 vision pipeline E2E validation")
+    parser.add_argument(
+        "--normal",
+        default=None,
+        help="Path to a real/normal image (default: built-in 32×32 solid PNG)",
     )
     parser.add_argument(
-        "--normal", default=None,
-        help="Path to a real/normal image (default: built-in 32×32 solid PNG)"
-    )
-    parser.add_argument(
-        "--synthetic", default=None,
-        help="Path to a synthetic/AI-generated image (default: built-in 32×32 noise PNG)"
+        "--synthetic",
+        default=None,
+        help="Path to a synthetic/AI-generated image (default: built-in 32×32 noise PNG)",
     )
     args = parser.parse_args()
 
@@ -330,7 +345,7 @@ def main() -> int:
         print(f"\nNormal image:    {args.normal} ({len(normal_bytes):,} bytes)")
     else:
         normal_bytes = _make_solid_png(32, 32, (128, 160, 128))
-        normal_name  = "test_normal_32x32.png"
+        normal_name = "test_normal_32x32.png"
         print(f"\nNormal image:    built-in 32×32 solid-gray PNG ({len(normal_bytes)} bytes)")
 
     if args.synthetic:
@@ -340,7 +355,7 @@ def main() -> int:
         print(f"Synthetic image: {args.synthetic} ({len(synth_bytes):,} bytes)")
     else:
         synth_bytes = _make_noise_png(32, 32, seed=2024)
-        synth_name  = "test_synthetic_noise_32x32.png"
+        synth_name = "test_synthetic_noise_32x32.png"
         print(f"Synthetic image: built-in 32×32 noise PNG ({len(synth_bytes)} bytes)")
 
     print(
@@ -385,7 +400,7 @@ def main() -> int:
             print("\nBLOCKED: Vision service not running. Fix: make up-vision")
         return 1
 
-    normal_job_id  = up1_body["job_id"]
+    normal_job_id = up1_body["job_id"]
     normal_asset_id = up1_body["media_asset_id"]
 
     # ------------------------------------------------------------------
@@ -399,7 +414,9 @@ def main() -> int:
 
     if not job1_check.passed:
         if "timed out" in job1_check.detail:
-            print("\nBLOCKED: Vision worker not processing jobs. Fix: make logs-analyse-vision-worker")
+            print(
+                "\nBLOCKED: Vision worker not processing jobs. Fix: make logs-analyse-vision-worker"
+            )
         return 1
 
     # ------------------------------------------------------------------
@@ -438,7 +455,9 @@ def main() -> int:
 
     if not job2_check.passed:
         if "timed out" in job2_check.detail:
-            print("\nBLOCKED: Vision worker not processing jobs. Fix: make logs-analyse-vision-worker")
+            print(
+                "\nBLOCKED: Vision worker not processing jobs. Fix: make logs-analyse-vision-worker"
+            )
         return 1
 
     # ------------------------------------------------------------------
@@ -459,28 +478,36 @@ def main() -> int:
     print()
     print("Stage 8 — Deepfake score comparison:")
     scores_separated = synth_score >= normal_score
-    _p(Check(
-        "Score separation (synthetic >= normal)",
-        True,
-        f"normal={normal_score:.4f}  synthetic={synth_score:.4f}  "
-        + ("✓ separated as expected"
-           if scores_separated
-           else "synthetic < normal — model uncertain on built-in fixtures; use real face images"),
-        warning=(not scores_separated),
-    ))
-    _p(Check(
-        "Normal score range",
-        True,
-        f"{normal_score:.4f}  (expected 0.0–0.3 for real content; "
-        f"{'✓ in range' if normal_score <= 0.5 else 'HIGH — may be false positive'})",
-        warning=(normal_score > 0.5),
-    ))
-    _p(Check(
-        "Synthetic score range",
-        True,
-        f"{synth_score:.4f}  (noise images may score low; pass --synthetic real_ai_face.jpg for better signal)",
-        warning=False,
-    ))
+    _p(
+        Check(
+            "Score separation (synthetic >= normal)",
+            True,
+            f"normal={normal_score:.4f}  synthetic={synth_score:.4f}  "
+            + (
+                "✓ separated as expected"
+                if scores_separated
+                else "synthetic < normal — model uncertain on built-in fixtures; use real face images"
+            ),
+            warning=(not scores_separated),
+        )
+    )
+    _p(
+        Check(
+            "Normal score range",
+            True,
+            f"{normal_score:.4f}  (expected 0.0–0.3 for real content; "
+            f"{'✓ in range' if normal_score <= 0.5 else 'HIGH — may be false positive'})",
+            warning=(normal_score > 0.5),
+        )
+    )
+    _p(
+        Check(
+            "Synthetic score range",
+            True,
+            f"{synth_score:.4f}  (noise images may score low; pass --synthetic real_ai_face.jpg for better signal)",
+            warning=False,
+        )
+    )
 
     # ------------------------------------------------------------------
     # Stage 9 — pHash deduplication (re-upload same image)
@@ -492,28 +519,31 @@ def main() -> int:
 
     if up3_check.passed:
         returned_id = up3_body.get("media_asset_id")
-        dedup_hit   = returned_id == normal_asset_id
-        _p(Check(
-            "Dedup: same media_asset_id returned",
-            dedup_hit,
-            f"✓ {returned_id}" if dedup_hit
-            else f"different ID ({returned_id} vs {normal_asset_id}) — content_hash dedup may not have fired",
-            warning=(not dedup_hit),
-        ))
+        dedup_hit = returned_id == normal_asset_id
+        _p(
+            Check(
+                "Dedup: same media_asset_id returned",
+                dedup_hit,
+                f"✓ {returned_id}"
+                if dedup_hit
+                else f"different ID ({returned_id} vs {normal_asset_id}) — content_hash dedup may not have fired",
+                warning=(not dedup_hit),
+            )
+        )
 
     # ------------------------------------------------------------------
     # Stage 10 — DB persistence: job result still in Redis (TTL = 1h)
     # ------------------------------------------------------------------
     print()
     print("Stage 10 — DB persistence (job result still in Redis):")
-    status, persisted = http_get(
-        f"{BASE}/api/v1/vision/jobs/{normal_job_id}", headers=_auth(token)
+    status, persisted = http_get(f"{BASE}/api/v1/vision/jobs/{normal_job_id}", headers=_auth(token))
+    _p(
+        Check(
+            "Job result persisted",
+            status == 200 and persisted.get("status") == "complete",
+            f"GET /vision/jobs/{normal_job_id[:8]}… → {persisted.get('status', f'HTTP {status}')}",
+        )
     )
-    _p(Check(
-        "Job result persisted",
-        status == 200 and persisted.get("status") == "complete",
-        f"GET /vision/jobs/{normal_job_id[:8]}… → {persisted.get('status', f'HTTP {status}')}",
-    ))
 
     # ------------------------------------------------------------------
     # Summary

@@ -6,6 +6,7 @@ topics.topic_relevance_threshold accordingly.
 
 pytest.mark.unit — mocks all DB calls, no external dependencies.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -18,6 +19,7 @@ pytestmark = pytest.mark.unit
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_pool_mock(conn: AsyncMock):
     """asyncpg.Pool mock where acquire() returns async context manager."""
@@ -50,8 +52,8 @@ def _make_row(
 # calibrate_topic_thresholds
 # ---------------------------------------------------------------------------
 
-class TestCalibrateTopicThresholds:
 
+class TestCalibrateTopicThresholds:
     @pytest.mark.asyncio
     async def test_sets_threshold_from_percentile(self):
         """Basic case: topic with no existing threshold gets calibrated."""
@@ -175,8 +177,12 @@ class TestCalibrateTopicThresholds:
         from anveshak.analyst.relevance import calibrate_topic_thresholds
 
         rows = [
-            _make_row(topic_id="t1", topic_name="Narrow", target_threshold=0.35, current_threshold=None),
-            _make_row(topic_id="t2", topic_name="Broad", target_threshold=0.12, current_threshold=None),
+            _make_row(
+                topic_id="t1", topic_name="Narrow", target_threshold=0.35, current_threshold=None
+            ),
+            _make_row(
+                topic_id="t2", topic_name="Broad", target_threshold=0.12, current_threshold=None
+            ),
         ]
         mock_conn = AsyncMock()
         mock_conn.fetch = AsyncMock(return_value=rows)
@@ -217,13 +223,26 @@ class TestCalibrateTopicThresholds:
 # Reporter RAG relevance filter
 # ---------------------------------------------------------------------------
 
+
 class TestReporterRAGRelevanceFilter:
     """Verify relevance_threshold is threaded to fetch_rag_chunks."""
 
     _FAKE_DATA_BUNDLE = {
-        "topic_stats": {"name": "Test", "content_count": 5, "source_count": 2, "cluster_count": 1, "signal_count": 0},
-        "sources": [], "clusters": [], "signals": [], "entities": [],
-        "sentiment_trend": [], "keywords": [], "evidence_items": [], "language_breakdown": [],
+        "topic_stats": {
+            "name": "Test",
+            "content_count": 5,
+            "source_count": 2,
+            "cluster_count": 1,
+            "signal_count": 0,
+        },
+        "sources": [],
+        "clusters": [],
+        "signals": [],
+        "entities": [],
+        "sentiment_trend": [],
+        "keywords": [],
+        "evidence_items": [],
+        "language_breakdown": [],
     }
 
     @pytest.mark.asyncio
@@ -231,20 +250,38 @@ class TestReporterRAGRelevanceFilter:
         """When topic has topic_relevance_threshold, it's passed to fetch_rag_chunks."""
         from anveshak.reporter.worker import generate_report
 
-        topic = {"id": "topic-1", "name": "Test", "keywords": ["test"],
-                 "topic_relevance_threshold": 0.18}
-        report = {"id": "r1", "topic_id": "topic-1", "report_type": "intelligence_brief",
-                  "credibility_min_filter": 30.0}
+        topic = {
+            "id": "topic-1",
+            "name": "Test",
+            "keywords": ["test"],
+            "topic_relevance_threshold": 0.18,
+        }
+        report = {
+            "id": "r1",
+            "topic_id": "topic-1",
+            "report_type": "intelligence_brief",
+            "credibility_min_filter": 30.0,
+        }
 
-        ctx = {"db": AsyncMock(), "settings": MagicMock(
-            rag_top_k=10, rag_max_context_tokens=4000,
-            ollama_model="test", ollama_host="http://o:11434",
-            ollama_report_timeout_s=30, ollama_retry_max=2,
-            topic_relevance_threshold=0.35,
-        )}
+        ctx = {
+            "db": AsyncMock(),
+            "settings": MagicMock(
+                rag_top_k=10,
+                rag_max_context_tokens=4000,
+                ollama_model="test",
+                ollama_host="http://o:11434",
+                ollama_report_timeout_s=30,
+                ollama_retry_max=2,
+                topic_relevance_threshold=0.35,
+            ),
+        }
 
-        with patch("anveshak.reporter.worker.db") as mock_db, \
-             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed:
+        with (
+            patch("anveshak.reporter.worker.db") as mock_db,
+            patch(
+                "anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock
+            ) as mock_embed,
+        ):
             mock_db.fetch_report = AsyncMock(return_value=report)
             mock_db.fetch_topic = AsyncMock(return_value=topic)
             mock_db.fetch_report_data_bundle = AsyncMock(return_value=self._FAKE_DATA_BUNDLE)
@@ -263,18 +300,32 @@ class TestReporterRAGRelevanceFilter:
         from anveshak.reporter.worker import generate_report
 
         topic = {"id": "topic-1", "name": "Test", "keywords": ["test"]}
-        report = {"id": "r1", "topic_id": "topic-1", "report_type": "intelligence_brief",
-                  "credibility_min_filter": 30.0}
+        report = {
+            "id": "r1",
+            "topic_id": "topic-1",
+            "report_type": "intelligence_brief",
+            "credibility_min_filter": 30.0,
+        }
 
-        ctx = {"db": AsyncMock(), "settings": MagicMock(
-            rag_top_k=10, rag_max_context_tokens=4000,
-            ollama_model="test", ollama_host="http://o:11434",
-            ollama_report_timeout_s=30, ollama_retry_max=2,
-            topic_relevance_threshold=0.35,
-        )}
+        ctx = {
+            "db": AsyncMock(),
+            "settings": MagicMock(
+                rag_top_k=10,
+                rag_max_context_tokens=4000,
+                ollama_model="test",
+                ollama_host="http://o:11434",
+                ollama_report_timeout_s=30,
+                ollama_retry_max=2,
+                topic_relevance_threshold=0.35,
+            ),
+        }
 
-        with patch("anveshak.reporter.worker.db") as mock_db, \
-             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed:
+        with (
+            patch("anveshak.reporter.worker.db") as mock_db,
+            patch(
+                "anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock
+            ) as mock_embed,
+        ):
             mock_db.fetch_report = AsyncMock(return_value=report)
             mock_db.fetch_topic = AsyncMock(return_value=topic)
             mock_db.fetch_report_data_bundle = AsyncMock(return_value=self._FAKE_DATA_BUNDLE)
@@ -291,6 +342,7 @@ class TestReporterRAGRelevanceFilter:
 # ---------------------------------------------------------------------------
 # API default threshold consistency
 # ---------------------------------------------------------------------------
+
 
 class TestAPIDefaultThreshold:
     """Verify API default matches global analyst setting."""
@@ -311,6 +363,7 @@ class TestAPIDefaultThreshold:
 # ---------------------------------------------------------------------------
 # Settings
 # ---------------------------------------------------------------------------
+
 
 class TestCalibrationSettings:
     """Verify calibration settings exist with correct defaults."""

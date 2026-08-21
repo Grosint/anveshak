@@ -1,4 +1,5 @@
 """Social platform adapter registry."""
+
 from .base import (
     AdapterAuthError,
     AdapterDegradedError,
@@ -6,9 +7,8 @@ from .base import (
     RawItem,
     SourceAdapterBase,
 )
-
-from .youtube_adapter import YouTubeAdapter
 from .whatsapp import WhatsAppAdapter
+from .youtube_adapter import YouTubeAdapter
 
 __all__ = [
     "SourceAdapterBase",

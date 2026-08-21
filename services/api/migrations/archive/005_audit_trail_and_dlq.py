@@ -5,6 +5,7 @@ failed_jobs: dead-letter queue for ARQ jobs that fail after max retries.
 
 Revision ID: 005
 """
+
 from alembic import op
 
 revision = "005"
@@ -31,13 +32,9 @@ def upgrade() -> None:
         "ON audit_trail(resource_type, resource_id, created_at DESC)"
     )
     op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_audit_trail_user "
-        "ON audit_trail(user_id, created_at DESC)"
+        "CREATE INDEX IF NOT EXISTS idx_audit_trail_user ON audit_trail(user_id, created_at DESC)"
     )
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_audit_trail_created "
-        "ON audit_trail(created_at DESC)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS idx_audit_trail_created ON audit_trail(created_at DESC)")
 
     # Dead-letter queue — failed ARQ jobs
     op.execute("""

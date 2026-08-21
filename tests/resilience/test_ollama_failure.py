@@ -3,6 +3,7 @@
 Verifies graceful failure: clear error, no hang, no unhandled exception.
 Marked @pytest.mark.resilience — runs nightly only, not in CI.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch

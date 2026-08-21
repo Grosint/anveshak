@@ -3,10 +3,9 @@
 Bug 1: orphan_enqueued_at column missing from schema → orphan sweep crashes
 Bug 2: 7 of 8 service pools missing JSONB codec → data loss in 3 locations
 """
+
 from __future__ import annotations
 
-import importlib
-import json
 import re
 from pathlib import Path
 
@@ -20,6 +19,7 @@ _SERVICES_DIR = Path(__file__).resolve().parents[2] / "services"
 # ===========================================================================
 # Bug 1: orphan_enqueued_at must exist in migration
 # ===========================================================================
+
 
 class TestOrphanEnqueuedAtColumn:
     """Column orphan_enqueued_at must exist in the DB schema."""
@@ -43,6 +43,7 @@ class TestOrphanEnqueuedAtColumn:
 # Bug 2: JSONB codec — shared pool utility + safe parsing
 # ===========================================================================
 
+
 class TestSharedPoolUtility:
     """SDK must provide a shared create_db_pool with JSONB codec."""
 
@@ -56,9 +57,8 @@ class TestSharedPoolUtility:
                 "SDK must provide shared pool with JSONB codec"
             )
         import asyncio
-        assert asyncio.iscoroutinefunction(create_db_pool), (
-            "create_db_pool must be async"
-        )
+
+        assert asyncio.iscoroutinefunction(create_db_pool), "create_db_pool must be async"
 
 
 class TestAllServicePoolsUseCodec:
@@ -131,7 +131,7 @@ class TestNoUnsafeJsonLoads:
                     continue
 
                 # Check for isinstance(str) guard within 4 lines before
-                window = "\n".join(lines[max(0, i - 4):i + 1])
+                window = "\n".join(lines[max(0, i - 4) : i + 1])
                 has_guard = "isinstance(" in window and "str)" in window
 
                 # Accept ternary: json.loads(x) if isinstance(x, str) else x
@@ -140,10 +140,9 @@ class TestNoUnsafeJsonLoads:
 
                 if not has_guard:
                     rel = py_file.relative_to(_SERVICES_DIR)
-                    violations.append(f"{rel}:{i+1}: {stripped[:120]}")
+                    violations.append(f"{rel}:{i + 1}: {stripped[:120]}")
 
         assert not violations, (
             "Found json.loads() on DB row fields without isinstance(str) guard "
-            "(will lose data after JSONB codec enabled):\n"
-            + "\n".join(violations)
+            "(will lose data after JSONB codec enabled):\n" + "\n".join(violations)
         )

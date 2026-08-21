@@ -5,6 +5,7 @@ All DB calls are mocked.
 
 pytest.mark.unit — no external dependencies.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -18,8 +19,8 @@ pytestmark = pytest.mark.unit
 # Test 1: Disabled when MAX_TOPICS_PER_CYCLE=0
 # ---------------------------------------------------------------------------
 
-class TestThrottleDisabled:
 
+class TestThrottleDisabled:
     @pytest.mark.asyncio
     async def test_throttle_disabled_returns_all(self):
         """When max_topics_per_cycle=0, all active topics with pending items are returned."""
@@ -50,8 +51,8 @@ class TestThrottleDisabled:
 # Test 2: Throttle limits topics
 # ---------------------------------------------------------------------------
 
-class TestThrottleLimits:
 
+class TestThrottleLimits:
     @pytest.mark.asyncio
     async def test_throttle_limits_to_max(self):
         """When max_topics_per_cycle=2, only 2 topics are returned."""
@@ -82,8 +83,8 @@ class TestThrottleLimits:
 # Test 3: SQL skips topics with no pending items
 # ---------------------------------------------------------------------------
 
-class TestSkipsNoPending:
 
+class TestSkipsNoPending:
     @pytest.mark.asyncio
     async def test_sql_has_having_clause(self):
         """SQL_ACTIVE_TOPICS_PRIORITIZED must filter topics with zero pending items."""
@@ -91,17 +92,15 @@ class TestSkipsNoPending:
 
         sql = SQL_ACTIVE_TOPICS_PRIORITIZED.lower()
         assert "having" in sql, "SQL must use HAVING to skip topics with no pending items"
-        assert "narrative_cluster_id is null" in sql, (
-            "SQL must count unclustered items as pending"
-        )
+        assert "narrative_cluster_id is null" in sql, "SQL must count unclustered items as pending"
 
 
 # ---------------------------------------------------------------------------
 # Test 4: Prioritizes by pending count
 # ---------------------------------------------------------------------------
 
-class TestPrioritization:
 
+class TestPrioritization:
     @pytest.mark.asyncio
     async def test_sql_orders_by_pending_desc(self):
         """Topics with most pending items must be processed first."""

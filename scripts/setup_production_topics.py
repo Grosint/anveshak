@@ -14,6 +14,7 @@ Topics:
 
 Sources: 11 RSS + 6 web + 3 Telegram + 1 X/Twitter = 21 sources
 """
+
 from __future__ import annotations
 
 import argparse
@@ -22,10 +23,10 @@ import sys
 import urllib.error
 import urllib.request
 
-
 # ---------------------------------------------------------------------------
 # HTTP helpers (stdlib only — no external deps needed on VM)
 # ---------------------------------------------------------------------------
+
 
 def _post(url: str, payload: dict, token: str | None = None) -> tuple[int, dict]:
     data = json.dumps(payload).encode()
@@ -62,10 +63,21 @@ TOPICS = [
     {
         "name": "India-China LAC Military Posturing",
         "keywords": [
-            "LAC", "Line of Actual Control", "Ladakh", "Aksai Chin", "Depsang",
-            "PLA", "India China border", "Galwan", "Pangong", "Arunachal",
-            "Tawang", "Chinese military", "India China standoff",
-            "eastern Ladakh", "border infrastructure",
+            "LAC",
+            "Line of Actual Control",
+            "Ladakh",
+            "Aksai Chin",
+            "Depsang",
+            "PLA",
+            "India China border",
+            "Galwan",
+            "Pangong",
+            "Arunachal",
+            "Tawang",
+            "Chinese military",
+            "India China standoff",
+            "eastern Ladakh",
+            "border infrastructure",
         ],
         "languages": ["en", "hi", "zh"],
         "signal_threshold": 2,
@@ -76,10 +88,24 @@ TOPICS = [
     {
         "name": "Pakistan Cross-Border Terror & LoC Activity",
         "keywords": [
-            "LoC", "Line of Control", "Kashmir", "cross-border", "infiltration",
-            "ceasefire violation", "Pakistan terrorism", "LeT", "JeM", "Jaish",
-            "Lashkar", "IED", "encounter", "Pulwama", "Pahalgam",
-            "drone smuggling", "terror funding", "FATF Pakistan",
+            "LoC",
+            "Line of Control",
+            "Kashmir",
+            "cross-border",
+            "infiltration",
+            "ceasefire violation",
+            "Pakistan terrorism",
+            "LeT",
+            "JeM",
+            "Jaish",
+            "Lashkar",
+            "IED",
+            "encounter",
+            "Pulwama",
+            "Pahalgam",
+            "drone smuggling",
+            "terror funding",
+            "FATF Pakistan",
         ],
         "languages": ["en", "hi", "ur"],
         "signal_threshold": 2,
@@ -90,11 +116,23 @@ TOPICS = [
     {
         "name": "Indian Ocean Maritime Security & Chinese Naval Presence",
         "keywords": [
-            "Indian Ocean", "IOR", "South China Sea", "Chinese navy",
-            "PLA Navy", "Hambantota", "String of Pearls", "Djibouti",
-            "submarine", "Indian Navy", "INS", "Quad naval",
-            "Malabar exercise", "maritime surveillance", "PLAN",
-            "aircraft carrier", "Andaman Nicobar",
+            "Indian Ocean",
+            "IOR",
+            "South China Sea",
+            "Chinese navy",
+            "PLA Navy",
+            "Hambantota",
+            "String of Pearls",
+            "Djibouti",
+            "submarine",
+            "Indian Navy",
+            "INS",
+            "Quad naval",
+            "Malabar exercise",
+            "maritime surveillance",
+            "PLAN",
+            "aircraft carrier",
+            "Andaman Nicobar",
         ],
         "languages": ["en", "hi"],
         "signal_threshold": 2,
@@ -105,11 +143,19 @@ TOPICS = [
     {
         "name": "Disinformation & Info Ops Targeting India",
         "keywords": [
-            "deepfake India", "disinformation India", "fake news military",
-            "propaganda India", "influence operation", "information warfare",
-            "AI generated", "manipulated media", "fact check India",
-            "ISPR propaganda", "anti-India narrative",
-            "social media manipulation", "coordinated inauthentic",
+            "deepfake India",
+            "disinformation India",
+            "fake news military",
+            "propaganda India",
+            "influence operation",
+            "information warfare",
+            "AI generated",
+            "manipulated media",
+            "fact check India",
+            "ISPR propaganda",
+            "anti-India narrative",
+            "social media manipulation",
+            "coordinated inauthentic",
         ],
         "languages": ["en", "hi"],
         "signal_threshold": 2,
@@ -205,7 +251,6 @@ SOURCES = [
         "credibility_score": 68.0,
         "topic_indices": [0, 1, 3],
     },
-
     # --- Tier 2: Web sources (platform: "web") ---
     {
         "name": "GlobalSecurity.org",
@@ -249,7 +294,6 @@ SOURCES = [
         "credibility_score": 62.0,
         "topic_indices": [0, 1, 3],
     },
-
     # --- Tier 3: Social (Telegram + X/Twitter) ---
     {
         "name": "Telegram: Defence Updates",
@@ -286,18 +330,21 @@ SOURCES = [
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Set up production validation topics and sources",
     )
     parser.add_argument(
-        "--api-url", default="http://localhost:8000",
+        "--api-url",
+        default="http://localhost:8000",
         help="Anveshak API base URL (default: http://localhost:8000)",
     )
     parser.add_argument("--username", default="demo@anveshak.local")
     parser.add_argument("--password", default="AnveshakDemo2024!")
     parser.add_argument(
-        "--dry-run", action="store_true",
+        "--dry-run",
+        action="store_true",
         help="Print what would be created without calling API",
     )
     args = parser.parse_args()
@@ -312,7 +359,9 @@ def main() -> int:
             print(f"  keywords:  {len(topic['keywords'])} terms")
             print(f"  languages: {topic['languages']}")
             print(f"  threshold: ISC >= {topic['signal_threshold']}")
-            print(f"  report:    {topic['scheduled_report_cron']} ({topic['scheduled_report_type']})")
+            print(
+                f"  report:    {topic['scheduled_report_cron']} ({topic['scheduled_report_type']})"
+            )
             print(f"  sources:   {len(linked)}")
             for name in linked:
                 src = next(s for s in SOURCES if s["name"] == name)
@@ -329,10 +378,13 @@ def main() -> int:
 
     # --- Authenticate ---
     print(f"Setting up production validation → {base}\n")
-    status_code, resp = _post(f"{base}/api/v1/auth/login", {
-        "username": args.username,
-        "password": args.password,
-    })
+    status_code, resp = _post(
+        f"{base}/api/v1/auth/login",
+        {
+            "username": args.username,
+            "password": args.password,
+        },
+    )
     if status_code != 200 or "access_token" not in resp:
         print(f"FAIL: Login failed ({status_code}): {resp}")
         return 1
@@ -385,7 +437,8 @@ def main() -> int:
     for src in SOURCES:
         # Resolve topic IDs for this source
         link_topic_ids = [
-            topic_ids[i] for i in src["topic_indices"]
+            topic_ids[i]
+            for i in src["topic_indices"]
             if i < len(topic_ids) and topic_ids[i] is not None
         ]
 

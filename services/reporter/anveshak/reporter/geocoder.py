@@ -2,12 +2,14 @@
 
 Uses geonamescache (bundled offline data — no network calls, no API key required)
 plus a custom overlay for defence-relevant locations.
-CLAUDE.md hardware independence: no ML model here.
+AGENTS.md hardware independence: no ML model here.
 """
+
 from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -22,8 +24,11 @@ log = structlog.get_logger(__name__)
 _gc = geonamescache.GeonamesCache()
 
 # Pre-build lookup indices for fast case-insensitive matching
-_CITIES_BY_NAME: dict[str, dict[str, Any]] = {}
-_COUNTRIES_BY_NAME: dict[str, dict[str, Any]] = {}
+# Mapping, not dict: geonamescache yields TypedDicts, which are read-compatible
+# with Mapping but not assignable to dict[str, Any]. Every read below is a
+# lookup, so the covariant type is the accurate one.
+_CITIES_BY_NAME: dict[str, Mapping[str, Any]] = {}
+_COUNTRIES_BY_NAME: dict[str, Mapping[str, Any]] = {}
 _CUSTOM_LOCATIONS: dict[str, tuple[float, float]] = {}
 
 
@@ -48,7 +53,11 @@ def _load_custom_locations() -> None:
     """Load custom_locations.json overlay for defence-specific locations."""
     candidates = [
         Path("/app/infra/configs/geocoder/custom_locations.json"),
-        Path(__file__).resolve().parents[4] / "infra" / "configs" / "geocoder" / "custom_locations.json",
+        Path(__file__).resolve().parents[4]
+        / "infra"
+        / "configs"
+        / "geocoder"
+        / "custom_locations.json",
     ]
     for path in candidates:
         if path.is_file():
@@ -73,6 +82,7 @@ _CAPS_PATTERN = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b")
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def geocode_locations(location_names: list[str]) -> dict[str, tuple[float, float]]:
     """Return {name: (lat, lon)} for each recognised location.

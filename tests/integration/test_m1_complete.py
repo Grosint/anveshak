@@ -6,17 +6,18 @@ Run: uv run pytest tests/integration/test_m1_complete.py -v
 These tests exercise the full credibility feedback loop end-to-end:
   cross-verification boost → contradiction drop → report source warnings dedup.
 """
+
 import uuid
 
 import pytest
-
 from anveshak.analyst.credibility import (
-    run_cross_verification_update,
-    run_contradiction_update,
     clamp_score,
+    run_contradiction_update,
+    run_cross_verification_update,
 )
 from anveshak.analyst.settings import AnalystSettings
-from tests.conftest import LABELS_JSON, insert_content_item
+
+from tests.conftest import LABELS_JSON
 
 settings = AnalystSettings()
 
@@ -25,10 +26,9 @@ settings = AnalystSettings()
 # Helpers (read-only queries)
 # ---------------------------------------------------------------------------
 
+
 async def _get_source_score(conn, source_id: str) -> float:
-    return await conn.fetchval(
-        "SELECT credibility_score FROM sources WHERE id = $1", source_id
-    )
+    return await conn.fetchval("SELECT credibility_score FROM sources WHERE id = $1", source_id)
 
 
 async def _count_audit_entries(conn, source_id: str) -> int:
@@ -40,38 +40,61 @@ async def _count_audit_entries(conn, source_id: str) -> int:
 async def _count_report_warnings(conn, report_id: str, source_id: str) -> int:
     return await conn.fetchval(
         "SELECT COUNT(*) FROM report_source_warnings WHERE report_id=$1 AND source_id=$2",
-        report_id, source_id,
+        report_id,
+        source_id,
     )
 
 
-async def _insert_cluster(pool, cluster_id: str, topic_id: str, isc: int, item_count: int = 5) -> None:
+async def _insert_cluster(
+    pool, cluster_id: str, topic_id: str, isc: int, item_count: int = 5
+) -> None:
     async with pool.acquire() as conn:
-        await conn.execute("""
+        await conn.execute(
+            """
             INSERT INTO narrative_clusters
                 (id, topic_id, label, item_count, independent_source_count, created_at, updated_at, labels)
             VALUES ($1, $2, 'Test Cluster', $3, $4, NOW(), NOW(), $5::jsonb)
             ON CONFLICT (id) DO NOTHING
-        """, cluster_id, topic_id, item_count, isc, LABELS_JSON)
+        """,
+            cluster_id,
+            topic_id,
+            item_count,
+            isc,
+            LABELS_JSON,
+        )
 
 
 async def _insert_content_item_m1(
-    pool, item_id: str, topic_id: str, source_id: str,
+    pool,
+    item_id: str,
+    topic_id: str,
+    source_id: str,
     cluster_id: str | None = None,
 ) -> None:
     content_hash = f"hash_{item_id}"
     async with pool.acquire() as conn:
-        await conn.execute("""
+        await conn.execute(
+            """
             INSERT INTO content_items
                 (id, topic_id, source_id, raw_text, clean_text, content_hash,
                  narrative_cluster_id, captured_at, created_at, updated_at, labels, org_id)
             VALUES ($1, $2, $3, 'test text', 'test text', $4, $5, NOW(), NOW(), NOW(), $6::jsonb, $7)
             ON CONFLICT (content_hash) DO NOTHING
-        """, item_id, topic_id, source_id, content_hash, cluster_id, LABELS_JSON, "org-integration-test")
+        """,
+            item_id,
+            topic_id,
+            source_id,
+            content_hash,
+            cluster_id,
+            LABELS_JSON,
+            "org-integration-test",
+        )
 
 
 # ---------------------------------------------------------------------------
 # Test 1: Cross-verification boost (7.1)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 @pytest.mark.asyncio
@@ -111,6 +134,7 @@ async def test_cross_verification_boosts_high_credibility_sources(db_pool, make_
 # Test 2: Cross-verify does NOT boost low-credibility sources (7.1)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_cross_verification_skips_low_credibility_sources(db_pool, make_topic, make_source):
@@ -137,6 +161,7 @@ async def test_cross_verification_skips_low_credibility_sources(db_pool, make_to
 # Test 3: Score is clamped to 100.0 (7.5)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_cross_verification_clamps_score_at_100(db_pool, make_topic, make_source):
@@ -161,6 +186,7 @@ async def test_cross_verification_clamps_score_at_100(db_pool, make_topic, make_
 # ---------------------------------------------------------------------------
 # Test 4: Contradiction drop (7.2)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 @pytest.mark.asyncio
@@ -200,6 +226,7 @@ async def test_contradiction_drops_high_noise_ratio_source(db_pool, make_topic, 
 # Test 5: Contradiction does NOT drop source with low noise ratio (7.2)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_contradiction_skips_low_noise_ratio_source(db_pool, make_topic, make_source):
@@ -214,9 +241,7 @@ async def test_contradiction_skips_low_noise_ratio_source(db_pool, make_topic, m
 
     # 8 clustered, 2 unclustered → noise ratio = 0.2 (below threshold 0.6)
     for _ in range(8):
-        await _insert_content_item_m1(
-            db_pool, str(uuid.uuid4()), topic_id, source_id, cluster_id
-        )
+        await _insert_content_item_m1(db_pool, str(uuid.uuid4()), topic_id, source_id, cluster_id)
     for _ in range(2):
         await _insert_content_item_m1(
             db_pool, str(uuid.uuid4()), topic_id, source_id, cluster_id=None
@@ -227,14 +252,13 @@ async def test_contradiction_skips_low_noise_ratio_source(db_pool, make_topic, m
     async with db_pool.acquire() as conn:
         score = await _get_source_score(conn, source_id)
 
-    assert score == initial_score, (
-        f"Low noise ratio source should not be dropped: got {score}"
-    )
+    assert score == initial_score, f"Low noise ratio source should not be dropped: got {score}"
 
 
 # ---------------------------------------------------------------------------
 # Test 6: Report source warnings dedup (7.6)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 @pytest.mark.asyncio
@@ -248,7 +272,8 @@ async def test_report_source_warning_no_duplicates(db_pool, make_topic, make_sou
 
     async with db_pool.acquire() as conn:
         # Create a minimal report row
-        await conn.execute("""
+        await conn.execute(
+            """
             INSERT INTO reports
                 (id, topic_id, report_type, time_window_start, time_window_end,
                  credibility_min_filter, generated_at, source_snapshot,
@@ -256,13 +281,19 @@ async def test_report_source_warning_no_duplicates(db_pool, make_topic, make_sou
             VALUES ($1, $2, 'intelligence_brief', NOW() - INTERVAL '1 day', NOW(),
                     30.0, NOW(), '{}'::jsonb, NOW(), NOW(), $3::jsonb)
             ON CONFLICT (id) DO NOTHING
-        """, report_id, topic_id, LABELS_JSON)
+        """,
+            report_id,
+            topic_id,
+            LABELS_JSON,
+        )
 
     # Simulate cron firing twice — both should produce exactly one row
-    await insert_source_warning(db_pool, report_id, source_id, "Warning Source",
-                                old_score=80.0, new_score=50.0)
-    await insert_source_warning(db_pool, report_id, source_id, "Warning Source",
-                                old_score=80.0, new_score=50.0)
+    await insert_source_warning(
+        db_pool, report_id, source_id, "Warning Source", old_score=80.0, new_score=50.0
+    )
+    await insert_source_warning(
+        db_pool, report_id, source_id, "Warning Source", old_score=80.0, new_score=50.0
+    )
 
     async with db_pool.acquire() as conn:
         count = await _count_report_warnings(conn, report_id, source_id)
@@ -277,6 +308,7 @@ async def test_report_source_warning_no_duplicates(db_pool, make_topic, make_sou
 # Test 7: credibility_below API filter SQL (7.9) — DB-level
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_list_sources_below_returns_only_low_credibility(db_pool, make_source):
@@ -285,6 +317,7 @@ async def test_list_sources_below_returns_only_low_credibility(db_pool, make_sou
     high_id = await make_source(name="High Source", credibility_score=85.0)
 
     from anveshak.api.db.sources import list_sources_below
+
     async with db_pool.acquire() as conn:
         results = await list_sources_below(conn, 40.0)
 
@@ -296,6 +329,7 @@ async def test_list_sources_below_returns_only_low_credibility(db_pool, make_sou
 # ---------------------------------------------------------------------------
 # Test 8: topic sources query (7.10) — DB-level
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 @pytest.mark.asyncio
@@ -311,17 +345,20 @@ async def test_list_topic_sources_returns_contributing_sources(db_pool, make_top
         # Link both sources to the topic via topic_sources join table
         await conn.execute(
             "INSERT INTO topic_sources (topic_id, source_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-            topic_id, contributing_source_id,
+            topic_id,
+            contributing_source_id,
         )
         await conn.execute(
             "INSERT INTO topic_sources (topic_id, source_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-            topic_id, non_contributing_source_id,
+            topic_id,
+            non_contributing_source_id,
         )
 
     # Only the contributing source has content items
     await _insert_content_item_m1(db_pool, item_id, topic_id, contributing_source_id)
 
     from anveshak.api.db.sources import list_topic_sources
+
     async with db_pool.acquire() as conn:
         results = await list_topic_sources(conn, topic_id)
 

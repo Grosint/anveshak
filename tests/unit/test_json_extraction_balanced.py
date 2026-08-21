@@ -3,6 +3,7 @@
 Critical fix: rfind("}") breaks on JSON strings containing } characters.
 The extractor must use balanced brace matching that respects string escaping.
 """
+
 from __future__ import annotations
 
 import json

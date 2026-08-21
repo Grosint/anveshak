@@ -3,7 +3,6 @@
 Verifies that the ON CONFLICT (report_id, source_id) DO NOTHING clause
 in SQL_INSERT_SOURCE_WARNING prevents duplicate warning rows.
 """
-import pytest
 
 from anveshak.reporter.db import SQL_INSERT_SOURCE_WARNING
 

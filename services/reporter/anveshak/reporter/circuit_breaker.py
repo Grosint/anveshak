@@ -12,6 +12,7 @@ Redis keys:
   anveshak:reporter:ollama:failures   — consecutive failure count
   anveshak:reporter:ollama:opened_at  — monotonic timestamp when opened
 """
+
 from __future__ import annotations
 
 import time

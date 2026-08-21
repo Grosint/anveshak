@@ -6,11 +6,12 @@ Sentiment trend and trending keywords already have time windows — entities mus
 
 pytest.mark.integration — requires running PostgreSQL.
 """
+
 from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -25,7 +26,7 @@ class TestEntitiesTimeWindow:
         from anveshak.api.db.topics import get_topic_entities
 
         topic_id = await make_topic(name="Entities Window Test")
-        source_id = await make_source(name="Test Source", platform="web")
+        await make_source(name="Test Source", platform="web")
 
         async with db_pool.acquire() as conn:
             # Should accept days parameter without error
@@ -52,16 +53,32 @@ class TestEntitiesTimeWindow:
                    language, content_hash, url, captured_at, credibility_score_at_capture,
                    created_at, updated_at, labels, org_id)
                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)""",
-                recent_id, topic_id, source_id, "recent article about PLA", "recent article about PLA",
-                "en", recent_hash, f"https://example.com/{recent_id[:8]}",
-                now, 75.0, now, now, labels, "org-integration-test",
+                recent_id,
+                topic_id,
+                source_id,
+                "recent article about PLA",
+                "recent article about PLA",
+                "en",
+                recent_hash,
+                f"https://example.com/{recent_id[:8]}",
+                now,
+                75.0,
+                now,
+                now,
+                labels,
+                "org-integration-test",
             )
             await conn.execute(
                 """INSERT INTO extracted_entities (id, content_item_id, entity_type, entity_text,
                    confidence, created_at, labels)
                    VALUES ($1,$2,$3,$4,$5,$6,$7)""",
-                str(uuid.uuid4()), recent_id, "ORG", "PLA",
-                0.95, now, labels,
+                str(uuid.uuid4()),
+                recent_id,
+                "ORG",
+                "PLA",
+                0.95,
+                now,
+                labels,
             )
 
             # Insert old content item + entity (60 days ago)
@@ -72,16 +89,32 @@ class TestEntitiesTimeWindow:
                    language, content_hash, url, captured_at, credibility_score_at_capture,
                    created_at, updated_at, labels, org_id)
                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)""",
-                old_id, topic_id, source_id, "old article about DRDO", "old article about DRDO",
-                "en", old_hash, f"https://example.com/{old_id[:8]}",
-                old_date, 75.0, old_date, old_date, labels, "org-integration-test",
+                old_id,
+                topic_id,
+                source_id,
+                "old article about DRDO",
+                "old article about DRDO",
+                "en",
+                old_hash,
+                f"https://example.com/{old_id[:8]}",
+                old_date,
+                75.0,
+                old_date,
+                old_date,
+                labels,
+                "org-integration-test",
             )
             await conn.execute(
                 """INSERT INTO extracted_entities (id, content_item_id, entity_type, entity_text,
                    confidence, created_at, labels)
                    VALUES ($1,$2,$3,$4,$5,$6,$7)""",
-                str(uuid.uuid4()), old_id, "ORG", "DRDO",
-                0.90, old_date, labels,
+                str(uuid.uuid4()),
+                old_id,
+                "ORG",
+                "DRDO",
+                0.90,
+                old_date,
+                labels,
             )
 
             # Query with 30-day window — should only see PLA, not DRDO

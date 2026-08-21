@@ -11,25 +11,26 @@ YouTube Data API v3 free tier: 10,000 units/day.
 YouTubeQuotaGuard atomically enforces daily cap using Redis counter keyed by date.
 Resets at midnight UTC automatically via TTL.
 """
+
 from __future__ import annotations
 
 import hashlib
 import re
-from datetime import datetime, timedelta, timezone, UTC
-from typing import AsyncIterator
-from urllib.parse import urlparse, parse_qs
+from datetime import UTC, datetime, timedelta
+from typing import Any, AsyncIterator
+from urllib.parse import urlparse
 
 import structlog
 from arq import ArqRedis
 
+from ..settings import settings
 from .base import (
     AdapterAuthError,
-    AdapterDegradedError,
     AdapterRateLimitError,
     RawItem,
     SourceAdapterBase,
+    require_client,
 )
-from ..settings import settings
 
 log = structlog.get_logger(__name__)
 
@@ -38,13 +39,22 @@ log = structlog.get_logger(__name__)
 # Content hash helpers — stable across caption edits
 # ---------------------------------------------------------------------------
 
+
 def youtube_video_hash(video_id: str) -> str:
-    """SHA-256 hash for YouTube video dedup. Uses video_id, not text content."""
+    """SHA-256 dedup key for a YouTube video. Keyed on video_id, not text.
+
+    The adapter does not call this: it sets ``stable_id="video:{video_id}"`` on
+    the RawItem and RawItem.content_hash() produces the same digest from
+    ``{platform}:{stable_id}``. Kept as the readable statement of the format,
+    and as what callers outside the adapter (backfills, one-off scripts) should
+    use to recompute a key. tests/unit/test_youtube_quota.py asserts the two
+    agree, so neither can drift.
+    """
     return hashlib.sha256(f"youtube:video:{video_id}".encode()).hexdigest()
 
 
 def youtube_comment_hash(comment_id: str) -> str:
-    """SHA-256 hash for YouTube comment dedup. Uses comment_id."""
+    """SHA-256 dedup key for a YouTube comment. See youtube_video_hash()."""
     return hashlib.sha256(f"youtube:comment:{comment_id}".encode()).hexdigest()
 
 
@@ -91,7 +101,7 @@ def normalize_channel_input(raw: str) -> tuple[str, str]:
         if path.startswith("/@"):
             return ("handle", path[2:])
         if path.startswith("/channel/"):
-            return ("channel_id", path[len("/channel/"):])
+            return ("channel_id", path[len("/channel/") :])
         if path.startswith("/c/"):
             return ("custom", path[3:])
         if path.startswith("/user/"):
@@ -113,6 +123,7 @@ def normalize_channel_input(raw: str) -> tuple[str, str]:
 # Quota Guard — daily Redis atomic counter
 # ---------------------------------------------------------------------------
 
+
 def _daily_quota_key() -> str:
     """Redis key for today's YouTube quota counter."""
     return f"anveshak:youtube:daily_quota:{datetime.now(UTC).strftime('%Y-%m-%d')}"
@@ -121,9 +132,7 @@ def _daily_quota_key() -> str:
 def _seconds_until_day_end() -> int:
     """Seconds from now until midnight UTC."""
     now = datetime.now(UTC)
-    next_midnight = (now + timedelta(days=1)).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    next_midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
     return max(1, int((next_midnight - now).total_seconds()))
 
 
@@ -167,9 +176,21 @@ return new_count
         key = _daily_quota_key()
         ttl = _seconds_until_day_end()
 
-        result = int(await self._redis.eval(
-            self._LUA_CHECK_AND_INCREMENT, 1, key, self._cap, ttl, units
-        ))
+        # redis-py declares keys_and_args as str. Ints work at runtime because the
+        # client encodes them, but the Lua script receives strings either way, so
+        # convert here to match what actually crosses the wire.
+        # redis-py types eval() against the sync client, which declares a str
+        # return. ArqRedis is async and awaits fine at runtime.
+        result = int(
+            await self._redis.eval(  # pyright: ignore[reportGeneralTypeIssues]
+                self._LUA_CHECK_AND_INCREMENT,
+                1,
+                key,
+                str(self._cap),
+                str(ttl),
+                str(units),
+            )
+        )
 
         if result == -1:
             log.warning(
@@ -193,6 +214,7 @@ return new_count
 # YouTube Adapter
 # ---------------------------------------------------------------------------
 
+
 class YouTubeAdapter(SourceAdapterBase):
     """YouTube Data API v3 adapter — channel-based polling.
 
@@ -206,9 +228,16 @@ class YouTubeAdapter(SourceAdapterBase):
     adapter_version = "1.0.0"
 
     def __init__(self, quota_guard: YouTubeQuotaGuard) -> None:
-        self._youtube = None  # googleapiclient.discovery.Resource
+        # googleapiclient.discovery.Resource is built dynamically and ships no
+        # stubs, so Any is the honest annotation.
+        self._youtube: Any | None = None
         self._quota_guard = quota_guard
         self._channel_cache: dict[str, str] = {}  # handle → channel_id
+
+    @property
+    def _api(self) -> Any:
+        """The discovery client, or AdapterAuthError if authenticate() never ran."""
+        return require_client(self._youtube, "youtube")
 
     async def authenticate(self) -> None:
         """Validate API key by making a cheap API call."""
@@ -217,15 +246,19 @@ class YouTubeAdapter(SourceAdapterBase):
 
         try:
             from googleapiclient.discovery import build
-            self._youtube = build(
-                "youtube", "v3",
+
+            client = build(
+                "youtube",
+                "v3",
                 developerKey=settings.youtube_api_key,
                 cache_discovery=False,
             )
             # Test call — costs 1 unit but validates the key
-            self._youtube.channels().list(
-                part="id", id="UC_x5XG1OV2P6uZZ5FSM9Ttw"  # Google's channel
+            client.channels().list(
+                part="id",
+                id="UC_x5XG1OV2P6uZZ5FSM9Ttw",  # Google's channel
             ).execute()
+            self._youtube = client
             log.info("youtube.adapter.authenticated")
         except Exception as exc:
             raise AdapterAuthError(f"YouTube API key validation failed: {exc}") from exc
@@ -237,7 +270,6 @@ class YouTubeAdapter(SourceAdapterBase):
         topic_id: str,
     ) -> AsyncIterator[RawItem]:
         """Poll each channel's uploads, yield videos + optional comments."""
-        import asyncio
 
         for handle in source_handles:
             try:
@@ -275,28 +307,40 @@ class YouTubeAdapter(SourceAdapterBase):
         try:
             if kind == "handle":
                 resp = await asyncio.to_thread(
-                    lambda: self._youtube.channels().list(
-                        part="id,contentDetails",
-                        forHandle=value,
-                    ).execute()
+                    lambda: (
+                        self._api.channels()
+                        .list(
+                            part="id,contentDetails",
+                            forHandle=value,
+                        )
+                        .execute()
+                    )
                 )
             elif kind == "user":
                 resp = await asyncio.to_thread(
-                    lambda: self._youtube.channels().list(
-                        part="id,contentDetails",
-                        forUsername=value,
-                    ).execute()
+                    lambda: (
+                        self._api.channels()
+                        .list(
+                            part="id,contentDetails",
+                            forUsername=value,
+                        )
+                        .execute()
+                    )
                 )
             else:  # custom — try search as last resort
                 if not await self._quota_guard.check_and_increment(units=99):
                     raise AdapterRateLimitError("YouTube daily quota exhausted")
                 resp = await asyncio.to_thread(
-                    lambda: self._youtube.search().list(
-                        part="snippet",
-                        q=value,
-                        type="channel",
-                        maxResults=1,
-                    ).execute()
+                    lambda: (
+                        self._api.search()
+                        .list(
+                            part="snippet",
+                            q=value,
+                            type="channel",
+                            maxResults=1,
+                        )
+                        .execute()
+                    )
                 )
                 items = resp.get("items", [])
                 if items:
@@ -330,32 +374,37 @@ class YouTubeAdapter(SourceAdapterBase):
 
         # Fetch recent video IDs from uploads playlist
         resp = await asyncio.to_thread(
-            lambda: self._youtube.playlistItems().list(
-                part="contentDetails",
-                playlistId=uploads_playlist,
-                maxResults=min(50, settings.youtube_backfill_count),
-            ).execute()
+            lambda: (
+                self._api.playlistItems()
+                .list(
+                    part="contentDetails",
+                    playlistId=uploads_playlist,
+                    maxResults=min(50, settings.youtube_backfill_count),
+                )
+                .execute()
+            )
         )
 
-        video_ids = [
-            item["contentDetails"]["videoId"]
-            for item in resp.get("items", [])
-        ]
+        video_ids = [item["contentDetails"]["videoId"] for item in resp.get("items", [])]
 
         if not video_ids:
             return
 
         # Fetch video metadata in batches of 50 (1 unit per call)
         for i in range(0, len(video_ids), 50):
-            batch = video_ids[i:i + 50]
+            batch = video_ids[i : i + 50]
             if not await self._quota_guard.check_and_increment(units=1):
                 raise AdapterRateLimitError("YouTube daily quota exhausted")
 
             details = await asyncio.to_thread(
-                lambda ids=batch: self._youtube.videos().list(
-                    part="snippet,statistics",
-                    id=",".join(ids),
-                ).execute()
+                lambda ids=batch: (
+                    self._api.videos()
+                    .list(
+                        part="snippet,statistics",
+                        id=",".join(ids),
+                    )
+                    .execute()
+                )
             )
 
             for video in details.get("items", []):
@@ -372,14 +421,11 @@ class YouTubeAdapter(SourceAdapterBase):
 
         title = snippet.get("title", "")
         description = snippet.get("description", "")
-        published_at = datetime.fromisoformat(
-            snippet["publishedAt"].replace("Z", "+00:00")
-        )
+        published_at = datetime.fromisoformat(snippet["publishedAt"].replace("Z", "+00:00"))
         channel_title = snippet.get("channelTitle", handle)
-        thumbnail = (
-            snippet.get("thumbnails", {}).get("high", {}).get("url")
-            or snippet.get("thumbnails", {}).get("default", {}).get("url", "")
-        )
+        thumbnail = snippet.get("thumbnails", {}).get("high", {}).get("url") or snippet.get(
+            "thumbnails", {}
+        ).get("default", {}).get("url", "")
 
         # Engagement metrics
         engagement: dict[str, int | float] = {}
@@ -405,6 +451,14 @@ class YouTubeAdapter(SourceAdapterBase):
             caption_text, caption_source = await self._fetch_caption(vid)
         except Exception as exc:
             log.info("youtube.caption_unavailable", video_id=vid, error=str(exc))
+        # Manual captions, ASR, or none materially changes transcript quality, so
+        # record which one this item got.
+        log.debug(
+            "youtube.caption_resolved",
+            video_id=vid,
+            caption_source=caption_source,
+            caption_chars=len(caption_text),
+        )
 
         # Build raw_text: title + description + transcript
         parts = [title]
@@ -425,11 +479,12 @@ class YouTubeAdapter(SourceAdapterBase):
             engagement=engagement or None,
             author_id=snippet.get("channelId", ""),
             author_handle=channel_title,
+            # Dedup on the video, not its text. raw_text embeds the transcript,
+            # and an ASR re-run rewrites that for an unchanged video, which text
+            # hashing would ingest as a new item on every poll. Matches
+            # youtube_video_hash(vid) -- see RawItem.content_hash().
+            stable_id=f"video:{vid}",
         )
-        # Override content_hash to use video_id (stable across caption edits)
-        video_item._youtube_video_id = vid
-        video_item._youtube_content_type = "video"
-        video_item._youtube_caption_source = caption_source
         yield video_item
 
         # Optional: fetch comments
@@ -475,13 +530,17 @@ class YouTubeAdapter(SourceAdapterBase):
 
         try:
             resp = await asyncio.to_thread(
-                lambda: self._youtube.commentThreads().list(
-                    part="snippet",
-                    videoId=video_id,
-                    maxResults=min(100, settings.youtube_max_comments_per_video),
-                    order="relevance",
-                    textFormat="plainText",
-                ).execute()
+                lambda: (
+                    self._api.commentThreads()
+                    .list(
+                        part="snippet",
+                        videoId=video_id,
+                        maxResults=min(100, settings.youtube_max_comments_per_video),
+                        order="relevance",
+                        textFormat="plainText",
+                    )
+                    .execute()
+                )
             )
         except Exception as exc:
             log.info("youtube.comments_disabled", video_id=video_id, error=str(exc))
@@ -503,17 +562,16 @@ class YouTubeAdapter(SourceAdapterBase):
                 raw_text=comment.get("textDisplay", ""),
                 url=f"https://www.youtube.com/watch?v={video_id}&lc={comment_id}",
                 platform="youtube",
-                captured_at=datetime.fromisoformat(
-                    comment["publishedAt"].replace("Z", "+00:00")
-                ),
+                captured_at=datetime.fromisoformat(comment["publishedAt"].replace("Z", "+00:00")),
                 source_handle=handle,
                 engagement=comment_engagement or None,
                 author_id=comment.get("authorChannelId", {}).get("value", ""),
                 author_handle=comment.get("authorDisplayName", ""),
                 reply_to_id=video_id,
+                # Comment IDs are stable across edits; matches
+                # youtube_comment_hash(comment_id).
+                stable_id=f"comment:{comment_id}",
             )
-            item._youtube_comment_id = comment_id
-            item._youtube_content_type = "comment"
             yield item
 
     async def health(self) -> dict:
@@ -555,10 +613,14 @@ class YouTubeAdapter(SourceAdapterBase):
                 return None
 
             resp = await asyncio.to_thread(
-                lambda: self._youtube.channels().list(
-                    part="snippet,statistics",
-                    id=channel_id,
-                ).execute()
+                lambda: (
+                    self._api.channels()
+                    .list(
+                        part="snippet,statistics",
+                        id=channel_id,
+                    )
+                    .execute()
+                )
             )
 
             items = resp.get("items", [])

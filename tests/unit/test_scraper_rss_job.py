@@ -8,10 +8,12 @@ Bugs caught:
 
 pytest.mark.unit — no DB, no Redis, no network.
 """
-import pytest
-from datetime import datetime, UTC
+
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 pytestmark = pytest.mark.unit
 
@@ -51,7 +53,6 @@ def _source_row(source_id: str, url: str, credibility: float = 50.0):
 
 
 class TestPollRssSources:
-
     @pytest.mark.asyncio
     @patch("anveshak.scraper.jobs.fetch_rss_items", new_callable=AsyncMock)
     async def test_topic_not_found(self, mock_fetch_rss):
@@ -92,8 +93,14 @@ class TestPollRssSources:
     @patch("anveshak.scraper.jobs.compute_content_hash")
     @patch("anveshak.scraper.jobs.fetch_rss_items", new_callable=AsyncMock)
     async def test_dedup_via_on_conflict(
-        self, mock_fetch_rss, mock_hash, mock_clean, mock_clean_hash,
-        mock_quality, mock_title, mock_metric
+        self,
+        mock_fetch_rss,
+        mock_hash,
+        mock_clean,
+        mock_clean_hash,
+        mock_quality,
+        mock_title,
+        mock_metric,
     ):
         """Two items with same content_hash — second insert returns None (ON CONFLICT) → counter=1."""
         from anveshak.scraper.jobs import poll_rss_sources
@@ -148,8 +155,15 @@ class TestPollRssSources:
     @patch("anveshak.scraper.jobs.compute_content_hash", return_value="hash1")
     @patch("anveshak.scraper.jobs.fetch_rss_items", new_callable=AsyncMock)
     async def test_item_error_continues(
-        self, mock_fetch_rss, mock_hash, mock_clean, mock_clean_hash,
-        mock_quality, mock_title, mock_errors_metric, mock_items_metric
+        self,
+        mock_fetch_rss,
+        mock_hash,
+        mock_clean,
+        mock_clean_hash,
+        mock_quality,
+        mock_title,
+        mock_errors_metric,
+        mock_items_metric,
     ):
         """Item 2 raises during clean → items 1 and 3 still inserted."""
         from anveshak.scraper.jobs import poll_rss_sources

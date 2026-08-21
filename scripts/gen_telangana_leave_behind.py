@@ -8,6 +8,7 @@ Must run inside the report-worker container (has WeasyPrint + DB access):
     docker exec anveshak-report-worker-1 python /tmp/gen_telangana_leave_behind.py
     docker cp anveshak-report-worker-1:/tmp/telangana_leave_behind.pdf .
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -32,70 +33,144 @@ OUTPUT_PATH = "/tmp/telangana_leave_behind.pdf"
 
 # HTML artifacts extracted as entities by spaCy from raw HTML fragments
 _HTML_ARTIFACT_RE = re.compile(
-    r'href=|src=|dir=|class=|style=|xmlns|</?[a-z]|\.css|\.js|'
-    r'mozilla|firefox|chrome|safari|webkit|opera|edge|trident|'
-    r'windows nt|macintosh|linux x86|compatible|gecko|applewebkit',
+    r"href=|src=|dir=|class=|style=|xmlns|</?[a-z]|\.css|\.js|"
+    r"mozilla|firefox|chrome|safari|webkit|opera|edge|trident|"
+    r"windows nt|macintosh|linux x86|compatible|gecko|applewebkit",
     re.IGNORECASE,
 )
 
 # Entities that are generic web/browser/boilerplate noise, not intelligence
 _NOISE_ENTITIES = {
     # Web/browser artifacts
-    "mozilla firefox", "google chrome", "safari", "internet explorer",
-    "microsoft edge", "opera", "webkit", "gecko",
+    "mozilla firefox",
+    "google chrome",
+    "safari",
+    "internet explorer",
+    "microsoft edge",
+    "opera",
+    "webkit",
+    "gecko",
     # Generic terms misclassified by NER
-    "state", "ips", "dgp", "sp", "dsp", "si", "ci",
-    "lok adalat", "lok sabha", "rajya sabha",
+    "state",
+    "ips",
+    "dgp",
+    "sp",
+    "dsp",
+    "si",
+    "ci",
+    "lok adalat",
+    "lok sabha",
+    "rajya sabha",
     # Global noise not relevant to Telangana cyber fraud
-    "fifa", "iran", "pentagon", "lebanon", "spain",
-    "north korea", "kim jong-un", "vance",
-    "egypt", "france", "switzerland", "brazil", "argentina",
-    "world cup", "ukraine", "russia", "gaza", "israel",
-    "turkey", "germany", "japan", "portugal", "croatia",
-    "south korea", "italy", "mexico", "copa", "euro",
-    "champions league", "premier league", "la liga",
+    "fifa",
+    "iran",
+    "pentagon",
+    "lebanon",
+    "spain",
+    "north korea",
+    "kim jong-un",
+    "vance",
+    "egypt",
+    "france",
+    "switzerland",
+    "brazil",
+    "argentina",
+    "world cup",
+    "ukraine",
+    "russia",
+    "gaza",
+    "israel",
+    "turkey",
+    "germany",
+    "japan",
+    "portugal",
+    "croatia",
+    "south korea",
+    "italy",
+    "mexico",
+    "copa",
+    "euro",
+    "champions league",
+    "premier league",
+    "la liga",
 }
 
 # URL domains that are noise in identifier tables
 _NOISE_DOMAINS = {
-    "facebook.com", "twitter.com", "x.com", "google.com",
-    "apple.co", "bit.ly", "t.co", "instagram.com",
-    "cdn.siasat.com", "media.telanganatoday.com",
-    "siasat.com", "mseducationacademy.in",
+    "facebook.com",
+    "twitter.com",
+    "x.com",
+    "google.com",
+    "apple.co",
+    "bit.ly",
+    "t.co",
+    "instagram.com",
+    "cdn.siasat.com",
+    "media.telanganatoday.com",
+    "siasat.com",
+    "mseducationacademy.in",
     "voters.eci.gov.in",
 }
 
 # Language code → human-readable name
 _LANG_NAMES = {
-    "en": "English", "hi": "Hindi", "te": "Telugu", "ur": "Urdu",
-    "ta": "Tamil", "kn": "Kannada", "mr": "Marathi", "bn": "Bengali",
-    "zh": "Chinese", "ar": "Arabic", "ru": "Russian", "id": "Indonesian",
-    "ml": "Malayalam", "pa": "Punjabi", "gu": "Gujarati",
-    "ko": "Korean", "no": "Norwegian", "ja": "Japanese", "fr": "French",
-    "de": "German", "es": "Spanish", "pt": "Portuguese", "it": "Italian",
-    "nl": "Dutch", "sv": "Swedish", "da": "Danish", "fi": "Finnish",
-    "pl": "Polish", "cs": "Czech", "ro": "Romanian", "hu": "Hungarian",
-    "tr": "Turkish", "th": "Thai", "vi": "Vietnamese", "ms": "Malay",
-    "tl": "Tagalog", "ne": "Nepali", "as": "Assamese",
+    "en": "English",
+    "hi": "Hindi",
+    "te": "Telugu",
+    "ur": "Urdu",
+    "ta": "Tamil",
+    "kn": "Kannada",
+    "mr": "Marathi",
+    "bn": "Bengali",
+    "zh": "Chinese",
+    "ar": "Arabic",
+    "ru": "Russian",
+    "id": "Indonesian",
+    "ml": "Malayalam",
+    "pa": "Punjabi",
+    "gu": "Gujarati",
+    "ko": "Korean",
+    "no": "Norwegian",
+    "ja": "Japanese",
+    "fr": "French",
+    "de": "German",
+    "es": "Spanish",
+    "pt": "Portuguese",
+    "it": "Italian",
+    "nl": "Dutch",
+    "sv": "Swedish",
+    "da": "Danish",
+    "fi": "Finnish",
+    "pl": "Polish",
+    "cs": "Czech",
+    "ro": "Romanian",
+    "hu": "Hungarian",
+    "tr": "Turkish",
+    "th": "Thai",
+    "vi": "Vietnamese",
+    "ms": "Malay",
+    "tl": "Tagalog",
+    "ne": "Nepali",
+    "as": "Assamese",
 }
 
 
 def _clean_cluster_label(label: str) -> str:
     """Remove HTML fragments from cluster labels."""
     # Strip href="..." fragments (closed or unclosed quotes)
-    label = re.sub(r',?\s*href="[^"]*"?', '', label)
+    label = re.sub(r',?\s*href="[^"]*"?', "", label)
     # Strip any remaining HTML attributes (dir=, class=, style=, etc.)
-    label = re.sub(r',?\s*\w+="[^"]*"?', '', label)
+    label = re.sub(r',?\s*\w+="[^"]*"?', "", label)
     # Strip any remaining HTML tags
-    label = re.sub(r'<[^>]+>', '', label)
+    label = re.sub(r"<[^>]+>", "", label)
     # Remove bare URLs that snuck through
-    label = re.sub(r'https?://\S+', '', label)
+    label = re.sub(r"https?://\S+", "", label)
     # Collapse whitespace
-    label = re.sub(r'\s+', ' ', label).strip()
+    label = re.sub(r"\s+", " ", label).strip()
     # Remove leading/trailing commas, colons with nothing after
-    label = label.strip(', ')
+    label = label.strip(", ")
     # Remove trailing colon if label ends with one
-    label = re.sub(r':\s*$', '', label).strip()
+    label = re.sub(r":\s*$", "", label).strip()
     return label
 
 
@@ -112,13 +187,12 @@ async def main() -> None:
 
     async with pool.acquire() as conn:
         # ── Topic ──
-        topic = await conn.fetchrow(
-            "SELECT name, keywords FROM topics WHERE id = $1", TOPIC_ID
-        )
+        topic = await conn.fetchrow("SELECT name, keywords FROM topics WHERE id = $1", TOPIC_ID)
         assert topic, f"Topic {TOPIC_ID} not found"
 
         # ── Stats ──
-        stats = await conn.fetchrow("""
+        stats = await conn.fetchrow(
+            """
             SELECT
                 (SELECT COUNT(*) FROM content_items WHERE topic_id = $1) AS content_count,
                 (SELECT COUNT(DISTINCT source_id) FROM content_items WHERE topic_id = $1) AS source_count,
@@ -126,10 +200,13 @@ async def main() -> None:
                 (SELECT COUNT(*) FROM signals WHERE topic_id = $1) AS signal_count,
                 (SELECT MIN(captured_at) FROM content_items WHERE topic_id = $1) AS earliest,
                 (SELECT MAX(captured_at) FROM content_items WHERE topic_id = $1) AS latest
-        """, TOPIC_ID)
+        """,
+            TOPIC_ID,
+        )
 
         # ── Sources — dedup by name, keep highest item_count ──
-        source_rows = await conn.fetch("""
+        source_rows = await conn.fetch(
+            """
             SELECT DISTINCT ON (s.name) s.name, s.platform,
                    CASE WHEN s.credibility_score = 0 THEN NULL
                         ELSE s.credibility_score END AS credibility_score,
@@ -138,7 +215,9 @@ async def main() -> None:
             JOIN topic_sources ts ON ts.source_id = s.id AND ts.topic_id = $1
             LEFT JOIN content_items ci ON ci.source_id = s.id AND ci.topic_id = $1
             ORDER BY s.name, s.credibility_score DESC NULLS LAST
-        """, TOPIC_ID)
+        """,
+            TOPIC_ID,
+        )
         sources = []
         for r in source_rows:
             d = dict(r)
@@ -149,13 +228,16 @@ async def main() -> None:
         sources.sort(key=lambda x: x["item_count"], reverse=True)
 
         # ── Clusters (top 15 by ISC) — clean HTML from labels ──
-        cluster_rows = await conn.fetch("""
+        cluster_rows = await conn.fetch(
+            """
             SELECT label, item_count, independent_source_count, executive_summary
             FROM narrative_clusters
             WHERE topic_id = $1
             ORDER BY independent_source_count DESC, item_count DESC
             LIMIT 15
-        """, TOPIC_ID)
+        """,
+            TOPIC_ID,
+        )
         clusters = []
         for r in cluster_rows:
             d = dict(r)
@@ -165,7 +247,8 @@ async def main() -> None:
             clusters.append(d)
 
         # ── Signals (top 20, skip noisy URL_DOMAIN) ──
-        signal_rows = await conn.fetch("""
+        signal_rows = await conn.fetch(
+            """
             SELECT s.signal_type, s.description, s.status, s.created_at
             FROM signals s
             WHERE s.topic_id = $1
@@ -181,7 +264,9 @@ async def main() -> None:
               AND s.description NOT ILIKE '%URL_DOMAIN%media.%'
             ORDER BY s.created_at DESC
             LIMIT 20
-        """, TOPIC_ID)
+        """,
+            TOPIC_ID,
+        )
         signals = []
         _CLUSTER_NAME_RE = re.compile(r"Cluster '([^']+)'")
         _IDENT_RE = re.compile(r"Identifier (\S+) '([^']+)'")
@@ -203,13 +288,16 @@ async def main() -> None:
             signals.append(d)
 
         # ── Identifiers (skip generic URL_DOMAIN noise) ──
-        ident_rows = await conn.fetch("""
+        ident_rows = await conn.fetch(
+            """
             SELECT identifier_type, identifier_value, source_count, content_item_count
             FROM identifier_clusters
             WHERE topic_id = $1
             ORDER BY source_count DESC, content_item_count DESC
             LIMIT 30
-        """, TOPIC_ID)
+        """,
+            TOPIC_ID,
+        )
         identifiers = []
         for r in ident_rows:
             d = dict(r)
@@ -219,7 +307,8 @@ async def main() -> None:
         identifiers = identifiers[:15]
 
         # ── Top entities — aggressive noise filtering ──
-        entity_rows = await conn.fetch("""
+        entity_rows = await conn.fetch(
+            """
             SELECT ee.entity_type,
                    INITCAP(LOWER(ee.entity_text)) AS entity_text,
                    SUM(cnt) AS mention_count
@@ -252,7 +341,9 @@ async def main() -> None:
             HAVING SUM(cnt) >= 3
             ORDER BY mention_count DESC
             LIMIT 60
-        """, TOPIC_ID)
+        """,
+            TOPIC_ID,
+        )
         entities = []
         for r in entity_rows:
             text_lower = r["entity_text"].lower().strip()
@@ -267,23 +358,29 @@ async def main() -> None:
         entities = entities[:20]
 
         # ── Language breakdown ──
-        lang_rows = await conn.fetch("""
+        lang_rows = await conn.fetch(
+            """
             SELECT COALESCE(language, 'unknown') AS language, COUNT(*) AS count
             FROM content_items
             WHERE topic_id = $1 AND language IS NOT NULL
             GROUP BY language
             ORDER BY count DESC
-        """, TOPIC_ID)
+        """,
+            TOPIC_ID,
+        )
         language_breakdown = []
         for r in lang_rows:
             code = r["language"]
-            language_breakdown.append({
-                "language": _LANG_NAMES.get(code, code),
-                "count": r["count"],
-            })
+            language_breakdown.append(
+                {
+                    "language": _LANG_NAMES.get(code, code),
+                    "count": r["count"],
+                }
+            )
 
         # ── Evidence items (top 20 from highest-ISC clusters) ──
-        evidence_rows = await conn.fetch("""
+        evidence_rows = await conn.fetch(
+            """
             SELECT ci.clean_text, ci.url, ci.captured_at, ci.credibility_score_at_capture,
                    s.name AS source_name, s.platform,
                    nc.label AS cluster_label
@@ -294,19 +391,23 @@ async def main() -> None:
               AND LENGTH(ci.clean_text) > 80
             ORDER BY nc.independent_source_count DESC, ci.captured_at DESC
             LIMIT 20
-        """, TOPIC_ID)
+        """,
+            TOPIC_ID,
+        )
         evidence_items = []
         for r in evidence_rows:
             text = r["clean_text"] or ""
-            evidence_items.append({
-                "title": _clean_cluster_label(r["cluster_label"] or ""),
-                "snippet": text[:300] + ("..." if len(text) > 300 else ""),
-                "url": r["url"] or "",
-                "captured_at": str(r["captured_at"]),
-                "credibility_score_at_capture": r["credibility_score_at_capture"] or 0,
-                "source_name": r["source_name"],
-                "platform": r["platform"],
-            })
+            evidence_items.append(
+                {
+                    "title": _clean_cluster_label(r["cluster_label"] or ""),
+                    "snippet": text[:300] + ("..." if len(text) > 300 else ""),
+                    "url": r["url"] or "",
+                    "captured_at": str(r["captured_at"]),
+                    "credibility_score_at_capture": r["credibility_score_at_capture"] or 0,
+                    "source_name": r["source_name"],
+                    "platform": r["platform"],
+                }
+            )
 
         # ── Keyword frequency from topic keywords ──
         keywords_list = topic["keywords"] or []
@@ -315,21 +416,30 @@ async def main() -> None:
             count_row = await conn.fetchrow(
                 "SELECT COUNT(*) AS cnt FROM content_items "
                 "WHERE topic_id = $1 AND clean_text ILIKE $2",
-                TOPIC_ID, f"%{kw}%",
+                TOPIC_ID,
+                f"%{kw}%",
             )
-            keyword_stats.append({
-                "keyword": kw,
-                "frequency": count_row["cnt"] if count_row else 0,
-            })
+            keyword_stats.append(
+                {
+                    "keyword": kw,
+                    "frequency": count_row["cnt"] if count_row else 0,
+                }
+            )
         keyword_stats.sort(key=lambda x: x["frequency"], reverse=True)
 
     await pool.close()
 
     # ── Build BLUF ──
     actionable_idents = [
-        i for i in identifiers
-        if i["identifier_type"] in (
-            "TELEGRAM_HANDLE", "PHONE_INTL", "PHONE_IN", "UPI_ID", "CRYPTO_WALLET",
+        i
+        for i in identifiers
+        if i["identifier_type"]
+        in (
+            "TELEGRAM_HANDLE",
+            "PHONE_INTL",
+            "PHONE_IN",
+            "UPI_ID",
+            "CRYPTO_WALLET",
         )
     ]
     multi_source_idents = [i for i in identifiers if i["source_count"] >= 2]
@@ -343,7 +453,8 @@ async def main() -> None:
     )
     if multi_source_idents:
         handle_examples = [
-            i["identifier_value"] for i in multi_source_idents
+            i["identifier_value"]
+            for i in multi_source_idents
             if i["identifier_type"] == "TELEGRAM_HANDLE"
         ][:3]
         if handle_examples:

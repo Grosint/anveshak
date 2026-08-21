@@ -5,6 +5,7 @@ what users expect. These tests document the actual behaviour so the gap is visib
 
 pytest.mark.unit — no disk I/O, no external deps.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -13,7 +14,6 @@ pytestmark = pytest.mark.unit
 
 
 class TestIsVideoPath:
-
     def test_mp4(self):
         from anveshak.vision.media_store import is_video_path
 
@@ -54,10 +54,12 @@ class TestIsVideoPath:
         from anveshak.vision.media_store import is_video_path
 
         # These SHOULD be True but currently return False — documenting the bug
-        assert is_video_path("/media/video.flv") is False, \
+        assert is_video_path("/media/video.flv") is False, (
             ".flv should be supported but isn't — fix _VIDEO_EXTS"
-        assert is_video_path("/media/video.wmv") is False, \
+        )
+        assert is_video_path("/media/video.wmv") is False, (
             ".wmv should be supported but isn't — fix _VIDEO_EXTS"
+        )
 
     def test_dot_only_extension(self):
         """Edge case: path ending with '.' has empty suffix."""

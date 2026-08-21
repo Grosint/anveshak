@@ -1,20 +1,21 @@
 """Authentication endpoints — login, logout, current user."""
+
 from __future__ import annotations
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
+from anveshak.db import DBConnection
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
-import asyncpg
 
-from ..db.pool import get_db
-from ..db import auth as auth_db
 from ..auth.jwt import (
     create_access_token,
-    pwd_context,
     get_current_user,
+    pwd_context,
     revoke_token,
 )
+from ..db import auth as auth_db
+from ..db.pool import get_db
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -28,7 +29,7 @@ class LoginRequest(BaseModel):
 @router.post("/login")
 async def login(
     req: LoginRequest,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
 ):
     row = await auth_db.get_user_by_username(db, req.username)
     if not row or not pwd_context.verify(req.password, row["password_hash"]):

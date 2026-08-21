@@ -7,14 +7,14 @@ keeping this module free of heavy ML/image dependencies.
 Criteria 4.1–4.4: download, store, hash.
 Criteria 4.5–4.6 (EXIF, pHash): handled by vision/jobs.py.
 """
+
 from __future__ import annotations
 
 import asyncio
 import hashlib
 import mimetypes
-import uuid
 from dataclasses import dataclass
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
@@ -35,21 +35,41 @@ _MIME_TO_ASSET_TYPE: dict[str, str] = {
 }
 
 _SUPPORTED_EXTENSIONS: frozenset[str] = frozenset(
-    {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp",  # images
-     ".mp4", ".avi", ".mov", ".webm", ".mkv",            # videos
-     ".pdf"}                                              # documents
+    {
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".gif",
+        ".webp",
+        ".bmp",  # images
+        ".mp4",
+        ".avi",
+        ".mov",
+        ".webm",
+        ".mkv",  # videos
+        ".pdf",
+    }  # documents
 )
+
+
+# mimetypes returns inconsistent results — normalise common cases
+_NORMALISE: dict[str, str] = {
+    ".jpeg": ".jpg",
+    ".jpe": ".jpg",
+    ".jfif": ".jpg",
+}
 
 
 @dataclass(frozen=True)
 class MediaDownloadResult:
     """Result returned by download_media_asset on success."""
-    content_hash: str        # SHA-256 of raw bytes
-    storage_path: str        # absolute path where file was written
-    asset_type: str          # image|video|document
+
+    content_hash: str  # SHA-256 of raw bytes
+    storage_path: str  # absolute path where file was written
+    asset_type: str  # image|video|document
     file_size_bytes: int
     original_url: str
-    content_type: str        # MIME type from HTTP response
+    content_type: str  # MIME type from HTTP response
 
 
 def _infer_asset_type(content_type: str, url: str) -> Optional[str]:
@@ -87,12 +107,6 @@ def _extension_from_content_type(content_type: str, url: str) -> str:
     """Determine file extension from MIME type or URL."""
     ct = content_type.split(";")[0].strip()
     ext = mimetypes.guess_extension(ct, strict=False)
-    # mimetypes returns inconsistent results — normalise common cases
-    _NORMALISE: dict[str, str] = {
-        ".jpeg": ".jpg",
-        ".jpe": ".jpg",
-        ".jfif": ".jpg",
-    }
     if ext:
         return _NORMALISE.get(ext, ext)
     # Fallback to URL extension

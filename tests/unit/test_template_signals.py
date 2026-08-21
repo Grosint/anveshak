@@ -9,6 +9,7 @@ Covers:
 - Signal insertion with correct params
 - Check cycle with severity-gated firing
 """
+
 from __future__ import annotations
 
 import json
@@ -18,10 +19,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_pool_and_conn():
     """Build mock asyncpg pool + connection with context manager support."""
@@ -87,28 +88,34 @@ def _latest_match_row(
 # 1. compute_template_match_threshold
 # ===================================================================
 
+
 class TestComputeTemplateMatchThreshold:
     """Severity-based match thresholds: CRITICAL=1, HIGH=2, MEDIUM=3."""
 
     def test_critical_threshold_is_1(self):
         from anveshak.analyst.template_signals import compute_template_match_threshold
+
         assert compute_template_match_threshold("CRITICAL") == 1
 
     def test_high_threshold_is_2(self):
         from anveshak.analyst.template_signals import compute_template_match_threshold
+
         assert compute_template_match_threshold("HIGH") == 2
 
     def test_medium_threshold_is_3(self):
         from anveshak.analyst.template_signals import compute_template_match_threshold
+
         assert compute_template_match_threshold("MEDIUM") == 3
 
     def test_low_threshold_is_3(self):
         """LOW uses same threshold as MEDIUM (most conservative)."""
         from anveshak.analyst.template_signals import compute_template_match_threshold
+
         assert compute_template_match_threshold("LOW") == 3
 
     def test_unknown_severity_defaults_to_3(self):
         from anveshak.analyst.template_signals import compute_template_match_threshold
+
         assert compute_template_match_threshold("UNKNOWN") == 3
 
 
@@ -116,11 +123,13 @@ class TestComputeTemplateMatchThreshold:
 # 2. build_template_evidence
 # ===================================================================
 
+
 class TestBuildTemplateEvidence:
     """Evidence JSONB matches plan spec."""
 
     def test_all_keys_present(self):
         from anveshak.analyst.template_signals import build_template_evidence
+
         ev = build_template_evidence(
             template_name="mule_recruitment",
             template_display="Mule Account Recruitment",
@@ -142,6 +151,7 @@ class TestBuildTemplateEvidence:
 
     def test_returns_dict(self):
         from anveshak.analyst.template_signals import build_template_evidence
+
         ev = build_template_evidence(
             template_name="x",
             template_display="X",
@@ -156,6 +166,7 @@ class TestBuildTemplateEvidence:
 
     def test_json_serializable(self):
         from anveshak.analyst.template_signals import build_template_evidence
+
         ev = build_template_evidence(
             template_name="drug_sale",
             template_display="Drug Sale",
@@ -171,6 +182,7 @@ class TestBuildTemplateEvidence:
 
     def test_empty_identifiers_allowed(self):
         from anveshak.analyst.template_signals import build_template_evidence
+
         ev = build_template_evidence(
             template_name="fake_sim_sale",
             template_display="Fake SIM Sale",
@@ -188,11 +200,13 @@ class TestBuildTemplateEvidence:
 # 3. build_template_description
 # ===================================================================
 
+
 class TestBuildTemplateDescription:
     """Human-readable description for analysts."""
 
     def test_contains_template_display(self):
         from anveshak.analyst.template_signals import build_template_description
+
         desc = build_template_description(
             template_display="Mule Account Recruitment",
             match_count=3,
@@ -202,6 +216,7 @@ class TestBuildTemplateDescription:
 
     def test_contains_match_count(self):
         from anveshak.analyst.template_signals import build_template_description
+
         desc = build_template_description(
             template_display="Investment Fraud",
             match_count=5,
@@ -211,6 +226,7 @@ class TestBuildTemplateDescription:
 
     def test_returns_string(self):
         from anveshak.analyst.template_signals import build_template_description
+
         desc = build_template_description(
             template_display="Drug Sale",
             match_count=2,
@@ -223,11 +239,13 @@ class TestBuildTemplateDescription:
 # 4. build_template_signal_payload
 # ===================================================================
 
+
 class TestBuildTemplateSignalPayload:
     """WebSocket payload for template match signals."""
 
     def test_signal_type_field(self):
         from anveshak.analyst.template_signals import build_template_signal_payload
+
         payload = build_template_signal_payload(
             signal_id="sig-1",
             topic_id="topic-1",
@@ -241,6 +259,7 @@ class TestBuildTemplateSignalPayload:
 
     def test_type_is_signal(self):
         from anveshak.analyst.template_signals import build_template_signal_payload
+
         payload = build_template_signal_payload(
             signal_id="sig-1",
             topic_id="topic-1",
@@ -255,6 +274,7 @@ class TestBuildTemplateSignalPayload:
     def test_severity_from_template(self):
         """Severity comes from template, not computed from match_count."""
         from anveshak.analyst.template_signals import build_template_signal_payload
+
         payload = build_template_signal_payload(
             signal_id="sig-1",
             topic_id="topic-1",
@@ -268,6 +288,7 @@ class TestBuildTemplateSignalPayload:
 
     def test_all_fields_present(self):
         from anveshak.analyst.template_signals import build_template_signal_payload
+
         payload = build_template_signal_payload(
             signal_id="sig-1",
             topic_id="topic-1",
@@ -278,9 +299,15 @@ class TestBuildTemplateSignalPayload:
             max_confidence=0.92,
         )
         expected_keys = {
-            "type", "signal_type", "signal_id", "topic_id",
-            "template_name", "template_display", "severity",
-            "match_count", "max_confidence",
+            "type",
+            "signal_type",
+            "signal_id",
+            "topic_id",
+            "template_name",
+            "template_display",
+            "severity",
+            "match_count",
+            "max_confidence",
         }
         assert set(payload.keys()) == expected_keys
 
@@ -289,12 +316,14 @@ class TestBuildTemplateSignalPayload:
 # 5. is_duplicate_template_signal
 # ===================================================================
 
+
 class TestIsDuplicateTemplateSignal:
     """24h dedup per (template_name, topic_id)."""
 
     @pytest.mark.asyncio
     async def test_existing_returns_true(self):
         from anveshak.analyst.template_signals import is_duplicate_template_signal
+
         conn = AsyncMock()
         conn.fetchrow.return_value = {"id": "existing-signal"}
         result = await is_duplicate_template_signal(conn, "mule_recruitment", "topic-1")
@@ -303,6 +332,7 @@ class TestIsDuplicateTemplateSignal:
     @pytest.mark.asyncio
     async def test_none_returns_false(self):
         from anveshak.analyst.template_signals import is_duplicate_template_signal
+
         conn = AsyncMock()
         conn.fetchrow.return_value = None
         result = await is_duplicate_template_signal(conn, "mule_recruitment", "topic-1")
@@ -311,6 +341,7 @@ class TestIsDuplicateTemplateSignal:
     @pytest.mark.asyncio
     async def test_query_uses_both_template_name_and_topic_id(self):
         from anveshak.analyst.template_signals import is_duplicate_template_signal
+
         conn = AsyncMock()
         conn.fetchrow.return_value = None
         await is_duplicate_template_signal(conn, "drug_sale", "topic-42")
@@ -324,6 +355,7 @@ class TestIsDuplicateTemplateSignal:
 # 6. fire_template_signal
 # ===================================================================
 
+
 class TestFireTemplateSignal:
     """Insert signal row with correct params."""
 
@@ -331,6 +363,7 @@ class TestFireTemplateSignal:
     @patch("anveshak.analyst.template_signals.analyst_signals_fired_total")
     async def test_dedup_returns_none(self, mock_metric):
         from anveshak.analyst.template_signals import fire_template_signal
+
         conn = AsyncMock()
         conn.fetchrow.return_value = {"id": "existing"}  # dedup hit
         result = await fire_template_signal(
@@ -353,6 +386,7 @@ class TestFireTemplateSignal:
     @patch("anveshak.analyst.template_signals.analyst_signals_fired_total")
     async def test_inserts_with_uuid(self, mock_metric):
         from anveshak.analyst.template_signals import fire_template_signal
+
         conn = AsyncMock()
         conn.fetchrow.return_value = None  # no dedup
         result = await fire_template_signal(
@@ -377,6 +411,7 @@ class TestFireTemplateSignal:
     @patch("anveshak.analyst.template_signals.analyst_signals_fired_total")
     async def test_evidence_is_json(self, mock_metric):
         from anveshak.analyst.template_signals import fire_template_signal
+
         conn = AsyncMock()
         conn.fetchrow.return_value = None
         await fire_template_signal(
@@ -405,6 +440,7 @@ class TestFireTemplateSignal:
     async def test_cluster_id_is_null(self, mock_metric):
         """cluster_id FK is for narrative_clusters only — NULL for template signals."""
         from anveshak.analyst.template_signals import fire_template_signal
+
         conn = AsyncMock()
         conn.fetchrow.return_value = None
         await fire_template_signal(
@@ -429,6 +465,7 @@ class TestFireTemplateSignal:
     @patch("anveshak.analyst.template_signals.analyst_signals_fired_total")
     async def test_signal_type_constant(self, mock_metric):
         from anveshak.analyst.template_signals import fire_template_signal
+
         conn = AsyncMock()
         conn.fetchrow.return_value = None
         await fire_template_signal(
@@ -453,6 +490,7 @@ class TestFireTemplateSignal:
     @patch("anveshak.analyst.template_signals.analyst_signals_fired_total")
     async def test_severity_metric_incremented(self, mock_metric):
         from anveshak.analyst.template_signals import fire_template_signal
+
         conn = AsyncMock()
         conn.fetchrow.return_value = None
         await fire_template_signal(
@@ -477,6 +515,7 @@ class TestFireTemplateSignal:
 # 7. check_template_signals — check cycle
 # ===================================================================
 
+
 class TestCheckTemplateSignals:
     """Integration of severity gating, dedup, fire, broadcast."""
 
@@ -484,6 +523,7 @@ class TestCheckTemplateSignals:
     @patch("anveshak.analyst.template_signals.analyst_signals_fired_total")
     async def test_no_matches_returns_zero(self, mock_metric):
         from anveshak.analyst.template_signals import check_template_signals
+
         pool, conn = _make_pool_and_conn()
         conn.fetch.return_value = []  # no breaching matches
         broadcast = AsyncMock()
@@ -496,14 +536,17 @@ class TestCheckTemplateSignals:
     async def test_critical_fires_on_single_match(self, mock_metric):
         """CRITICAL templates fire signal on 1 match."""
         from anveshak.analyst.template_signals import check_template_signals
+
         pool, conn = _make_pool_and_conn()
         conn.fetch.side_effect = [
             # First call: breaching template matches
-            [_breaching_row(
-                template_name="mule_recruitment",
-                template_severity="CRITICAL",
-                match_count=1,
-            )],
+            [
+                _breaching_row(
+                    template_name="mule_recruitment",
+                    template_severity="CRITICAL",
+                    match_count=1,
+                )
+            ],
         ]
         # fetchrow sequence: latest_match_item, then dedup inside fire_template_signal
         conn.fetchrow.side_effect = [
@@ -520,13 +563,16 @@ class TestCheckTemplateSignals:
     async def test_high_skips_single_match(self, mock_metric):
         """HIGH templates need 2+ matches — skip if only 1."""
         from anveshak.analyst.template_signals import check_template_signals
+
         pool, conn = _make_pool_and_conn()
         conn.fetch.side_effect = [
-            [_breaching_row(
-                template_name="digital_arrest",
-                template_severity="HIGH",
-                match_count=1,  # below threshold of 2
-            )],
+            [
+                _breaching_row(
+                    template_name="digital_arrest",
+                    template_severity="HIGH",
+                    match_count=1,  # below threshold of 2
+                )
+            ],
         ]
         broadcast = AsyncMock()
         result = await check_template_signals(pool, broadcast)
@@ -537,13 +583,16 @@ class TestCheckTemplateSignals:
     async def test_high_fires_on_two_matches(self, mock_metric):
         """HIGH templates fire on 2+ matches."""
         from anveshak.analyst.template_signals import check_template_signals
+
         pool, conn = _make_pool_and_conn()
         conn.fetch.side_effect = [
-            [_breaching_row(
-                template_name="digital_arrest",
-                template_severity="HIGH",
-                match_count=2,
-            )],
+            [
+                _breaching_row(
+                    template_name="digital_arrest",
+                    template_severity="HIGH",
+                    match_count=2,
+                )
+            ],
         ]
         conn.fetchrow.side_effect = [
             _latest_match_row(content_item_id="ci-5", confidence=0.78),  # latest match
@@ -558,13 +607,16 @@ class TestCheckTemplateSignals:
     async def test_medium_needs_three_matches(self, mock_metric):
         """MEDIUM templates need 3+ matches."""
         from anveshak.analyst.template_signals import check_template_signals
+
         pool, conn = _make_pool_and_conn()
         conn.fetch.side_effect = [
-            [_breaching_row(
-                template_name="fake_sim_sale",
-                template_severity="MEDIUM",
-                match_count=2,  # below threshold of 3
-            )],
+            [
+                _breaching_row(
+                    template_name="fake_sim_sale",
+                    template_severity="MEDIUM",
+                    match_count=2,  # below threshold of 3
+                )
+            ],
         ]
         broadcast = AsyncMock()
         result = await check_template_signals(pool, broadcast)
@@ -575,6 +627,7 @@ class TestCheckTemplateSignals:
     async def test_dedup_skips_duplicate(self, mock_metric):
         """Already-fired signal in 24h → skip."""
         from anveshak.analyst.template_signals import check_template_signals
+
         pool, conn = _make_pool_and_conn()
         conn.fetch.side_effect = [
             [_breaching_row(template_severity="CRITICAL", match_count=3)],
@@ -592,6 +645,7 @@ class TestCheckTemplateSignals:
     async def test_broadcast_failure_still_counts(self, mock_metric):
         """Broadcast failure doesn't crash; signal still counted."""
         from anveshak.analyst.template_signals import check_template_signals
+
         pool, conn = _make_pool_and_conn()
         conn.fetch.side_effect = [
             [_breaching_row(template_severity="CRITICAL", match_count=1)],
@@ -609,6 +663,7 @@ class TestCheckTemplateSignals:
     async def test_multiple_templates_mixed_severity(self, mock_metric):
         """Multiple templates in one cycle — some fire, some skip."""
         from anveshak.analyst.template_signals import check_template_signals
+
         pool, conn = _make_pool_and_conn()
         conn.fetch.side_effect = [
             [
@@ -650,14 +705,17 @@ class TestCheckTemplateSignals:
     async def test_payload_has_template_name(self, mock_metric):
         """Broadcast payload includes template_name."""
         from anveshak.analyst.template_signals import check_template_signals
+
         pool, conn = _make_pool_and_conn()
         conn.fetch.side_effect = [
-            [_breaching_row(
-                template_name="investment_fraud",
-                template_display="Investment Fraud",
-                template_severity="CRITICAL",
-                match_count=1,
-            )],
+            [
+                _breaching_row(
+                    template_name="investment_fraud",
+                    template_display="Investment Fraud",
+                    template_severity="CRITICAL",
+                    match_count=1,
+                )
+            ],
         ]
         conn.fetchrow.side_effect = [
             _latest_match_row(),  # latest match
@@ -673,15 +731,18 @@ class TestCheckTemplateSignals:
 # 8. Signal type constant
 # ===================================================================
 
+
 class TestSignalTypeConstant:
     """Module exports match expected values."""
 
     def test_signal_type_value(self):
         from anveshak.analyst.template_signals import SIGNAL_TYPE_TEMPLATE_MATCH
+
         assert SIGNAL_TYPE_TEMPLATE_MATCH == "scam_template_match"
 
     def test_sql_constants_exported(self):
         from anveshak.analyst import template_signals
+
         assert hasattr(template_signals, "SQL_BREACHING_TEMPLATE_MATCHES")
         assert hasattr(template_signals, "SQL_DUPLICATE_TEMPLATE_SIGNAL_CHECK")
         assert hasattr(template_signals, "SQL_LATEST_TEMPLATE_MATCH_ITEM")

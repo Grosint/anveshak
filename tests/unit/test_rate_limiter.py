@@ -3,21 +3,22 @@
 Validates sliding window logic, client IP extraction, JWT sub extraction,
 and the per-key window growth pattern.
 """
+
 from __future__ import annotations
 
 import base64
 import json
 import time
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from services.api.anveshak.api.middleware.rate_limit import (
+    _WINDOW_S,
     _check_rate,
     _client_ip,
     _jwt_sub,
     _windows,
-    _WINDOW_S,
 )
 
 pytestmark = pytest.mark.unit
@@ -53,16 +54,18 @@ def _make_jwt_token(payload: dict) -> str:
 
 # ---- Test 1: Under limit -> all allowed ----
 
+
 @pytest.mark.unit
 def test_check_rate_allows_under_limit() -> None:
     """5 requests under a limit of 10 should all be allowed."""
     for i in range(5):
         allowed, retry_after = _check_rate("test-key-1", 10)
-        assert allowed is True, f"Request {i+1} should be allowed"
+        assert allowed is True, f"Request {i + 1} should be allowed"
         assert retry_after == 0
 
 
 # ---- Test 2: At limit -> blocked with retry_after ----
+
 
 @pytest.mark.unit
 def test_check_rate_blocks_at_limit() -> None:
@@ -77,6 +80,7 @@ def test_check_rate_blocks_at_limit() -> None:
 
 
 # ---- Test 3: Window slides — old timestamps evicted ----
+
 
 @pytest.mark.unit
 def test_check_rate_window_slides() -> None:
@@ -104,6 +108,7 @@ def test_check_rate_window_slides() -> None:
 
 # ---- Test 4: X-Forwarded-For -> first IP ----
 
+
 @pytest.mark.unit
 def test_client_ip_from_forwarded_for() -> None:
     """X-Forwarded-For with multiple IPs returns the first one (client IP)."""
@@ -113,6 +118,7 @@ def test_client_ip_from_forwarded_for() -> None:
 
 # ---- Test 5: No header -> falls back to request.client.host ----
 
+
 @pytest.mark.unit
 def test_client_ip_from_remote_addr() -> None:
     """Without X-Forwarded-For, fall back to request.client.host."""
@@ -121,6 +127,7 @@ def test_client_ip_from_remote_addr() -> None:
 
 
 # ---- Test 6: Valid JWT -> extracts "sub" field ----
+
 
 @pytest.mark.unit
 def test_jwt_sub_extraction() -> None:
@@ -132,6 +139,7 @@ def test_jwt_sub_extraction() -> None:
 
 # ---- Test 7: Malformed token -> returns None ----
 
+
 @pytest.mark.unit
 def test_jwt_sub_malformed_token() -> None:
     """Garbage token should return None, not raise."""
@@ -140,6 +148,7 @@ def test_jwt_sub_malformed_token() -> None:
 
 
 # ---- Test 8: No Bearer prefix -> returns None ----
+
 
 @pytest.mark.unit
 def test_jwt_sub_missing_bearer() -> None:
@@ -150,6 +159,7 @@ def test_jwt_sub_missing_bearer() -> None:
 
 
 # ---- Test 9: Unique keys create separate entries in _windows ----
+
 
 @pytest.mark.unit
 def test_windows_grow_per_key() -> None:

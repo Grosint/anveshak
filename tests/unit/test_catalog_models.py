@@ -2,6 +2,7 @@
 
 Validates Labels is mandatory (non-Optional), strict mode, and field types.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -10,18 +11,20 @@ pytestmark = pytest.mark.unit
 
 
 def test_catalog_entry_has_mandatory_labels():
-    """CatalogEntry.labels must be non-Optional (CLAUDE.md rule 2)."""
+    """CatalogEntry.labels must be non-Optional (AGENTS.md rule 2)."""
     from anveshak.models.catalog import CatalogEntry
 
     field = CatalogEntry.model_fields["labels"]
     # labels must NOT have a default of None and must NOT be Optional
     assert field.is_required() or field.default is not None, (
-        "CatalogEntry.labels must not be Optional — CLAUDE.md rule 2"
+        "CatalogEntry.labels must not be Optional — AGENTS.md rule 2"
     )
     # Verify it cannot be None
     with pytest.raises(Exception):
         CatalogEntry(
-            name="test", url_or_handle="https://test.com", platform="web",
+            name="test",
+            url_or_handle="https://test.com",
+            platform="web",
             labels=None,
         )
 
@@ -35,8 +38,8 @@ def test_catalog_entry_strict_mode():
 
 def test_catalog_entry_defaults():
     """CatalogEntry fields have sensible defaults."""
-    from anveshak.models.catalog import CatalogEntry
     from anveshak.models.base import Labels
+    from anveshak.models.catalog import CatalogEntry
 
     entry = CatalogEntry(
         name="Test Source",
@@ -54,8 +57,8 @@ def test_catalog_entry_defaults():
 
 def test_catalog_entry_domain_tags():
     """CatalogEntry.domain_tags accepts list of strings."""
-    from anveshak.models.catalog import CatalogEntry
     from anveshak.models.base import Labels
+    from anveshak.models.catalog import CatalogEntry
 
     entry = CatalogEntry(
         name="Test",
@@ -75,8 +78,10 @@ def test_discovered_source_has_mandatory_labels():
     assert field.is_required() or field.default is not None
     with pytest.raises(Exception):
         DiscoveredSource(
-            topic_id="t1", domain_or_handle="example.com",
-            discovery_method="snowball", labels=None,
+            topic_id="t1",
+            domain_or_handle="example.com",
+            discovery_method="snowball",
+            labels=None,
         )
 
 
@@ -89,8 +94,8 @@ def test_discovered_source_strict_mode():
 
 def test_discovered_source_defaults():
     """DiscoveredSource has correct defaults."""
-    from anveshak.models.catalog import DiscoveredSource
     from anveshak.models.base import Labels
+    from anveshak.models.catalog import DiscoveredSource
 
     ds = DiscoveredSource(
         topic_id="topic-1",
@@ -121,8 +126,8 @@ def test_source_suggestion_strict_mode():
 
 def test_source_suggestion_fields():
     """SourceSuggestion must have platform, description, search_terms, reasoning."""
-    from anveshak.models.catalog import SourceSuggestion
     from anveshak.models.base import Labels
+    from anveshak.models.catalog import SourceSuggestion
 
     ss = SourceSuggestion(
         platform="telegram",
@@ -137,8 +142,8 @@ def test_source_suggestion_fields():
 
 def test_catalog_approval_fields():
     """CatalogApproval must have required fields."""
-    from anveshak.models.catalog import CatalogApproval
     from anveshak.models.base import Labels
+    from anveshak.models.catalog import CatalogApproval
 
     ca = CatalogApproval(
         catalog_entry_id="ce-1",

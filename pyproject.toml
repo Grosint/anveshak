@@ -22,6 +22,7 @@ dev-dependencies = [
     "ruff>=0.3",
     "isort>=5.13",
     "bandit>=1.7",
+    "pyright>=1.1",
 ]
 
 [tool.pytest.ini_options]
@@ -41,6 +42,18 @@ markers = [
 ]
 addopts = "--strict-markers --tb=short -q"
 
+[tool.pyright]
+# Pin the interpreter so results are identical on every machine and in CI.
+# Pyright otherwise guesses from whatever Python it finds first.
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+include = ["services", "sdk"]
+exclude = ["**/__pycache__", "**/migrations/archive", ".venv"]
+# Standard mode, no blanket suppressions: `make typecheck` currently reports a
+# real backlog rather than a clean bill of health. See docs/venv_rebuild_plan.md.
+typeCheckingMode = "standard"
+
 [tool.coverage.run]
 source = ["services", "sdk"]
 omit = ["*/tests/*", "*/migrations/*"]
@@ -56,7 +69,37 @@ directory = "htmlcov"
 
 [tool.ruff]
 line-length = 100
+
+# .gitignore blanket-excludes `models/` and `media/` (ML weights). Git honours
+# the `!sdk/anveshak/models/` negations, but ruff's walker prunes the directory
+# before it sees them, so the SDK Pydantic models were never linted. Lint what
+# we are given; path arguments already scope the run.
+respect-gitignore = false
+
+[tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
+
+# `ruff format` owns line width for code. Every remaining E501 is content the
+# formatter deliberately preserves (SQL DDL, the CSS in reporter/pdf.py, LLM
+# prompt text, XML test fixtures) where rewrapping would hurt readability
+# or change meaning. Ruff documents E501 as incompatible with the formatter.
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# Service entrypoints call configure_logging() before the remaining imports so
+# structlog is configured before any imported module can emit a log record.
+# See sdk/anveshak/logging.py: the ordering is deliberate, not an oversight.
+"services/api/anveshak/api/main.py" = ["E402"]
+"services/analyst/anveshak/analyst/scheduler.py" = ["E402"]
+"services/reporter/anveshak/reporter/worker.py" = ["E402"]
+"services/scraper/anveshak/scraper/main.py" = ["E402"]
+"services/social/anveshak/social/main.py" = ["E402"]
+"services/vision/anveshak/vision/main.py" = ["E402"]
+
+# One-off demo report generators. Function-local UPPER_CASE constants (regexes,
+# lookup tables) are deliberate and readable here; renaming them to lowercase
+# would misrepresent them as mutable locals.
+"scripts/gen_*_leave_behind.py" = ["N806"]
 
 [tool.black]
 line-length = 100

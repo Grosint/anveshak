@@ -5,6 +5,7 @@ test process alongside other service metrics without name conflicts.
 
 Exposed at GET /metrics via make_asgi_app(registry=REGISTRY).
 """
+
 from prometheus_client import CollectorRegistry, Counter, Gauge
 
 # Isolated registry — prevents duplicate-registration errors in tests

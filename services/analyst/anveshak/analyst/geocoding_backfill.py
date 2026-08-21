@@ -3,15 +3,14 @@
 Processes GPE/LOC/FAC entities not yet in geocoded_locations table.
 Runs in batches for memory safety. Idempotent — safe to replay.
 """
-from __future__ import annotations
 
-from typing import Any
+from __future__ import annotations
 
 import structlog
 
-from .geocoding import geocode_entities, normalize_entity_text, LOCATION_ENTITY_TYPES
-from .geocoding_db import upsert_geocoded_location
+from .geocoding import geocode_entities, normalize_entity_text
 from .geocoding_cache import geocode_cache_set
+from .geocoding_db import upsert_geocoded_location
 
 log = structlog.get_logger(__name__)
 
@@ -117,7 +116,6 @@ async def backfill_geocoding(ctx: dict) -> None:
 
     # Mark unresolved entities so SQL NOT EXISTS skips them next batch.
     # Uses lat=0, lon=0, source='unresolved', confidence=0.0.
-    resolved_texts = {normalize_entity_text(t) for t in texts if normalize_entity_text(t)}
     geocoded_texts = {e["entity_text_normalized"] for e in results}
     unresolved_count = 0
     for text, etype in zip(texts, types):
@@ -130,7 +128,12 @@ async def backfill_geocoding(ctx: dict) -> None:
                         await conn.execute(SQL_UPSERT_UNRESOLVED, normalized, etype)
                 unresolved_count += 1
             except Exception:
-                pass
+                log.warning(
+                    "geocoding_backfill.unresolved_upsert_failed",
+                    entity_text=text,
+                    entity_type=etype,
+                    exc_info=True,
+                )
 
     log.info(
         "geocoding_backfill.batch_done",
@@ -143,9 +146,11 @@ async def backfill_geocoding(ctx: dict) -> None:
     if len(rows) >= _BATCH_SIZE:
         try:
             from arq import create_pool
+
             from .jobs import WorkerSettings
+
             redis_pool = await create_pool(WorkerSettings.redis_settings)
-            await redis_pool.enqueue_job("backfill_geocoding")
+            await redis_pool.enqueue_job("backfill_geocoding", _queue_name="arq:analyst")
             log.info("geocoding_backfill.continuation_enqueued")
         except Exception:
             log.warning("geocoding_backfill.enqueue_continuation_failed", exc_info=True)

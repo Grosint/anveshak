@@ -13,6 +13,7 @@ Tests:
   - WebSocket delivery loop delivers signal within 10s (criteria 2.29)
   - Duplicate scrape → no duplicate signal within 24h (criteria 2.30)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -20,18 +21,17 @@ import hashlib
 import math
 import random
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
-import pytest
 import asyncpg
-
-from anveshak.analyst.clustering import count_independent_sources, run_clustering
-from anveshak.analyst.signal_engine import check_signals, is_duplicate_signal
-
+import pytest
+from anveshak.analyst.clustering import run_clustering
+from anveshak.analyst.signal_engine import check_signals
 
 # ---------------------------------------------------------------------------
 # Fixtures (using root conftest make_topic / make_source)
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 async def topic_threshold_2(make_topic):
@@ -47,7 +47,11 @@ async def topic_threshold_2(make_topic):
 async def sources_three_platforms(make_source):
     """Three sources from distinct platforms."""
     ids = {}
-    platforms = {"telegram": "t.me/iaf_news", "reddit": "r/IndianDefence", "web": "https://indiandefence.com"}
+    platforms = {
+        "telegram": "t.me/iaf_news",
+        "reddit": "r/IndianDefence",
+        "web": "https://indiandefence.com",
+    }
     for platform, handle in platforms.items():
         sid = await make_source(
             name=f"Source {platform}",
@@ -84,6 +88,7 @@ async def sources_four_platforms(make_source):
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 async def insert_item_with_embedding(
     pool: asyncpg.Pool,
     topic_id: str,
@@ -98,7 +103,8 @@ async def insert_item_with_embedding(
     embedding_str = "[" + ",".join(f"{x:.8f}" for x in embedding) + "]"
     now = datetime.now(UTC)
     async with pool.acquire() as conn:
-        await conn.execute("""
+        await conn.execute(
+            """
             INSERT INTO content_items (
                 id, topic_id, source_id, raw_text, clean_text, language,
                 content_hash, url, captured_at, credibility_score_at_capture,
@@ -106,8 +112,19 @@ async def insert_item_with_embedding(
             ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::vector,$12,$13,$14,$15)
             ON CONFLICT(content_hash) DO NOTHING
         """,
-            item_id, topic_id, source_id, text, text, "en",
-            content_hash, url, now, 70.0, embedding_str, now, now,
+            item_id,
+            topic_id,
+            source_id,
+            text,
+            text,
+            "en",
+            content_hash,
+            url,
+            now,
+            70.0,
+            embedding_str,
+            now,
+            now,
             '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}',
             "org-integration-test",
         )
@@ -138,6 +155,7 @@ def _similar_embedding(base: list[float], noise: float = 0.03) -> list[float]:
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 @pytest.mark.asyncio
@@ -190,13 +208,16 @@ async def test_independent_source_count_reflects_platforms(
     await run_clustering(topic_threshold_2, db_pool)
 
     async with db_pool.acquire() as conn:
-        rows = await conn.fetch("""
+        rows = await conn.fetch(
+            """
             SELECT independent_source_count, item_count
             FROM narrative_clusters
             WHERE topic_id = $1
             ORDER BY item_count DESC
             LIMIT 1
-        """, topic_threshold_2)
+        """,
+            topic_threshold_2,
+        )
 
     assert rows, "At least one cluster should exist"
     best = rows[0]
@@ -210,9 +231,7 @@ async def test_independent_source_count_reflects_platforms(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_signal_fires_when_threshold_met(
-    db_pool, topic_threshold_2, sources_three_platforms
-):
+async def test_signal_fires_when_threshold_met(db_pool, topic_threshold_2, sources_three_platforms):
     """Criteria 2.28: threshold=2, 2+ platforms → signal fires."""
     base = _random_base(seed=303)
 
@@ -249,9 +268,7 @@ async def test_signal_fires_when_threshold_met(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_no_duplicate_signal_within_24h(
-    db_pool, topic_threshold_2, sources_three_platforms
-):
+async def test_no_duplicate_signal_within_24h(db_pool, topic_threshold_2, sources_three_platforms):
     """Criteria 2.30: second clustering run does NOT create duplicate signal."""
     base = _random_base(seed=404)
 
@@ -271,20 +288,24 @@ async def test_no_duplicate_signal_within_24h(
     await run_clustering(topic_threshold_2, db_pool)
 
     broadcast_1: list[dict] = []
-    await check_signals(db_pool, lambda p: broadcast_1.append(p) or __import__('asyncio').sleep(0))
+    await check_signals(db_pool, lambda p: broadcast_1.append(p) or __import__("asyncio").sleep(0))
 
-    async def noop(p): pass  # noqa: E704
+    async def noop(p):
+        pass  # noqa: E704
 
     # Second pass — same clusters, same threshold — should NOT duplicate
     broadcast_2: list[dict] = []
-    await check_signals(db_pool, lambda p: broadcast_2.append(p) or __import__('asyncio').sleep(0))
+    await check_signals(db_pool, lambda p: broadcast_2.append(p) or __import__("asyncio").sleep(0))
 
     async with db_pool.acquire() as conn:
-        signal_count = await conn.fetchval("""
+        signal_count = await conn.fetchval(
+            """
             SELECT COUNT(*) FROM signals
             WHERE topic_id = $1
               AND signal_type = 'multi_source_convergence'
-        """, topic_threshold_2)
+        """,
+            topic_threshold_2,
+        )
 
     # Signals created on second pass should all be deduplicated
     assert signal_count == len(broadcast_1), (
@@ -316,7 +337,10 @@ async def test_signal_delivery_loop_pushes_within_10s(
 
     # Write signal to DB (analyst side — delivered_at=NULL)
     await run_clustering(topic_threshold_2, db_pool)
-    async def noop(_): pass
+
+    async def noop(_):
+        pass
+
     await check_signals(db_pool, noop)
 
     # Confirm at least one undelivered signal exists
@@ -341,7 +365,9 @@ async def test_signal_delivery_loop_pushes_within_10s(
             timeout=10.0,
         )
     except asyncio.TimeoutError:
-        pytest.fail("Signal was not delivered via WebSocket loop within 10 seconds (criterion 2.29)")
+        pytest.fail(
+            "Signal was not delivered via WebSocket loop within 10 seconds (criterion 2.29)"
+        )
     finally:
         loop_task.cancel()
         try:
@@ -364,6 +390,7 @@ async def _wait_for_delivery(delivered: list, poll_interval: float = 0.1) -> Non
 # ---------------------------------------------------------------------------
 # Scenario 2: Production load — 100 articles across 5 narratives
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 @pytest.mark.asyncio
@@ -403,32 +430,32 @@ async def test_production_load_100_articles_5_narratives(
     assert elapsed < 2.0, f"Clustering took {elapsed:.2f}s, expected <2s"
 
     async with db_pool.acquire() as conn:
-        rows = await conn.fetch("""
+        rows = await conn.fetch(
+            """
             SELECT independent_source_count, item_count
             FROM narrative_clusters
             WHERE topic_id = $1
             ORDER BY item_count DESC
-        """, topic_threshold_2)
+        """,
+            topic_threshold_2,
+        )
 
     assert len(rows) == 5
     for row in rows:
         assert row["independent_source_count"] == 4, (
             f"Expected ISC=4, got {row['independent_source_count']}"
         )
-        assert row["item_count"] == 20, (
-            f"Expected 20 items per cluster, got {row['item_count']}"
-        )
+        assert row["item_count"] == 20, f"Expected 20 items per cluster, got {row['item_count']}"
 
 
 # ---------------------------------------------------------------------------
 # Scenario 5: Incremental arrival
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_incremental_arrival_new_batch(
-    db_pool, topic_threshold_2, sources_three_platforms
-):
+async def test_incremental_arrival_new_batch(db_pool, topic_threshold_2, sources_three_platforms):
     """Scenario 5: existing clusters + new batch → correct assignment."""
     base = _random_base(seed=5001)
 
@@ -471,13 +498,16 @@ async def test_incremental_arrival_new_batch(
             embedding=emb,
         )
 
-    cluster_ids_p2 = await run_clustering(topic_threshold_2, db_pool)
+    await run_clustering(topic_threshold_2, db_pool)
 
     async with db_pool.acquire() as conn:
-        rows = await conn.fetch("""
+        rows = await conn.fetch(
+            """
             SELECT item_count FROM narrative_clusters
             WHERE topic_id = $1
-        """, topic_threshold_2)
+        """,
+            topic_threshold_2,
+        )
 
     total_items = sum(r["item_count"] for r in rows)
     assert total_items == 14, f"Expected 14 total items (10+4), got {total_items}"

@@ -8,9 +8,10 @@ Tests:
 
 pytest.mark.unit — mock Redis, no external dependencies.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest

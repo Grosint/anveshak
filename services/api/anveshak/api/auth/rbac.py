@@ -12,6 +12,7 @@ Usage:
     async def read_data(user=Depends(require_role("viewer", "analyst", "admin"))):
         ...
 """
+
 from __future__ import annotations
 
 from typing import Callable

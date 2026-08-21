@@ -1,9 +1,11 @@
 """Unit tests for services/api db/sources repository."""
+
 from __future__ import annotations
 
-import pytest
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
-from datetime import datetime, UTC
+
+import pytest
 
 
 @pytest.fixture
@@ -17,8 +19,15 @@ async def test_list_sources_returns_tuple(mock_conn):
     from anveshak.api.db.sources import list_sources  # type: ignore[import]
 
     mock_conn.fetch.return_value = [
-        {"id": "s1", "name": "NDTV", "platform": "web", "credibility_score": 75.0,
-         "is_active": True, "last_checked_at": None, "total": 1}
+        {
+            "id": "s1",
+            "name": "NDTV",
+            "platform": "web",
+            "credibility_score": 75.0,
+            "is_active": True,
+            "last_checked_at": None,
+            "total": 1,
+        }
     ]
     items, total = await list_sources(mock_conn)
     assert len(items) == 1
@@ -68,14 +77,20 @@ async def test_source_exists_false(mock_conn):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_credibility_calls_both_sqls(mock_conn):
-    """update_credibility must write score update AND audit log (CLAUDE.md rule 8)."""
+    """update_credibility must write score update AND audit log (AGENTS.md rule 8)."""
     from anveshak.api.db.sources import update_credibility  # type: ignore[import]
 
     now = datetime.now(UTC)
     await update_credibility(
-        mock_conn, "s1", "audit-id", 75.0, 50.0,
-        "deepfake amplification", "user:analyst1",
-        now, '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}',
+        mock_conn,
+        "s1",
+        "audit-id",
+        75.0,
+        50.0,
+        "deepfake amplification",
+        "user:analyst1",
+        now,
+        '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}',
     )
     assert mock_conn.execute.await_count == 2
     calls = [c[0][0] for c in mock_conn.execute.call_args_list]
@@ -110,8 +125,15 @@ async def test_get_audit_log_returns_list(mock_conn):
     from anveshak.api.db.sources import get_audit_log  # type: ignore[import]
 
     mock_conn.fetch.return_value = [
-        {"id": "a1", "source_id": "s1", "old_score": 75.0, "new_score": 50.0,
-         "reason": "test", "changed_by": "user:x", "created_at": datetime.now(UTC)}
+        {
+            "id": "a1",
+            "source_id": "s1",
+            "old_score": 75.0,
+            "new_score": 50.0,
+            "reason": "test",
+            "changed_by": "user:x",
+            "created_at": datetime.now(UTC),
+        }
     ]
     result = await get_audit_log(mock_conn, "s1")
     assert len(result) == 1

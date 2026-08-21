@@ -1,11 +1,12 @@
 """LLM calling and output validation for the reporter service.
 
-CLAUDE.md rules enforced:
+AGENTS.md rules enforced:
 - Rule 5: All LLM calls are async (httpx.AsyncClient).
 - Rule 9: LLM output is parsed through Pydantic (ReportContent) before use.
 - Rule 10: Ollama only — no cloud LLM.
 - Rule 2: ReportContent carries mandatory labels field.
 """
+
 from __future__ import annotations
 
 import json
@@ -14,9 +15,8 @@ from typing import Any
 
 import httpx
 import structlog
-from pydantic import BaseModel, ConfigDict
-
 from anveshak.models.base import Labels
+from pydantic import BaseModel, ConfigDict
 
 log = structlog.get_logger(__name__)
 
@@ -25,12 +25,14 @@ log = structlog.get_logger(__name__)
 # Output schema — what we expect the LLM to return
 # ---------------------------------------------------------------------------
 
+
 class LegalSectionRef(BaseModel):
     """One applicable legal provision mapped to a finding."""
+
     model_config = ConfigDict(strict=True)
 
-    act: str          # BNS | IT Act | UAPA | PMLA | NDPS
-    section: str      # e.g. "318", "66C"
+    act: str  # BNS | IT Act | UAPA | PMLA | NDPS
+    section: str  # e.g. "318", "66C"
     description: str  # Short title of the provision
     evidence_ref: str  # Which source/finding supports this mapping
     labels: Labels
@@ -38,6 +40,7 @@ class LegalSectionRef(BaseModel):
 
 class LegalMapping(BaseModel):
     """Maps a key finding to applicable legal provisions."""
+
     model_config = ConfigDict(strict=True)
 
     finding: str
@@ -47,17 +50,19 @@ class LegalMapping(BaseModel):
 
 class LensEvaluation(BaseModel):
     """One perspective in the three-lens evaluation framework."""
+
     model_config = ConfigDict(strict=True)
 
-    perspective: str       # "Brigadier" | "NIA Chief" | "R&AW Chief"
+    perspective: str  # "Brigadier" | "NIA Chief" | "R&AW Chief"
     threat_assessment: str
     priority_actions: list[str]
-    risk_level: str        # LOW | MEDIUM | HIGH | CRITICAL
+    risk_level: str  # LOW | MEDIUM | HIGH | CRITICAL
     labels: Labels
 
 
 class ThreeLensAnnexure(BaseModel):
     """Three-lens evaluation: Brigadier, NIA Chief, R&AW Chief perspectives."""
+
     model_config = ConfigDict(strict=True)
 
     evaluations: list[LensEvaluation]
@@ -67,9 +72,10 @@ class ThreeLensAnnexure(BaseModel):
 class ReportContent(BaseModel):
     """Pydantic model for validated LLM output.
 
-    CLAUDE.md rule 9: NEVER store or display raw LLM output.
-    CLAUDE.md rule 2: labels is MANDATORY and NEVER Optional.
+    AGENTS.md rule 9: NEVER store or display raw LLM output.
+    AGENTS.md rule 2: labels is MANDATORY and NEVER Optional.
     """
+
     model_config = ConfigDict(strict=True)
 
     executive_summary: str
@@ -77,7 +83,7 @@ class ReportContent(BaseModel):
     recommendations: list[str]
     confidence_level: float
     source_citations: list[str]
-    labels: Labels  # MANDATORY — CLAUDE.md rule 2
+    labels: Labels  # MANDATORY — AGENTS.md rule 2
     # Legal mapping — populated when include_legal_mapping=True in prompt
     legal_sections: list[dict[str, Any]] = []
     # Three-lens evaluation — populated when include_three_lens=True in prompt
@@ -147,6 +153,7 @@ def parse_llm_response(raw: str) -> ReportContent:
 # Ollama HTTP helpers
 # ---------------------------------------------------------------------------
 
+
 async def call_ollama(
     prompt: str,
     model: str,
@@ -156,7 +163,7 @@ async def call_ollama(
     """POST to Ollama /api/generate and return the response string.
 
     Uses httpx.AsyncClient — never blocks the event loop.
-    CLAUDE.md rule 10: host must be internal Docker network.
+    AGENTS.md rule 10: host must be internal Docker network.
     """
     payload = {"model": model, "prompt": prompt, "stream": False}
     async with httpx.AsyncClient(timeout=float(timeout)) as client:
@@ -170,8 +177,10 @@ async def call_ollama(
 # Source Assessment Brief — Phase 2 output model
 # ---------------------------------------------------------------------------
 
+
 class AssessmentCitation(BaseModel):
     """A factual claim with specific content_item_id references."""
+
     model_config = ConfigDict(strict=True)
 
     claim: str
@@ -183,19 +192,20 @@ class SourceAssessmentBrief(BaseModel):
     """Validated LLM output for source assessment.
 
     Every claim MUST cite specific content_item_ids.
-    CLAUDE.md rule 9: never store raw LLM output.
-    CLAUDE.md rule 2: labels is MANDATORY.
+    AGENTS.md rule 9: never store raw LLM output.
+    AGENTS.md rule 2: labels is MANDATORY.
     """
+
     model_config = ConfigDict(strict=True)
 
-    source_characterization: str       # 2-3 sentences: what this source is
-    posting_behavior: str              # posting patterns, frequency, timing
-    key_themes: list[str]              # top 5 themes this source covers
-    narrative_role: str                # originator | amplifier | aggregator
-    intelligence_value: str            # HIGH | MEDIUM | LOW with justification
-    risk_indicators: list[str]         # red flags (disinfo, coordination, etc.)
+    source_characterization: str  # 2-3 sentences: what this source is
+    posting_behavior: str  # posting patterns, frequency, timing
+    key_themes: list[str]  # top 5 themes this source covers
+    narrative_role: str  # originator | amplifier | aggregator
+    intelligence_value: str  # HIGH | MEDIUM | LOW with justification
+    risk_indicators: list[str]  # red flags (disinfo, coordination, etc.)
     cited_claims: list[AssessmentCitation]
-    confidence_level: float            # 0.0–1.0
+    confidence_level: float  # 0.0–1.0
     labels: Labels
 
 
@@ -238,8 +248,7 @@ async def call_ollama_for_assessment(
                 error=str(exc),
             )
             retry_prompt = (
-                prompt
-                + "\n\nIMPORTANT: Respond with ONLY the JSON object. "
+                prompt + "\n\nIMPORTANT: Respond with ONLY the JSON object. "
                 "No preamble, no markdown, no explanation."
             )
 
@@ -251,13 +260,15 @@ async def call_ollama_for_assessment(
 # BLUF (Bottom Line Up Front) — minimal v2 model
 # ---------------------------------------------------------------------------
 
+
 class BlufContent(BaseModel):
     """Minimal LLM output for data-driven reports.
 
     Only a 2-3 sentence BLUF paragraph + confidence. Everything else is SQL.
-    CLAUDE.md rule 2: labels is MANDATORY.
-    CLAUDE.md rule 9: validated before storage.
+    AGENTS.md rule 2: labels is MANDATORY.
+    AGENTS.md rule 9: validated before storage.
     """
+
     model_config = ConfigDict(strict=True)
 
     bluf: str
@@ -310,8 +321,7 @@ async def call_ollama_for_bluf(
                 error=str(exc),
             )
             retry_prompt = (
-                prompt
-                + "\n\nIMPORTANT: Respond with ONLY the JSON object. "
+                prompt + "\n\nIMPORTANT: Respond with ONLY the JSON object. "
                 "No preamble, no markdown, no explanation."
             )
 
@@ -350,8 +360,7 @@ async def call_ollama_with_retry(
             )
             # Tighten prompt on retry — instruct strict JSON-only output
             retry_prompt = (
-                prompt
-                + "\n\nIMPORTANT: Respond with ONLY the JSON object. "
+                prompt + "\n\nIMPORTANT: Respond with ONLY the JSON object. "
                 "No preamble, no markdown, no explanation."
             )
 

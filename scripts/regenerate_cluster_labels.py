@@ -7,6 +7,7 @@ for audit trail (NIA requirement).
 Usage:
     uv run python scripts/regenerate_cluster_labels.py [--dry-run] [--batch-size 10] [--delay 2.0]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -63,19 +64,29 @@ async def regenerate(
             "WHERE label IS NOT NULL AND label != '' ORDER BY item_count DESC"
         )
     soup_clusters = [
-        r for r in all_clusters
+        r
+        for r in all_clusters
         if is_entity_soup(r["label"]) and r["id"] not in {c["id"] for c in clusters}
     ]
 
     all_targets = list(clusters) + soup_clusters
-    log.info("regen.found_targets", sql_match=len(clusters),
-             entity_soup=len(soup_clusters), total=len(all_targets))
+    log.info(
+        "regen.found_targets",
+        sql_match=len(clusters),
+        entity_soup=len(soup_clusters),
+        total=len(all_targets),
+    )
 
     if dry_run:
         for row in all_targets:
             reason = "entity_soup" if row in soup_clusters else "sql_match"
-            log.info("regen.would_regenerate", cluster_id=row["id"],
-                     label=row["label"], item_count=row["item_count"], reason=reason)
+            log.info(
+                "regen.would_regenerate",
+                cluster_id=row["id"],
+                label=row["label"],
+                item_count=row["item_count"],
+                reason=reason,
+            )
         await pool.close()
         return
 
@@ -92,17 +103,25 @@ async def regenerate(
             old_label = row["label"]
             try:
                 # Audit: log old label before overwrite (NIA requirement)
-                log.info("regen.old_label", cluster_id=cluster_id,
-                         old_label=old_label, item_count=row["item_count"])
+                log.info(
+                    "regen.old_label",
+                    cluster_id=cluster_id,
+                    old_label=old_label,
+                    item_count=row["item_count"],
+                )
 
                 async with pool.acquire() as conn:
                     await conn.execute(SQL_RESET_LABEL_HASH, cluster_id)
 
                 label = await generate_label_for_cluster(cluster_id, pool)
                 generated += 1
-                log.info("regen.success", cluster_id=cluster_id,
-                         old_label=old_label, new_label=label,
-                         item_count=row["item_count"])
+                log.info(
+                    "regen.success",
+                    cluster_id=cluster_id,
+                    old_label=old_label,
+                    new_label=label,
+                    item_count=row["item_count"],
+                )
             except Exception as exc:
                 failed += 1
                 log.warning("regen.failed", cluster_id=cluster_id, error=str(exc))
@@ -113,11 +132,16 @@ async def regenerate(
     # Process in batches with progress logging
     total = len(all_targets)
     for i in range(0, total, batch_size):
-        batch = all_targets[i:i + batch_size]
+        batch = all_targets[i : i + batch_size]
         batch_num = (i // batch_size) + 1
         total_batches = (total + batch_size - 1) // batch_size
-        log.info("regen.batch_start", batch=batch_num, of=total_batches,
-                 done=generated + failed, remaining=total - generated - failed)
+        log.info(
+            "regen.batch_start",
+            batch=batch_num,
+            of=total_batches,
+            done=generated + failed,
+            remaining=total - generated - failed,
+        )
         await asyncio.gather(*(process_one(row) for row in batch))
 
     await pool.close()
@@ -126,12 +150,17 @@ async def regenerate(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Regenerate bad cluster labels")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="List clusters that would be regenerated without changing them")
-    parser.add_argument("--batch-size", type=int, default=3,
-                        help="Max concurrent Ollama calls (default: 3)")
-    parser.add_argument("--delay", type=float, default=5.0,
-                        help="Delay in seconds between calls (default: 5.0)")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="List clusters that would be regenerated without changing them",
+    )
+    parser.add_argument(
+        "--batch-size", type=int, default=3, help="Max concurrent Ollama calls (default: 3)"
+    )
+    parser.add_argument(
+        "--delay", type=float, default=5.0, help="Delay in seconds between calls (default: 5.0)"
+    )
     args = parser.parse_args()
 
     postgres_url = os.environ.get(

@@ -3,37 +3,54 @@
 Criteria 4.5: EXIF extracted via Pillow (or exiftool if EXIF_BACKEND=exiftool)
 Criteria 4.6: pHash computed using imagehash library (bigint stored in DB)
 """
+
 from __future__ import annotations
 
-import hashlib
 import io
 import json
 import subprocess
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import structlog
-
-from .settings import settings
 
 log = structlog.get_logger(__name__)
 
 # EXIF fields of intelligence interest — GPS, device info, AI software signatures
-_EXIF_INTEREST_KEYS: frozenset[str] = frozenset({
-    "GPSLatitude", "GPSLongitude", "GPSAltitude",
-    "GPSDateStamp", "GPSTimeStamp",
-    "Make", "Model",
-    "Software",
-    "DateTime", "DateTimeOriginal",
-    "ImageDescription",
-    "Artist", "Copyright",
-})
+_VIDEO_EXTS: frozenset[str] = frozenset({".mp4", ".avi", ".mov", ".webm", ".mkv"})
+
+_EXIF_INTEREST_KEYS: frozenset[str] = frozenset(
+    {
+        "GPSLatitude",
+        "GPSLongitude",
+        "GPSAltitude",
+        "GPSDateStamp",
+        "GPSTimeStamp",
+        "Make",
+        "Model",
+        "Software",
+        "DateTime",
+        "DateTimeOriginal",
+        "ImageDescription",
+        "Artist",
+        "Copyright",
+    }
+)
 
 # Software strings that suggest AI generation
 _AI_SOFTWARE_SIGNATURES: tuple[str, ...] = (
-    "stable diffusion", "midjourney", "dall-e", "dalle",
-    "firefly", "runway", "pika", "gen-2", "imagen",
-    "deepfake", "faceswap", "realesrgan",
+    "stable diffusion",
+    "midjourney",
+    "dall-e",
+    "dalle",
+    "firefly",
+    "runway",
+    "pika",
+    "gen-2",
+    "imagen",
+    "deepfake",
+    "faceswap",
+    "realesrgan",
 )
 
 
@@ -93,7 +110,8 @@ def _exif_pillow(image_bytes: bytes) -> Optional[dict]:
         from PIL.ExifTags import TAGS
 
         img = Image.open(io.BytesIO(image_bytes))
-        raw = img._getexif()  # returns {tag_id: value} or None
+        # _getexif is private but is the only way to get the raw tag-id mapping.
+        raw = img._getexif()  # pyright: ignore[reportAttributeAccessIssue]  # {tag_id: value} or None
         if not raw:
             return {"ai_software_detected": False}
 
@@ -108,9 +126,7 @@ def _exif_pillow(image_bytes: bytes) -> Optional[dict]:
 
         # Flag AI-generation software signatures
         software = result.get("Software", "").lower()
-        result["ai_software_detected"] = any(
-            sig in software for sig in _AI_SOFTWARE_SIGNATURES
-        )
+        result["ai_software_detected"] = any(sig in software for sig in _AI_SOFTWARE_SIGNATURES)
         return result
 
     except Exception as exc:
@@ -120,8 +136,8 @@ def _exif_pillow(image_bytes: bytes) -> Optional[dict]:
 
 def _exif_exiftool(image_bytes: bytes) -> Optional[dict]:
     """Extract EXIF using exiftool binary — more comprehensive than Pillow."""
-    import tempfile
     import os
+    import tempfile
 
     with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
         tmp.write(image_bytes)
@@ -148,11 +164,11 @@ def _exif_exiftool(image_bytes: bytes) -> Optional[dict]:
                 flat["_"] = group
 
         # Filter to interest keys and add AI detection flag
-        filtered = {k: str(v) for k, v in flat.items() if k in _EXIF_INTEREST_KEYS}
+        # dict[str, Any]: the EXIF values are strings, but ai_software_detected
+        # below is a bool and both land in the same JSONB column.
+        filtered: dict[str, Any] = {k: str(v) for k, v in flat.items() if k in _EXIF_INTEREST_KEYS}
         software = filtered.get("Software", "").lower()
-        filtered["ai_software_detected"] = any(
-            sig in software for sig in _AI_SOFTWARE_SIGNATURES
-        )
+        filtered["ai_software_detected"] = any(sig in software for sig in _AI_SOFTWARE_SIGNATURES)
         return filtered
     except (subprocess.TimeoutExpired, json.JSONDecodeError, Exception) as exc:
         log.warning("vision.exif.exiftool_failed", error=str(exc))
@@ -163,5 +179,4 @@ def _exif_exiftool(image_bytes: bytes) -> Optional[dict]:
 
 def is_video_path(storage_path: str) -> bool:
     """Determine if the asset at storage_path is a video based on extension."""
-    _VIDEO_EXTS: frozenset[str] = frozenset({".mp4", ".avi", ".mov", ".webm", ".mkv"})
     return Path(storage_path).suffix.lower() in _VIDEO_EXTS

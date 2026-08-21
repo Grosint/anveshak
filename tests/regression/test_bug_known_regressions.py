@@ -3,6 +3,7 @@
 Each test reproduces a specific bug that was fixed. If the bug regresses,
 the corresponding test will fail immediately.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -35,14 +36,14 @@ def test_deepfake_score_is_float_not_bool():
     """
     # Verify the detector base class enforces float output
     try:
-        from anveshak.vision.detectors.base import DeepfakeDetector
         import inspect
+
+        from anveshak.vision.detectors.base import DeepfakeDetector
+
         sig = inspect.signature(DeepfakeDetector.score)
         ret = sig.return_annotation
         if ret != inspect.Parameter.empty:
-            assert ret in (float, "float"), (
-                f"DeepfakeDetector.score must return float, got {ret}"
-            )
+            assert ret in (float, "float"), f"DeepfakeDetector.score must return float, got {ret}"
     except ImportError:
         pytest.skip("Vision module not importable in this environment")
 
@@ -73,6 +74,4 @@ def test_paywall_detection_does_not_reject_short_articles():
         "Sign up now to access premium content. "
         "Unlock this story with a subscription."
     )
-    assert is_paywall_page(paywall) is True, (
-        "Obvious paywall content should be detected"
-    )
+    assert is_paywall_page(paywall) is True, "Obvious paywall content should be detected"

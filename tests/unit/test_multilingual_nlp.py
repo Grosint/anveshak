@@ -11,12 +11,12 @@ Tests cover:
 
 pytest.mark.unit — no DB, no network, no real ML models.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -42,21 +42,24 @@ EXPECTED_TRANSLATION = (
 # Language detection
 # ---------------------------------------------------------------------------
 
+
 class TestDetectLanguageChinese:
     """langdetect correctly identifies Chinese text as 'zh' or 'zh-cn'."""
 
     def test_chinese_text_detected(self):
         """Long Chinese text must detect as a zh variant."""
         from langdetect import detect
+
         result = detect(CHINESE_TEXT)
         assert result.startswith("zh"), f"Expected zh*, got {result!r}"
 
     def test_short_text_defaults_to_en(self):
         """Texts shorter than _MIN_LANGDETECT_LEN fall back to 'en'."""
         from anveshak.analyst.nlp import _MODELS, detect_language
+
         # Inject a fake zh model so it's in _MODELS — avoids unsupported lang fallback
         _MODELS["zh"] = MagicMock()
-        result = detect_language("短文")   # 2 chars — below minimum
+        result = detect_language("短文")  # 2 chars — below minimum
         assert result == "en"
         del _MODELS["zh"]
 
@@ -65,38 +68,46 @@ class TestDetectLanguageChinese:
 # needs_translation() routing
 # ---------------------------------------------------------------------------
 
-class TestNeedsTranslation:
 
+class TestNeedsTranslation:
     def test_zh_needs_translation(self):
         from anveshak.analyst.translation import needs_translation
+
         assert needs_translation("zh") is True
 
     def test_zh_cn_needs_translation(self):
         from anveshak.analyst.translation import needs_translation
+
         assert needs_translation("zh-cn") is True
 
     def test_hi_needs_translation(self):
         from anveshak.analyst.translation import needs_translation
+
         assert needs_translation("hi") is True
 
     def test_ar_needs_translation(self):
         from anveshak.analyst.translation import needs_translation
+
         assert needs_translation("ar") is True
 
     def test_ur_needs_translation(self):
         from anveshak.analyst.translation import needs_translation
+
         assert needs_translation("ur") is True
 
     def test_ru_needs_translation(self):
         from anveshak.analyst.translation import needs_translation
+
         assert needs_translation("ru") is True
 
     def test_en_does_not_need_translation(self):
         from anveshak.analyst.translation import needs_translation
+
         assert needs_translation("en") is False
 
     def test_unknown_lang_does_not_need_translation(self):
         from anveshak.analyst.translation import needs_translation
+
         assert needs_translation("xx") is False
 
 
@@ -104,8 +115,8 @@ class TestNeedsTranslation:
 # translate_to_english() — mocked NLLB pipeline
 # ---------------------------------------------------------------------------
 
-class TestTranslateToEnglish:
 
+class TestTranslateToEnglish:
     def test_successful_translation(self):
         """translate_to_english returns string when pipeline succeeds."""
         mock_output = [{"translation_text": EXPECTED_TRANSLATION}]
@@ -114,6 +125,7 @@ class TestTranslateToEnglish:
             mock_get.return_value = mock_pipe
 
             from anveshak.analyst.translation import translate_to_english
+
             result = translate_to_english(CHINESE_TEXT, "zh")
 
         assert result == EXPECTED_TRANSLATION
@@ -130,6 +142,7 @@ class TestTranslateToEnglish:
             mock_get.return_value = mock_pipe
 
             from anveshak.analyst.translation import translate_to_english
+
             result = translate_to_english(CHINESE_TEXT, "zh")
 
         assert result is None
@@ -138,6 +151,7 @@ class TestTranslateToEnglish:
         """Unsupported language codes return None without calling pipeline."""
         with patch("anveshak.analyst.translation._get_pipeline") as mock_get:
             from anveshak.analyst.translation import translate_to_english
+
             result = translate_to_english("some text", "xx")
 
         assert result is None
@@ -145,14 +159,15 @@ class TestTranslateToEnglish:
 
     def test_text_truncation(self):
         """Very long text is truncated before translation."""
-        long_text = "中" * 10000   # 10K chars, exceeds default max_chars=5000
+        long_text = "中" * 10000  # 10K chars, exceeds default max_chars=5000
         mock_output = [{"translation_text": "China " * 100}]
         with patch("anveshak.analyst.translation._get_pipeline") as mock_get:
             mock_pipe = MagicMock(return_value=mock_output)
             mock_get.return_value = mock_pipe
 
-            from anveshak.analyst.translation import translate_to_english
             from anveshak.analyst.settings import settings
+            from anveshak.analyst.translation import translate_to_english
+
             result = translate_to_english(long_text, "zh")
 
         assert result is not None
@@ -165,11 +180,11 @@ class TestTranslateToEnglish:
 # NER on translated English text
 # ---------------------------------------------------------------------------
 
-class TestNEROnTranslatedText:
 
+class TestNEROnTranslatedText:
     def test_english_ner_on_translated_chinese(self):
         """English NER extracts entities from the translated English text."""
-        from anveshak.analyst.nlp import EntityDTO, _MODELS
+        from anveshak.analyst.nlp import _MODELS
 
         mock_doc = MagicMock()
         entities = [
@@ -189,6 +204,7 @@ class TestNEROnTranslatedText:
         _MODELS["en"] = mock_nlp
 
         from anveshak.analyst.nlp import parse_entities
+
         result = parse_entities(EXPECTED_TRANSLATION, "en")
 
         assert len(result) == 3
@@ -206,17 +222,19 @@ class TestNEROnTranslatedText:
 # Embedding on translated text
 # ---------------------------------------------------------------------------
 
-class TestEmbeddingOnTranslatedText:
 
+class TestEmbeddingOnTranslatedText:
     def test_encode_text_returns_vector(self):
         """encode_text produces a list of floats for English translated text."""
         import numpy as np
+
         expected_dim = 384
         fake_vector = np.array([0.1] * expected_dim, dtype=np.float32)
         with patch("anveshak.analyst.embeddings._encoder") as mock_enc:
             mock_enc.encode.return_value = fake_vector
 
             from anveshak.analyst.embeddings import encode_text
+
             result = encode_text(EXPECTED_TRANSLATION)
 
         assert isinstance(result, list)
@@ -228,13 +246,14 @@ class TestEmbeddingOnTranslatedText:
 # analyse_content job — translation path (fully mocked)
 # ---------------------------------------------------------------------------
 
+
 class TestAnalyseContentWithTranslation:
     """Verify the full analyse_content ARQ job wires translation correctly."""
 
     @pytest.mark.asyncio
     async def test_chinese_content_translated_before_ner(self):
         """analyse_content translates Chinese text; entities extracted in English."""
-        from unittest.mock import AsyncMock, MagicMock, patch, call
+        from unittest.mock import AsyncMock, MagicMock, patch
 
         content_id = "test-zh-001"
         fake_row = {
@@ -285,6 +304,7 @@ class TestAnalyseContentWithTranslation:
             mock_settings.minhash_num_perm = 128
 
             from anveshak.analyst.jobs import analyse_content
+
             await analyse_content(ctx, content_id)
 
         # NER must have received the TRANSLATED English text, not the Chinese original
@@ -324,6 +344,7 @@ class TestAnalyseContentWithTranslation:
             mock_settings.translation_model = "facebook/nllb-200-distilled-600M"
 
             from anveshak.analyst.jobs import analyse_content
+
             await analyse_content(ctx, "test-en-001")
 
         mock_translate.assert_not_called()
@@ -333,13 +354,14 @@ class TestAnalyseContentWithTranslation:
 # ContentItem model — translated_text fields (labels mandatory)
 # ---------------------------------------------------------------------------
 
-class TestContentItemTranslationFields:
 
+class TestContentItemTranslationFields:
     def test_translated_text_optional(self):
         """ContentItem accepts translated_text=None (English articles)."""
-        from anveshak.models.content import ContentItem
-        from anveshak.models.base import Labels
         import hashlib
+
+        from anveshak.models.base import Labels
+        from anveshak.models.content import ContentItem
 
         item = ContentItem(
             source_id="src-001",
@@ -353,9 +375,10 @@ class TestContentItemTranslationFields:
 
     def test_translated_text_populated(self):
         """ContentItem stores translated_text and translation_model when set."""
-        from anveshak.models.content import ContentItem
-        from anveshak.models.base import Labels
         import hashlib
+
+        from anveshak.models.base import Labels
+        from anveshak.models.content import ContentItem
 
         item = ContentItem(
             source_id="src-002",
@@ -373,9 +396,10 @@ class TestContentItemTranslationFields:
 
     def test_labels_mandatory(self):
         """ContentItem.labels is non-Optional — omitting it raises ValidationError."""
-        from pydantic import ValidationError
-        from anveshak.models.content import ContentItem
         import hashlib
+
+        from anveshak.models.content import ContentItem
+        from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
             ContentItem(

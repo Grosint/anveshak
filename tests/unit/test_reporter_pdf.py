@@ -2,14 +2,14 @@
 
 pytest.mark.unit — WeasyPrint is mocked (no system fonts needed in CI).
 """
+
 from __future__ import annotations
 
 import os
 import tempfile
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-
 
 pytestmark = pytest.mark.unit
 
@@ -139,7 +139,7 @@ class TestGeneratePdf:
     async def test_weasyprint_failure_raises_pdf_generation_error(self):
         """WeasyPrint exception → PDFGenerationError with report_id context."""
         import anveshak.reporter.pdf as pdf_mod
-        from anveshak.reporter.pdf import generate_pdf, PDFGenerationError
+        from anveshak.reporter.pdf import PDFGenerationError, generate_pdf
 
         mock_html_obj = MagicMock()
         mock_html_obj.write_pdf.side_effect = RuntimeError("libpango missing")
@@ -159,7 +159,7 @@ class TestGeneratePdf:
     async def test_disk_write_failure_raises_pdf_generation_error(self):
         """Disk write failure → PDFGenerationError."""
         import anveshak.reporter.pdf as pdf_mod
-        from anveshak.reporter.pdf import generate_pdf, PDFGenerationError
+        from anveshak.reporter.pdf import PDFGenerationError, generate_pdf
 
         mock_html_obj = MagicMock()
         mock_html_obj.write_pdf.side_effect = OSError("No space left on device")
@@ -251,8 +251,12 @@ SAMPLE_V2_REPORT_DATA = {
         {"name": "NDTV", "platform": "web", "credibility_score": 65.0, "item_count": 28},
     ],
     "clusters": [
-        {"label": "Border UAV sightings", "item_count": 42, "independent_source_count": 3,
-         "executive_summary": "Multiple sightings near northern border."},
+        {
+            "label": "Border UAV sightings",
+            "item_count": 42,
+            "independent_source_count": 3,
+            "executive_summary": "Multiple sightings near northern border.",
+        },
     ],
     "entities": [
         {"entity_text": "Lakshadweep", "entity_type": "GPE", "mention_count": 12},
@@ -262,8 +266,12 @@ SAMPLE_V2_REPORT_DATA = {
         {"keyword": "drone", "frequency": 38},
     ],
     "signals": [
-        {"description": "3 sources corroborate UAV cluster", "cluster_label": "Border UAV",
-         "status": "new", "created_at": "2026-04-10T10:00:00Z"},
+        {
+            "description": "3 sources corroborate UAV cluster",
+            "cluster_label": "Border UAV",
+            "status": "new",
+            "created_at": "2026-04-10T10:00:00Z",
+        },
     ],
 }
 
@@ -283,7 +291,7 @@ class TestRenderPdfHtmlV2:
         from anveshak.reporter.pdf import render_pdf_html
 
         html = render_pdf_html(SAMPLE_V2_REPORT_DATA)
-        assert "148" in html     # content_count
+        assert "148" in html  # content_count
         assert "Content Items" in html
 
     def test_v2_contains_source_inventory(self):

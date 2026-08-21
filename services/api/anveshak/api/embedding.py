@@ -3,6 +3,7 @@
 Avoids PyTorch dependency in the API image by delegating to the analyst
 service's /internal/embed endpoint.
 """
+
 from __future__ import annotations
 
 import httpx

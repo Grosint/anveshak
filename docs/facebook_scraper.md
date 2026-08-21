@@ -13,7 +13,7 @@
 
 ### API Marketplace Options (REJECTED — sovereignty violation)
 
-Sending monitored page URLs to external APIs leaks surveillance targets. CLAUDE.md rule 10: intelligence data never leaves deployment boundary.
+Sending monitored page URLs to external APIs leaks surveillance targets. AGENTS.md rule 10: intelligence data never leaves deployment boundary.
 
 | Provider | Cost | Verdict |
 |----------|------|---------|

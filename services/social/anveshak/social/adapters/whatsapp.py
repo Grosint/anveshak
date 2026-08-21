@@ -5,10 +5,11 @@ drains via LPOP in collect(). Fully self-hosted, no Meta Business API.
 
 Auth is QR-based on the bridge sidecar — no env var credentials needed.
 """
+
 from __future__ import annotations
 
 import json
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import AsyncIterator
 from urllib.parse import quote
 
@@ -17,12 +18,12 @@ import structlog
 from arq import ArqRedis
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from ..settings import settings
 from .base import (
     AdapterAuthError,
     RawItem,
     SourceAdapterBase,
 )
-from ..settings import settings
 
 log = structlog.get_logger(__name__)
 
@@ -129,9 +130,7 @@ class WhatsAppAdapter(SourceAdapterBase):
                 data = resp.json()
                 if data.get("status") == "logged_out":
                     self._connected = False
-                    raise AdapterAuthError(
-                        "WhatsApp session logged out — re-scan QR"
-                    )
+                    raise AdapterAuthError("WhatsApp session logged out — re-scan QR")
         except AdapterAuthError:
             raise
         except Exception:
@@ -145,6 +144,14 @@ class WhatsAppAdapter(SourceAdapterBase):
             raw_bytes = await self._redis.lpop(BUFFER_KEY)  # type: ignore[arg-type]
             if raw_bytes is None:
                 break
+            if not isinstance(raw_bytes, (bytes, str)):
+                # lpop returns a list only when called with a count, which this is
+                # not. Skip rather than hand a list to a JSON parser.
+                log.warning(
+                    "social.whatsapp.unexpected_buffer_type",
+                    returned_type=type(raw_bytes).__name__,
+                )
+                continue
 
             try:
                 msg = WhatsAppBufferMessage.from_json(raw_bytes)
@@ -169,6 +176,7 @@ class WhatsAppAdapter(SourceAdapterBase):
             media_urls: list[str] = []
             if msg.media_path:
                 from pathlib import Path
+
                 try:
                     Path(msg.media_path).resolve().relative_to(Path(media_root).resolve())
                     media_urls = [msg.media_path]
@@ -188,7 +196,11 @@ class WhatsAppAdapter(SourceAdapterBase):
             url = f"https://wa.me/g/{quote(group_num)}/{quote(msg_id)}"
 
             # Timestamp
-            captured_at = datetime.fromtimestamp(msg.timestamp, tz=UTC) if msg.timestamp else datetime.now(UTC)
+            captured_at = (
+                datetime.fromtimestamp(msg.timestamp, tz=UTC)
+                if msg.timestamp
+                else datetime.now(UTC)
+            )
 
             yield RawItem(
                 raw_text=raw_text,

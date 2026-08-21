@@ -10,6 +10,7 @@ The composite index lets PostgreSQL jump directly to the right topic + date rang
 
 Revision ID: 002
 """
+
 from alembic import op
 
 revision = "002"

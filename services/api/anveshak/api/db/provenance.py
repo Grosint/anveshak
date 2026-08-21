@@ -1,9 +1,10 @@
 """Provenance repository — aggregated intelligence + provenance chain queries.
 
 Issue #7: Provenance API endpoints for UX rewiring.
-All SQL is module-level constants. Functions take asyncpg.Connection
+All SQL is module-level constants. Functions take DBConnection
 and return plain dicts (route layer handles serialization).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -11,6 +12,7 @@ import json
 from typing import Any
 
 import asyncpg
+from anveshak.db import DBConnection
 
 # ---------------------------------------------------------------------------
 # 1. Topic Intelligence — aggregated overview (single call)
@@ -372,7 +374,9 @@ SQL_TOPIC_URGENCY = """
 
 
 async def _pool_fetch(
-    pool: asyncpg.Pool, sql: str, *args: Any,
+    pool: asyncpg.Pool,
+    sql: str,
+    *args: Any,
 ) -> list[asyncpg.Record]:
     """Execute pool.acquire() → conn.fetch() for use in asyncio.gather."""
     async with pool.acquire() as conn:
@@ -380,7 +384,9 @@ async def _pool_fetch(
 
 
 async def _pool_fetchrow(
-    pool: asyncpg.Pool, sql: str, *args: Any,
+    pool: asyncpg.Pool,
+    sql: str,
+    *args: Any,
 ) -> asyncpg.Record | None:
     """Execute pool.acquire() → conn.fetchrow() for use in asyncio.gather."""
     async with pool.acquire() as conn:
@@ -390,6 +396,7 @@ async def _pool_fetchrow(
 # ---------------------------------------------------------------------------
 # Repository functions
 # ---------------------------------------------------------------------------
+
 
 async def get_topic_intelligence(
     pool: asyncpg.Pool,
@@ -405,8 +412,7 @@ async def get_topic_intelligence(
     its own connection from the pool (asyncpg connections are not safe
     for concurrent operations).
     """
-    (signals, clusters, identifiers, locations,
-     source_health, stats_row) = await asyncio.gather(
+    (signals, clusters, identifiers, locations, source_health, stats_row) = await asyncio.gather(
         _pool_fetch(pool, SQL_INTELLIGENCE_SIGNALS, topic_id),
         _pool_fetch(pool, SQL_INTELLIGENCE_CLUSTERS, topic_id, cluster_limit),
         _pool_fetch(pool, SQL_INTELLIGENCE_IDENTIFIERS, topic_id, identifier_limit),
@@ -415,9 +421,15 @@ async def get_topic_intelligence(
         _pool_fetchrow(pool, SQL_INTELLIGENCE_STATS, topic_id),
     )
 
-    stats = dict(stats_row) if stats_row else {
-        "total_content": 0, "total_clusters": 0, "total_signals": 0,
-    }
+    stats = (
+        dict(stats_row)
+        if stats_row
+        else {
+            "total_content": 0,
+            "total_clusters": 0,
+            "total_signals": 0,
+        }
+    )
 
     return {
         "signals": [dict(r) for r in signals],
@@ -440,8 +452,7 @@ async def get_identifier_provenance(
     All 5 queries run concurrently via asyncio.gather, each acquiring
     its own connection from the pool.
     """
-    (content_items, sources, clusters, signals_rows,
-     cross_topic) = await asyncio.gather(
+    (content_items, sources, clusters, signals_rows, cross_topic) = await asyncio.gather(
         _pool_fetch(pool, SQL_IDENTIFIER_CONTENT_ITEMS, topic_id, identifier_value),
         _pool_fetch(pool, SQL_IDENTIFIER_SOURCES, topic_id, identifier_value),
         _pool_fetch(pool, SQL_IDENTIFIER_CLUSTERS, topic_id, identifier_value),
@@ -472,8 +483,7 @@ async def get_cluster_provenance(
     Concurrent queries for header, signal, content timeline,
     identifiers, and source spread.
     """
-    (header, signal_row, items, identifiers,
-     source_spread, linked_tracker) = await asyncio.gather(
+    (header, signal_row, items, identifiers, source_spread, linked_tracker) = await asyncio.gather(
         _pool_fetchrow(pool, SQL_CLUSTER_HEADER, cluster_id, topic_id),
         _pool_fetchrow(pool, SQL_CLUSTER_SIGNAL, cluster_id, topic_id),
         _pool_fetch(pool, SQL_CLUSTER_CONTENT_TIMELINE, cluster_id, topic_id, content_limit),
@@ -521,17 +531,20 @@ async def get_cluster_flow(
     # Build temporal edges: source with earlier first_seen → source with later first_seen
     edges: list[dict[str, Any]] = []
     for i, src_a in enumerate(nodes):
-        for src_b in nodes[i + 1:]:
+        for src_b in nodes[i + 1 :]:
             if src_a["first_seen"] and src_b["first_seen"]:
                 delta = src_b["first_seen"] - src_a["first_seen"]
-                edges.append({
-                    "source": src_a["id"],
-                    "target": src_b["id"],
-                    "edge_type": "temporal",
-                    "time_delta_hours": round(
-                        delta.total_seconds() / 3600, 1,
-                    ),
-                })
+                edges.append(
+                    {
+                        "source": src_a["id"],
+                        "target": src_b["id"],
+                        "edge_type": "temporal",
+                        "time_delta_hours": round(
+                            delta.total_seconds() / 3600,
+                            1,
+                        ),
+                    }
+                )
 
     # Shared identifier edges (dotted)
     shared_edges = [
@@ -553,7 +566,7 @@ async def get_cluster_flow(
 
 
 async def get_content_provenance(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     content_id: str,
 ) -> dict[str, Any] | None:
     """Full provenance chain for one content item."""
@@ -572,10 +585,14 @@ async def get_content_provenance(
     }
 
     # Cluster as nested object
-    result["cluster"] = {
-        "label": result.pop("cluster_label", None),
-        "isc": result.pop("cluster_isc", None),
-    } if result.get("narrative_cluster_id") else None
+    result["cluster"] = (
+        {
+            "label": result.pop("cluster_label", None),
+            "isc": result.pop("cluster_isc", None),
+        }
+        if result.get("narrative_cluster_id")
+        else None
+    )
 
     # Identifiers
     identifier_rows = await conn.fetch(SQL_CONTENT_IDENTIFIERS, content_id)
@@ -601,7 +618,7 @@ async def get_content_provenance(
 
 
 async def get_topic_urgency(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     topic_id: str,
 ) -> dict[str, Any]:
     """Urgency metrics for a single topic."""

@@ -11,6 +11,7 @@ Tests for:
 
 pytest.mark.unit — no external dependencies.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -22,15 +23,16 @@ pytestmark = pytest.mark.unit
 # 1. Convergence — cross-topic must be org-scoped
 # ===================================================================
 
-class TestConvergenceOrgScope:
 
+class TestConvergenceOrgScope:
     def test_convergent_clusters_joins_topics(self):
         """SQL_CONVERGENT_CLUSTERS must JOIN topics to access org_id."""
         from services.analyst.anveshak.analyst.convergence import SQL_CONVERGENT_CLUSTERS
 
         sql = SQL_CONVERGENT_CLUSTERS.lower()
-        assert "join topics" in sql or "join topics " in sql, \
+        assert "join topics" in sql or "join topics " in sql, (
             "SQL_CONVERGENT_CLUSTERS must JOIN topics for org_id access"
+        )
 
     def test_convergent_clusters_filters_same_org(self):
         """SQL_CONVERGENT_CLUSTERS must ensure both clusters are in same org."""
@@ -38,16 +40,17 @@ class TestConvergenceOrgScope:
 
         sql = SQL_CONVERGENT_CLUSTERS.lower()
         # Must have a condition ensuring t1.org_id = t2.org_id
-        assert "org_id" in sql, \
+        assert "org_id" in sql, (
             "SQL_CONVERGENT_CLUSTERS must filter by org_id to prevent cross-org leaks"
+        )
 
 
 # ===================================================================
 # 2. Scraper — content inserts must include org_id
 # ===================================================================
 
-class TestScraperOrgId:
 
+class TestScraperOrgId:
     def test_insert_content_has_org_id(self):
         """Scraper SQL_INSERT_CONTENT must include org_id column."""
         from services.scraper.anveshak.scraper.jobs import SQL_INSERT_CONTENT
@@ -65,8 +68,8 @@ class TestScraperOrgId:
 # 3. Social — content inserts must include org_id
 # ===================================================================
 
-class TestSocialOrgId:
 
+class TestSocialOrgId:
     def test_insert_content_has_org_id(self):
         """Social SQL_INSERT_CONTENT must include org_id column."""
         from services.social.anveshak.social.ingest import SQL_INSERT_CONTENT
@@ -78,8 +81,8 @@ class TestSocialOrgId:
 # 4. Credibility — audit log inserts must include org_id
 # ===================================================================
 
-class TestCredibilityOrgId:
 
+class TestCredibilityOrgId:
     def test_insert_audit_log_has_org_id(self):
         """Credibility SQL_INSERT_AUDIT_LOG must include org_id column."""
         from services.analyst.anveshak.analyst.credibility import SQL_INSERT_AUDIT_LOG
@@ -91,8 +94,8 @@ class TestCredibilityOrgId:
 # 5. Signal engine — signals inherit org via topic_id (no org_id column)
 # ===================================================================
 
-class TestSignalEngineOrgScope:
 
+class TestSignalEngineOrgScope:
     def test_signals_inherit_org_via_topic(self):
         """Signals don't need org_id column — they inherit org scope via topic_id FK.
         The SQL_INSERT_SIGNAL must have topic_id which links to the org-scoped topics table."""

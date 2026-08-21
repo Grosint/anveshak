@@ -10,10 +10,10 @@ HARDWARE REQUIREMENT: RTX 3080+ (8GB VRAM). On CPU: ~90s per frame — impractic
 This detector raises NotImplementedError when vision_device=cpu.
 See hardware.md for the full upgrade path.
 """
+
 from __future__ import annotations
 
 from .base import DeepfakeDetector
-from ..settings import settings
 
 
 class DIREDetector(DeepfakeDetector):
@@ -40,6 +40,7 @@ class DIREDetector(DeepfakeDetector):
         # DIRE uses a diffusion model (e.g. DDPM) as the reconstructor.
         # Model loading is deferred to first inference call.
         import torch
+
         if not torch.cuda.is_available():
             raise RuntimeError(
                 "DIREDetector: CUDA not available. "

@@ -12,18 +12,26 @@ Tests for:
 
 pytest.mark.unit — no external dependencies.
 """
+
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from tests.helpers.migrations import migrations_sql
+
 pytestmark = pytest.mark.unit
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
+
 
 def _make_token(
     subject: str = "user-1",
@@ -38,7 +46,10 @@ def _make_token(
         from services.api.anveshak.api.auth.jwt import create_access_token
 
         return create_access_token(
-            subject=subject, username=username, role=role, org_id=org_id,
+            subject=subject,
+            username=username,
+            role=role,
+            org_id=org_id,
         )
 
 
@@ -46,8 +57,8 @@ def _make_token(
 # 1. JWT payload includes org_id
 # ===================================================================
 
-class TestJWTOrgId:
 
+class TestJWTOrgId:
     def test_token_contains_org_id(self):
         """Token payload must include org_id."""
         with patch("services.api.anveshak.api.auth.jwt.settings") as s:
@@ -60,7 +71,10 @@ class TestJWTOrgId:
             )
 
             token = create_access_token(
-                subject="user-1", username="analyst", role="analyst", org_id="org-nia",
+                subject="user-1",
+                username="analyst",
+                role="analyst",
+                org_id="org-nia",
             )
             payload = verify_token(token)
 
@@ -78,7 +92,10 @@ class TestJWTOrgId:
             )
 
             token = create_access_token(
-                subject="sa-1", username="superadmin", role="super-admin", org_id=None,
+                subject="sa-1",
+                username="superadmin",
+                role="super-admin",
+                org_id=None,
             )
             payload = verify_token(token)
 
@@ -106,8 +123,8 @@ class TestJWTOrgId:
 # 2. Auth DB returns org_id
 # ===================================================================
 
-class TestAuthDBOrgId:
 
+class TestAuthDBOrgId:
     def test_sql_includes_org_id(self):
         """SQL query for user lookup must select org_id."""
         from services.api.anveshak.api.db.auth import SQL_GET_USER_BY_USERNAME
@@ -119,8 +136,8 @@ class TestAuthDBOrgId:
 # 3. Login embeds org_id in token
 # ===================================================================
 
-class TestLoginWithOrgId:
 
+class TestLoginWithOrgId:
     @pytest.mark.asyncio
     async def test_login_returns_token_with_org_id(self, mock_conn):
         """Login response token must contain the user's org_id."""
@@ -128,23 +145,29 @@ class TestLoginWithOrgId:
 
         hashed = pwd_context.hash("password")
 
-        with patch(
-            "services.api.anveshak.api.routes.auth.auth_db.get_user_by_username",
-            new=AsyncMock(return_value={
-                "id": "user-1",
-                "password_hash": hashed,
-                "role": "analyst",
-                "org_id": "org-nia",
-            }),
-        ), patch("services.api.anveshak.api.auth.jwt.settings") as s:
+        with (
+            patch(
+                "services.api.anveshak.api.routes.auth.auth_db.get_user_by_username",
+                new=AsyncMock(
+                    return_value={
+                        "id": "user-1",
+                        "password_hash": hashed,
+                        "role": "analyst",
+                        "org_id": "org-nia",
+                    }
+                ),
+            ),
+            patch("services.api.anveshak.api.auth.jwt.settings") as s,
+        ):
             s.jwt_secret_key = "test-secret-for-org-tests"
             s.jwt_algorithm = "HS256"
             s.jwt_expire_minutes = 30
             from services.api.anveshak.api.auth.jwt import verify_token
-            from services.api.anveshak.api.routes.auth import login, LoginRequest
+            from services.api.anveshak.api.routes.auth import LoginRequest, login
 
             result = await login(
-                LoginRequest(username="analyst", password="password"), db=mock_conn,
+                LoginRequest(username="analyst", password="password"),
+                db=mock_conn,
             )
             payload = verify_token(result["access_token"])
 
@@ -155,16 +178,19 @@ class TestLoginWithOrgId:
 # 4. /me returns org_id
 # ===================================================================
 
-class TestAuthMeOrgId:
 
+class TestAuthMeOrgId:
     @pytest.mark.asyncio
     async def test_me_returns_org_id(self):
         """GET /auth/me must include org_id in response."""
         from services.api.anveshak.api.routes.auth import me
 
         user = {
-            "sub": "u1", "username": "analyst1",
-            "role": "analyst", "jti": "x", "org_id": "org-nia",
+            "sub": "u1",
+            "username": "analyst1",
+            "role": "analyst",
+            "jti": "x",
+            "org_id": "org-nia",
         }
         result = await me(user=user)
         assert result["org_id"] == "org-nia"
@@ -175,8 +201,10 @@ class TestAuthMeOrgId:
         from services.api.anveshak.api.routes.auth import me
 
         user = {
-            "sub": "sa-1", "username": "superadmin",
-            "role": "super-admin", "jti": "x",
+            "sub": "sa-1",
+            "username": "superadmin",
+            "role": "super-admin",
+            "jti": "x",
         }
         result = await me(user=user)
         assert result.get("org_id") is None
@@ -186,8 +214,8 @@ class TestAuthMeOrgId:
 # 5. RBAC org helpers
 # ===================================================================
 
-class TestRBACOrgHelpers:
 
+class TestRBACOrgHelpers:
     def test_get_user_org_returns_org_id(self):
         """get_user_org() extracts org_id from user dict."""
         from services.api.anveshak.api.auth.rbac import get_user_org
@@ -226,6 +254,7 @@ class TestRBACOrgHelpers:
     def test_require_org_context_raises_for_missing_org(self):
         """require_org_context() raises 400 when org_id is missing."""
         from fastapi import HTTPException
+
         from services.api.anveshak.api.auth.rbac import require_org_context
 
         user = {"sub": "sa-1", "role": "super-admin"}
@@ -248,8 +277,8 @@ class TestRBACOrgHelpers:
 # 6. Organization DB CRUD
 # ===================================================================
 
-class TestOrganizationDB:
 
+class TestOrganizationDB:
     @pytest.mark.asyncio
     async def test_create_org_returns_id(self):
         """create_organization() inserts and returns org ID."""
@@ -268,10 +297,18 @@ class TestOrganizationDB:
         from services.api.anveshak.api.db.organizations import list_organizations
 
         mock_conn = AsyncMock()
-        mock_conn.fetch = AsyncMock(return_value=[
-            {"id": "org-1", "name": "NIA", "slug": "nia",
-             "is_active": True, "created_at": "2026-01-01", "updated_at": "2026-01-01"},
-        ])
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "id": "org-1",
+                    "name": "NIA",
+                    "slug": "nia",
+                    "is_active": True,
+                    "created_at": "2026-01-01",
+                    "updated_at": "2026-01-01",
+                },
+            ]
+        )
 
         result = await list_organizations(mock_conn)
         assert isinstance(result, list)
@@ -284,9 +321,14 @@ class TestOrganizationDB:
         from services.api.anveshak.api.db.organizations import get_organization
 
         mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(return_value={
-            "id": "org-1", "name": "NIA", "slug": "nia", "is_active": True,
-        })
+        mock_conn.fetchrow = AsyncMock(
+            return_value={
+                "id": "org-1",
+                "name": "NIA",
+                "slug": "nia",
+                "is_active": True,
+            }
+        )
 
         result = await get_organization(mock_conn, "org-1")
         assert result is not None
@@ -319,8 +361,8 @@ class TestOrganizationDB:
 # 7. User creation with org_id
 # ===================================================================
 
-class TestUserCreateWithOrg:
 
+class TestUserCreateWithOrg:
     @pytest.mark.asyncio
     async def test_create_user_accepts_org_id(self):
         """create_user() must accept org_id parameter."""
@@ -330,7 +372,11 @@ class TestUserCreateWithOrg:
         mock_conn.fetchval = AsyncMock(return_value="user-new")
 
         user_id = await create_user(
-            mock_conn, "newuser", "password123", "analyst", org_id="org-nia",
+            mock_conn,
+            "newuser",
+            "password123",
+            "analyst",
+            org_id="org-nia",
         )
         assert user_id == "user-new"
         mock_conn.fetchval.assert_awaited_once()
@@ -352,18 +398,26 @@ class TestUserCreateWithOrg:
 # 8. User listing with org filter
 # ===================================================================
 
-class TestUserListWithOrg:
 
+class TestUserListWithOrg:
     @pytest.mark.asyncio
     async def test_list_users_returns_org_id(self):
         """list_users() results must include org_id field."""
         from anveshak.api.db.users import list_users
 
         mock_conn = AsyncMock()
-        mock_conn.fetch = AsyncMock(return_value=[
-            {"id": "u1", "username": "a", "role": "analyst",
-             "org_id": "org-nia", "created_at": "2026-01-01", "updated_at": "2026-01-01"},
-        ])
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "id": "u1",
+                    "username": "a",
+                    "role": "analyst",
+                    "org_id": "org-nia",
+                    "created_at": "2026-01-01",
+                    "updated_at": "2026-01-01",
+                },
+            ]
+        )
 
         result = await list_users(mock_conn)
         assert result[0]["org_id"] == "org-nia"
@@ -392,8 +446,8 @@ class TestUserListWithOrg:
 # 9. Organization route handlers
 # ===================================================================
 
-class TestOrgRoutes:
 
+class TestOrgRoutes:
     @pytest.mark.asyncio
     async def test_list_orgs_route_calls_db(self):
         """GET /organizations calls list_organizations."""
@@ -418,8 +472,8 @@ class TestOrgRoutes:
             new=AsyncMock(return_value="org-new"),
         ):
             from services.api.anveshak.api.routes.organizations import (
-                create_organization,
                 CreateOrgRequest,
+                create_organization,
             )
 
             mock_conn = AsyncMock()
@@ -465,23 +519,29 @@ class TestOrgRoutes:
     @pytest.mark.asyncio
     async def test_update_org_route(self):
         """PATCH /organizations/{id} returns updated confirmation."""
-        with patch(
-            "services.api.anveshak.api.routes.organizations.org_db.get_organization",
-            new=AsyncMock(return_value={"id": "org-1", "name": "NIA"}),
-        ), patch(
-            "services.api.anveshak.api.routes.organizations.org_db.update_organization",
-            new=AsyncMock(),
+        with (
+            patch(
+                "services.api.anveshak.api.routes.organizations.org_db.get_organization",
+                new=AsyncMock(return_value={"id": "org-1", "name": "NIA"}),
+            ),
+            patch(
+                "services.api.anveshak.api.routes.organizations.org_db.update_organization",
+                new=AsyncMock(),
+            ),
         ):
             from services.api.anveshak.api.routes.organizations import (
-                update_organization,
                 UpdateOrgRequest,
+                update_organization,
             )
 
             mock_conn = AsyncMock()
             user = {"sub": "sa-1", "role": "super-admin", "jti": "x"}
             req = UpdateOrgRequest(name="NIA Updated")
             result = await update_organization(
-                org_id="org-1", req=req, db=mock_conn, _user=user,
+                org_id="org-1",
+                req=req,
+                db=mock_conn,
+                _user=user,
             )
 
         assert result["updated"] is True
@@ -491,48 +551,59 @@ class TestOrgRoutes:
 # 10. Migration file exists
 # ===================================================================
 
+
 class TestMigration:
+    """Assert on migration *content*, never on a version filename.
 
-    def test_migration_007_exists(self):
-        """Migration 007_organizations.py must exist."""
-        from pathlib import Path
-
-        path = Path("services/api/migrations/versions/007_organizations.py")
-        assert path.exists(), "Migration file 007_organizations.py not found"
+    The org schema arrived as 007_organizations.py and has since been
+    squashed into 001_initial_schema.py; path-based assertions broke.
+    """
 
     def test_migration_creates_organizations_table(self):
-        """Migration must CREATE TABLE organizations."""
-        from pathlib import Path
-
-        content = Path("services/api/migrations/versions/007_organizations.py").read_text()
-        assert "CREATE TABLE organizations" in content
-
-    def test_migration_adds_org_id_to_users(self):
-        """Migration must add org_id column to users."""
-        from pathlib import Path
-
-        content = Path("services/api/migrations/versions/007_organizations.py").read_text()
-        assert "users ADD COLUMN org_id" in content
-
-    def test_migration_adds_org_id_to_topics(self):
-        """Migration must add org_id column to topics."""
-        from pathlib import Path
-
-        content = Path("services/api/migrations/versions/007_organizations.py").read_text()
-        assert "topics ADD COLUMN org_id" in content
+        """Migrations must CREATE TABLE organizations."""
+        assert "CREATE TABLE organizations" in migrations_sql()
 
     def test_migration_creates_org_sources_table(self):
-        """Migration must create org_sources visibility table."""
-        from pathlib import Path
+        """Migrations must create the org_sources visibility table."""
+        assert "CREATE TABLE org_sources" in migrations_sql()
 
-        content = Path("services/api/migrations/versions/007_organizations.py").read_text()
-        assert "CREATE TABLE org_sources" in content
+    @pytest.mark.parametrize("table", ["users", "topics"])
+    def test_migration_gives_table_an_org_id(self, table: str):
+        """users and topics are root tables, so each carries its own org_id.
 
-    def test_migration_backfills_default_org(self):
-        """Migration must backfill existing data to default org."""
-        from pathlib import Path
+        Accepts either form: an inline column in the squashed CREATE TABLE,
+        or an ADD COLUMN in a later incremental migration.
+        """
+        sql = migrations_sql()
+        create_block = re.search(
+            rf"CREATE TABLE {table} \((.*?)\n *\)", sql, re.DOTALL | re.IGNORECASE
+        )
+        inline = bool(create_block and "org_id" in create_block.group(1))
+        added = bool(re.search(rf"{table} ADD COLUMN org_id", sql, re.IGNORECASE))
+        assert inline or added, f"{table} has no org_id column in any migration"
 
-        content = Path("services/api/migrations/versions/007_organizations.py").read_text()
+    def test_migration_references_organizations_fk(self):
+        """org_id columns must be FK-constrained, not free-text."""
+        assert "REFERENCES organizations(id)" in migrations_sql()
+
+
+# ===================================================================
+# 10b. Seed data provides the default organization
+# ===================================================================
+
+
+class TestSeedDefaultOrg:
+    """The default org used to be backfilled by migration 007.
+
+    Post-squash the schema is created fresh with nothing to backfill, so
+    the default org now comes from the demo seed instead. Assert there, or
+    a seed that stops creating it fails silently at demo time.
+    """
+
+    @pytest.mark.parametrize("seed", ["seed_demo.sql", "seed_demo_full.sql"])
+    def test_seed_creates_default_org(self, seed: str):
+        content = (REPO_ROOT / "scripts" / seed).read_text()
+        assert "INSERT INTO organizations" in content
         assert "org-anshul" in content
 
 
@@ -540,11 +611,9 @@ class TestMigration:
 # 11. Frontend AuthContext includes org_id
 # ===================================================================
 
-class TestFrontendOrgId:
 
+class TestFrontendOrgId:
     def test_auth_context_has_org_id(self):
         """AuthContext.tsx JWTPayload must include org_id field."""
-        from pathlib import Path
-
-        content = Path("frontend/src/contexts/AuthContext.tsx").read_text()
+        content = (REPO_ROOT / "frontend" / "src" / "contexts" / "AuthContext.tsx").read_text()
         assert "org_id" in content

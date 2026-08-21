@@ -509,7 +509,7 @@ Workers are separate container processes that execute heavy background jobs disp
    - No face → **EfficientNetDetector** (`umm-maybe/AI-image-detector`, Swin-base, CIFAKE-trained)
    - Video → extract keyframes every 5s via ffmpeg → EfficientNet on each frame → worst-case (max) score
    - GPU upgrade: `VISION_DEEPFAKE_VIDEO_MODEL=dire` for DIRE diffusion-based detection (~94% accuracy, RTX 3080+ required)
-   - All scores are **float 0.0–1.0, never bool** (CLAUDE.md rule 7)
+   - All scores are **float 0.0–1.0, never bool** (AGENTS.md rule 7)
 5. **CLIP classification** (images only, if topic has `clip_categories`) — zero-shot image classification against analyst-defined categories (e.g., "military vehicle", "fighter aircraft", "tank")
 6. **Persist results** — upsert `vision_results` (JSONB for detections/labels, float for scores)
 

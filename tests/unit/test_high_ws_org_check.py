@@ -3,9 +3,10 @@
 A non-super-admin JWT missing org_id should be rejected with code 4003.
 Super-admin (role=super-admin) can connect without org_id to see all signals.
 """
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -21,7 +22,6 @@ def _make_ws():
 
 
 class TestWebSocketOrgBoundary:
-
     @pytest.mark.asyncio
     async def test_analyst_without_org_id_rejected(self):
         """Non-super-admin with missing org_id → close 4003."""

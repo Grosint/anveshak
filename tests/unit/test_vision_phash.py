@@ -3,29 +3,33 @@
 Criteria 4.6: pHash stored as BIGINT (Python int).
 Criteria 4.25–4.27: reverse lookup uses Hamming distance threshold from settings.
 """
-import io
-import pytest
-from unittest.mock import patch, MagicMock
 
+import io
+
+import pytest
 
 # ---------------------------------------------------------------------------
 # Tests: pHash computation
 # ---------------------------------------------------------------------------
 
+
 class TestComputePhash:
     @pytest.mark.unit
     def test_phash_returns_int(self):
         """compute_phash() must return Python int (stored as BIGINT in DB)."""
-        from PIL import Image
         import numpy as np
+        from PIL import Image
 
         # Create a simple 100x100 red image for testing
-        img = Image.fromarray(np.zeros((100, 100, 3), dtype=np.uint8) + np.array([255, 0, 0], dtype=np.uint8))
+        img = Image.fromarray(
+            np.zeros((100, 100, 3), dtype=np.uint8) + np.array([255, 0, 0], dtype=np.uint8)
+        )
         buf = io.BytesIO()
         img.save(buf, format="JPEG")
         image_bytes = buf.getvalue()
 
         from anveshak.vision.media_store import compute_phash
+
         result = compute_phash(image_bytes)
         assert result is not None
         assert isinstance(result, int)
@@ -33,8 +37,8 @@ class TestComputePhash:
     @pytest.mark.unit
     def test_phash_same_image_deterministic(self):
         """Same image bytes → same pHash value (deterministic)."""
-        from PIL import Image
         import numpy as np
+        from PIL import Image
 
         arr = np.zeros((100, 100, 3), dtype=np.uint8)
         arr[40:60, 40:60] = [200, 100, 50]  # a small coloured square
@@ -44,6 +48,7 @@ class TestComputePhash:
         image_bytes = buf.getvalue()
 
         from anveshak.vision.media_store import compute_phash
+
         result1 = compute_phash(image_bytes)
         result2 = compute_phash(image_bytes)
         assert result1 == result2
@@ -51,8 +56,8 @@ class TestComputePhash:
     @pytest.mark.unit
     def test_phash_different_images_differ(self):
         """Different images → different pHash values."""
-        from PIL import Image
         import numpy as np
+        from PIL import Image
 
         def _make_checkerboard(block_size: int, invert: bool) -> bytes:
             # Checkerboard pattern in grayscale — pHash uses DCT of grayscale,
@@ -69,6 +74,7 @@ class TestComputePhash:
             return buf.getvalue()
 
         from anveshak.vision.media_store import compute_phash
+
         h1 = compute_phash(_make_checkerboard(8, invert=False))
         h2 = compute_phash(_make_checkerboard(8, invert=True))
         # Opposite-polarity checkerboards are perceptually distinct
@@ -78,6 +84,7 @@ class TestComputePhash:
     def test_phash_none_on_invalid_bytes(self):
         """compute_phash() returns None for non-image bytes (graceful failure)."""
         from anveshak.vision.media_store import compute_phash
+
         result = compute_phash(b"not an image at all")
         assert result is None
 
@@ -86,31 +93,34 @@ class TestComputePhash:
 # Tests: EXIF extraction
 # ---------------------------------------------------------------------------
 
+
 class TestExtractExif:
     @pytest.mark.unit
     def test_exif_returns_dict(self):
         """extract_exif() returns a dict (possibly empty, never None for valid image)."""
-        from PIL import Image
         import numpy as np
+        from PIL import Image
 
         arr = np.zeros((50, 50, 3), dtype=np.uint8)
         buf = io.BytesIO()
         Image.fromarray(arr).save(buf, format="JPEG")
 
         from anveshak.vision.media_store import extract_exif
+
         result = extract_exif(buf.getvalue(), backend="pillow")
         assert isinstance(result, dict)
 
     @pytest.mark.unit
     def test_exif_ai_software_detected_flag_present(self):
         """extract_exif() always includes 'ai_software_detected' boolean key."""
-        from PIL import Image
         import numpy as np
+        from PIL import Image
 
         arr = np.zeros((50, 50, 3), dtype=np.uint8)
         buf = io.BytesIO()
         Image.fromarray(arr).save(buf, format="JPEG")
 
         from anveshak.vision.media_store import extract_exif
+
         result = extract_exif(buf.getvalue(), backend="pillow")
         assert "ai_software_detected" in result

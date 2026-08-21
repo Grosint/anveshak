@@ -14,6 +14,7 @@ Bugs this test suite catches:
 
 pytest.mark.unit — no DB, no Redis, no external dependencies.
 """
+
 from __future__ import annotations
 
 import json
@@ -28,6 +29,7 @@ pytestmark = pytest.mark.unit
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_pool_and_conn():
     """Create mock asyncpg pool + connection with async context manager."""
@@ -76,28 +78,34 @@ class TestComputeIdentifierSeverity:
 
     def test_source_count_1_medium(self):
         from anveshak.analyst.identifier_signals import compute_identifier_severity
+
         assert compute_identifier_severity(1) == "MEDIUM"
 
     def test_source_count_2_medium(self):
         from anveshak.analyst.identifier_signals import compute_identifier_severity
+
         assert compute_identifier_severity(2) == "MEDIUM"
 
     def test_source_count_3_high(self):
         """Boundary: exactly 3 sources → HIGH."""
         from anveshak.analyst.identifier_signals import compute_identifier_severity
+
         assert compute_identifier_severity(3) == "HIGH"
 
     def test_source_count_4_high(self):
         from anveshak.analyst.identifier_signals import compute_identifier_severity
+
         assert compute_identifier_severity(4) == "HIGH"
 
     def test_source_count_5_critical(self):
         """Boundary: exactly 5 sources → CRITICAL."""
         from anveshak.analyst.identifier_signals import compute_identifier_severity
+
         assert compute_identifier_severity(5) == "CRITICAL"
 
     def test_source_count_10_critical(self):
         from anveshak.analyst.identifier_signals import compute_identifier_severity
+
         assert compute_identifier_severity(10) == "CRITICAL"
 
 
@@ -421,8 +429,8 @@ class TestFireIdentifierSignal:
     async def test_signal_type_is_identifier_convergence(self, mock_metric):
         """signal_type must be 'identifier_convergence'."""
         from anveshak.analyst.identifier_signals import (
-            fire_identifier_signal,
             SIGNAL_TYPE_IDENTIFIER_CONVERGENCE,
+            fire_identifier_signal,
         )
 
         conn = AsyncMock()
@@ -638,9 +646,9 @@ class TestCheckIdentifierSignals:
 
 
 class TestSignalTypeConstant:
-
     def test_constant_value(self):
         from anveshak.analyst.identifier_signals import SIGNAL_TYPE_IDENTIFIER_CONVERGENCE
+
         assert SIGNAL_TYPE_IDENTIFIER_CONVERGENCE == "identifier_convergence"
 
     def test_sql_constants_exist(self):
@@ -650,6 +658,7 @@ class TestSignalTypeConstant:
             SQL_DUPLICATE_IDENTIFIER_SIGNAL_CHECK,
             SQL_IDENTIFIER_CLUSTER_SOURCES,
         )
+
         assert "identifier_clusters" in SQL_BREACHING_IDENTIFIER_CLUSTERS
         assert "identifier_convergence" in SQL_DUPLICATE_IDENTIFIER_SIGNAL_CHECK
         assert "identifier_cluster_items" in SQL_IDENTIFIER_CLUSTER_SOURCES

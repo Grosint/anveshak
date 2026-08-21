@@ -4,13 +4,14 @@ Persists last_poll_at to Redis so restarts can detect gaps.
 Currently logs warnings for missed windows — future work can add
 adapter-specific catchup queries for platforms that support time-based search.
 
-CLAUDE.md: DB is authoritative for long-lived state, but Redis is fine for
+AGENTS.md: DB is authoritative for long-lived state, but Redis is fine for
 transient operational state like poll timestamps (if lost, worst case is
 one extra poll cycle worth of duplicate detection via content_hash).
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from typing import Optional
 
 import structlog
@@ -59,7 +60,7 @@ def detect_poll_gap(
             gap_seconds=int(elapsed.total_seconds()),
             gap_human=str(elapsed),
             hint="Content from this window may have been missed. "
-                 "Deduplication via content_hash prevents duplicates on next poll.",
+            "Deduplication via content_hash prevents duplicates on next poll.",
         )
         return elapsed
 

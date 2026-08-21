@@ -6,6 +6,7 @@ Called from analyse_content ARQ job AFTER spaCy NER. Works on clean_text
 
 Pure functions — no DB, no I/O. Safe to unit-test without infrastructure.
 """
+
 from __future__ import annotations
 
 import re
@@ -31,12 +32,31 @@ class IdentifierMatch:
 # UPI bank suffixes (used to distinguish UPI from EMAIL)
 # ---------------------------------------------------------------------------
 
-UPI_BANK_SUFFIXES = frozenset({
-    "ybl", "paytm", "okaxis", "oksbi", "ibl", "upi", "axl",
-    "icici", "apl", "barodampay", "okhdfcbank", "okicici",
-    "jupiteraxis", "freecharge", "phonepe", "gpay", "postbank",
-    "sbi", "kotak", "indus", "federal",
-})
+UPI_BANK_SUFFIXES = frozenset(
+    {
+        "ybl",
+        "paytm",
+        "okaxis",
+        "oksbi",
+        "ibl",
+        "upi",
+        "axl",
+        "icici",
+        "apl",
+        "barodampay",
+        "okhdfcbank",
+        "okicici",
+        "jupiteraxis",
+        "freecharge",
+        "phonepe",
+        "gpay",
+        "postbank",
+        "sbi",
+        "kotak",
+        "indus",
+        "federal",
+    }
+)
 
 # ---------------------------------------------------------------------------
 # Compiled regex patterns
@@ -57,13 +77,13 @@ _RE_PHONE_IN = re.compile(
 # PHONE_INTL: international phone with explicit country code prefix
 # Country codes → expected subscriber digit lengths
 _INTL_PHONE_CODES: dict[str, tuple[int, ...]] = {
-    "86":  (11,),        # China
-    "852": (8,),         # Hong Kong
-    "971": (9,),         # UAE
-    "92":  (10,),        # Pakistan
-    "977": (10,),        # Nepal
-    "880": (10,),        # Bangladesh
-    "95":  (7, 8, 9),    # Myanmar
+    "86": (11,),  # China
+    "852": (8,),  # Hong Kong
+    "971": (9,),  # UAE
+    "92": (10,),  # Pakistan
+    "977": (10,),  # Nepal
+    "880": (10,),  # Bangladesh
+    "95": (7, 8, 9),  # Myanmar
 }
 
 _RE_PHONE_INTL = re.compile(
@@ -92,19 +112,13 @@ _RE_CRYPTO_BTC = re.compile(
 )
 
 # CRYPTO_ETH: 0x + exactly 40 hex chars
-_RE_CRYPTO_ETH = re.compile(
-    r"\b(0x[a-fA-F0-9]{40})\b"
-)
+_RE_CRYPTO_ETH = re.compile(r"\b(0x[a-fA-F0-9]{40})\b")
 
 # CRYPTO_TRC20: T + exactly 33 alphanumeric chars
-_RE_CRYPTO_TRC20 = re.compile(
-    r"\b(T[a-zA-Z0-9]{33})\b"
-)
+_RE_CRYPTO_TRC20 = re.compile(r"\b(T[a-zA-Z0-9]{33})\b")
 
 # SOCIAL HANDLES: @letter followed by 4-31 more alphanumeric/underscore chars
-_RE_SOCIAL_HANDLE = re.compile(
-    r"(?<!\w)@([a-zA-Z][a-zA-Z0-9_]{4,31})(?!\w)"
-)
+_RE_SOCIAL_HANDLE = re.compile(r"(?<!\w)@([a-zA-Z][a-zA-Z0-9_]{4,31})(?!\w)")
 
 # URL: http(s) URLs
 _RE_URL = re.compile(
@@ -148,27 +162,61 @@ _RE_SEBI_REG = re.compile(
 )
 
 # Phone context words — boost confidence when near phone number
-_PHONE_CONTEXT_WORDS = frozenset({
-    "call", "whatsapp", "ws", "phone", "mobile", "contact", "dial", "reach",
-    "sms", "text", "msg", "telegram", "signal", "number", "helpline",
-})
+_PHONE_CONTEXT_WORDS = frozenset(
+    {
+        "call",
+        "whatsapp",
+        "ws",
+        "phone",
+        "mobile",
+        "contact",
+        "dial",
+        "reach",
+        "sms",
+        "text",
+        "msg",
+        "telegram",
+        "signal",
+        "number",
+        "helpline",
+    }
+)
 
 # PAN context words — required to extract PAN (moderate FP risk)
-_PAN_CONTEXT_WORDS = frozenset({
-    "pan", "pan card", "income tax", "tax id", "permanent account",
-    "tax", "itr", "assessment",
-})
+_PAN_CONTEXT_WORDS = frozenset(
+    {
+        "pan",
+        "pan card",
+        "income tax",
+        "tax id",
+        "permanent account",
+        "tax",
+        "itr",
+        "assessment",
+    }
+)
 
 # Bank account context words — required (HIGH FP risk)
-_BANK_ACCOUNT_CONTEXT_WORDS = frozenset({
-    "account", "a/c", "ac no", "bank", "neft", "rtgs", "imps",
-    "beneficiary", "credit to", "transfer to",
-})
+_BANK_ACCOUNT_CONTEXT_WORDS = frozenset(
+    {
+        "account",
+        "a/c",
+        "ac no",
+        "bank",
+        "neft",
+        "rtgs",
+        "imps",
+        "beneficiary",
+        "credit to",
+        "transfer to",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
 # Normalization helpers
 # ---------------------------------------------------------------------------
+
 
 def _normalize_phone(raw: str) -> str:
     """Strip to 10 digits."""
@@ -182,8 +230,9 @@ def _normalize_phone(raw: str) -> str:
     return digits
 
 
-def _has_context(text: str, match_start: int, context_words: frozenset[str],
-                  window: int = 80) -> bool:
+def _has_context(
+    text: str, match_start: int, context_words: frozenset[str], window: int = 80
+) -> bool:
     """Check if match is near any of the context words."""
     start = max(0, match_start - window)
     end = min(len(text), match_start + window)
@@ -216,29 +265,102 @@ def _normalize_url_path(url: str) -> str:
 # Social platform domains → (identifier_type, noise_paths)
 # Path segment after domain = handle/page/profile name
 _SOCIAL_URL_DOMAINS: dict[str, tuple[str, frozenset[str]]] = {
-    "t.me": ("TELEGRAM_HANDLE", frozenset({
-        "s", "share", "joinchat", "addstickers",
-    })),
-    "facebook.com": ("FACEBOOK_HANDLE", frozenset({
-        "share", "sharer", "sharer.php", "dialog", "login", "help",
-        "privacy", "policies", "settings", "watch", "marketplace",
-        "groups", "events", "profile.php",
-    })),
-    "fb.com": ("FACEBOOK_HANDLE", frozenset({
-        "share", "sharer", "sharer.php", "dialog", "login", "help",
-    })),
-    "twitter.com": ("X_HANDLE", frozenset({
-        "share", "intent", "login", "i", "settings", "explore",
-        "search", "home", "tos", "privacy", "hashtag",
-    })),
-    "x.com": ("X_HANDLE", frozenset({
-        "share", "intent", "login", "i", "settings", "explore",
-        "search", "home", "tos", "privacy", "hashtag",
-    })),
-    "instagram.com": ("INSTAGRAM_HANDLE", frozenset({
-        "explore", "reels", "stories", "direct", "accounts",
-        "about", "legal", "p",
-    })),
+    "t.me": (
+        "TELEGRAM_HANDLE",
+        frozenset(
+            {
+                "s",
+                "share",
+                "joinchat",
+                "addstickers",
+            }
+        ),
+    ),
+    "facebook.com": (
+        "FACEBOOK_HANDLE",
+        frozenset(
+            {
+                "share",
+                "sharer",
+                "sharer.php",
+                "dialog",
+                "login",
+                "help",
+                "privacy",
+                "policies",
+                "settings",
+                "watch",
+                "marketplace",
+                "groups",
+                "events",
+                "profile.php",
+            }
+        ),
+    ),
+    "fb.com": (
+        "FACEBOOK_HANDLE",
+        frozenset(
+            {
+                "share",
+                "sharer",
+                "sharer.php",
+                "dialog",
+                "login",
+                "help",
+            }
+        ),
+    ),
+    "twitter.com": (
+        "X_HANDLE",
+        frozenset(
+            {
+                "share",
+                "intent",
+                "login",
+                "i",
+                "settings",
+                "explore",
+                "search",
+                "home",
+                "tos",
+                "privacy",
+                "hashtag",
+            }
+        ),
+    ),
+    "x.com": (
+        "X_HANDLE",
+        frozenset(
+            {
+                "share",
+                "intent",
+                "login",
+                "i",
+                "settings",
+                "explore",
+                "search",
+                "home",
+                "tos",
+                "privacy",
+                "hashtag",
+            }
+        ),
+    ),
+    "instagram.com": (
+        "INSTAGRAM_HANDLE",
+        frozenset(
+            {
+                "explore",
+                "reels",
+                "stories",
+                "direct",
+                "accounts",
+                "about",
+                "legal",
+                "p",
+            }
+        ),
+    ),
 }
 
 
@@ -251,7 +373,7 @@ def _normalize_phone_intl(raw: str) -> str | None:
     # Match against known country codes (longest first to avoid prefix collision)
     for code in sorted(_INTL_PHONE_CODES, key=len, reverse=True):
         if digits.startswith(code):
-            subscriber = digits[len(code):]
+            subscriber = digits[len(code) :]
             if len(subscriber) in _INTL_PHONE_CODES[code]:
                 return f"+{digits}"
             return None
@@ -260,7 +382,7 @@ def _normalize_phone_intl(raw: str) -> str | None:
 
 def _has_prefix(text: str, match_start: int) -> bool:
     """Check if phone match is preceded by +91 or standalone 0 trunk prefix."""
-    prefix_region = text[max(0, match_start - 5):match_start].strip()
+    prefix_region = text[max(0, match_start - 5) : match_start].strip()
     if "+91" in prefix_region:
         return True
     # Standalone 0 trunk prefix: "0" preceded by non-digit or start of region
@@ -273,6 +395,7 @@ def _has_prefix(text: str, match_start: int) -> bool:
 # ---------------------------------------------------------------------------
 # Main extraction function
 # ---------------------------------------------------------------------------
+
 
 def extract_identifiers(text: str, platform: str = "") -> list[IdentifierMatch]:
     """Extract actionable identifiers from text.
@@ -295,12 +418,14 @@ def extract_identifiers(text: str, platform: str = "") -> list[IdentifierMatch]:
         key = (id_type, normalized)
         if key not in seen:
             seen.add(key)
-            results.append(IdentifierMatch(
-                identifier_type=id_type,
-                raw_value=raw,
-                normalized_value=normalized,
-                confidence=confidence,
-            ))
+            results.append(
+                IdentifierMatch(
+                    identifier_type=id_type,
+                    raw_value=raw,
+                    normalized_value=normalized,
+                    confidence=confidence,
+                )
+            )
 
     # --- UPI (before EMAIL to mark UPI domains) ---
     upi_normalized: set[str] = set()

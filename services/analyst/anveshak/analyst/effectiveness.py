@@ -4,10 +4,10 @@ Weekly ARQ cron job that computes how effective each catalog source has been
 at producing intelligence that matters. Updates source_catalog with computed
 recommendation_rank and analytics scores.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, Optional
 
 import asyncpg
 import structlog
@@ -92,11 +92,7 @@ def compute_recommendation_rank(
         return "curated"
 
     # Check for low performer first (approved but bad relevance)
-    if (
-        relevance_hit_rate is not None
-        and relevance_hit_rate < 0.10
-        and signal_contributions == 0
-    ):
+    if relevance_hit_rate is not None and relevance_hit_rate < 0.10 and signal_contributions == 0:
         return "low_performer"
 
     if topics_approved >= 2 and signal_contributions >= 3:

@@ -10,12 +10,11 @@ Usage:
 Downloads real pre-trained weights from HuggingFace and exports to ONNX.
 Idempotent — skips if model files already exist.
 """
+
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
-
 
 # Default HF model repos — same as services/vision/anveshak/vision/settings.py
 DEFAULT_FACETORCH_HF_MODEL = "prithivMLmods/Deep-Fake-Detector-v2-Model"
@@ -35,7 +34,8 @@ def _download_facetorch_onnx(model_dir: Path, hf_model: str) -> Path:
     print(f"  Downloading {hf_model} ...")
 
     ort_model = ORTModelForImageClassification.from_pretrained(
-        hf_model, export=True,
+        hf_model,
+        export=True,
     )
     ort_model.save_pretrained(str(out_path.parent))
 
@@ -60,7 +60,8 @@ def _download_efficientnet_onnx(model_dir: Path, hf_model: str) -> Path:
     print(f"  Downloading {hf_model} ...")
 
     ort_model = ORTModelForImageClassification.from_pretrained(
-        hf_model, export=True,
+        hf_model,
+        export=True,
     )
     ort_model.save_pretrained(str(out_path.parent))
 

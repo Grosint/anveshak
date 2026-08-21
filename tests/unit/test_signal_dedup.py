@@ -3,22 +3,21 @@
 pytest.mark.unit — no external dependencies, no DB, no network.
 All functions under test are pure or use mock asyncpg connections.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, UTC
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
-
 from anveshak.analyst.signal_engine import (
     build_signal_payload,
     is_duplicate_signal,
 )
 
-
 # ---------------------------------------------------------------------------
 # build_signal_payload — pure function, no DB
 # ---------------------------------------------------------------------------
+
 
 class TestBuildSignalPayload:
     """Criteria 2.19: WebSocket message schema."""
@@ -57,6 +56,7 @@ class TestBuildSignalPayload:
 # is_duplicate_signal — async, uses mock asyncpg connection
 # ---------------------------------------------------------------------------
 
+
 class TestIsDuplicateSignal:
     """Criteria 2.13: same cluster_id + signal_type within 24h → duplicate."""
 
@@ -80,6 +80,7 @@ class TestIsDuplicateSignal:
     async def test_different_cluster_not_duplicate(self):
         """Signals for different clusters are independent."""
         call_count = 0
+
         async def mock_fetchrow(sql, cluster_id, signal_type):
             nonlocal call_count
             call_count += 1

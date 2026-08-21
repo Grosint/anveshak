@@ -2,10 +2,10 @@
 
 pytest.mark.unit — pure Python, no DB/network.
 """
+
 from __future__ import annotations
 
 import pytest
-
 
 pytestmark = pytest.mark.unit
 
@@ -166,7 +166,6 @@ class TestGeocodeInPipeline:
 
     async def test_geocode_step_called_after_ner(self):
         """analyse_content must call geocode_and_store for location entities."""
-        from unittest.mock import patch, AsyncMock, MagicMock
 
         # The geocode_and_store function should exist and be called from jobs
         from anveshak.analyst.geocoding import geocode_entities

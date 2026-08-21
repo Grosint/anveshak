@@ -4,8 +4,11 @@ is_quality_content returns (passed: bool, gate: str) tuples where:
 - passed: True if content is good for embedding, False if rejected
 - gate: 'too_short', 'few_words', 'unique_ratio', 'punctuation', or 'passed'
 """
-import pytest
+
 from unittest.mock import patch
+
+import pytest
+from anveshak.analyst.content_quality import is_quality_content
 
 
 @pytest.fixture(autouse=True)
@@ -16,9 +19,6 @@ def _default_settings():
         mock.content_min_unique_word_ratio = 0.4
         mock.content_max_punctuation_ratio = 0.3
         yield mock
-
-
-from anveshak.analyst.content_quality import is_quality_content
 
 
 class TestIsQualityContent:
@@ -109,7 +109,9 @@ class TestIsQualityContent:
         """Exactly at the threshold — unique_ratio = 0.4 should pass."""
         # 10 words, 4 unique = 0.4 ratio
         words = ["alpha", "beta", "gamma", "delta"] + ["alpha"] * 3 + ["beta"] * 3
-        text = " ".join(words) + " extra filler content to reach the minimum length threshold needed"
+        text = (
+            " ".join(words) + " extra filler content to reach the minimum length threshold needed"
+        )
         passed, gate = is_quality_content(text)
         assert isinstance(passed, bool)
         assert gate in ("passed", "unique_ratio")

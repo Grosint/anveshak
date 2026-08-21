@@ -1,9 +1,10 @@
 """Keyword alert rules repository — all SQL for alert CRUD and triggers."""
+
 from __future__ import annotations
 
 from typing import Any
 
-import asyncpg
+from anveshak.db import DBConnection
 
 SQL_LIST_RULES = """
     SELECT id, topic_id, keywords, match_mode, is_active,
@@ -62,18 +63,18 @@ SQL_LIST_TRIGGERS = """
 """
 
 
-async def list_rules(conn: asyncpg.Connection, topic_id: str) -> list[dict[str, Any]]:
+async def list_rules(conn: DBConnection, topic_id: str) -> list[dict[str, Any]]:
     rows = await conn.fetch(SQL_LIST_RULES, topic_id)
     return [dict(r) for r in rows]
 
 
-async def get_rule(conn: asyncpg.Connection, rule_id: str) -> dict[str, Any] | None:
+async def get_rule(conn: DBConnection, rule_id: str) -> dict[str, Any] | None:
     row = await conn.fetchrow(SQL_GET_RULE, rule_id)
     return dict(row) if row else None
 
 
 async def create_rule(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     rule_id: str,
     topic_id: str,
     keywords: list[str],
@@ -84,14 +85,26 @@ async def create_rule(
 ) -> str:
     row = await conn.fetchrow(
         SQL_INSERT_RULE,
-        rule_id, topic_id, keywords, match_mode, True, True,
-        created_by, org_id, now, now,
+        rule_id,
+        topic_id,
+        keywords,
+        match_mode,
+        True,
+        True,
+        created_by,
+        org_id,
+        now,
+        now,
     )
+    if row is None:
+        # SQL_INSERT_RULE is INSERT ... RETURNING with no ON CONFLICT, so this is
+        # unreachable: asyncpg raises on failure rather than returning None.
+        raise RuntimeError(f"keyword alert rule insert returned no row: {rule_id}")
     return row["id"]
 
 
 async def update_rule(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     rule_id: str,
     keywords: list[str] | None = None,
     match_mode: str | None = None,
@@ -101,13 +114,13 @@ async def update_rule(
     return dict(row) if row else None
 
 
-async def delete_rule(conn: asyncpg.Connection, rule_id: str) -> bool:
+async def delete_rule(conn: DBConnection, rule_id: str) -> bool:
     row = await conn.fetchrow(SQL_DELETE_RULE, rule_id)
     return row is not None
 
 
 async def list_triggers(
-    conn: asyncpg.Connection, topic_id: str, limit: int = 50, offset: int = 0
+    conn: DBConnection, topic_id: str, limit: int = 50, offset: int = 0
 ) -> list[dict[str, Any]]:
     rows = await conn.fetch(SQL_LIST_TRIGGERS, topic_id, limit, offset)
     return [

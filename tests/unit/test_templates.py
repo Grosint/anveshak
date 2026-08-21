@@ -11,11 +11,11 @@ Tests cover:
 - Edge cases: empty inputs, no templates, no matches
 - Per-template positive/negative: each of 11 built-in templates
 """
+
 from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from anveshak.analyst.templates import (
     BUILTIN_TEMPLATES,
     ScamTemplate,
@@ -23,10 +23,10 @@ from anveshak.analyst.templates import (
     match_templates,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _unit_vec(dim: int = 384, seed: int = 42) -> list[float]:
     """Return a deterministic L2-normalized vector."""
@@ -64,6 +64,7 @@ def _make_template(**overrides) -> ScamTemplate:
 # ============================================================================
 # 1. Data model tests
 # ============================================================================
+
 
 class TestScamTemplateModel:
     """ScamTemplate dataclass shape and immutability."""
@@ -114,9 +115,13 @@ class TestTemplateMatchModel:
 
     def test_frozen(self):
         m = TemplateMatch(
-            template_name="x", template_display="X",
-            confidence=0.5, matched_keywords=[], matched_identifier_types=[],
-            legal_sections=[], severity="LOW",
+            template_name="x",
+            template_display="X",
+            confidence=0.5,
+            matched_keywords=[],
+            matched_identifier_types=[],
+            legal_sections=[],
+            severity="LOW",
         )
         with pytest.raises(AttributeError):
             m.confidence = 0.9  # type: ignore[misc]
@@ -125,6 +130,7 @@ class TestTemplateMatchModel:
 # ============================================================================
 # 2. Built-in templates
 # ============================================================================
+
 
 class TestBuiltinTemplates:
     """11 built-in templates with valid fields."""
@@ -143,10 +149,16 @@ class TestBuiltinTemplates:
     def test_expected_names(self):
         names = {t.name for t in BUILTIN_TEMPLATES}
         expected = {
-            "investment_fraud", "mule_recruitment", "maas",
-            "digital_arrest", "job_fraud", "pump_and_dump",
-            "fake_research_report", "drug_sale",
-            "drug_delivery_recruitment", "fake_sim_sale",
+            "investment_fraud",
+            "mule_recruitment",
+            "maas",
+            "digital_arrest",
+            "job_fraud",
+            "pump_and_dump",
+            "fake_research_report",
+            "drug_sale",
+            "drug_delivery_recruitment",
+            "fake_sim_sale",
             "crypto_cashout",
         }
         assert names == expected
@@ -168,8 +180,9 @@ class TestBuiltinTemplates:
     def test_min_keyword_hits_positive(self):
         for t in BUILTIN_TEMPLATES:
             assert t.min_keyword_hits >= 1, f"{t.name} min_keyword_hits < 1"
-            assert t.min_keyword_hits <= len(t.keywords), \
+            assert t.min_keyword_hits <= len(t.keywords), (
                 f"{t.name} min_keyword_hits > len(keywords)"
+            )
 
     def test_legal_sections_present(self):
         for t in BUILTIN_TEMPLATES:
@@ -195,6 +208,7 @@ class TestBuiltinTemplates:
 # 3. Keyword scoring
 # ============================================================================
 
+
 class TestKeywordScoring:
     """Keyword overlap and min_keyword_hits gate."""
 
@@ -210,8 +224,11 @@ class TestKeywordScoring:
         assert result.confidence >= 0.5
 
     def test_partial_keywords_above_min(self):
-        t = _make_template(keywords=["fraud", "money", "send", "account", "urgent"],
-                           min_keyword_hits=3, expected_identifiers=[])
+        t = _make_template(
+            keywords=["fraud", "money", "send", "account", "urgent"],
+            min_keyword_hits=3,
+            expected_identifiers=[],
+        )
         result = match_templates(
             content_keywords={"fraud", "money", "send"},
             identifier_types=set(),
@@ -223,8 +240,9 @@ class TestKeywordScoring:
         # confidence = 0.6 * 0.6 + 0.4 * 1.0 = 0.76
 
     def test_below_min_keyword_hits_rejected(self):
-        t = _make_template(keywords=["fraud", "money", "send", "account", "urgent"],
-                           min_keyword_hits=3)
+        t = _make_template(
+            keywords=["fraud", "money", "send", "account", "urgent"], min_keyword_hits=3
+        )
         result = match_templates(
             content_keywords={"fraud", "money"},  # only 2, min is 3
             identifier_types=set(),
@@ -244,8 +262,11 @@ class TestKeywordScoring:
         assert result is None
 
     def test_matched_keywords_in_result(self):
-        t = _make_template(keywords=["fraud", "money", "send", "account", "urgent"],
-                           min_keyword_hits=2, expected_identifiers=[])
+        t = _make_template(
+            keywords=["fraud", "money", "send", "account", "urgent"],
+            min_keyword_hits=2,
+            expected_identifiers=[],
+        )
         result = match_templates(
             content_keywords={"fraud", "money", "send"},
             identifier_types=set(),
@@ -256,8 +277,7 @@ class TestKeywordScoring:
         assert set(result.matched_keywords) == {"fraud", "money", "send"}
 
     def test_case_insensitive_keyword_match(self):
-        t = _make_template(keywords=["fraud", "money"], min_keyword_hits=2,
-                           expected_identifiers=[])
+        t = _make_template(keywords=["fraud", "money"], min_keyword_hits=2, expected_identifiers=[])
         result = match_templates(
             content_keywords={"FRAUD", "MONEY"},
             identifier_types=set(),
@@ -270,6 +290,7 @@ class TestKeywordScoring:
 # ============================================================================
 # 4. Identifier scoring
 # ============================================================================
+
 
 class TestIdentifierScoring:
     """Expected vs extracted identifier types."""
@@ -344,6 +365,7 @@ class TestIdentifierScoring:
 # ============================================================================
 # 5. Embedding similarity
 # ============================================================================
+
 
 class TestEmbeddingSimilarity:
     """Cosine similarity with reference embedding."""
@@ -420,8 +442,16 @@ class TestEmbeddingSimilarity:
         ref = _unit_vec(seed=42)
         content_emb = _perturb(ref, noise=0.01, seed=99)  # very close
         t = _make_template(
-            keywords=["fraud", "money", "send", "account", "urgent",
-                       "transfer", "bank", "commission"],
+            keywords=[
+                "fraud",
+                "money",
+                "send",
+                "account",
+                "urgent",
+                "transfer",
+                "bank",
+                "commission",
+            ],
             min_keyword_hits=2,
             expected_identifiers=["PHONE_IN", "UPI", "CRYPTO_BTC"],
             reference_embedding=ref,
@@ -443,6 +473,7 @@ class TestEmbeddingSimilarity:
 # ============================================================================
 # 6. Confidence formula
 # ============================================================================
+
 
 class TestConfidenceFormula:
     """confidence = max(0.6*kw + 0.4*id, emb)."""
@@ -524,19 +555,24 @@ class TestConfidenceFormula:
 # 7. Match selection
 # ============================================================================
 
+
 class TestMatchSelection:
     """Highest-confidence match wins."""
 
     def test_highest_confidence_selected(self):
         low = _make_template(
-            name="low_match", display="Low",
+            name="low_match",
+            display="Low",
             keywords=["a", "b", "c", "d", "e"],
-            min_keyword_hits=2, expected_identifiers=[],
+            min_keyword_hits=2,
+            expected_identifiers=[],
         )
         high = _make_template(
-            name="high_match", display="High",
+            name="high_match",
+            display="High",
             keywords=["a", "b", "c"],
-            min_keyword_hits=2, expected_identifiers=[],
+            min_keyword_hits=2,
+            expected_identifiers=[],
         )
         result = match_templates(
             content_keywords={"a", "b", "c"},
@@ -551,12 +587,20 @@ class TestMatchSelection:
 
     def test_single_template_returned(self):
         """Even with multiple matches, only ONE result returned."""
-        t1 = _make_template(name="t1", display="T1",
-                            keywords=["a", "b"], min_keyword_hits=2,
-                            expected_identifiers=[])
-        t2 = _make_template(name="t2", display="T2",
-                            keywords=["a", "b", "c"], min_keyword_hits=2,
-                            expected_identifiers=[])
+        t1 = _make_template(
+            name="t1",
+            display="T1",
+            keywords=["a", "b"],
+            min_keyword_hits=2,
+            expected_identifiers=[],
+        )
+        t2 = _make_template(
+            name="t2",
+            display="T2",
+            keywords=["a", "b", "c"],
+            min_keyword_hits=2,
+            expected_identifiers=[],
+        )
         result = match_templates(
             content_keywords={"a", "b", "c"},
             identifier_types=set(),
@@ -568,8 +612,10 @@ class TestMatchSelection:
 
     def test_legal_sections_from_matched_template(self):
         t = _make_template(
-            keywords=["a", "b", "c"], min_keyword_hits=2,
-            expected_identifiers=[], legal_sections=["PMLA Section 3"],
+            keywords=["a", "b", "c"],
+            min_keyword_hits=2,
+            expected_identifiers=[],
+            legal_sections=["PMLA Section 3"],
         )
         result = match_templates(
             content_keywords={"a", "b", "c"},
@@ -582,8 +628,10 @@ class TestMatchSelection:
 
     def test_severity_from_matched_template(self):
         t = _make_template(
-            keywords=["a", "b", "c"], min_keyword_hits=2,
-            expected_identifiers=[], severity="CRITICAL",
+            keywords=["a", "b", "c"],
+            min_keyword_hits=2,
+            expected_identifiers=[],
+            severity="CRITICAL",
         )
         result = match_templates(
             content_keywords={"a", "b", "c"},
@@ -598,6 +646,7 @@ class TestMatchSelection:
 # ============================================================================
 # 8. Edge cases
 # ============================================================================
+
 
 class TestEdgeCases:
     """Empty inputs, no templates, graceful handling."""
@@ -656,13 +705,20 @@ class TestEdgeCases:
 # 9. Per-template positive/negative tests (11 templates)
 # ============================================================================
 
-class TestInvestmentFraud:
 
+class TestInvestmentFraud:
     def test_positive_match(self):
         templates = BUILTIN_TEMPLATES
         result = match_templates(
-            content_keywords={"invest", "guaranteed", "returns", "profit",
-                              "double", "money", "daily"},
+            content_keywords={
+                "invest",
+                "guaranteed",
+                "returns",
+                "profit",
+                "double",
+                "money",
+                "daily",
+            },
             identifier_types={"PHONE_IN", "UPI"},
             content_embedding=None,
             templates=templates,
@@ -682,12 +738,18 @@ class TestInvestmentFraud:
 
 
 class TestMuleRecruitment:
-
     def test_positive_match(self):
         templates = BUILTIN_TEMPLATES
         result = match_templates(
-            content_keywords={"bank", "account", "commission", "per transaction",
-                              "easy money", "salary", "income"},
+            content_keywords={
+                "bank",
+                "account",
+                "commission",
+                "per transaction",
+                "easy money",
+                "salary",
+                "income",
+            },
             identifier_types={"PHONE_IN", "TELEGRAM_HANDLE"},
             content_embedding=None,
             templates=templates,
@@ -697,12 +759,18 @@ class TestMuleRecruitment:
 
 
 class TestMaas:
-
     def test_positive_match(self):
         templates = BUILTIN_TEMPLATES
         result = match_templates(
-            content_keywords={"account", "rent", "bank account",
-                              "monthly", "payment", "kyc", "documents"},
+            content_keywords={
+                "account",
+                "rent",
+                "bank account",
+                "monthly",
+                "payment",
+                "kyc",
+                "documents",
+            },
             identifier_types={"PHONE_IN", "UPI"},
             content_embedding=None,
             templates=templates,
@@ -712,12 +780,10 @@ class TestMaas:
 
 
 class TestDigitalArrest:
-
     def test_positive_match(self):
         templates = BUILTIN_TEMPLATES
         result = match_templates(
-            content_keywords={"police", "arrest", "warrant", "case",
-                              "legal", "pay", "fine"},
+            content_keywords={"police", "arrest", "warrant", "case", "legal", "pay", "fine"},
             identifier_types={"PHONE_IN"},
             content_embedding=None,
             templates=templates,
@@ -727,12 +793,18 @@ class TestDigitalArrest:
 
 
 class TestJobFraud:
-
     def test_positive_match(self):
         templates = BUILTIN_TEMPLATES
         result = match_templates(
-            content_keywords={"job", "work from home", "salary",
-                              "hiring", "vacancy", "apply", "registration fee"},
+            content_keywords={
+                "job",
+                "work from home",
+                "salary",
+                "hiring",
+                "vacancy",
+                "apply",
+                "registration fee",
+            },
             identifier_types={"PHONE_IN", "UPI"},
             content_embedding=None,
             templates=templates,
@@ -742,12 +814,18 @@ class TestJobFraud:
 
 
 class TestPumpAndDump:
-
     def test_positive_match(self):
         templates = BUILTIN_TEMPLATES
         result = match_templates(
-            content_keywords={"stock", "buy", "target", "multibagger",
-                              "tip", "profit", "guaranteed"},
+            content_keywords={
+                "stock",
+                "buy",
+                "target",
+                "multibagger",
+                "tip",
+                "profit",
+                "guaranteed",
+            },
             identifier_types={"PHONE_IN", "TELEGRAM_HANDLE"},
             content_embedding=None,
             templates=templates,
@@ -757,12 +835,18 @@ class TestPumpAndDump:
 
 
 class TestFakeResearchReport:
-
     def test_positive_match(self):
         templates = BUILTIN_TEMPLATES
         result = match_templates(
-            content_keywords={"research", "report", "analyst",
-                              "target price", "buy", "strong buy", "recommendation"},
+            content_keywords={
+                "research",
+                "report",
+                "analyst",
+                "target price",
+                "buy",
+                "strong buy",
+                "recommendation",
+            },
             identifier_types={"TELEGRAM_HANDLE"},
             content_embedding=None,
             templates=templates,
@@ -772,12 +856,10 @@ class TestFakeResearchReport:
 
 
 class TestDrugSale:
-
     def test_positive_match(self):
         templates = BUILTIN_TEMPLATES
         result = match_templates(
-            content_keywords={"maal", "stuff", "delivery", "gram",
-                              "pure", "quality", "available"},
+            content_keywords={"maal", "stuff", "delivery", "gram", "pure", "quality", "available"},
             identifier_types={"PHONE_IN", "TELEGRAM_HANDLE"},
             content_embedding=None,
             templates=templates,
@@ -787,12 +869,10 @@ class TestDrugSale:
 
 
 class TestDrugDeliveryRecruitment:
-
     def test_positive_match(self):
         templates = BUILTIN_TEMPLATES
         result = match_templates(
-            content_keywords={"delivery", "driver", "parcel",
-                              "pickup", "drop", "payment", "cash"},
+            content_keywords={"delivery", "driver", "parcel", "pickup", "drop", "payment", "cash"},
             identifier_types={"PHONE_IN"},
             content_embedding=None,
             templates=templates,
@@ -802,12 +882,18 @@ class TestDrugDeliveryRecruitment:
 
 
 class TestFakeSimSale:
-
     def test_positive_match(self):
         templates = BUILTIN_TEMPLATES
         result = match_templates(
-            content_keywords={"sim", "sim card", "pre-activated",
-                              "bulk", "no kyc", "available", "whatsapp"},
+            content_keywords={
+                "sim",
+                "sim card",
+                "pre-activated",
+                "bulk",
+                "no kyc",
+                "available",
+                "whatsapp",
+            },
             identifier_types={"PHONE_IN", "TELEGRAM_HANDLE"},
             content_embedding=None,
             templates=templates,
@@ -817,12 +903,10 @@ class TestFakeSimSale:
 
 
 class TestCryptoCashout:
-
     def test_positive_match(self):
         templates = BUILTIN_TEMPLATES
         result = match_templates(
-            content_keywords={"usdt", "cash", "convert", "rate",
-                              "exchange", "crypto", "withdraw"},
+            content_keywords={"usdt", "cash", "convert", "rate", "exchange", "crypto", "withdraw"},
             identifier_types={"CRYPTO_TRC20", "TELEGRAM_HANDLE"},
             content_embedding=None,
             templates=templates,

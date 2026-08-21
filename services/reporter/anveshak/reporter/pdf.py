@@ -1,12 +1,13 @@
 """PDF generation for intelligence reports.
 
 Uses WeasyPrint (HTML → PDF) with inline Jinja2 HTML templates.
-CLAUDE.md rule 6: hardware independence — no hardcoded model/device choices here.
+AGENTS.md rule 6: hardware independence — no hardcoded model/device choices here.
 
 Two templates:
 - PDF_TEMPLATE_V1: legacy LLM-dependent reports (backward compat)
 - PDF_TEMPLATE_V2: GROSINT-branded data-driven reports
 """
+
 from __future__ import annotations
 
 import os
@@ -26,6 +27,7 @@ log = structlog.get_logger(__name__)
 class PDFGenerationError(Exception):
     """Raised when PDF generation fails (WeasyPrint, disk I/O, etc.)."""
 
+
 # ---------------------------------------------------------------------------
 # Jinja2 environment
 # ---------------------------------------------------------------------------
@@ -35,6 +37,7 @@ _env = Environment(undefined=Undefined, autoescape=True)
 def _format_timestamp(value: str | object) -> str:
     """Format a timestamp string or datetime to 'DD Mon YYYY, HH:MM UTC'."""
     from datetime import datetime as _dt
+
     if not value:
         return "N/A"
     if isinstance(value, _dt):
@@ -238,7 +241,8 @@ PDF_TEMPLATE_V1 = """\
 # ---------------------------------------------------------------------------
 # V2 template — GROSINT branded, data-driven
 # ---------------------------------------------------------------------------
-PDF_TEMPLATE_V2 = """\
+PDF_TEMPLATE_V2 = (
+    """\
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -409,7 +413,9 @@ PDF_TEMPLATE_V2 = """\
 <div class="top-rule"></div>
 <div class="hdr">
   <div class="hdr-left">
-    """ + _ANVESHAK_ICON_SVG + """
+    """
+    + _ANVESHAK_ICON_SVG
+    + """
     <span class="wordmark" style="margin-left: 3mm;"><span>AN</span>VESHAK</span>
     <div class="subtitle">Open Source Intelligence Platform</div>
   </div>
@@ -667,6 +673,7 @@ PDF_TEMPLATE_V2 = """\
 </body>
 </html>
 """
+)
 
 # Pre-compile templates
 _COMPILED_V1 = _env.from_string(PDF_TEMPLATE_V1)
@@ -676,6 +683,7 @@ _COMPILED_V2 = _env.from_string(PDF_TEMPLATE_V2)
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def render_pdf_html(report_data: dict[str, Any]) -> str:
     """Render the Jinja2 HTML template for a given report data dict.
@@ -707,6 +715,7 @@ async def generate_pdf(
     global HTML  # noqa: PLW0603
     if HTML is None:
         from weasyprint import HTML as _HTML  # type: ignore[import]
+
         HTML = _HTML
 
     pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -718,8 +727,6 @@ async def generate_pdf(
         HTML(string=html_content).write_pdf(pdf_path)
     except Exception as exc:
         log.error("reporter.pdf_generation_failed", report_id=report_id, error=str(exc))
-        raise PDFGenerationError(
-            f"PDF generation failed for report {report_id}: {exc}"
-        ) from exc
+        raise PDFGenerationError(f"PDF generation failed for report {report_id}: {exc}") from exc
     log.info("reporter.pdf_written", report_id=report_id, path=pdf_path)
     return pdf_path

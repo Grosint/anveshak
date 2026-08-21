@@ -1,7 +1,8 @@
 """Text normalisation and content hash computation.
 
-SHA-256 of normalised clean_text is the mandatory deduplication key (CLAUDE.md rule 3).
+SHA-256 of normalised clean_text is the mandatory deduplication key (AGENTS.md rule 3).
 """
+
 import hashlib
 import re
 
@@ -9,7 +10,7 @@ import re
 def normalise_text(text: str) -> str:
     """Lowercase and collapse whitespace — canonical form for content hashing."""
     text = text.lower()
-    text = re.sub(r'\s+', ' ', text)
+    text = re.sub(r"\s+", " ", text)
     return text.strip()
 
 

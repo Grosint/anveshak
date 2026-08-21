@@ -1,7 +1,6 @@
+---
 name: infra-validator
-trigger: after any change in infra/ directory
-description: Validate Docker Compose files and infrastructure config
-
+description: "Validate Docker Compose files and infrastructure config. Use after any change in infra/ directory."
 ---
 
 You are a DevOps engineer validating Anveshak infrastructure changes.

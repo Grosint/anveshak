@@ -8,6 +8,7 @@ No JWT required — external systems POST directly.
 
 Rate limiting: 100 requests/minute per API key (middleware).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -15,8 +16,8 @@ import re
 import uuid
 from typing import Optional
 
-import asyncpg
 import structlog
+from anveshak.db import DBConnection
 from arq import ArqRedis
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -32,8 +33,10 @@ router = APIRouter(prefix="/api/v1/tipline", tags=["tipline"])
 # Pydantic models
 # ---------------------------------------------------------------------------
 
+
 class TiplineIngestRequest(BaseModel):
     """Citizen-forwarded scam message."""
+
     model_config = ConfigDict(strict=True)
 
     text: str = Field(..., min_length=1, description="Forwarded message content")
@@ -47,12 +50,13 @@ class TiplineIngestRequest(BaseModel):
             "domain": "tipline",
             "owner_org": "anveshak",
         },
-        description="Labels (mandatory per CLAUDE.md)",
+        description="Labels (mandatory per AGENTS.md)",
     )
 
 
 class TiplineIngestResponse(BaseModel):
     """Response after tipline content ingestion."""
+
     model_config = ConfigDict(strict=True)
 
     id: str
@@ -64,6 +68,7 @@ class TiplineIngestResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _normalise(text: str) -> str:
     """Lowercase + collapse whitespace."""
@@ -79,6 +84,7 @@ def _compute_hash(text: str) -> str:
 # ARQ pool dependency
 # ---------------------------------------------------------------------------
 
+
 def _get_arq_pool(request: Request) -> ArqRedis:
     """Inject ARQ pool from app state."""
     return request.app.state.arq_pool
@@ -88,11 +94,12 @@ def _get_arq_pool(request: Request) -> ArqRedis:
 # Route
 # ---------------------------------------------------------------------------
 
+
 @router.post("/ingest", response_model=TiplineIngestResponse)
 async def ingest_tipline(
     body: TiplineIngestRequest,
     request: Request,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     arq_pool: ArqRedis = Depends(_get_arq_pool),
 ) -> TiplineIngestResponse:
     """Ingest a citizen-forwarded scam message.

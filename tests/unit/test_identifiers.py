@@ -8,10 +8,10 @@ Tests 16 identifier types:
 Each type has: positive match, negative/false-positive, normalization, edge case.
 Pure unit tests — no DB, no I/O.
 """
+
 from __future__ import annotations
 
 import pytest
-
 from anveshak.analyst.identifiers import IdentifierMatch, extract_identifiers
 
 pytestmark = pytest.mark.unit
@@ -20,6 +20,7 @@ pytestmark = pytest.mark.unit
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
+
 
 def _types(results: list[IdentifierMatch]) -> set[str]:
     return {r.identifier_type for r in results}
@@ -73,7 +74,9 @@ class TestPhoneIN:
         results = extract_identifiers(text)
         phones = [r for r in results if r.identifier_type == "PHONE_IN"]
         if phones:
-            assert phones[0].confidence < 0.9, "Bare number without context should have lower confidence"
+            assert phones[0].confidence < 0.9, (
+                "Bare number without context should have lower confidence"
+            )
 
     def test_phone_near_context_word_higher_confidence(self):
         """Phone near 'call'/'WhatsApp' = higher confidence."""
@@ -424,7 +427,7 @@ class TestCryptoTRC20:
         results = extract_identifiers(text)
         assert "CRYPTO_TRC20" not in _types(results)
 
-    def test_trc20_rejects_non_T_start(self):
+    def test_trc20_rejects_non_t_start(self):
         """Must start with T."""
         text = "AJYeasTPa8dGTLi7rWCvFzEQdmGSMH4XsH"
         results = extract_identifiers(text)
@@ -484,8 +487,11 @@ class TestTelegramHandle:
         text = f"Join {handle}"
         results = extract_identifiers(text)
         # Should not match the oversized handle
-        tg = [r for r in results if r.identifier_type == "TELEGRAM_HANDLE"
-              and len(r.normalized_value) > 32]
+        tg = [
+            r
+            for r in results
+            if r.identifier_type == "TELEGRAM_HANDLE" and len(r.normalized_value) > 32
+        ]
         assert len(tg) == 0
 
 
@@ -670,10 +676,10 @@ class TestURLDomain:
         """https://t.me/username should extract as TELEGRAM_HANDLE, NOT URL_DOMAIN."""
         text = "Join https://t.me/defencenews for updates"
         results = extract_identifiers(text)
-        assert "t.me" not in _values(results, "URL_DOMAIN"), \
-            "t.me must NOT appear as URL_DOMAIN"
-        assert "defencenews" in _values(results, "TELEGRAM_HANDLE"), \
+        assert "t.me" not in _values(results, "URL_DOMAIN"), "t.me must NOT appear as URL_DOMAIN"
+        assert "defencenews" in _values(results, "TELEGRAM_HANDLE"), (
             "Telegram URL path must be extracted as TELEGRAM_HANDLE"
+        )
 
     def test_normal_url_still_extracts_url_domain(self):
         """Non-social URLs must still extract as URL_DOMAIN with full path."""
@@ -699,8 +705,9 @@ class TestURLDomain:
         """https://facebook.com/scammerpage → FACEBOOK_HANDLE, not URL_DOMAIN."""
         text = "Check https://facebook.com/scammerpage for evidence"
         results = extract_identifiers(text)
-        assert "facebook.com" not in _values(results, "URL_DOMAIN"), \
+        assert "facebook.com" not in _values(results, "URL_DOMAIN"), (
             "facebook.com must NOT appear as URL_DOMAIN"
+        )
         assert "scammerpage" in _values(results, "FACEBOOK_HANDLE")
 
     def test_facebook_www_url_extracts_handle(self):
@@ -720,8 +727,9 @@ class TestURLDomain:
         for noise in ("share", "sharer", "login", "help", "settings", "marketplace"):
             text = f"https://facebook.com/{noise}"
             results = extract_identifiers(text)
-            assert noise not in _values(results, "FACEBOOK_HANDLE"), \
+            assert noise not in _values(results, "FACEBOOK_HANDLE"), (
                 f"Facebook noise path '{noise}' should not be extracted as handle"
+            )
 
     def test_facebook_profile_subpath(self):
         """facebook.com/profile.php?id=123 → skip (no clean handle)."""
@@ -736,8 +744,9 @@ class TestURLDomain:
         """https://twitter.com/fraudster → X_HANDLE."""
         text = "Follow https://twitter.com/fraudster for updates"
         results = extract_identifiers(text)
-        assert "twitter.com" not in _values(results, "URL_DOMAIN"), \
+        assert "twitter.com" not in _values(results, "URL_DOMAIN"), (
             "twitter.com must NOT appear as URL_DOMAIN"
+        )
         assert "fraudster" in _values(results, "X_HANDLE")
 
     def test_x_com_url_extracts_handle(self):
@@ -751,8 +760,9 @@ class TestURLDomain:
         for noise in ("intent", "login", "explore", "search", "settings", "home"):
             text = f"https://x.com/{noise}"
             results = extract_identifiers(text)
-            assert noise not in _values(results, "X_HANDLE"), \
+            assert noise not in _values(results, "X_HANDLE"), (
                 f"X noise path '{noise}' should not be extracted as handle"
+            )
 
     def test_x_hashtag_path_skipped(self):
         """x.com/hashtag/whatever → no handle."""
@@ -766,8 +776,9 @@ class TestURLDomain:
         """https://instagram.com/fakeshop → INSTAGRAM_HANDLE."""
         text = "Buy from https://instagram.com/fakeshop"
         results = extract_identifiers(text)
-        assert "instagram.com" not in _values(results, "URL_DOMAIN"), \
+        assert "instagram.com" not in _values(results, "URL_DOMAIN"), (
             "instagram.com must NOT appear as URL_DOMAIN"
+        )
         assert "fakeshop" in _values(results, "INSTAGRAM_HANDLE")
 
     def test_instagram_www_url_extracts_handle(self):
@@ -781,8 +792,9 @@ class TestURLDomain:
         for noise in ("explore", "reels", "stories", "accounts", "about"):
             text = f"https://instagram.com/{noise}"
             results = extract_identifiers(text)
-            assert noise not in _values(results, "INSTAGRAM_HANDLE"), \
+            assert noise not in _values(results, "INSTAGRAM_HANDLE"), (
                 f"Instagram noise path '{noise}' should not be extracted as handle"
+            )
 
     def test_instagram_post_path_skipped(self):
         """instagram.com/p/ABC123 → skip (p is noise, not a handle)."""
@@ -1115,10 +1127,23 @@ class TestCrossCuttingPart2:
         results = extract_identifiers(text, platform="telegram")
         types = _types(results)
         expected = {
-            "PHONE_IN", "PHONE_INTL", "UPI", "EMAIL", "CRYPTO_BTC",
-            "CRYPTO_ETH", "CRYPTO_TRC20", "TELEGRAM_HANDLE", "URL_DOMAIN",
-            "FACEBOOK_HANDLE", "X_HANDLE",
-            "GSTIN", "UDYAM", "PAN", "IFSC", "BANK_ACCOUNT", "SEBI_REG",
+            "PHONE_IN",
+            "PHONE_INTL",
+            "UPI",
+            "EMAIL",
+            "CRYPTO_BTC",
+            "CRYPTO_ETH",
+            "CRYPTO_TRC20",
+            "TELEGRAM_HANDLE",
+            "URL_DOMAIN",
+            "FACEBOOK_HANDLE",
+            "X_HANDLE",
+            "GSTIN",
+            "UDYAM",
+            "PAN",
+            "IFSC",
+            "BANK_ACCOUNT",
+            "SEBI_REG",
         }
         missing = expected - types
         assert not missing, f"Missing types: {missing}"

@@ -3,9 +3,10 @@
 Critical fix: verify that robots.txt is checked BEFORE both Crawl4AI
 and trafilatura paths, not just inside Crawl4AI.
 """
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -21,7 +22,11 @@ class TestRobotsTxtFallbackEnforcement:
         from anveshak.scraper.fetch import fetch_url
 
         with (
-            patch("anveshak.scraper.fetch.check_robots_allowed", new_callable=AsyncMock, return_value=True) as mock_robots,
+            patch(
+                "anveshak.scraper.fetch.check_robots_allowed",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
             patch("anveshak.scraper.fetch.create_shared_crawler") as mock_crawler_ctx,
             patch("anveshak.scraper.fetch._trafilatura_fetch", new_callable=AsyncMock) as mock_traf,
         ):
@@ -58,12 +63,15 @@ class TestRobotsTxtFallbackEnforcement:
         """When robots.txt blocks a URL, fetch must return None."""
         from anveshak.scraper.fetch import check_robots_allowed
 
-        with patch("anveshak.scraper.fetch._fetch_robots_txt", new_callable=AsyncMock) as mock_fetch:
+        with patch(
+            "anveshak.scraper.fetch._fetch_robots_txt", new_callable=AsyncMock
+        ) as mock_fetch:
             # robots.txt disallows all
             mock_fetch.return_value = "User-agent: *\nDisallow: /"
 
             # Clear cache to force fresh fetch
             from anveshak.scraper.fetch import _robots_cache
+
             _robots_cache.clear()
 
             with patch("anveshak.scraper.fetch.settings") as mock_settings:
@@ -77,10 +85,13 @@ class TestRobotsTxtFallbackEnforcement:
         """When robots.txt allows a URL, fetch should proceed."""
         from anveshak.scraper.fetch import check_robots_allowed
 
-        with patch("anveshak.scraper.fetch._fetch_robots_txt", new_callable=AsyncMock) as mock_fetch:
+        with patch(
+            "anveshak.scraper.fetch._fetch_robots_txt", new_callable=AsyncMock
+        ) as mock_fetch:
             mock_fetch.return_value = "User-agent: *\nAllow: /"
 
             from anveshak.scraper.fetch import _robots_cache
+
             _robots_cache.clear()
 
             with patch("anveshak.scraper.fetch.settings") as mock_settings:

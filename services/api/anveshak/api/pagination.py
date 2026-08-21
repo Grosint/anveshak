@@ -3,6 +3,7 @@
 Provides a standard paginated response wrapper and helpers for adding
 COUNT(*) OVER() + LIMIT/OFFSET to existing SQL queries.
 """
+
 from __future__ import annotations
 
 from typing import Any

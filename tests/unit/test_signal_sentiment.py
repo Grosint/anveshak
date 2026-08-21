@@ -3,14 +3,13 @@
 pytest.mark.unit -- no external dependencies, no DB, no network.
 All DB calls mocked with AsyncMock.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from anveshak.analyst.signal_engine import check_sentiment_shifts
-
 
 _MOD = "anveshak.analyst.signal_engine"
 
@@ -57,9 +56,9 @@ def _make_pool(
 # Tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestSentimentShiftFires:
-
     @pytest.mark.asyncio
     async def test_fires_when_drop_exceeds_threshold(self):
         """baseline 0.5, recent 0.1 → drop 0.4 > threshold 0.3 → signal fired."""
@@ -95,7 +94,6 @@ class TestSentimentShiftFires:
 
 @pytest.mark.unit
 class TestSentimentShiftNoneHandling:
-
     @pytest.mark.asyncio
     async def test_skips_when_baseline_none(self):
         """No content in baseline window → baseline_avg=None → skip gracefully."""
@@ -131,7 +129,6 @@ class TestSentimentShiftNoneHandling:
 
 @pytest.mark.unit
 class TestSentimentShiftDedup:
-
     @pytest.mark.asyncio
     async def test_dedup_skips_existing(self):
         """Existing sentiment signal in 24h → skip even though drop is large."""
@@ -156,7 +153,6 @@ class TestSentimentShiftDedup:
 
 @pytest.mark.unit
 class TestSentimentShiftBroadcast:
-
     @pytest.mark.asyncio
     async def test_broadcasts_payload_structure(self):
         """Broadcast called with correct payload keys."""

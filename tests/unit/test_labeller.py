@@ -6,6 +6,7 @@ TDD RED phase — these tests define the expected interface for:
 - fallback_label: template-driven fallback using topic name + scam templates
 - parse_label: validate LLM JSON output
 """
+
 from __future__ import annotations
 
 import json
@@ -19,6 +20,7 @@ pytestmark = pytest.mark.unit
 # ---------------------------------------------------------------------------
 # Helpers — fake DB rows matching CTE UNION ALL shape
 # ---------------------------------------------------------------------------
+
 
 def _text_row(text: str, labels_json: str | None = None):
     """Simulate a 'texts' row from SQL_CLUSTER_LABEL_CONTEXT."""
@@ -47,8 +49,9 @@ def _entity_row(entity_type: str, entity_text: str, cnt: int):
     }
 
 
-def _platform_row(platform: str, source_name: str, item_count: int,
-                   earliest: datetime, latest: datetime):
+def _platform_row(
+    platform: str, source_name: str, item_count: int, earliest: datetime, latest: datetime
+):
     return {
         "section": "platform",
         "val1": platform,
@@ -79,9 +82,11 @@ def _make_context_rows():
     t1 = datetime(2026, 6, 20, tzinfo=timezone.utc)
     t2 = datetime(2026, 6, 26, tzinfo=timezone.utc)
     labels_with_template = json.dumps({"scam_template": "mule_recruitment"})
-    labels_with_identifiers = json.dumps({
-        "identifiers": {"PHONE": ["9876543210"], "UPI": ["scammer@paytm"]},
-    })
+    labels_with_identifiers = json.dumps(
+        {
+            "identifiers": {"PHONE": ["9876543210"], "UPI": ["scammer@paytm"]},
+        }
+    )
     return [
         _topic_row("Telangana Cyber Fraud Intelligence", "cyber fraud, TGCSB, telangana"),
         _text_row("Fake investment scheme targeting youth via Telegram", labels_with_template),
@@ -99,6 +104,7 @@ def _make_context_rows():
 # ---------------------------------------------------------------------------
 # Tests: parse_context_rows
 # ---------------------------------------------------------------------------
+
 
 class TestParseContextRows:
     """parse_context_rows extracts structured data from CTE UNION ALL rows."""
@@ -165,6 +171,7 @@ class TestParseContextRows:
 # ---------------------------------------------------------------------------
 # Tests: build_label_prompt
 # ---------------------------------------------------------------------------
+
 
 class TestBuildLabelPrompt:
     """build_label_prompt assembles enriched prompt with structured context."""
@@ -257,6 +264,7 @@ class TestBuildLabelPrompt:
 # Tests: fallback_label
 # ---------------------------------------------------------------------------
 
+
 class TestFallbackLabel:
     """fallback_label produces readable labels, not entity-soup."""
 
@@ -319,6 +327,7 @@ class TestFallbackLabel:
 # ---------------------------------------------------------------------------
 # Tests: parse_label
 # ---------------------------------------------------------------------------
+
 
 class TestParseLabel:
     """parse_label validates LLM JSON output through ClusterLabel."""

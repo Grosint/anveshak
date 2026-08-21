@@ -2,6 +2,7 @@
 
 Model is loaded ONCE via load_encoder() at service startup, not per-request.
 """
+
 from __future__ import annotations
 
 import structlog

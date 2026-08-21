@@ -2,23 +2,24 @@
 
 CPU-feasible intelligence features built on existing NER output and embeddings.
 """
+
 from __future__ import annotations
 
+import json
+import re as _re
+from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
-import asyncpg
+import geonamescache
 import structlog
+from anveshak.db import DBConnection
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
 from ..auth.rbac import require_role
-from ..db.pool import get_db
 from ..db import audit as audit_db
 from ..db import topics as topics_db
-
-import json
-from pathlib import Path
-
-import geonamescache
+from ..db.pool import get_db
 
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["intelligence"])
@@ -27,8 +28,10 @@ router = APIRouter(prefix="/api/v1", tags=["intelligence"])
 # Lightweight geocoder (reuses same geonamescache + custom overlay as reporter)
 # ---------------------------------------------------------------------------
 _gc = geonamescache.GeonamesCache()
-_CITIES: dict[str, dict[str, Any]] = {}
-_COUNTRIES: dict[str, dict[str, Any]] = {}
+# Mapping, not dict: geonamescache yields TypedDicts, read-compatible with
+# Mapping but not assignable to dict[str, Any]. Every use below is a lookup.
+_CITIES: dict[str, Mapping[str, Any]] = {}
+_COUNTRIES: dict[str, Mapping[str, Any]] = {}
 _CUSTOM_LOCS: dict[str, tuple[float, float]] = {}
 
 for _k, _city in _gc.get_cities().items():
@@ -39,7 +42,9 @@ for _k, _city in _gc.get_cities().items():
 for _k, _country in _gc.get_countries().items():
     _COUNTRIES[_country["name"].lower()] = _country
 
-_custom_path = Path(__file__).resolve().parents[5] / "infra" / "configs" / "geocoder" / "custom_locations.json"
+_custom_path = (
+    Path(__file__).resolve().parents[5] / "infra" / "configs" / "geocoder" / "custom_locations.json"
+)
 if not _custom_path.is_file():
     _custom_path = Path("/workspace/infra/configs/geocoder/custom_locations.json")
 if _custom_path.is_file():
@@ -49,8 +54,6 @@ if _custom_path.is_file():
     except Exception:
         pass
 
-
-import re as _re
 
 # Common aliases → canonical name (lowercase keys, lowercase values)
 _ALIASES: dict[str, str] = {
@@ -93,8 +96,17 @@ _NOISE_RE = _re.compile(
 
 # Known non-location GPE/LOC false positives from spaCy
 _NOISE_NAMES: set[str] = {
-    "modi", "khan", "nadaprabhu", "indus", "dm", "tamil",
-    "hindu", "muslim", "congress", "bjp", "aap",
+    "modi",
+    "khan",
+    "nadaprabhu",
+    "indus",
+    "dm",
+    "tamil",
+    "hindu",
+    "muslim",
+    "congress",
+    "bjp",
+    "aap",
 }
 
 
@@ -550,12 +562,13 @@ SQL_AUTHOR_POST_COUNTS = """
 # Routes
 # ---------------------------------------------------------------------------
 
+
 @router.get("/topics/{topic_id}/entity-graph")
 async def get_entity_cooccurrence(
     topic_id: str,
     min_count: int = Query(2, ge=1, description="Minimum co-occurrence count"),
     limit: int = Query(100, ge=1, le=500, description="Max edges to return"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     """Entity co-occurrence graph — who appears with whom.
@@ -587,7 +600,7 @@ async def get_location_map(
     topic_id: str,
     min_mentions: int = Query(2, ge=1, description="Minimum mention count"),
     limit: int = Query(100, ge=1, le=500, description="Max locations"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     """Location heatmap — geocoded GPE/LOC/FACILITY entities from NER.
@@ -612,17 +625,19 @@ async def get_location_map(
             continue
         lat, lon = coords[norm]
         latest = data.get("latest_mention")
-        features.append({
-            "type": "Feature",
-            "geometry": {"type": "Point", "coordinates": [lon, lat]},
-            "properties": {
-                "name": _location_display_name(norm),
-                "entity_type": data.get("entity_type", "GPE"),
-                "mention_count": data.get("mention_count", 1),
-                "source_count": data.get("source_count", 1),
-                "latest_mention": latest.isoformat() if latest else None,
-            },
-        })
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [lon, lat]},
+                "properties": {
+                    "name": _location_display_name(norm),
+                    "entity_type": data.get("entity_type", "GPE"),
+                    "mention_count": data.get("mention_count", 1),
+                    "source_count": data.get("source_count", 1),
+                    "latest_mention": latest.isoformat() if latest else None,
+                },
+            }
+        )
 
     unresolved = [
         _location_display_name(data["entity_key"])
@@ -646,7 +661,7 @@ async def get_location_map_v2(
     topic_id: str,
     min_mentions: int = Query(2, ge=1, description="Minimum mention count"),
     limit: int = Query(100, ge=1, le=500, description="Max locations"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     """Location map V2 — backed by geocoded_locations table.
@@ -661,18 +676,20 @@ async def get_location_map_v2(
     features: list[dict[str, Any]] = []
     for r in rows:
         latest = r.get("latest_mention")
-        features.append({
-            "type": "Feature",
-            "geometry": {"type": "Point", "coordinates": [r["longitude"], r["latitude"]]},
-            "properties": {
-                "name": r["name"].title(),
-                "entity_type": r["entity_type"],
-                "mention_count": r["mention_count"],
-                "source_count": r["source_count"],
-                "latest_mention": latest.isoformat() if latest else None,
-                "geocode_source": r["geocode_source"],
-            },
-        })
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [r["longitude"], r["latitude"]]},
+                "properties": {
+                    "name": r["name"].title(),
+                    "entity_type": r["entity_type"],
+                    "mention_count": r["mention_count"],
+                    "source_count": r["source_count"],
+                    "latest_mention": latest.isoformat() if latest else None,
+                    "geocode_source": r["geocode_source"],
+                },
+            }
+        )
 
     # Count unresolved entities for metadata
     unresolved_row = await db.fetchrow(SQL_UNRESOLVED_COUNT_V2, topic_id)
@@ -697,7 +714,7 @@ async def get_location_map_v2(
 @router.get("/topics/{topic_id}/location-timeline")
 async def get_location_timeline(
     topic_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     """Per-location mention counts over last 30 days in weekly buckets.
@@ -711,15 +728,19 @@ async def get_location_timeline(
     by_name: dict[str, list[dict[str, Any]]] = {}
     for r in rows:
         name = r["name"]
-        by_name.setdefault(name, []).append({
-            "week": r["week"].isoformat(),
-            "count": r["mention_count"],
-        })
+        by_name.setdefault(name, []).append(
+            {
+                "week": r["week"].isoformat(),
+                "count": r["mention_count"],
+            }
+        )
 
     return {
         "locations": [
             {"name": name.title(), "timeline": timeline}
-            for name, timeline in sorted(by_name.items(), key=lambda x: -sum(p["count"] for p in x[1]))
+            for name, timeline in sorted(
+                by_name.items(), key=lambda x: -sum(p["count"] for p in x[1])
+            )
         ]
     }
 
@@ -729,7 +750,7 @@ async def get_location_content(
     topic_id: str,
     entity: str,
     limit: int = Query(20, ge=1, le=100),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> list[dict[str, Any]]:
     """Content items mentioning a specific location entity.
@@ -744,21 +765,24 @@ async def get_location_content(
         labels = r.get("labels")
         if isinstance(labels, str):
             import json as _json
+
             try:
                 labels = _json.loads(labels)
             except Exception:
                 labels = {}
         sentiment = labels.get("sentiment", {}) if isinstance(labels, dict) else {}
 
-        results.append({
-            "id": str(r["id"]),
-            "title": r["title"],
-            "url": r["url"],
-            "captured_at": r["captured_at"].isoformat() if r["captured_at"] else None,
-            "source_name": r["source_name"],
-            "platform": r["platform"],
-            "sentiment_compound": sentiment.get("compound"),
-        })
+        results.append(
+            {
+                "id": str(r["id"]),
+                "title": r["title"],
+                "url": r["url"],
+                "captured_at": r["captured_at"].isoformat() if r["captured_at"] else None,
+                "source_name": r["source_name"],
+                "platform": r["platform"],
+                "sentiment_compound": sentiment.get("compound"),
+            }
+        )
 
     return results
 
@@ -766,12 +790,13 @@ async def get_location_content(
 @router.get("/topics/{topic_id}/pins")
 async def list_pins(
     topic_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> list[dict[str, Any]]:
     """List analyst pins for a topic (org-scoped)."""
     await topics_db.verify_topic_access(db, topic_id, user)
     from ..auth.rbac import get_user_org
+
     org_id = get_user_org(user)
     rows = await db.fetch(SQL_LIST_PINS, topic_id, org_id)
     return [
@@ -791,7 +816,7 @@ async def list_pins(
 async def create_pin(
     topic_id: str,
     request: Request,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     """Create a manual analyst pin on the map."""
@@ -804,10 +829,15 @@ async def create_pin(
         raise HTTPException(status_code=422, detail="Invalid coordinates")
 
     from ..auth.rbac import get_user_org
+
     org_id = get_user_org(user)
     analyst_id = user.get("sub", "")
 
     row = await db.fetchrow(SQL_INSERT_PIN, topic_id, org_id, lat, lng, label, analyst_id)
+    if row is None:
+        # SQL_INSERT_PIN is INSERT ... RETURNING with no ON CONFLICT, so this is
+        # unreachable: asyncpg raises on failure rather than returning None.
+        raise HTTPException(status_code=500, detail="Pin insert returned no row")
     return {
         "id": str(row["id"]),
         "latitude": row["latitude"],
@@ -822,12 +852,13 @@ async def create_pin(
 async def delete_pin(
     topic_id: str,
     pin_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, str]:
     """Delete an analyst pin."""
     await topics_db.verify_topic_access(db, topic_id, user)
     from ..auth.rbac import get_user_org
+
     org_id = get_user_org(user)
     result = await db.execute(SQL_DELETE_PIN, pin_id, topic_id, org_id)
     if result != "DELETE 1":
@@ -839,7 +870,7 @@ async def delete_pin(
 async def get_similar_topics(
     topic_id: str,
     limit: int = Query(5, ge=1, le=20, description="Max similar topics"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> list[dict[str, Any]]:
     """Find topics with similar narrative clusters by centroid distance.
@@ -854,7 +885,7 @@ async def get_similar_topics(
 @router.get("/topics/{topic_id}/discover-sources")
 async def discover_sources(
     topic_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     """Extract outbound URLs from scraped content and suggest new sources.
@@ -863,8 +894,8 @@ async def discover_sources(
     reference each domain). Filters out already-registered sources.
     """
     await topics_db.verify_topic_access(db, topic_id, user)
-    from urllib.parse import urlparse
     from collections import Counter
+    from urllib.parse import urlparse
 
     # Fetch outbound links from content
     link_rows = await db.fetch(SQL_OUTBOUND_LINKS, topic_id)
@@ -891,17 +922,14 @@ async def discover_sources(
 
     # Filter and sort by frequency
     new_domains = {
-        domain: count
-        for domain, count in domain_counts.items()
-        if domain not in existing_domains
+        domain: count for domain, count in domain_counts.items() if domain not in existing_domains
     }
     suggestions = sorted(new_domains.items(), key=lambda x: x[1], reverse=True)[:50]
 
     return {
         "topic_id": topic_id,
         "suggestions": [
-            {"domain": domain, "citation_count": count}
-            for domain, count in suggestions
+            {"domain": domain, "citation_count": count} for domain, count in suggestions
         ],
         "total_outbound_domains": len(domain_counts),
         "already_registered": len(set(domain_counts) & existing_domains),
@@ -913,7 +941,7 @@ async def get_cluster_duplicates(
     topic_id: str,
     min_similarity: float = Query(0.85, ge=0.5, le=1.0, description="Min cosine similarity"),
     limit: int = Query(20, ge=1, le=100, description="Max pairs"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> list[dict[str, Any]]:
     """Detect near-duplicate clusters by centroid cosine similarity.
@@ -964,7 +992,7 @@ async def merge_clusters(
     request: Request,
     keep_id: str = Body(..., description="Cluster ID to keep (absorbs items)"),
     remove_id: str = Body(..., description="Cluster ID to remove (items reassigned)"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     """Merge two clusters — reassign content items from remove_id to keep_id, delete remove_id.
@@ -996,7 +1024,11 @@ async def merge_clusters(
         topic_id=keep["topic_id"],
     )
     await audit_db.log_action(
-        db, user["sub"], "cluster.merge", "cluster", keep_id,
+        db,
+        user["sub"],
+        "cluster.merge",
+        "cluster",
+        keep_id,
         {"removed_cluster_id": remove_id, "topic_id": keep["topic_id"]},
         request.client.host if request.client else "",
     )
@@ -1013,11 +1045,12 @@ async def merge_clusters(
 # Social Media Analytics Routes
 # ---------------------------------------------------------------------------
 
+
 @router.get("/topics/{topic_id}/stats")
 async def get_topic_stats(
     topic_id: str,
     days: int = Query(30, ge=1, le=365, description="Lookback window in days"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ) -> dict[str, Any]:
     """Topic analytics — platform breakdown, volume timeline, engagement summary."""
@@ -1039,17 +1072,22 @@ async def get_topic_stats(
             }
             for r in platform_rows
         ],
-        "volume_timeline": [
-            {"date": str(r["date"]), "count": r["count"]}
-            for r in volume_rows
-        ],
+        "volume_timeline": [{"date": str(r["date"]), "count": r["count"]} for r in volume_rows],
         "engagement": {
             "total_likes": eng_row["total_likes"] or 0,
             "total_comments": eng_row["total_comments"] or 0,
             "total_shares": eng_row["total_shares"] or 0,
             "total_views": eng_row["total_views"] or 0,
             "posts_with_engagement": eng_row["posts_with_engagement"] or 0,
-        } if eng_row else {"total_likes": 0, "total_comments": 0, "total_shares": 0, "total_views": 0, "posts_with_engagement": 0},
+        }
+        if eng_row
+        else {
+            "total_likes": 0,
+            "total_comments": 0,
+            "total_shares": 0,
+            "total_views": 0,
+            "posts_with_engagement": 0,
+        },
     }
 
 
@@ -1058,7 +1096,7 @@ async def get_top_authors(
     topic_id: str,
     days: int = Query(30, ge=1, le=365),
     limit: int = Query(20, ge=1, le=100),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ) -> list[dict[str, Any]]:
     """Top content authors ranked by engagement impact."""
@@ -1084,7 +1122,7 @@ async def get_network_graph(
     topic_id: str,
     min_weight: int = Query(1, ge=1, description="Minimum edge weight"),
     limit: int = Query(200, ge=1, le=500, description="Max edges"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     """Social network graph — forwarding chains between authors/channels."""
@@ -1101,12 +1139,14 @@ async def get_network_graph(
         connected_ids.add(src)
         connected_ids.add(tgt)
         # Swap: show info flow direction (origin → forwarder)
-        edges.append({
-            "source": tgt,
-            "target": src,
-            "edge_type": r["edge_type"],
-            "weight": r["weight"],
-        })
+        edges.append(
+            {
+                "source": tgt,
+                "target": src,
+                "edge_type": r["edge_type"],
+                "weight": r["weight"],
+            }
+        )
 
     # Only fetch post counts for connected authors
     author_rows = await db.fetch(SQL_AUTHOR_POST_COUNTS, topic_id, 100)
@@ -1224,7 +1264,7 @@ SQL_DRISHTI_CROSS_TOPIC_ENTITIES = """
 async def get_drishti_preview(
     topic_id: str,
     min_count: int = Query(1, ge=1, description="Minimum mention count"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     """Drishti Preview — cross-topic entity resolution graph.
@@ -1237,7 +1277,8 @@ async def get_drishti_preview(
 
     # Get home topic name
     home_topic = await db.fetchrow(
-        "SELECT name FROM topics WHERE id = $1", topic_id,
+        "SELECT name FROM topics WHERE id = $1",
+        topic_id,
     )
     home_topic_name = home_topic["name"] if home_topic else "This Topic"
 
@@ -1262,7 +1303,9 @@ async def get_drishti_preview(
                     "id": nid,
                     "name": row["display_text"],
                     "type": row["entity_type"],
-                    "topics": [{"id": topic_id, "name": home_topic_name, "mentions": row["mention_count"]}],
+                    "topics": [
+                        {"id": topic_id, "name": home_topic_name, "mentions": row["mention_count"]}
+                    ],
                     "total_mentions": row["mention_count"],
                     "is_cross_topic": False,
                 }
@@ -1276,11 +1319,13 @@ async def get_drishti_preview(
                 color_idx += 1
 
             if nid in nodes:
-                nodes[nid]["topics"].append({
-                    "id": other_tid,
-                    "name": row["topic_name"],
-                    "mentions": row["mention_count"],
-                })
+                nodes[nid]["topics"].append(
+                    {
+                        "id": other_tid,
+                        "name": row["topic_name"],
+                        "mentions": row["mention_count"],
+                    }
+                )
                 nodes[nid]["total_mentions"] += row["mention_count"]
                 nodes[nid]["is_cross_topic"] = True
             else:
@@ -1288,7 +1333,13 @@ async def get_drishti_preview(
                     "id": nid,
                     "name": row["display_text"],
                     "type": row["entity_type"],
-                    "topics": [{"id": other_tid, "name": row["topic_name"], "mentions": row["mention_count"]}],
+                    "topics": [
+                        {
+                            "id": other_tid,
+                            "name": row["topic_name"],
+                            "mentions": row["mention_count"],
+                        }
+                    ],
                     "total_mentions": row["mention_count"],
                     "is_cross_topic": True,
                 }
@@ -1301,11 +1352,13 @@ async def get_drishti_preview(
                 src_ids = [nid for nid in nodes if nid.startswith(f"{entity_a}:")]
                 tgt_ids = [nid for nid in nodes if nid.startswith(f"{entity_b}:")]
                 if src_ids and tgt_ids:
-                    edges.append({
-                        "source": src_ids[0],
-                        "target": tgt_ids[0],
-                        "weight": row["edge_count"] or 1,
-                    })
+                    edges.append(
+                        {
+                            "source": src_ids[0],
+                            "target": tgt_ids[0],
+                            "weight": row["edge_count"] or 1,
+                        }
+                    )
 
     return {
         "topic_id": topic_id,

@@ -8,6 +8,7 @@ Verifies that the scheduler:
 
 pytest.mark.unit -- no external dependencies, no DB, no network.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -24,6 +25,7 @@ class TestIdentifierClusterLoopExists:
 
     def test_function_exists(self):
         from anveshak.analyst.scheduler import identifier_cluster_loop
+
         assert callable(identifier_cluster_loop)
 
 
@@ -33,10 +35,13 @@ class TestIdentifierClusterLoopRegistered:
 
     def test_registered_in_lifespan(self):
         import inspect
+
         from anveshak.analyst import scheduler
+
         source = inspect.getsource(scheduler.lifespan)
-        assert "identifier_cluster_loop" in source, \
+        assert "identifier_cluster_loop" in source, (
             "identifier_cluster_loop must be registered in lifespan tasks"
+        )
 
 
 @pytest.mark.unit
@@ -45,11 +50,14 @@ class TestIdentifierClusterLoopQueriesEntities:
 
     def test_sql_unclustered_identifiers_exists(self):
         from anveshak.analyst.scheduler import SQL_UNCLUSTERED_IDENTIFIERS
+
         sql_lower = SQL_UNCLUSTERED_IDENTIFIERS.lower()
-        assert "extracted_entities" in sql_lower, \
-            "SQL must query extracted_entities table"
-        assert "identifier_cluster_items" in sql_lower or "not exists" in sql_lower or "left join" in sql_lower, \
-            "SQL must filter out already-clustered entities"
+        assert "extracted_entities" in sql_lower, "SQL must query extracted_entities table"
+        assert (
+            "identifier_cluster_items" in sql_lower
+            or "not exists" in sql_lower
+            or "left join" in sql_lower
+        ), "SQL must filter out already-clustered entities"
 
 
 @pytest.mark.unit
@@ -58,11 +66,10 @@ class TestIdentifierClusterLoopUpsertsCluster:
 
     def test_sql_upsert_cluster_exists(self):
         from anveshak.analyst.scheduler import SQL_UPSERT_IDENTIFIER_CLUSTER
+
         sql_lower = SQL_UPSERT_IDENTIFIER_CLUSTER.lower()
-        assert "identifier_clusters" in sql_lower, \
-            "SQL must target identifier_clusters table"
-        assert "on conflict" in sql_lower, \
-            "SQL must use ON CONFLICT for idempotent upsert"
+        assert "identifier_clusters" in sql_lower, "SQL must target identifier_clusters table"
+        assert "on conflict" in sql_lower, "SQL must use ON CONFLICT for idempotent upsert"
 
 
 @pytest.mark.unit
@@ -71,11 +78,12 @@ class TestIdentifierClusterLoopInsertsItems:
 
     def test_sql_insert_cluster_item_exists(self):
         from anveshak.analyst.scheduler import SQL_INSERT_IDENTIFIER_CLUSTER_ITEM
+
         sql_lower = SQL_INSERT_IDENTIFIER_CLUSTER_ITEM.lower()
-        assert "identifier_cluster_items" in sql_lower, \
+        assert "identifier_cluster_items" in sql_lower, (
             "SQL must target identifier_cluster_items table"
-        assert "on conflict" in sql_lower, \
-            "SQL must use ON CONFLICT DO NOTHING for idempotency"
+        )
+        assert "on conflict" in sql_lower, "SQL must use ON CONFLICT DO NOTHING for idempotency"
 
 
 @pytest.mark.unit
@@ -86,7 +94,7 @@ class TestIdentifierClusterLoopCallsBuildClusters:
     async def test_build_clusters_called(self):
         """Simulate one cycle: query returns entities → build_clusters called → upsert."""
         from anveshak.analyst.identifier_clustering import (
-            ContentIdentifier, IdentifierCluster,
+            IdentifierCluster,
         )
 
         now = datetime.now(timezone.utc)
@@ -124,12 +132,14 @@ class TestIdentifierClusterLoopCallsBuildClusters:
         )
 
         conn = AsyncMock()
-        conn.fetch = AsyncMock(side_effect=[
-            # First call: active topics
-            [{"id": "topic-1"}],
-            # Second call: unclustered identifiers for topic-1
-            fake_entity_rows,
-        ])
+        conn.fetch = AsyncMock(
+            side_effect=[
+                # First call: active topics
+                [{"id": "topic-1"}],
+                # Second call: unclustered identifiers for topic-1
+                fake_entity_rows,
+            ]
+        )
         conn.fetchrow = AsyncMock(return_value={"id": "cluster-1"})
         conn.execute = AsyncMock()
 
@@ -149,6 +159,7 @@ class TestIdentifierClusterLoopCallsBuildClusters:
             patch(f"{_SCHED_MOD}.build_clusters", return_value=[fake_cluster]) as mock_build,
         ):
             from anveshak.analyst.scheduler import _run_identifier_cluster_cycle
+
             await _run_identifier_cluster_cycle(pool)
 
         mock_build.assert_called_once()

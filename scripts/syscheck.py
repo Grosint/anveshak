@@ -49,17 +49,23 @@ MIN_DISK_GB = 20
 REC_DISK_GB = 100
 MIN_DOCKER_MAJOR = 20
 
-PORTS = [3000, 3001, 5433, 6379, 8000, 8001, 8002, 8003, 8005, 8006, 8007,
-         9090, 9121, 9187, 11434]
+PORTS = [3000, 3001, 5433, 6379, 8000, 8001, 8002, 8003, 8005, 8006, 8007, 9090, 9121, 9187, 11434]
 
 # Production tiers from hardware.md
 TIERS = [
-    ("CPU-only (dev/testing)", "16-core, 32GB RAM, 512GB NVMe", "~₹80K",
-     "~50 articles/day, 5min/report"),
-    ("Demo/eval (recommended)", "RTX 3080, 32GB RAM, 1TB NVMe", "~₹1.5–2L",
-     "~2K articles/day, 30s/report"),
-    ("IAF production", "RTX 4090, 64GB RAM, 2TB NVMe", "~₹3–4L",
-     "~10K articles/day, 10s/report"),
+    (
+        "CPU-only (dev/testing)",
+        "16-core, 32GB RAM, 512GB NVMe",
+        "~₹80K",
+        "~50 articles/day, 5min/report",
+    ),
+    (
+        "Demo/eval (recommended)",
+        "RTX 3080, 32GB RAM, 1TB NVMe",
+        "~₹1.5–2L",
+        "~2K articles/day, 30s/report",
+    ),
+    ("IAF production", "RTX 4090, 64GB RAM, 2TB NVMe", "~₹3–4L", "~10K articles/day, 10s/report"),
 ]
 
 
@@ -76,6 +82,7 @@ class CheckResult(NamedTuple):
 # Detection helpers
 # ---------------------------------------------------------------------------
 
+
 def _run(cmd: list[str], timeout: int = 10) -> str | None:
     """Run a command and return stdout, or None on failure."""
     try:
@@ -91,14 +98,14 @@ def detect_ram_gb() -> float:
     if system == "Darwin":
         out = _run(["sysctl", "-n", "hw.memsize"])
         if out:
-            return int(out) / (1024 ** 3)
+            return int(out) / (1024**3)
     elif system == "Linux":
         try:
             with open("/proc/meminfo") as f:
                 for line in f:
                     if line.startswith("MemTotal:"):
                         kb = int(line.split()[1])
-                        return kb / (1024 ** 2)
+                        return kb / (1024**2)
         except OSError:
             pass
     return 0.0
@@ -122,14 +129,14 @@ def detect_ram_available_gb() -> float:
                     free_pages += int(line.split(":")[1].strip().rstrip("."))
                 elif "Pages purgeable:" in line:
                     free_pages += int(line.split(":")[1].strip().rstrip("."))
-            return (free_pages * page_size) / (1024 ** 3)
+            return (free_pages * page_size) / (1024**3)
     elif system == "Linux":
         try:
             with open("/proc/meminfo") as f:
                 for line in f:
                     if line.startswith("MemAvailable:"):
                         kb = int(line.split()[1])
-                        return kb / (1024 ** 2)
+                        return kb / (1024**2)
         except OSError:
             pass
     return 0.0
@@ -147,7 +154,7 @@ def detect_disk_free_gb() -> float:
     """Return free disk space in GB for the working directory."""
     try:
         usage = shutil.disk_usage(os.getcwd())
-        return usage.free / (1024 ** 3)
+        return usage.free / (1024**3)
     except OSError:
         return 0.0
 
@@ -156,7 +163,7 @@ def detect_disk_total_gb() -> float:
     """Return total disk space in GB."""
     try:
         usage = shutil.disk_usage(os.getcwd())
-        return usage.total / (1024 ** 3)
+        return usage.total / (1024**3)
     except OSError:
         return 0.0
 
@@ -230,11 +237,9 @@ def detect_gpu() -> tuple[str, str]:
         if out:
             gpu_name = out.splitlines()[0].strip()
             name_upper = gpu_name.upper()
-            if any(x in name_upper for x in ["4090", "A100", "H100", "A6000",
-                                               "L40", "A40"]):
+            if any(x in name_upper for x in ["4090", "A100", "H100", "A6000", "L40", "A40"]):
                 return gpu_name, "production"
-            elif any(x in name_upper for x in ["3080", "3090", "4070", "4080",
-                                                 "A5000", "A4000"]):
+            elif any(x in name_upper for x in ["3080", "3090", "4070", "4080", "A5000", "A4000"]):
                 return gpu_name, "demo"
             else:
                 return gpu_name, "basic"
@@ -257,10 +262,12 @@ def check_port(port: int, host: str = "127.0.0.1", timeout: float = 0.3) -> bool
 # Table rendering
 # ---------------------------------------------------------------------------
 
+
 def _pad(text: str, width: int) -> str:
     """Pad text to width, accounting for ANSI escape sequences."""
     # Strip ANSI to calculate visible length
     import re
+
     visible = re.sub(r"\033\[[0-9;]*m", "", text)
     padding = width - len(visible)
     if padding > 0:
@@ -295,15 +302,17 @@ def print_table(results: list[CheckResult]) -> None:
     print(f"{BLUE}╠{'═' * c0}╦{'═' * c1}╦{'═' * c2}╦{'═' * c3}╣{RESET}")
 
     # Header row
-    print(f"{BLUE}║{RESET}{BOLD}"
-          f" {_pad('Check', c0 - 1)}"
-          f"{BLUE}║{RESET}{BOLD}"
-          f" {_pad('Current', c1 - 1)}"
-          f"{BLUE}║{RESET}{BOLD}"
-          f" {_pad('Minimum', c2 - 1)}"
-          f"{BLUE}║{RESET}{BOLD}"
-          f" {_pad('Recommended', c3 - 1)}"
-          f"{BLUE}║{RESET}")
+    print(
+        f"{BLUE}║{RESET}{BOLD}"
+        f" {_pad('Check', c0 - 1)}"
+        f"{BLUE}║{RESET}{BOLD}"
+        f" {_pad('Current', c1 - 1)}"
+        f"{BLUE}║{RESET}{BOLD}"
+        f" {_pad('Minimum', c2 - 1)}"
+        f"{BLUE}║{RESET}{BOLD}"
+        f" {_pad('Recommended', c3 - 1)}"
+        f"{BLUE}║{RESET}"
+    )
 
     # Header-body separator
     print(f"{BLUE}╠{'═' * c0}╬{'═' * c1}╬{'═' * c2}╬{'═' * c3}╣{RESET}")
@@ -313,15 +322,17 @@ def print_table(results: list[CheckResult]) -> None:
         min_col = f"{r.minimum} {_status(r.min_ok)}" if r.minimum else "—"
         rec_col = f"{r.recommended} {_status(r.rec_ok)}" if r.recommended else "—"
 
-        print(f"{BLUE}║{RESET}"
-              f" {_pad(r.name, c0 - 1)}"
-              f"{BLUE}║{RESET}"
-              f" {_pad(r.current, c1 - 1)}"
-              f"{BLUE}║{RESET}"
-              f" {_pad(min_col, c2 - 1)}"
-              f"{BLUE}║{RESET}"
-              f" {_pad(rec_col, c3 - 1)}"
-              f"{BLUE}║{RESET}")
+        print(
+            f"{BLUE}║{RESET}"
+            f" {_pad(r.name, c0 - 1)}"
+            f"{BLUE}║{RESET}"
+            f" {_pad(r.current, c1 - 1)}"
+            f"{BLUE}║{RESET}"
+            f" {_pad(min_col, c2 - 1)}"
+            f"{BLUE}║{RESET}"
+            f" {_pad(rec_col, c3 - 1)}"
+            f"{BLUE}║{RESET}"
+        )
 
     # Bottom border
     print(f"{BLUE}╚{'═' * c0}╩{'═' * c1}╩{'═' * c2}╩{'═' * c3}╝{RESET}")
@@ -330,6 +341,7 @@ def print_table(results: list[CheckResult]) -> None:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> int:
     results: list[CheckResult] = []
@@ -342,35 +354,41 @@ def main() -> int:
     ram_rec_ok = total_ram >= REC_RAM_GB
     if not ram_min_ok:
         all_min_ok = False
-    results.append(CheckResult(
-        "RAM (total)",
-        f"{total_ram:.0f} GB",
-        f"{MIN_RAM_GB} GB",
-        ram_min_ok,
-        f"{REC_RAM_GB} GB",
-        ram_rec_ok,
-    ))
-    results.append(CheckResult(
-        "RAM (available)",
-        f"{avail_ram:.1f} GB",
-        "6 GB",
-        avail_ram >= 6.0,
-        "16 GB",
-        avail_ram >= 16.0,
-    ))
+    results.append(
+        CheckResult(
+            "RAM (total)",
+            f"{total_ram:.0f} GB",
+            f"{MIN_RAM_GB} GB",
+            ram_min_ok,
+            f"{REC_RAM_GB} GB",
+            ram_rec_ok,
+        )
+    )
+    results.append(
+        CheckResult(
+            "RAM (available)",
+            f"{avail_ram:.1f} GB",
+            "6 GB",
+            avail_ram >= 6.0,
+            "16 GB",
+            avail_ram >= 16.0,
+        )
+    )
     if avail_ram < 6.0:
         all_min_ok = False
 
     # --- CPU ---
     cores = detect_cpu_cores()
-    results.append(CheckResult(
-        "CPU cores",
-        str(cores),
-        "4",
-        cores >= 4,
-        "16",
-        cores >= 16,
-    ))
+    results.append(
+        CheckResult(
+            "CPU cores",
+            str(cores),
+            "4",
+            cores >= 4,
+            "16",
+            cores >= 16,
+        )
+    )
     if cores < 4:
         all_min_ok = False
 
@@ -381,14 +399,16 @@ def main() -> int:
     disk_rec_ok = disk_free >= REC_DISK_GB
     if not disk_min_ok:
         all_min_ok = False
-    results.append(CheckResult(
-        "Disk free",
-        f"{disk_free:.0f} GB / {disk_total:.0f} GB",
-        f"{MIN_DISK_GB} GB",
-        disk_min_ok,
-        f"{REC_DISK_GB} GB",
-        disk_rec_ok,
-    ))
+    results.append(
+        CheckResult(
+            "Disk free",
+            f"{disk_free:.0f} GB / {disk_total:.0f} GB",
+            f"{MIN_DISK_GB} GB",
+            disk_min_ok,
+            f"{REC_DISK_GB} GB",
+            disk_rec_ok,
+        )
+    )
 
     # --- Docker ---
     docker_ver = detect_docker_version()
@@ -396,35 +416,41 @@ def main() -> int:
     docker_ok = docker_ver is not None and docker_major_version(docker_ver) >= MIN_DOCKER_MAJOR
     if not docker_ok:
         all_min_ok = False
-    results.append(CheckResult(
-        "Docker",
-        docker_ver or "NOT FOUND",
-        f"v{MIN_DOCKER_MAJOR}+",
-        docker_ok,
-        "",
-        docker_ok,
-    ))
-    results.append(CheckResult(
-        "Docker daemon",
-        f"{GREEN}running{RESET}" if docker_running else f"{RED}stopped{RESET}",
-        "running",
-        docker_running,
-        "",
-        docker_running,
-    ))
+    results.append(
+        CheckResult(
+            "Docker",
+            docker_ver or "NOT FOUND",
+            f"v{MIN_DOCKER_MAJOR}+",
+            docker_ok,
+            "",
+            docker_ok,
+        )
+    )
+    results.append(
+        CheckResult(
+            "Docker daemon",
+            f"{GREEN}running{RESET}" if docker_running else f"{RED}stopped{RESET}",
+            "running",
+            docker_running,
+            "",
+            docker_running,
+        )
+    )
     if not docker_running:
         all_min_ok = False
 
     # --- Docker Compose ---
     compose_ver = detect_compose_version()
-    results.append(CheckResult(
-        "Docker Compose",
-        compose_ver or "NOT FOUND",
-        "v2+",
-        compose_ver is not None,
-        "",
-        compose_ver is not None,
-    ))
+    results.append(
+        CheckResult(
+            "Docker Compose",
+            compose_ver or "NOT FOUND",
+            "v2+",
+            compose_ver is not None,
+            "",
+            compose_ver is not None,
+        )
+    )
     if compose_ver is None:
         all_min_ok = False
 
@@ -436,14 +462,16 @@ def main() -> int:
         "demo": f"{GREEN}Demo-tier{RESET}",
         "production": f"{GREEN}{BOLD}Production-tier{RESET}",
     }
-    results.append(CheckResult(
-        "GPU",
-        gpu_name,
-        "optional",
-        True,  # GPU is not required for minimum
-        "RTX 3080+",
-        gpu_tier in ("demo", "production"),
-    ))
+    results.append(
+        CheckResult(
+            "GPU",
+            gpu_name,
+            "optional",
+            True,  # GPU is not required for minimum
+            "RTX 3080+",
+            gpu_tier in ("demo", "production"),
+        )
+    )
 
     # --- Ports ---
     busy_ports = []
@@ -460,26 +488,30 @@ def main() -> int:
     else:
         port_current = f"{GREEN}all free{RESET}"
 
-    results.append(CheckResult(
-        "Ports",
-        port_current,
-        "all free",
-        ports_ok,
-        "",
-        ports_ok,
-    ))
+    results.append(
+        CheckResult(
+            "Ports",
+            port_current,
+            "all free",
+            ports_ok,
+            "",
+            ports_ok,
+        )
+    )
 
     # --- Platform ---
     system = platform.system()
     machine = platform.machine()
-    results.append(CheckResult(
-        "Platform",
-        f"{system} {machine}",
-        "macOS/Linux",
-        system in ("Darwin", "Linux"),
-        "",
-        system in ("Darwin", "Linux"),
-    ))
+    results.append(
+        CheckResult(
+            "Platform",
+            f"{system} {machine}",
+            "macOS/Linux",
+            system in ("Darwin", "Linux"),
+            "",
+            system in ("Darwin", "Linux"),
+        )
+    )
 
     # -----------------------------------------------------------------------
     # Print table
@@ -514,14 +546,14 @@ def main() -> int:
     print()
     print(f"  {BOLD}Hardware tier classification:{RESET}")
     if gpu_tier == "production":
-        print(f"    {GREEN}{BOLD}▸ IAF Production{RESET}"
-              f" — ~10K articles/day, 10s/report, 72b LLM capable")
+        print(
+            f"    {GREEN}{BOLD}▸ IAF Production{RESET}"
+            f" — ~10K articles/day, 10s/report, 72b LLM capable"
+        )
     elif gpu_tier == "demo":
-        print(f"    {GREEN}▸ Demo/Eval{RESET}"
-              f" — ~2K articles/day, 30s/report")
+        print(f"    {GREEN}▸ Demo/Eval{RESET} — ~2K articles/day, 30s/report")
     else:
-        print(f"    {CYAN}▸ CPU-only{RESET}"
-              f" — ~50 articles/day, 5min/report")
+        print(f"    {CYAN}▸ CPU-only{RESET} — ~50 articles/day, 5min/report")
 
     # Tier table
     print()

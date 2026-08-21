@@ -1,6 +1,8 @@
 """API service settings — all hardware-sensitive values from env vars."""
-from pydantic_settings import BaseSettings
+
 from typing import Optional
+
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -13,15 +15,15 @@ class Settings(BaseSettings):
 
     # Ollama
     ollama_host: str = "http://ollama:11434"
-    ollama_report_model: str = "mistral:7b"       # see hardware.md
-    ollama_cluster_model: str = "llama3.2:3b"     # see hardware.md
-    ollama_keep_alive: str = "5m"                  # see hardware.md
+    ollama_report_model: str = "mistral:7b"  # see hardware.md
+    ollama_cluster_model: str = "llama3.2:3b"  # see hardware.md
+    ollama_keep_alive: str = "5m"  # see hardware.md
     llm_max_tokens: int = 2048
 
     # JWT Auth
     jwt_secret_key: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
-    jwt_expire_minutes: int = 480               # 8 hours
+    jwt_expire_minutes: int = 480  # 8 hours
 
     # CORS
     allowed_origins: list[str] = ["http://localhost:3000", "http://frontend:3000"]
@@ -40,7 +42,7 @@ class Settings(BaseSettings):
 
     # Internal service URLs
     analyst_service_url: str = "http://analyse-scheduler:8007"
-    phash_duplicate_threshold: int = 8   # Hamming distance for reverse-image search
+    phash_duplicate_threshold: int = 8  # Hamming distance for reverse-image search
 
     # Vision file storage (absorbed from vision container)
     media_storage_root: str = "/app/media"

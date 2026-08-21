@@ -1,9 +1,10 @@
 """Template repository — SQL for scam_templates and topic_templates."""
+
 from __future__ import annotations
 
 from typing import Any
 
-import asyncpg
+from anveshak.db import DBConnection
 
 # ---------------------------------------------------------------------------
 # SQL constants
@@ -52,33 +53,26 @@ SQL_UNLINK_TEMPLATE = """
 
 
 async def list_templates(
-    conn: asyncpg.Connection, org_id: str | None = None,
+    conn: DBConnection,
+    org_id: str | None = None,
 ) -> list[dict[str, Any]]:
     rows = await conn.fetch(SQL_LIST_TEMPLATES, org_id)
     return [dict(r) for r in rows]
 
 
-async def get_template(
-    conn: asyncpg.Connection, template_id: str
-) -> dict[str, Any] | None:
+async def get_template(conn: DBConnection, template_id: str) -> dict[str, Any] | None:
     row = await conn.fetchrow(SQL_GET_TEMPLATE, template_id)
     return dict(row) if row else None
 
 
-async def list_topic_templates(
-    conn: asyncpg.Connection, topic_id: str
-) -> list[dict[str, Any]]:
+async def list_topic_templates(conn: DBConnection, topic_id: str) -> list[dict[str, Any]]:
     rows = await conn.fetch(SQL_LIST_TOPIC_TEMPLATES, topic_id)
     return [dict(r) for r in rows]
 
 
-async def link_template(
-    conn: asyncpg.Connection, topic_id: str, template_id: str
-) -> None:
+async def link_template(conn: DBConnection, topic_id: str, template_id: str) -> None:
     await conn.execute(SQL_LINK_TEMPLATE, topic_id, template_id)
 
 
-async def unlink_template(
-    conn: asyncpg.Connection, topic_id: str, template_id: str
-) -> None:
+async def unlink_template(conn: DBConnection, topic_id: str, template_id: str) -> None:
     await conn.execute(SQL_UNLINK_TEMPLATE, topic_id, template_id)

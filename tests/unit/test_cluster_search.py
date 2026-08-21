@@ -11,9 +11,10 @@ Tests:
 
 pytest.mark.unit — mock DB.
 """
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -24,30 +25,36 @@ pytestmark = pytest.mark.unit
 # Relevance tier computation
 # ---------------------------------------------------------------------------
 
+
 class TestRelevanceTier:
     """_relevance_tier converts raw cosine similarity to analyst-friendly labels."""
 
     def test_high_tier(self):
         from anveshak.api.db.topics import _relevance_tier
+
         assert _relevance_tier(0.85) == "high"
         assert _relevance_tier(0.45) == "high"
 
     def test_medium_tier(self):
         from anveshak.api.db.topics import _relevance_tier
+
         assert _relevance_tier(0.40) == "medium"
         assert _relevance_tier(0.30) == "medium"
 
     def test_low_tier(self):
         from anveshak.api.db.topics import _relevance_tier
+
         assert _relevance_tier(0.20) == "low"
         assert _relevance_tier(0.15) == "low"
 
     def test_none_returns_keyword(self):
         from anveshak.api.db.topics import _relevance_tier
+
         assert _relevance_tier(None) == "keyword"
 
     def test_boundary_values(self):
         from anveshak.api.db.topics import _relevance_tier
+
         assert _relevance_tier(0.45) == "high"
         assert _relevance_tier(0.4499) == "medium"
         assert _relevance_tier(0.30) == "medium"
@@ -58,29 +65,35 @@ class TestRelevanceTier:
 # DB function existence and callability
 # ---------------------------------------------------------------------------
 
+
 class TestDBFunctionsExist:
     """All new DB functions exist and are importable."""
 
     def test_search_clusters_by_centroid_exists(self):
         from anveshak.api.db.topics import search_clusters_by_centroid
+
         assert callable(search_clusters_by_centroid)
 
     def test_search_clusters_by_label_exists(self):
         from anveshak.api.db.topics import search_clusters_by_label
+
         assert callable(search_clusters_by_label)
 
     def test_get_cluster_content_exists(self):
         from anveshak.api.db.topics import get_cluster_content
+
         assert callable(get_cluster_content)
 
     def test_verify_cluster_belongs_to_topic_exists(self):
         from anveshak.api.db.topics import verify_cluster_belongs_to_topic
+
         assert callable(verify_cluster_belongs_to_topic)
 
 
 # ---------------------------------------------------------------------------
 # verify_cluster_belongs_to_topic
 # ---------------------------------------------------------------------------
+
 
 class TestVerifyClusterBelongsToTopic:
     """Multi-tenancy guard: cluster must belong to the specified topic."""
@@ -120,6 +133,7 @@ class TestVerifyClusterBelongsToTopic:
 # search_clusters_by_centroid
 # ---------------------------------------------------------------------------
 
+
 class TestSearchClustersByCentroid:
     """Centroid semantic search passes correct SQL params."""
 
@@ -137,12 +151,23 @@ class TestSearchClustersByCentroid:
             "similarity_score": 0.75,
         }
         mock_conn = AsyncMock()
-        mock_conn.fetch = AsyncMock(side_effect=[
-            [MagicMock(**{"__getitem__": lambda s, k: mock_row[k], "get": mock_row.get, "keys": mock_row.keys, "items": mock_row.items})],
-            [],  # SQL_CLUSTER_SOURCES returns empty
-        ])
+        mock_conn.fetch = AsyncMock(
+            side_effect=[
+                [
+                    MagicMock(
+                        **{
+                            "__getitem__": lambda s, k: mock_row[k],
+                            "get": mock_row.get,
+                            "keys": mock_row.keys,
+                            "items": mock_row.items,
+                        }
+                    )
+                ],
+                [],  # SQL_CLUSTER_SOURCES returns empty
+            ]
+        )
 
-        results = await search_clusters_by_centroid(
+        await search_clusters_by_centroid(
             mock_conn, "[0.1,0.2,0.3]", "topic-1", min_similarity=0.30, limit=20
         )
 
@@ -169,6 +194,7 @@ class TestSearchClustersByCentroid:
 # search_clusters_by_label (ILIKE fallback)
 # ---------------------------------------------------------------------------
 
+
 class TestSearchClustersByLabel:
     """ILIKE fallback when embedding service is unavailable."""
 
@@ -179,9 +205,7 @@ class TestSearchClustersByLabel:
         mock_conn = AsyncMock()
         mock_conn.fetch = AsyncMock(return_value=[])
 
-        results = await search_clusters_by_label(
-            mock_conn, "hawala", "topic-1", limit=10
-        )
+        await search_clusters_by_label(mock_conn, "hawala", "topic-1", limit=10)
 
         first_call_args = mock_conn.fetch.call_args_list[0][0]
         assert "ILIKE" in first_call_args[0]  # SQL constant
@@ -194,6 +218,7 @@ class TestSearchClustersByLabel:
 # get_cluster_content
 # ---------------------------------------------------------------------------
 
+
 class TestGetClusterContent:
     """Drill-down: content items within a cluster."""
 
@@ -204,9 +229,7 @@ class TestGetClusterContent:
         mock_conn = AsyncMock()
         mock_conn.fetch = AsyncMock(return_value=[])
 
-        await get_cluster_content(
-            mock_conn, "cluster-1", sort="time", limit=20, offset=0
-        )
+        await get_cluster_content(mock_conn, "cluster-1", sort="time", limit=20, offset=0)
 
         sql_used = mock_conn.fetch.call_args[0][0]
         assert "captured_at DESC" in sql_used
@@ -219,10 +242,12 @@ class TestGetClusterContent:
         mock_conn.fetch = AsyncMock(return_value=[])
 
         await get_cluster_content(
-            mock_conn, "cluster-1",
+            mock_conn,
+            "cluster-1",
             sort="relevance",
             query_vec_str="[0.1,0.2]",
-            limit=20, offset=0,
+            limit=20,
+            offset=0,
         )
 
         sql_used = mock_conn.fetch.call_args[0][0]
@@ -236,10 +261,12 @@ class TestGetClusterContent:
         mock_conn.fetch = AsyncMock(return_value=[])
 
         await get_cluster_content(
-            mock_conn, "cluster-1",
+            mock_conn,
+            "cluster-1",
             sort="relevance",
             query_vec_str=None,  # no embedding available
-            limit=20, offset=0,
+            limit=20,
+            offset=0,
         )
 
         sql_used = mock_conn.fetch.call_args[0][0]
@@ -250,36 +277,44 @@ class TestGetClusterContent:
 # SQL constants contain required guards
 # ---------------------------------------------------------------------------
 
+
 class TestSQLGuards:
     """Verify SQL constants include required safety clauses."""
 
     def test_centroid_search_excludes_archived(self):
         from anveshak.api.db.topics import SQL_CLUSTER_CENTROID_SEARCH
+
         assert "archived_at IS NULL" in SQL_CLUSTER_CENTROID_SEARCH
 
     def test_centroid_search_excludes_null_centroids(self):
         from anveshak.api.db.topics import SQL_CLUSTER_CENTROID_SEARCH
+
         assert "embedding_centroid IS NOT NULL" in SQL_CLUSTER_CENTROID_SEARCH
 
     def test_centroid_search_has_min_similarity_filter(self):
         from anveshak.api.db.topics import SQL_CLUSTER_CENTROID_SEARCH
+
         # $3 is the min_similarity parameter
         assert ">= $3" in SQL_CLUSTER_CENTROID_SEARCH
 
     def test_label_search_excludes_archived(self):
         from anveshak.api.db.topics import SQL_CLUSTER_LABEL_SEARCH
+
         assert "archived_at IS NULL" in SQL_CLUSTER_LABEL_SEARCH
 
     def test_content_by_relevance_filters_quality(self):
         from anveshak.api.db.topics import SQL_CLUSTER_CONTENT_BY_RELEVANCE
+
         assert "content_quality" in SQL_CLUSTER_CONTENT_BY_RELEVANCE
 
     def test_content_by_time_filters_quality(self):
         from anveshak.api.db.topics import SQL_CLUSTER_CONTENT_BY_TIME
+
         assert "content_quality" in SQL_CLUSTER_CONTENT_BY_TIME
 
     def test_content_by_relevance_requires_embedding(self):
         from anveshak.api.db.topics import SQL_CLUSTER_CONTENT_BY_RELEVANCE
+
         assert "embedding IS NOT NULL" in SQL_CLUSTER_CONTENT_BY_RELEVANCE
 
 
@@ -287,9 +322,11 @@ class TestSQLGuards:
 # Embedding helper shared module
 # ---------------------------------------------------------------------------
 
+
 class TestEmbeddingHelper:
     """embed_query is importable from the shared module."""
 
     def test_embed_query_importable(self):
         from anveshak.api.embedding import embed_query
+
         assert callable(embed_query)

@@ -6,6 +6,7 @@ sensitivity for the most common convergence threshold.
 
 pytest.mark.unit — pure function, no DB, no network.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -14,7 +15,6 @@ pytestmark = pytest.mark.unit
 
 
 class TestBuildSignalPayload:
-
     def test_high_severity_when_isc_above_threshold(self):
         """ISC >= 3 → severity HIGH (3+ independent platforms confirm a narrative)."""
         from anveshak.analyst.signal_engine import build_signal_payload
@@ -83,8 +83,13 @@ class TestBuildSignalPayload:
             label="Test cluster",
         )
         required_keys = {
-            "type", "signal_id", "topic_id", "cluster_id",
-            "cluster_label", "severity", "independent_source_count",
+            "type",
+            "signal_id",
+            "topic_id",
+            "cluster_id",
+            "cluster_label",
+            "severity",
+            "independent_source_count",
         }
         assert set(payload.keys()) == required_keys
 

@@ -3,9 +3,10 @@
 pytest.mark.unit — no Instagrapi client, no network.
 Tests static helper methods and pure logic on InstagramAdapter.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -16,6 +17,7 @@ pytestmark = pytest.mark.unit
 # ---------------------------------------------------------------------------
 # Helpers — mock Instagram API objects
 # ---------------------------------------------------------------------------
+
 
 def _mock_media(
     caption: str = "Buy now! Contact +919876543210",
@@ -70,40 +72,53 @@ def _mock_user_info(
 # Handle normalization
 # ---------------------------------------------------------------------------
 
+
 class TestHandleNormalization:
     """InstagramAdapter._normalise_handle strips @ and lowercases."""
 
     def test_at_prefix_stripped(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         assert InstagramAdapter._normalise_handle("@ScamSeller") == "scamseller"
 
     def test_bare_handle_lowered(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         assert InstagramAdapter._normalise_handle("ScamSeller") == "scamseller"
 
     def test_already_normalised(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         assert InstagramAdapter._normalise_handle("scamseller") == "scamseller"
 
     def test_instagram_url_stripped(self):
         """Handle provided as full Instagram URL."""
         from anveshak.social.adapters.instagram import InstagramAdapter
-        assert InstagramAdapter._normalise_handle("https://instagram.com/ScamSeller") == "scamseller"
+
+        assert (
+            InstagramAdapter._normalise_handle("https://instagram.com/ScamSeller") == "scamseller"
+        )
 
     def test_instagram_url_with_trailing_slash(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
-        assert InstagramAdapter._normalise_handle("https://www.instagram.com/ScamSeller/") == "scamseller"
+
+        assert (
+            InstagramAdapter._normalise_handle("https://www.instagram.com/ScamSeller/")
+            == "scamseller"
+        )
 
 
 # ---------------------------------------------------------------------------
 # Post extraction helpers
 # ---------------------------------------------------------------------------
 
+
 class TestPostToRawItem:
     """InstagramAdapter._media_to_raw_item converts Instagrapi Media to RawItem."""
 
     def test_basic_post_extraction(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         media = _mock_media()
         raw = InstagramAdapter._media_to_raw_item(media, "scam_seller")
         assert raw.raw_text == "Buy now! Contact +919876543210"
@@ -112,18 +127,21 @@ class TestPostToRawItem:
 
     def test_url_uses_shortcode(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         media = _mock_media(shortcode="AbCdEf123")
         raw = InstagramAdapter._media_to_raw_item(media, "test_user")
         assert raw.url == "https://www.instagram.com/p/AbCdEf123/"
 
     def test_captured_at_is_utc(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         media = _mock_media(taken_at=1717200000)
         raw = InstagramAdapter._media_to_raw_item(media, "user")
         assert raw.captured_at.tzinfo is not None
 
     def test_media_urls_includes_thumbnail(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         media = _mock_media()
         raw = InstagramAdapter._media_to_raw_item(media, "user")
         assert len(raw.media_urls) >= 1
@@ -131,12 +149,14 @@ class TestPostToRawItem:
 
     def test_video_url_included(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         media = _mock_media(video_url="https://scontent.cdninstagram.com/video.mp4")
         raw = InstagramAdapter._media_to_raw_item(media, "user")
         assert "video.mp4" in " ".join(raw.media_urls)
 
     def test_empty_caption_uses_empty_string(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         media = _mock_media(caption="")
         raw = InstagramAdapter._media_to_raw_item(media, "user")
         assert raw.raw_text == ""
@@ -146,29 +166,34 @@ class TestPostToRawItem:
 # Bio extraction
 # ---------------------------------------------------------------------------
 
+
 class TestBioExtraction:
     """InstagramAdapter._bio_to_raw_item creates RawItem from profile bio."""
 
     def test_bio_raw_item_platform(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         user_info = _mock_user_info()
         raw = InstagramAdapter._bio_to_raw_item(user_info)
         assert raw.platform == "instagram_bio"
 
     def test_bio_raw_text_is_biography(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         user_info = _mock_user_info(biography="Call me at +919876543210")
         raw = InstagramAdapter._bio_to_raw_item(user_info)
         assert raw.raw_text == "Call me at +919876543210"
 
     def test_bio_url_format(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         user_info = _mock_user_info(username="seller123")
         raw = InstagramAdapter._bio_to_raw_item(user_info)
         assert raw.url == "https://www.instagram.com/seller123/"
 
     def test_bio_source_handle(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         user_info = _mock_user_info(username="seller123")
         raw = InstagramAdapter._bio_to_raw_item(user_info)
         assert raw.source_handle == "seller123"
@@ -176,6 +201,7 @@ class TestBioExtraction:
     def test_bio_labels_include_follower_counts(self):
         """Bio RawItem should carry follower/following in media_urls=[] (labels go via ingest)."""
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         user_info = _mock_user_info(follower_count=15000, following_count=200)
         raw = InstagramAdapter._bio_to_raw_item(user_info)
         # Bio items have no media
@@ -188,23 +214,27 @@ class TestBioExtraction:
 # Media URL extraction
 # ---------------------------------------------------------------------------
 
+
 class TestExtractMediaUrls:
     """InstagramAdapter._extract_media_urls pulls image/video URLs from Media."""
 
     def test_photo_post_extracts_thumbnail(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         media = _mock_media()
         urls = InstagramAdapter._extract_media_urls(media)
         assert len(urls) >= 1
 
     def test_video_post_includes_video_url(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         media = _mock_media(video_url="https://cdn.instagram.com/v.mp4")
         urls = InstagramAdapter._extract_media_urls(media)
         assert "https://cdn.instagram.com/v.mp4" in urls
 
     def test_no_media_returns_empty(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         media = MagicMock()
         media.thumbnail_url = None
         media.video_url = None
@@ -217,12 +247,14 @@ class TestExtractMediaUrls:
 # Rate limit guard
 # ---------------------------------------------------------------------------
 
+
 class TestInstagramRateLimitGuard:
     """InstagramRateLimitGuard enforces 100 requests/hour via Redis atomic counter."""
 
     @pytest.mark.asyncio
     async def test_under_limit_permits(self):
         from anveshak.social.adapters.instagram import InstagramRateLimitGuard
+
         redis = AsyncMock()
         redis.incr = AsyncMock(return_value=50)
         redis.expire = AsyncMock()
@@ -232,6 +264,7 @@ class TestInstagramRateLimitGuard:
     @pytest.mark.asyncio
     async def test_at_cap_blocks(self):
         from anveshak.social.adapters.instagram import InstagramRateLimitGuard
+
         redis = AsyncMock()
         redis.incr = AsyncMock(return_value=101)
         redis.decr = AsyncMock()
@@ -241,6 +274,7 @@ class TestInstagramRateLimitGuard:
     @pytest.mark.asyncio
     async def test_first_call_sets_ttl(self):
         from anveshak.social.adapters.instagram import InstagramRateLimitGuard
+
         redis = AsyncMock()
         redis.incr = AsyncMock(return_value=1)
         redis.expire = AsyncMock()
@@ -254,6 +288,7 @@ class TestInstagramRateLimitGuard:
     @pytest.mark.asyncio
     async def test_cap_exceeded_decrements(self):
         from anveshak.social.adapters.instagram import InstagramRateLimitGuard
+
         redis = AsyncMock()
         redis.incr = AsyncMock(return_value=101)
         redis.decr = AsyncMock()
@@ -264,6 +299,7 @@ class TestInstagramRateLimitGuard:
     @pytest.mark.asyncio
     async def test_current_count_reads_without_increment(self):
         from anveshak.social.adapters.instagram import InstagramRateLimitGuard
+
         redis = AsyncMock()
         redis.get = AsyncMock(return_value=b"42")
         guard = InstagramRateLimitGuard(redis, cap=100)
@@ -276,35 +312,41 @@ class TestInstagramRateLimitGuard:
 # Adapter class attributes
 # ---------------------------------------------------------------------------
 
+
 class TestAdapterAttributes:
     """InstagramAdapter has correct class-level attributes."""
 
     def test_adapter_id(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         assert adapter.adapter_id == "instagram-v1"
 
     def test_platform(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         assert adapter.platform == "instagram"
 
     def test_adapter_version(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         assert adapter.adapter_version == "1.0.0"
 
     def test_no_client_before_auth(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         assert adapter._client is None
 
     def test_circuit_breaker_params(self):
         """Instagram uses higher threshold (10) and longer cooldown (24h) per plan."""
         from anveshak.social.adapters.instagram import (
-            INSTAGRAM_CIRCUIT_BREAKER_THRESHOLD,
             INSTAGRAM_CIRCUIT_BREAKER_COOLDOWN_S,
+            INSTAGRAM_CIRCUIT_BREAKER_THRESHOLD,
         )
+
         assert INSTAGRAM_CIRCUIT_BREAKER_THRESHOLD == 10
         assert INSTAGRAM_CIRCUIT_BREAKER_COOLDOWN_S == 86400
 
@@ -313,21 +355,25 @@ class TestAdapterAttributes:
 # Conformance (reuse pattern from test_social_conformance.py)
 # ---------------------------------------------------------------------------
 
+
 class TestInstagramConformance:
     """Instagram adapter passes SourceAdapterConformanceSuite."""
 
     def test_platform_in_allowed_set(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         assert adapter.platform in {"telegram", "reddit", "bluesky", "twitter", "web", "instagram"}
 
     def test_adapter_id_kebab_case(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         assert "-" in adapter.adapter_id
 
     def test_raw_item_content_hash_deterministic(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         media = _mock_media()
         raw = InstagramAdapter._media_to_raw_item(media, "user")
         h1 = raw.content_hash()
@@ -337,18 +383,21 @@ class TestInstagramConformance:
 
     def test_raw_item_url_non_empty(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         media = _mock_media()
         raw = InstagramAdapter._media_to_raw_item(media, "user")
         assert raw.url
 
     def test_raw_item_captured_at_timezone_aware(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         media = _mock_media()
         raw = InstagramAdapter._media_to_raw_item(media, "user")
         assert raw.captured_at.tzinfo is not None
 
     def test_raw_item_platform_matches_adapter(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         media = _mock_media()
         raw = InstagramAdapter._media_to_raw_item(media, "user")
@@ -359,6 +408,7 @@ class TestInstagramConformance:
 # Session management
 # ---------------------------------------------------------------------------
 
+
 class TestSessionManagement:
     """InstagramAdapter handles session login and re-login."""
 
@@ -366,6 +416,7 @@ class TestSessionManagement:
     async def test_authenticate_calls_login(self):
         """authenticate() should call Instagrapi Client.login."""
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         mock_client = MagicMock()
         mock_client.login = MagicMock(return_value=True)
@@ -382,6 +433,7 @@ class TestSessionManagement:
     async def test_authenticate_disabled_logs_warning(self):
         """authenticate() with adapter disabled should not raise."""
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         with patch("anveshak.social.adapters.instagram.settings") as mock_settings:
             mock_settings.instagram_adapter_enabled = False
@@ -391,6 +443,7 @@ class TestSessionManagement:
     @pytest.mark.asyncio
     async def test_refresh_credentials_returns_true_on_success(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         adapter.authenticate = AsyncMock()
         result = await adapter.refresh_credentials()
@@ -398,8 +451,9 @@ class TestSessionManagement:
 
     @pytest.mark.asyncio
     async def test_refresh_credentials_returns_false_on_failure(self):
-        from anveshak.social.adapters.instagram import InstagramAdapter
         from anveshak.social.adapters.base import AdapterAuthError
+        from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         adapter.authenticate = AsyncMock(side_effect=AdapterAuthError("bad creds"))
         result = await adapter.refresh_credentials()
@@ -408,8 +462,9 @@ class TestSessionManagement:
     @pytest.mark.asyncio
     async def test_authenticate_raises_when_enabled_no_creds(self):
         """adapter enabled but no username/password → AdapterAuthError."""
-        from anveshak.social.adapters.instagram import InstagramAdapter
         from anveshak.social.adapters.base import AdapterAuthError
+        from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         with patch("anveshak.social.adapters.instagram.settings") as mock_settings:
             mock_settings.instagram_adapter_enabled = True
@@ -422,6 +477,7 @@ class TestSessionManagement:
     async def test_authenticate_with_session_path(self):
         """Session path provided → load_settings called first."""
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         mock_client = MagicMock()
         mock_client.login = MagicMock(return_value=True)
@@ -439,6 +495,7 @@ class TestSessionManagement:
     async def test_authenticate_session_expired_relogin(self):
         """Session load fails → re-creates client and logs in fresh."""
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         mock_client = MagicMock()
         mock_client.load_settings = MagicMock(side_effect=Exception("session expired"))
@@ -460,12 +517,14 @@ class TestSessionManagement:
 # Collect early returns
 # ---------------------------------------------------------------------------
 
+
 class TestCollectEarlyReturns:
     """Test collect() guard clauses and early returns."""
 
     @pytest.mark.asyncio
     async def test_collect_not_authenticated_yields_nothing(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         adapter._client = None
         items = [item async for item in adapter.collect(["test"], ["@user"], "topic-1")]
@@ -474,6 +533,7 @@ class TestCollectEarlyReturns:
     @pytest.mark.asyncio
     async def test_health_no_client_returns_down(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         adapter._client = None
         result = await adapter.health()
@@ -482,6 +542,7 @@ class TestCollectEarlyReturns:
     @pytest.mark.asyncio
     async def test_health_with_client_calls_account_info(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         mock_client = MagicMock()
         mock_client.account_info = MagicMock(return_value=MagicMock())
@@ -493,6 +554,7 @@ class TestCollectEarlyReturns:
     @pytest.mark.asyncio
     async def test_health_with_exception_returns_degraded(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         adapter._client = MagicMock()
         with patch("asyncio.to_thread", new_callable=AsyncMock, side_effect=Exception("oops")):
@@ -504,20 +566,24 @@ class TestCollectEarlyReturns:
 # Hourly key and TTL helpers
 # ---------------------------------------------------------------------------
 
+
 class TestHourlyKeyHelpers:
     """Test _hourly_key and _seconds_until_hour_end."""
 
     def test_hourly_key_format(self):
         from anveshak.social.adapters.instagram import _hourly_key
+
         key = _hourly_key()
         assert key.startswith("anveshak:instagram:hourly_calls:")
         # Format: YYYY-MM-DD-HH
         import re
+
         suffix = key.split(":")[-1]
         assert re.fullmatch(r"\d{4}-\d{2}-\d{2}-\d{2}", suffix), f"Bad key: {key}"
 
     def test_seconds_until_hour_end_positive(self):
         from anveshak.social.adapters.instagram import _seconds_until_hour_end
+
         ttl = _seconds_until_hour_end()
         assert 0 < ttl <= 3600
 
@@ -526,11 +592,13 @@ class TestHourlyKeyHelpers:
 # Media timestamp parsing edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestTimestampParsing:
     """_media_to_raw_item handles various timestamp formats."""
 
     def test_unix_int_timestamp(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         media = _mock_media(taken_at=1717200000)
         raw = InstagramAdapter._media_to_raw_item(media, "user")
         assert raw.captured_at.year >= 2024
@@ -538,6 +606,7 @@ class TestTimestampParsing:
 
     def test_datetime_object_naive(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         media = _mock_media()
         media.taken_at = datetime(2026, 1, 15, 10, 30)  # naive
         raw = InstagramAdapter._media_to_raw_item(media, "user")
@@ -545,6 +614,7 @@ class TestTimestampParsing:
 
     def test_datetime_object_aware(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         media = _mock_media()
         media.taken_at = datetime(2026, 1, 15, 10, 30, tzinfo=UTC)
         raw = InstagramAdapter._media_to_raw_item(media, "user")
@@ -552,6 +622,7 @@ class TestTimestampParsing:
 
     def test_none_timestamp_falls_back(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         media = _mock_media()
         media.taken_at = None
         raw = InstagramAdapter._media_to_raw_item(media, "user")
@@ -562,12 +633,14 @@ class TestTimestampParsing:
 # Collect with mocked client
 # ---------------------------------------------------------------------------
 
+
 class TestCollectWithMockedClient:
     """Test collect() flows with mocked Instagrapi client."""
 
     @pytest.mark.asyncio
     async def test_profile_yields_bio_and_posts(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         mock_client = MagicMock()
         adapter._client = mock_client
@@ -596,6 +669,7 @@ class TestCollectWithMockedClient:
     @pytest.mark.asyncio
     async def test_private_profile_skips_posts(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         adapter._client = MagicMock()
 
@@ -614,6 +688,7 @@ class TestCollectWithMockedClient:
     @pytest.mark.asyncio
     async def test_hashtag_search_yields_posts(self):
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         adapter._client = MagicMock()
 
@@ -632,6 +707,7 @@ class TestCollectWithMockedClient:
     async def test_profile_error_continues(self):
         """Per-handle errors are logged and collect continues."""
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         adapter._client = MagicMock()
 
@@ -646,8 +722,9 @@ class TestCollectWithMockedClient:
     @pytest.mark.asyncio
     async def test_login_required_raises_auth_error(self):
         """login_required exception → AdapterAuthError."""
-        from anveshak.social.adapters.instagram import InstagramAdapter
         from anveshak.social.adapters.base import AdapterAuthError
+        from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         adapter._client = MagicMock()
 
@@ -662,8 +739,9 @@ class TestCollectWithMockedClient:
     @pytest.mark.asyncio
     async def test_rate_limit_raises_rate_limit_error(self):
         """Rate limit from Meta → AdapterRateLimitError."""
-        from anveshak.social.adapters.instagram import InstagramAdapter
         from anveshak.social.adapters.base import AdapterRateLimitError
+        from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         adapter._client = MagicMock()
 
@@ -679,6 +757,7 @@ class TestCollectWithMockedClient:
     async def test_rate_guard_blocks_when_exhausted(self):
         """Rate guard blocks further collection when hourly cap hit."""
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         adapter._client = MagicMock()
         adapter._rate_guard = AsyncMock()
@@ -691,6 +770,7 @@ class TestCollectWithMockedClient:
     async def test_empty_caption_posts_skipped(self):
         """Posts with empty captions are not yielded."""
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         adapter._client = MagicMock()
 
@@ -698,6 +778,7 @@ class TestCollectWithMockedClient:
         media = _mock_media(caption="", shortcode="EEE")
 
         call_count = 0
+
         async def fake_to_thread(fn, *args, **kwargs):
             nonlocal call_count
             call_count += 1
@@ -714,8 +795,9 @@ class TestCollectWithMockedClient:
     @pytest.mark.asyncio
     async def test_hashtag_rate_limit_raises(self):
         """Rate limit during hashtag search → AdapterRateLimitError."""
-        from anveshak.social.adapters.instagram import InstagramAdapter
         from anveshak.social.adapters.base import AdapterRateLimitError
+        from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         adapter._client = MagicMock()
 
@@ -731,6 +813,7 @@ class TestCollectWithMockedClient:
     async def test_hashtag_error_continues(self):
         """Non-rate-limit hashtag errors are logged, collection continues."""
         from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         adapter._client = MagicMock()
 
@@ -745,8 +828,9 @@ class TestCollectWithMockedClient:
     @pytest.mark.asyncio
     async def test_auth_failure_sets_client_none(self):
         """authenticate() failure → _client remains None."""
-        from anveshak.social.adapters.instagram import InstagramAdapter
         from anveshak.social.adapters.base import AdapterAuthError
+        from anveshak.social.adapters.instagram import InstagramAdapter
+
         adapter = InstagramAdapter()
         mock_client = MagicMock()
         mock_client.login = MagicMock(side_effect=Exception("blocked"))

@@ -9,11 +9,12 @@ pytest.mark.integration — requires running Docker Compose (postgres).
 Run with:
   uv run --package anveshak-tests pytest tests/integration/test_backfill_clustering_contract.py -v -m integration
 """
+
 from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 import numpy as np
 import pytest
@@ -24,6 +25,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _random_embedding(seed: int, dim: int = 384) -> list[float]:
     """L2-normalised random embedding (matches sentence-transformers output)."""
@@ -45,9 +47,13 @@ def _similar_embedding(base: list[float], seed: int, noise: float = 0.02) -> lis
 async def _insert_content(pool, topic_id, source_id, text, embedding, language="en"):
     """Insert content_item with embedding. Returns item_id."""
     from tests.conftest import insert_content_item
+
     content_hash = hashlib.sha256(text.lower().strip().encode()).hexdigest()
     return await insert_content_item(
-        pool, topic_id, source_id, text,
+        pool,
+        topic_id,
+        source_id,
+        text,
         content_hash=content_hash,
         embedding=embedding,
         language=language,
@@ -61,13 +67,17 @@ async def _backfill_item(pool, topic_id, content_item_id, similarity=0.90):
             """INSERT INTO topic_content_items (topic_id, content_item_id, similarity_score, assigned_at)
                VALUES ($1, $2, $3, $4)
                ON CONFLICT (topic_id, content_item_id) DO NOTHING""",
-            topic_id, content_item_id, similarity, datetime.now(UTC),
+            topic_id,
+            content_item_id,
+            similarity,
+            datetime.now(UTC),
         )
 
 
 # ---------------------------------------------------------------------------
 # Test 1: Backfilled items appear in load_unclustered_embeddings
 # ---------------------------------------------------------------------------
+
 
 class TestBackfilledItemsInClustering:
     """Verify clustering queries include items from topic_content_items."""
@@ -89,7 +99,9 @@ class TestBackfilledItemsInClustering:
 
         # Article owned by Topic A
         item_id = await _insert_content(
-            db_pool, topic_a, source_rss,
+            db_pool,
+            topic_a,
+            source_rss,
             "PLA bridge construction at Pangong Tso sector detected by satellite",
             embedding=base_emb,
         )
@@ -107,7 +119,10 @@ class TestBackfilledItemsInClustering:
         )
 
     async def test_load_unclustered_includes_both_owned_and_backfilled(
-        self, db_pool, make_topic, make_source,
+        self,
+        db_pool,
+        make_topic,
+        make_source,
     ):
         """Topic B should see its own items AND backfilled items."""
         from anveshak.analyst.clustering import load_unclustered_embeddings
@@ -121,7 +136,9 @@ class TestBackfilledItemsInClustering:
 
         # Article owned by Topic A, backfilled to Topic B
         item_a = await _insert_content(
-            db_pool, topic_a, source_rss,
+            db_pool,
+            topic_a,
+            source_rss,
             "Chinese military infrastructure near LAC",
             embedding=base_emb,
         )
@@ -129,7 +146,9 @@ class TestBackfilledItemsInClustering:
 
         # Article directly owned by Topic B
         item_b = await _insert_content(
-            db_pool, topic_b, source_web,
+            db_pool,
+            topic_b,
+            source_web,
             "India monitors Chinese activity at Line of Actual Control",
             embedding=_similar_embedding(base_emb, seed=101),
         )
@@ -145,6 +164,7 @@ class TestBackfilledItemsInClustering:
 # ---------------------------------------------------------------------------
 # Test 2: ISC counts platforms from backfilled items
 # ---------------------------------------------------------------------------
+
 
 class TestISCCountsBackfilledPlatforms:
     """Verify ISC reflects platforms from both owned and backfilled items."""
@@ -168,7 +188,9 @@ class TestISCCountsBackfilledPlatforms:
         # 3 web articles owned by Topic B
         for i in range(3):
             await _insert_content(
-                db_pool, topic_b, source_web,
+                db_pool,
+                topic_b,
+                source_web,
                 f"Indian forces monitor LAC activity report number {i} with details",
                 embedding=_similar_embedding(base_emb, seed=210 + i),
             )
@@ -176,7 +198,9 @@ class TestISCCountsBackfilledPlatforms:
         # 2 RSS articles owned by Topic A, backfilled to Topic B
         for i in range(2):
             item_id = await _insert_content(
-                db_pool, topic_a, source_rss,
+                db_pool,
+                topic_a,
+                source_rss,
                 f"Reuters LAC monitoring update edition {i} comprehensive coverage",
                 embedding=_similar_embedding(base_emb, seed=220 + i),
             )
@@ -205,6 +229,7 @@ class TestISCCountsBackfilledPlatforms:
 # Test 3: Both topics cluster the same shared article
 # ---------------------------------------------------------------------------
 
+
 class TestSharedSourceBothTopicsCluster:
     """Verify an article from a shared source clusters in both topics."""
 
@@ -229,7 +254,9 @@ class TestSharedSourceBothTopicsCluster:
 
         # Reuters article owned by Topic A
         shared_item = await _insert_content(
-            db_pool, topic_a, source_reuters,
+            db_pool,
+            topic_a,
+            source_reuters,
             "Chinese naval vessels detected in Indian Ocean by Indian Navy surveillance",
             embedding=base_emb,
         )
@@ -237,7 +264,9 @@ class TestSharedSourceBothTopicsCluster:
         # Topic A: 2 more articles
         for i in range(2):
             await _insert_content(
-                db_pool, topic_a, source_ndtv,
+                db_pool,
+                topic_a,
+                source_ndtv,
                 f"NDTV reports Chinese naval presence in Indian Ocean region part {i}",
                 embedding=_similar_embedding(base_emb, seed=310 + i),
             )
@@ -245,7 +274,9 @@ class TestSharedSourceBothTopicsCluster:
         # Topic B: 2 articles + backfilled Reuters article
         for i in range(2):
             await _insert_content(
-                db_pool, topic_b, source_hindu,
+                db_pool,
+                topic_b,
+                source_hindu,
                 f"The Hindu analysis of Chinese maritime activity IOR edition {i}",
                 embedding=_similar_embedding(base_emb, seed=320 + i),
             )
@@ -286,6 +317,7 @@ class TestSharedSourceBothTopicsCluster:
 # Test 4: Sentiment includes backfilled items
 # ---------------------------------------------------------------------------
 
+
 class TestSentimentIncludesBackfilled:
     """Verify sentiment queries include backfilled items."""
 
@@ -300,7 +332,6 @@ class TestSentimentIncludesBackfilled:
         topic_b = await make_topic(name="Topic B")
         source = await make_source(name="Source", platform="web")
 
-        base_emb = _random_embedding(seed=400)
         now = datetime.now(UTC)
 
         # Topic B's own items: positive sentiment
@@ -314,9 +345,20 @@ class TestSentimentIncludesBackfilled:
                        language, content_hash, url, captured_at, credibility_score_at_capture,
                        created_at, updated_at, labels, org_id)
                        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)""",
-                    item_id, topic_b, source, f"positive article {i}", f"positive article {i}",
-                    "en", content_hash, f"https://example.com/{item_id[:8]}",
-                    now, 75.0, now, now, labels, "org-integration-test",
+                    item_id,
+                    topic_b,
+                    source,
+                    f"positive article {i}",
+                    f"positive article {i}",
+                    "en",
+                    content_hash,
+                    f"https://example.com/{item_id[:8]}",
+                    now,
+                    75.0,
+                    now,
+                    now,
+                    labels,
+                    "org-integration-test",
                 )
 
         # Topic A's items: negative sentiment, backfilled to Topic B
@@ -331,9 +373,20 @@ class TestSentimentIncludesBackfilled:
                        language, content_hash, url, captured_at, credibility_score_at_capture,
                        created_at, updated_at, labels, org_id)
                        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)""",
-                    item_id, topic_a, source, f"negative article {i}", f"negative article {i}",
-                    "en", content_hash, f"https://example.com/{item_id[:8]}",
-                    now, 75.0, now, now, labels, "org-integration-test",
+                    item_id,
+                    topic_a,
+                    source,
+                    f"negative article {i}",
+                    f"negative article {i}",
+                    "en",
+                    content_hash,
+                    f"https://example.com/{item_id[:8]}",
+                    now,
+                    75.0,
+                    now,
+                    now,
+                    labels,
+                    "org-integration-test",
                 )
             backfilled_ids.append(item_id)
             await _backfill_item(db_pool, topic_b, item_id)

@@ -7,6 +7,7 @@ Responsibilities:
 Embeddings are served by the analyst-scheduler /internal/embed endpoint,
 avoiding a PyTorch dependency in the reporter image.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -149,8 +150,7 @@ def assemble_identifier_context(identifiers: list[dict[str, Any]]) -> str:
     for itype, items in by_type.items():
         label = _TYPE_LABELS.get(itype, itype)
         entries = ", ".join(
-            f"{it['identifier_value']} ({it['source_count']} sources)"
-            for it in items
+            f"{it['identifier_value']} ({it['source_count']} sources)" for it in items
         )
         lines.append(f"{label}: {entries}")
 

@@ -1,4 +1,5 @@
 """Unit tests for LLM source type suggestions (Level 4)."""
+
 from __future__ import annotations
 
 import json
@@ -9,22 +10,24 @@ import pytest
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 
 
-VALID_LLM_RESPONSE = json.dumps({
-    "suggestions": [
-        {
-            "platform": "telegram",
-            "description": "Myanmar military channels",
-            "search_terms": ["tatmadaw", "myanmar military"],
-            "reasoning": "Topic covers India-Myanmar border",
-        },
-        {
-            "platform": "web",
-            "description": "ASEAN defence outlets",
-            "search_terms": ["asean defence", "southeast asia military"],
-            "reasoning": "Regional defence coverage",
-        },
-    ]
-})
+VALID_LLM_RESPONSE = json.dumps(
+    {
+        "suggestions": [
+            {
+                "platform": "telegram",
+                "description": "Myanmar military channels",
+                "search_terms": ["tatmadaw", "myanmar military"],
+                "reasoning": "Topic covers India-Myanmar border",
+            },
+            {
+                "platform": "web",
+                "description": "ASEAN defence outlets",
+                "search_terms": ["asean defence", "southeast asia military"],
+                "reasoning": "Regional defence coverage",
+            },
+        ]
+    }
+)
 
 MALFORMED_LLM_RESPONSE = "Here are my suggestions: telegram channels about Myanmar"
 
@@ -34,6 +37,7 @@ JSON_WITH_FENCES = f"```json\n{VALID_LLM_RESPONSE}\n```"
 # ---------------------------------------------------------------------------
 # LLM suggestion parsing
 # ---------------------------------------------------------------------------
+
 
 def test_parse_llm_suggestions_valid():
     """parse_llm_suggestions extracts structured suggestions from valid JSON."""
@@ -75,6 +79,7 @@ def test_parse_llm_suggestions_returns_none_on_empty():
 # LLM suggestion job
 # ---------------------------------------------------------------------------
 
+
 async def test_suggest_source_types_calls_ollama():
     """suggest_source_types enqueues Ollama call and upserts results."""
     from anveshak.analyst.llm_discovery import suggest_source_types
@@ -86,14 +91,18 @@ async def test_suggest_source_types_calls_ollama():
     mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
 
     # Mock topic fetch
-    mock_conn.fetchrow = AsyncMock(return_value={
-        "name": "India-Myanmar Border",
-        "keywords": ["myanmar", "border", "infrastructure"],
-    })
+    mock_conn.fetchrow = AsyncMock(
+        return_value={
+            "name": "India-Myanmar Border",
+            "keywords": ["myanmar", "border", "infrastructure"],
+        }
+    )
     # Mock existing sources
-    mock_conn.fetch = AsyncMock(return_value=[
-        {"url_or_handle": "https://existing.com", "platform": "web"},
-    ])
+    mock_conn.fetch = AsyncMock(
+        return_value=[
+            {"url_or_handle": "https://existing.com", "platform": "web"},
+        ]
+    )
     mock_conn.execute = AsyncMock()
 
     with patch("anveshak.analyst.llm_discovery.call_ollama") as mock_ollama:
@@ -115,10 +124,12 @@ async def test_suggest_source_types_handles_ollama_failure():
     mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
     mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
 
-    mock_conn.fetchrow = AsyncMock(return_value={
-        "name": "Test Topic",
-        "keywords": ["test"],
-    })
+    mock_conn.fetchrow = AsyncMock(
+        return_value={
+            "name": "Test Topic",
+            "keywords": ["test"],
+        }
+    )
     mock_conn.fetch = AsyncMock(return_value=[])
 
     with patch("anveshak.analyst.llm_discovery.call_ollama") as mock_ollama:

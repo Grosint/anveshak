@@ -4,8 +4,9 @@ Uses PyMuPDF (fitz) to extract text from downloaded PDF files.
 PDFs encountered during scraping are fetched, text extracted, and
 inserted as content_items just like web page text.
 
-CLAUDE.md rule 6: no hardcoded model/device choices.
+AGENTS.md rule 6: no hardcoded model/device choices.
 """
+
 from __future__ import annotations
 
 from typing import Optional
@@ -35,8 +36,10 @@ def extract_pdf_text(pdf_bytes: bytes) -> Optional[str]:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         pages: list[str] = []
         for page in doc:
+            # get_text() returns str, list or dict depending on the option arg.
+            # With no arg it is str, but narrow rather than assume.
             text = page.get_text()
-            if text and text.strip():
+            if isinstance(text, str) and text.strip():
                 pages.append(text.strip())
         doc.close()
 

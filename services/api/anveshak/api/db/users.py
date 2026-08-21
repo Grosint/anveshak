@@ -1,11 +1,12 @@
 """User management repository — CRUD for the users table."""
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any
 
-import asyncpg
+from anveshak.db import DBConnection
 
 from ..auth.jwt import pwd_context
 
@@ -42,14 +43,15 @@ SQL_UPDATE_ROLE = "UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2"
 # Repository functions
 # ---------------------------------------------------------------------------
 
-async def list_users(conn: asyncpg.Connection) -> list[dict[str, Any]]:
+
+async def list_users(conn: DBConnection) -> list[dict[str, Any]]:
     """Return all users without password_hash."""
     rows = await conn.fetch(SQL_LIST_USERS)
     return [dict(r) for r in rows]
 
 
 async def create_user(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     username: str,
     password: str,
     role: str = "analyst",
@@ -59,14 +61,25 @@ async def create_user(
     user_id = str(uuid.uuid4())
     now = datetime.now(UTC)
     hashed = pwd_context.hash(password)
-    return await conn.fetchval(
+    created = await conn.fetchval(
         SQL_CREATE_USER,
-        user_id, username, hashed, role, org_id, now, now,
+        user_id,
+        username,
+        hashed,
+        role,
+        org_id,
+        now,
+        now,
     )
+    if created is None:
+        # INSERT ... RETURNING id with no ON CONFLICT: unreachable, asyncpg raises
+        # on failure rather than returning None.
+        raise RuntimeError(f"user insert returned no id: {username}")
+    return str(created)
 
 
 async def list_users_by_org(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     org_id: str,
 ) -> list[dict[str, Any]]:
     """Return users filtered by org_id."""
@@ -74,14 +87,14 @@ async def list_users_by_org(
     return [dict(r) for r in rows]
 
 
-async def delete_user(conn: asyncpg.Connection, user_id: str) -> bool:
+async def delete_user(conn: DBConnection, user_id: str) -> bool:
     """Delete a user by ID. Returns True if deleted."""
     result = await conn.execute(SQL_DELETE_USER, user_id)
     return result.endswith("1")
 
 
 async def update_user_role(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     user_id: str,
     role: str,
 ) -> None:

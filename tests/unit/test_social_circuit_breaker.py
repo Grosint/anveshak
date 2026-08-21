@@ -5,6 +5,7 @@ Redis-backed failure counter survives restarts.
 
 pytest.mark.unit — mock Redis, no external dependencies.
 """
+
 from __future__ import annotations
 
 import time
@@ -31,6 +32,7 @@ class TestCircuitBreakerClosed:
     @pytest.mark.asyncio
     async def test_initial_state_is_closed(self):
         from anveshak.social.circuit_breaker import AdapterCircuitBreaker
+
         redis = make_mock_redis()
         cb = AdapterCircuitBreaker(redis, "bluesky-v1", threshold=5, cooldown_s=900)
         state = await cb.get_state()
@@ -39,6 +41,7 @@ class TestCircuitBreakerClosed:
     @pytest.mark.asyncio
     async def test_record_failure_increments_counter(self):
         from anveshak.social.circuit_breaker import AdapterCircuitBreaker
+
         redis = make_mock_redis(incr_return=1)
         cb = AdapterCircuitBreaker(redis, "bluesky-v1", threshold=5, cooldown_s=900)
         await cb.record_failure()
@@ -47,6 +50,7 @@ class TestCircuitBreakerClosed:
     @pytest.mark.asyncio
     async def test_record_success_resets_counter(self):
         from anveshak.social.circuit_breaker import AdapterCircuitBreaker
+
         redis = make_mock_redis()
         cb = AdapterCircuitBreaker(redis, "bluesky-v1", threshold=5, cooldown_s=900)
         await cb.record_success()
@@ -59,6 +63,7 @@ class TestCircuitBreakerOpen:
     @pytest.mark.asyncio
     async def test_opens_after_threshold_failures(self):
         from anveshak.social.circuit_breaker import AdapterCircuitBreaker
+
         redis = make_mock_redis(incr_return=5)  # hits threshold
         cb = AdapterCircuitBreaker(redis, "bluesky-v1", threshold=5, cooldown_s=900)
         await cb.record_failure()
@@ -68,12 +73,15 @@ class TestCircuitBreakerOpen:
     @pytest.mark.asyncio
     async def test_is_open_returns_true_when_open(self):
         from anveshak.social.circuit_breaker import AdapterCircuitBreaker
+
         # Simulate: failure count >= threshold, opened_at is recent
         redis = make_mock_redis()
-        redis.get = AsyncMock(side_effect=[
-            b"6",  # failure count
-            str(time.monotonic()).encode(),  # opened_at (recent)
-        ])
+        redis.get = AsyncMock(
+            side_effect=[
+                b"6",  # failure count
+                str(time.monotonic()).encode(),  # opened_at (recent)
+            ]
+        )
         cb = AdapterCircuitBreaker(redis, "bluesky-v1", threshold=5, cooldown_s=900)
         state = await cb.get_state()
         assert state == "OPEN"
@@ -81,12 +89,15 @@ class TestCircuitBreakerOpen:
     @pytest.mark.asyncio
     async def test_allows_call_returns_false_when_open(self):
         from anveshak.social.circuit_breaker import AdapterCircuitBreaker
+
         # Count is above threshold, opened recently
         redis = make_mock_redis()
-        redis.get = AsyncMock(side_effect=[
-            b"6",  # failure count
-            str(time.monotonic()).encode(),  # opened_at (recent)
-        ])
+        redis.get = AsyncMock(
+            side_effect=[
+                b"6",  # failure count
+                str(time.monotonic()).encode(),  # opened_at (recent)
+            ]
+        )
         cb = AdapterCircuitBreaker(redis, "bluesky-v1", threshold=5, cooldown_s=900)
         allowed = await cb.allows_call()
         assert allowed is False
@@ -98,13 +109,16 @@ class TestCircuitBreakerHalfOpen:
     @pytest.mark.asyncio
     async def test_half_open_after_cooldown(self):
         from anveshak.social.circuit_breaker import AdapterCircuitBreaker
+
         # Count above threshold, but opened_at is old (cooldown expired)
         old_time = time.monotonic() - 1000  # > 900s cooldown
         redis = make_mock_redis()
-        redis.get = AsyncMock(side_effect=[
-            b"6",  # failure count
-            str(old_time).encode(),  # opened_at (expired)
-        ])
+        redis.get = AsyncMock(
+            side_effect=[
+                b"6",  # failure count
+                str(old_time).encode(),  # opened_at (expired)
+            ]
+        )
         cb = AdapterCircuitBreaker(redis, "bluesky-v1", threshold=5, cooldown_s=900)
         allowed = await cb.allows_call()
         assert allowed is True  # probe allowed
@@ -112,6 +126,7 @@ class TestCircuitBreakerHalfOpen:
     @pytest.mark.asyncio
     async def test_success_after_half_open_closes(self):
         from anveshak.social.circuit_breaker import AdapterCircuitBreaker
+
         redis = make_mock_redis()
         cb = AdapterCircuitBreaker(redis, "bluesky-v1", threshold=5, cooldown_s=900)
         await cb.record_success()
@@ -125,6 +140,7 @@ class TestCircuitBreakerIndependence:
     @pytest.mark.asyncio
     async def test_different_adapters_independent_keys(self):
         from anveshak.social.circuit_breaker import AdapterCircuitBreaker
+
         redis = make_mock_redis()
         cb1 = AdapterCircuitBreaker(redis, "bluesky-v1", threshold=5, cooldown_s=900)
         cb2 = AdapterCircuitBreaker(redis, "reddit-v1", threshold=5, cooldown_s=900)

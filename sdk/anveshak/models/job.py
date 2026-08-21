@@ -1,8 +1,11 @@
 """AnalysisJob model — async task queue state tracking."""
-from pydantic import ConfigDict, Field
-from typing import Optional, Any
+
 from enum import Enum
-from .base import Labels, AuditedModel
+from typing import Any, Optional
+
+from pydantic import Field
+
+from .base import AuditedModel
 
 
 class JobType(str, Enum):
@@ -28,10 +31,11 @@ class AnalysisJob(AuditedModel):
     All heavy processing (LLM inference, scraping, vision analysis)
     runs as ARQ background jobs tracked here.
     """
+
     job_type: JobType
     topic_id: Optional[str] = None
     status: JobStatus = JobStatus.QUEUED
     payload: dict[str, Any] = Field(default_factory=dict)
     result: Optional[dict[str, Any]] = None
     error: Optional[str] = None
-    arq_job_id: Optional[str] = None      # ARQ job identifier for polling
+    arq_job_id: Optional[str] = None  # ARQ job identifier for polling

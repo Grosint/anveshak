@@ -9,19 +9,19 @@ Verifies that analyse_content:
 
 pytest.mark.unit -- no external dependencies, no DB, no network.
 """
+
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, UTC
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers (matching test_analyst_jobs.py patterns)
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class _FakeEntity:
@@ -115,6 +115,7 @@ _MOD = "anveshak.analyst.jobs"
 # Common patch context for Engine C tests
 # ---------------------------------------------------------------------------
 
+
 def _base_patches(
     fake_embedding=None,
     fake_entities=None,
@@ -172,21 +173,38 @@ class TestAnalyseContentCallsExtractIdentifiers:
         ctx = _build_ctx(pool)
 
         patches = _base_patches()
-        with patches[0], patches[1], patches[2], patches[3], patches[4], \
-             patches[5], patches[6], patches[7], patches[8], patches[9], \
-             patches[10], patches[11] as mock_extract, patches[12], \
-             patches[13], patches[14], patches[15], patches[16]:
-
+        with (
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patches[5],
+            patches[6],
+            patches[7],
+            patches[8],
+            patches[9],
+            patches[10],
+            patches[11] as mock_extract,
+            patches[12],
+            patches[13],
+            patches[14],
+            patches[15],
+            patches[16],
+        ):
             from anveshak.analyst.jobs import analyse_content
+
             await analyse_content(ctx, "ci-1")
 
         # extract_identifiers must be called with work_text and platform
         mock_extract.assert_called_once()
         call_args = mock_extract.call_args
-        assert call_args.args[0] == row["clean_text"], \
+        assert call_args.args[0] == row["clean_text"], (
             "extract_identifiers should receive work_text"
-        assert call_args.args[1] == "telegram", \
+        )
+        assert call_args.args[1] == "telegram", (
             "extract_identifiers should receive platform from source"
+        )
 
 
 @pytest.mark.unit
@@ -205,18 +223,34 @@ class TestAnalyseContentInsertsIdentifierEntities:
         ]
 
         patches = _base_patches(fake_identifiers=fake_ids)
-        with patches[0], patches[1], patches[2], patches[3], patches[4], \
-             patches[5], patches[6], patches[7], patches[8], patches[9], \
-             patches[10], patches[11], patches[12], \
-             patches[13], patches[14], patches[15], patches[16]:
-
+        with (
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patches[5],
+            patches[6],
+            patches[7],
+            patches[8],
+            patches[9],
+            patches[10],
+            patches[11],
+            patches[12],
+            patches[13],
+            patches[14],
+            patches[15],
+            patches[16],
+        ):
             from anveshak.analyst.jobs import analyse_content
+
             await analyse_content(ctx, "ci-1")
 
         conn = pool.acquire().__aenter__.return_value
         # Filter INSERT INTO extracted_entities calls
         insert_calls = [
-            c for c in conn.execute.call_args_list
+            c
+            for c in conn.execute.call_args_list
             if len(c.args) > 1 and "INSERT INTO extracted_entities" in str(c.args[0])
         ]
 
@@ -243,12 +277,27 @@ class TestAnalyseContentCallsMatchTemplates:
         ctx = _build_ctx(pool)
 
         patches = _base_patches()
-        with patches[0], patches[1], patches[2], patches[3], patches[4], \
-             patches[5], patches[6], patches[7], patches[8], patches[9], \
-             patches[10], patches[11], patches[12] as mock_match, \
-             patches[13], patches[14], patches[15], patches[16]:
-
+        with (
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patches[5],
+            patches[6],
+            patches[7],
+            patches[8],
+            patches[9],
+            patches[10],
+            patches[11],
+            patches[12] as mock_match,
+            patches[13],
+            patches[14],
+            patches[15],
+            patches[16],
+        ):
             from anveshak.analyst.jobs import analyse_content
+
             await analyse_content(ctx, "ci-1")
 
         # match_templates must be called
@@ -287,31 +336,47 @@ class TestAnalyseContentTemplateMatchInLabels:
         )
 
         patches = _base_patches(fake_template_match=fake_match)
-        with patches[0], patches[1], patches[2], patches[3], patches[4], \
-             patches[5], patches[6], patches[7], patches[8], patches[9], \
-             patches[10], patches[11], patches[12], \
-             patches[13], patches[14], patches[15], patches[16]:
-
+        with (
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patches[5],
+            patches[6],
+            patches[7],
+            patches[8],
+            patches[9],
+            patches[10],
+            patches[11],
+            patches[12],
+            patches[13],
+            patches[14],
+            patches[15],
+            patches[16],
+        ):
             from anveshak.analyst.jobs import analyse_content
+
             await analyse_content(ctx, "ci-1")
 
         conn = pool.acquire().__aenter__.return_value
         update_calls = [
-            c for c in conn.execute.call_args_list
+            c
+            for c in conn.execute.call_args_list
             if len(c.args) > 1 and "UPDATE content_items" in str(c.args[0])
         ]
         assert len(update_calls) >= 1, "SQL_UPDATE_CONTENT_NLP not called"
 
         # $5 = labels_json
         labels = json.loads(update_calls[0].args[5])
-        assert labels.get("scam_template") == "investment_fraud", \
+        assert labels.get("scam_template") == "investment_fraud", (
             f"labels must contain scam_template, got {labels}"
-        assert labels.get("template_confidence") == 0.82, \
+        )
+        assert labels.get("template_confidence") == 0.82, (
             f"labels must contain template_confidence, got {labels}"
-        assert "matched_keywords" in labels, \
-            "labels must contain matched_keywords"
-        assert "extracted_identifiers" in labels, \
-            "labels must contain extracted_identifiers dict"
+        )
+        assert "matched_keywords" in labels, "labels must contain matched_keywords"
+        assert "extracted_identifiers" in labels, "labels must contain extracted_identifiers dict"
 
 
 @pytest.mark.unit
@@ -331,24 +396,41 @@ class TestAnalyseContentNoTemplateMatch:
             fake_template_match=None,
             fake_keywords=[_FakeKeyword("missile", 0.01)],
         )
-        with patches[0], patches[1], patches[2], patches[3], patches[4], \
-             patches[5], patches[6], patches[7], patches[8], patches[9], \
-             patches[10], patches[11], patches[12], \
-             patches[13], patches[14], patches[15], patches[16]:
-
+        with (
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patches[5],
+            patches[6],
+            patches[7],
+            patches[8],
+            patches[9],
+            patches[10],
+            patches[11],
+            patches[12],
+            patches[13],
+            patches[14],
+            patches[15],
+            patches[16],
+        ):
             from anveshak.analyst.jobs import analyse_content
+
             await analyse_content(ctx, "ci-1")
 
         conn = pool.acquire().__aenter__.return_value
         update_calls = [
-            c for c in conn.execute.call_args_list
+            c
+            for c in conn.execute.call_args_list
             if len(c.args) > 1 and "UPDATE content_items" in str(c.args[0])
         ]
         assert len(update_calls) >= 1
 
         labels = json.loads(update_calls[0].args[5])
-        assert "scam_template" not in labels, \
+        assert "scam_template" not in labels, (
             "labels should NOT contain scam_template when no match"
+        )
 
 
 @pytest.mark.unit
@@ -357,8 +439,9 @@ class TestAnalyseContentFetchesPlatform:
 
     def test_sql_get_content_includes_platform(self):
         from anveshak.analyst.jobs import SQL_GET_CONTENT
+
         sql_lower = SQL_GET_CONTENT.lower()
-        assert "platform" in sql_lower, \
-            "SQL_GET_CONTENT must SELECT platform (from sources table)"
-        assert "sources" in sql_lower or "source" in sql_lower, \
+        assert "platform" in sql_lower, "SQL_GET_CONTENT must SELECT platform (from sources table)"
+        assert "sources" in sql_lower or "source" in sql_lower, (
             "SQL_GET_CONTENT must JOIN sources table to get platform"
+        )

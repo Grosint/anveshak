@@ -430,7 +430,7 @@ function DetailPanel({
               >
                 Update credibility
               </Button>
-              <p className="text-[10px] text-text-muted">Every change is audit-logged and immutable (CLAUDE.md rule 8).</p>
+              <p className="text-[10px] text-text-muted">Every change is audit-logged and immutable (AGENTS.md rule 8).</p>
             </form>
 
             <hr className="border-anveshak-border" />

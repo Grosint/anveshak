@@ -13,13 +13,14 @@ Contracts tested:
   B6: Orphan sweep finds content with NULL embedding
   B7: Concurrent insert with same content_hash → exactly 1 row
 """
+
 from __future__ import annotations
 
 import asyncio
 import hashlib
 import json
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 import pytest
 
@@ -31,6 +32,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 # ---------------------------------------------------------------------------
 # B1: Content with NULL clean_text survives analyst read
 # ---------------------------------------------------------------------------
+
 
 async def test_content_with_empty_clean_text_readable(db_pool, make_topic, make_source):
     """Analyst SQL_GET_CONTENT must handle empty clean_text.
@@ -55,9 +57,18 @@ async def test_content_with_empty_clean_text_readable(db_pool, make_topic, make_
             ) VALUES ($1,$2,$3,$4,'',$5,$6,$7,$8,50.0,$9,$10,$11,$12)
             ON CONFLICT(content_hash) DO NOTHING
             """,
-            item_id, topic_id, source_id, "<html>paywall</html>",
-            "en", ch, "https://example.com/paywall", now,
-            TEST_ORG_ID, now, now, LABELS_JSON,
+            item_id,
+            topic_id,
+            source_id,
+            "<html>paywall</html>",
+            "en",
+            ch,
+            "https://example.com/paywall",
+            now,
+            TEST_ORG_ID,
+            now,
+            now,
+            LABELS_JSON,
         )
 
         # Analyst's SQL_GET_CONTENT query
@@ -84,6 +95,7 @@ async def test_content_with_empty_clean_text_readable(db_pool, make_topic, make_
 # B2: Cluster with HTML in label survives reporter read
 # ---------------------------------------------------------------------------
 
+
 async def test_cluster_with_html_label_readable(db_pool, make_topic):
     """Reporter data bundle must not crash when cluster label contains HTML.
 
@@ -102,9 +114,14 @@ async def test_cluster_with_html_label_readable(db_pool, make_topic):
                 created_at, updated_at, labels
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             """,
-            cluster_id, topic_id,
+            cluster_id,
+            topic_id,
             'Cyber Fraud: TGCSB, href="https://www.siasat.com"',  # dirty label
-            35, 3, now, now, LABELS_JSON,
+            35,
+            3,
+            now,
+            now,
+            LABELS_JSON,
         )
 
         # Reporter's cluster query (from fetch_report_data_bundle)
@@ -119,7 +136,7 @@ async def test_cluster_with_html_label_readable(db_pool, make_topic):
         )
 
     assert row is not None
-    assert 'href=' in row["label"], "HTML should survive round-trip"
+    assert "href=" in row["label"], "HTML should survive round-trip"
     assert row["item_count"] == 35
     assert row["executive_summary"] is None, "NULL summary should be handled"
 
@@ -127,6 +144,7 @@ async def test_cluster_with_html_label_readable(db_pool, make_topic):
 # ---------------------------------------------------------------------------
 # B3: Signal evidence JSONB not double-encoded
 # ---------------------------------------------------------------------------
+
 
 async def test_signal_evidence_jsonb_not_double_encoded(db_pool, make_topic):
     """Signal evidence must be a proper dict after DB round-trip, not a string.
@@ -148,14 +166,17 @@ async def test_signal_evidence_jsonb_not_double_encoded(db_pool, make_topic):
                 status, created_at, updated_at, labels
             ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $7, $8)
             """,
-            signal_id, topic_id, "multi_source_convergence",
+            signal_id,
+            topic_id,
+            "multi_source_convergence",
             "Test signal — 5 independent sources",
-            json.dumps(evidence), "new", now, LABELS_JSON,
+            json.dumps(evidence),
+            "new",
+            now,
+            LABELS_JSON,
         )
 
-        row = await conn.fetchrow(
-            "SELECT id, evidence FROM signals WHERE id = $1", signal_id
-        )
+        row = await conn.fetchrow("SELECT id, evidence FROM signals WHERE id = $1", signal_id)
 
     assert row is not None
     ev = row["evidence"]
@@ -175,6 +196,7 @@ async def test_signal_evidence_jsonb_not_double_encoded(db_pool, make_topic):
 # ---------------------------------------------------------------------------
 # B4: Report generation handles deleted topic
 # ---------------------------------------------------------------------------
+
 
 async def test_report_data_bundle_with_deleted_topic(db_pool, make_topic):
     """Reporter must handle topic deleted between enqueue and execution.
@@ -197,7 +219,13 @@ async def test_report_data_bundle_with_deleted_topic(db_pool, make_topic):
             ) VALUES ($1, $2, 'intelligence_brief', $3, $4, 30.0, '{}'::jsonb,
                       $5, $6, $7)
             """,
-            report_id, topic_id, now, now, now, now, LABELS_JSON,
+            report_id,
+            topic_id,
+            now,
+            now,
+            now,
+            now,
+            LABELS_JSON,
         )
 
         # Verify report exists
@@ -210,9 +238,7 @@ async def test_report_data_bundle_with_deleted_topic(db_pool, make_topic):
 
         # Now "delete" the topic (simulate race condition)
         # Can't actually delete due to FK — set status instead
-        await conn.execute(
-            "UPDATE topics SET status = 'deleted' WHERE id = $1", topic_id
-        )
+        await conn.execute("UPDATE topics SET status = 'deleted' WHERE id = $1", topic_id)
 
         # Reporter's topic stats query should handle gracefully
         topic_row = await conn.fetchrow(
@@ -226,9 +252,8 @@ async def test_report_data_bundle_with_deleted_topic(db_pool, make_topic):
 # B5: Vision NULL deepfake_score → no credibility penalty
 # ---------------------------------------------------------------------------
 
-async def test_null_deepfake_score_excluded_from_credibility(
-    db_pool, make_topic, make_source
-):
+
+async def test_null_deepfake_score_excluded_from_credibility(db_pool, make_topic, make_source):
     """Credibility update query must not penalize sources with NULL deepfake_score.
 
     When vision worker crashes or model fails, deepfake_score is NULL (not 0.0).
@@ -255,8 +280,15 @@ async def test_null_deepfake_score_excluded_from_credibility(
                       $6,$7,$8,$9)
             ON CONFLICT(content_hash) DO NOTHING
             """,
-            item_id, topic_id, source_id, ch, now,
-            TEST_ORG_ID, now, now, LABELS_JSON,
+            item_id,
+            topic_id,
+            source_id,
+            ch,
+            now,
+            TEST_ORG_ID,
+            now,
+            now,
+            LABELS_JSON,
         )
         media_hash = hashlib.sha256(b"test-media-asset").hexdigest()
         await conn.execute(
@@ -266,7 +298,11 @@ async def test_null_deepfake_score_excluded_from_credibility(
                 content_hash, created_at, labels
             ) VALUES ($1, $2, 'image', '/tmp/test.jpg', $3, $4, $5)
             """,
-            media_id, item_id, media_hash, now, LABELS_JSON,
+            media_id,
+            item_id,
+            media_hash,
+            now,
+            LABELS_JSON,
         )
         await conn.execute(
             """
@@ -274,7 +310,10 @@ async def test_null_deepfake_score_excluded_from_credibility(
                 id, media_asset_id, deepfake_score, processed_at, labels
             ) VALUES ($1, $2, NULL, $3, $4)
             """,
-            str(uuid.uuid4()), media_id, now, LABELS_JSON,
+            str(uuid.uuid4()),
+            media_id,
+            now,
+            LABELS_JSON,
         )
 
         # Credibility query — should return 0 rows (NULL excluded by > 0.8)
@@ -292,8 +331,7 @@ async def test_null_deepfake_score_excluded_from_credibility(
         )
 
     assert len(rows) == 0, (
-        f"NULL deepfake_score should be excluded from credibility penalty, "
-        f"got {len(rows)} rows"
+        f"NULL deepfake_score should be excluded from credibility penalty, got {len(rows)} rows"
     )
 
 
@@ -301,9 +339,8 @@ async def test_null_deepfake_score_excluded_from_credibility(
 # B6: Orphan sweep finds content with NULL embedding
 # ---------------------------------------------------------------------------
 
-async def test_orphan_sweep_query_finds_unprocessed_content(
-    db_pool, make_topic, make_source
-):
+
+async def test_orphan_sweep_query_finds_unprocessed_content(db_pool, make_topic, make_source):
     """Orphan sweep query must find content_items with NULL embedding.
 
     This is the safety net for when scraper inserts but enqueue_job fails.
@@ -313,7 +350,9 @@ async def test_orphan_sweep_query_finds_unprocessed_content(
 
     # Insert content WITHOUT embedding (simulates missed enqueue)
     item_id = await insert_content_item(
-        db_pool, topic_id, source_id,
+        db_pool,
+        topic_id,
+        source_id,
         text="Orphan content that was never analysed",
         embedding=None,  # No embedding = not processed
     )
@@ -334,8 +373,7 @@ async def test_orphan_sweep_query_finds_unprocessed_content(
 
     found_ids = [r["id"] for r in rows]
     assert item_id in found_ids, (
-        f"Orphan sweep should find item {item_id[:8]}... "
-        f"(found {len(rows)} orphans total)"
+        f"Orphan sweep should find item {item_id[:8]}... (found {len(rows)} orphans total)"
     )
 
 
@@ -343,9 +381,8 @@ async def test_orphan_sweep_query_finds_unprocessed_content(
 # B7: Concurrent insert with same content_hash → exactly 1 row
 # ---------------------------------------------------------------------------
 
-async def test_concurrent_dedup_same_hash_one_row(
-    db_pool, make_topic, make_source
-):
+
+async def test_concurrent_dedup_same_hash_one_row(db_pool, make_topic, make_source):
     """ON CONFLICT(content_hash) DO NOTHING must prevent duplicates.
 
     Two concurrent scraper tasks inserting the same content must result in
@@ -370,22 +407,27 @@ async def test_concurrent_dedup_same_hash_one_row(
                 ) VALUES ($1,$2,$3,$4,$5,'en',$6,$7,$8,50.0,$9,$10,$11,$12)
                 ON CONFLICT(content_hash) DO NOTHING
                 """,
-                item_id, topic_id, source_id, text, text,
-                ch, f"https://example.com/{suffix}", now,
-                TEST_ORG_ID, now, now, LABELS_JSON,
+                item_id,
+                topic_id,
+                source_id,
+                text,
+                text,
+                ch,
+                f"https://example.com/{suffix}",
+                now,
+                TEST_ORG_ID,
+                now,
+                now,
+                LABELS_JSON,
             )
         return item_id
 
     # Run 5 concurrent inserts with same content_hash
-    await asyncio.gather(
-        _insert("a"), _insert("b"), _insert("c"), _insert("d"), _insert("e")
-    )
+    await asyncio.gather(_insert("a"), _insert("b"), _insert("c"), _insert("d"), _insert("e"))
 
     async with db_pool.acquire() as conn:
         count = await conn.fetchval(
             "SELECT count(*) FROM content_items WHERE content_hash = $1", ch
         )
 
-    assert count == 1, (
-        f"Expected exactly 1 row for content_hash, got {count}"
-    )
+    assert count == 1, f"Expected exactly 1 row for content_hash, got {count}"

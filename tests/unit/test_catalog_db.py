@@ -1,8 +1,8 @@
 """Unit tests for catalog DB functions — mock asyncpg, verify SQL + params."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
-from datetime import datetime, UTC
 
 import pytest
 
@@ -24,6 +24,7 @@ def mock_conn() -> AsyncMock:
 # ---------------------------------------------------------------------------
 # list_catalog_suggestions
 # ---------------------------------------------------------------------------
+
 
 async def test_list_catalog_suggestions_calls_correct_sql(mock_conn):
     """list_catalog_suggestions must query by topic keywords overlap."""
@@ -54,6 +55,7 @@ async def test_list_catalog_suggestions_returns_dicts(mock_conn):
 # upsert_discovered
 # ---------------------------------------------------------------------------
 
+
 async def test_upsert_discovered_calls_execute(mock_conn):
     """upsert_discovered must INSERT with ON CONFLICT DO UPDATE."""
     from anveshak.api.db.catalog import upsert_discovered
@@ -81,6 +83,7 @@ async def test_upsert_discovered_calls_execute(mock_conn):
 # approve_discovered
 # ---------------------------------------------------------------------------
 
+
 async def test_approve_discovered_updates_status(mock_conn):
     """approve_discovered must set status=approved and link source_id."""
     from anveshak.api.db.catalog import approve_discovered
@@ -96,6 +99,7 @@ async def test_approve_discovered_updates_status(mock_conn):
 # dismiss_discovered
 # ---------------------------------------------------------------------------
 
+
 async def test_dismiss_discovered_updates_status(mock_conn):
     """dismiss_discovered must set status=dismissed."""
     from anveshak.api.db.catalog import dismiss_discovered
@@ -110,12 +114,13 @@ async def test_dismiss_discovered_updates_status(mock_conn):
 # list_discovered
 # ---------------------------------------------------------------------------
 
+
 async def test_list_discovered_by_topic(mock_conn):
     """list_discovered must filter by topic_id and optional status."""
     from anveshak.api.db.catalog import list_discovered
 
     mock_conn.fetch.return_value = []
-    result = await list_discovered(mock_conn, topic_id="t1")
+    await list_discovered(mock_conn, topic_id="t1")
     mock_conn.fetch.assert_called_once()
     call_args = mock_conn.fetch.call_args[0]
     assert call_args[1] == "t1"
@@ -126,7 +131,7 @@ async def test_list_discovered_with_status_filter(mock_conn):
     from anveshak.api.db.catalog import list_discovered
 
     mock_conn.fetch.return_value = []
-    result = await list_discovered(mock_conn, topic_id="t1", status="pending")
+    await list_discovered(mock_conn, topic_id="t1", status="pending")
     call_args = mock_conn.fetch.call_args[0]
     assert "t1" in call_args
     assert "pending" in call_args
@@ -135,6 +140,7 @@ async def test_list_discovered_with_status_filter(mock_conn):
 # ---------------------------------------------------------------------------
 # insert_catalog_approval
 # ---------------------------------------------------------------------------
+
 
 async def test_insert_catalog_approval(mock_conn):
     """insert_catalog_approval must INSERT with ON CONFLICT DO NOTHING."""
@@ -157,6 +163,7 @@ async def test_insert_catalog_approval(mock_conn):
 # ---------------------------------------------------------------------------
 # update_catalog_effectiveness
 # ---------------------------------------------------------------------------
+
 
 async def test_update_catalog_effectiveness(mock_conn):
     """update_catalog_effectiveness must UPDATE analytics columns."""

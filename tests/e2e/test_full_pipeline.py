@@ -6,27 +6,27 @@ All tests are read-only (no writes) to avoid disturbing demo state.
 Requirements: make up seed-demo
 Run: uv run --package anveshak-tests pytest tests/e2e/test_full_pipeline.py -v -m e2e
 """
+
 from __future__ import annotations
 
 import urllib.request
-import json
 
 import pytest
 
 from .conftest import (
     API_BASE,
-    DEMO_TOPIC_UAV,
-    DEMO_TOPIC_DEEPFAKE,
     DEMO_REPORT_ID,
-    DEMO_VISION_JOB_ID,
     DEMO_SIGNAL_ID,
+    DEMO_TOPIC_DEEPFAKE,
+    DEMO_TOPIC_UAV,
+    DEMO_VISION_JOB_ID,
     _http,
 )
-
 
 # ---------------------------------------------------------------------------
 # Step 1 — Deep health check (all dependencies green)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.e2e
 def test_api_deep_health_ready():
@@ -41,6 +41,7 @@ def test_api_deep_health_ready():
 # ---------------------------------------------------------------------------
 # Step 2 — Auth flow
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.e2e
 def test_auth_login_returns_token(auth_headers):
@@ -62,6 +63,7 @@ def test_auth_required_on_topics():
 # Step 3 — Topic data
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.e2e
 def test_topics_loaded(auth_headers):
     """8F.3 — At least 3 topics are present after seed_demo.sql."""
@@ -73,6 +75,7 @@ def test_topics_loaded(auth_headers):
 # ---------------------------------------------------------------------------
 # Step 4 — Content items
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.e2e
 def test_content_items_exist_for_uav_topic(auth_headers):
@@ -90,6 +93,7 @@ def test_content_items_exist_for_uav_topic(auth_headers):
 # ---------------------------------------------------------------------------
 # Step 5 — Intelligence signal
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.e2e
 def test_signal_exists_and_new(auth_headers):
@@ -126,6 +130,7 @@ def test_specific_signal_fields(auth_headers):
 # Step 6 — Vision analysis: deepfake score is a float, not bool
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.e2e
 def test_vision_job_deepfake_score_is_float(auth_headers):
     """8F.6 — Vision job result has deepfake_score as float 0–1 (rule 7: never bool)."""
@@ -148,6 +153,7 @@ def test_vision_job_deepfake_score_is_float(auth_headers):
 # Step 7 — Report: generated, immutable, has source_snapshot
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.e2e
 def test_report_exists_and_immutable(auth_headers):
     """8F.7 — Pre-generated report has generated_at set (immutability rule)."""
@@ -158,7 +164,9 @@ def test_report_exists_and_immutable(auth_headers):
     )
     assert status == 200, f"report not found: {body}"
     assert body.get("generated_at"), "generated_at must be set on a completed report"
-    assert body.get("source_snapshot"), "source_snapshot must capture credibility at generation time"
+    assert body.get("source_snapshot"), (
+        "source_snapshot must capture credibility at generation time"
+    )
     assert body.get("content_md"), "report content_md must not be empty"
 
 
@@ -180,6 +188,7 @@ def test_report_topic_list(auth_headers):
 # ---------------------------------------------------------------------------
 # Step 8 — Observability endpoints
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.e2e
 def test_prometheus_scrape_endpoint_reachable():

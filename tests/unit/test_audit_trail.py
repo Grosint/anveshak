@@ -10,9 +10,10 @@ Tests for:
 
 pytest.mark.unit — no external dependencies.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -24,6 +25,7 @@ pytestmark = pytest.mark.unit
 # 1. Audit trail DB functions
 # ===================================================================
 
+
 class TestAuditTrailDB:
     """db/audit.py must provide log_action() and get_audit_trail()."""
 
@@ -31,6 +33,7 @@ class TestAuditTrailDB:
     async def test_log_action_callable(self):
         """log_action function must exist and be callable."""
         from services.api.anveshak.api.db.audit import log_action
+
         assert callable(log_action)
 
     @pytest.mark.asyncio
@@ -81,6 +84,7 @@ class TestAuditTrailDB:
     async def test_get_audit_trail_callable(self):
         """get_audit_trail function must exist and be callable."""
         from services.api.anveshak.api.db.audit import get_audit_trail
+
         assert callable(get_audit_trail)
 
     @pytest.mark.asyncio
@@ -88,11 +92,19 @@ class TestAuditTrailDB:
         """get_audit_trail must return (items, total) tuple."""
         from services.api.anveshak.api.db.audit import get_audit_trail
 
-        mock_conn.fetch = AsyncMock(return_value=[
-            {"id": "a1", "user_id": "u1", "action": "topic.create",
-             "resource_type": "topic", "resource_id": "t1",
-             "created_at": datetime.now(UTC), "total": 42},
-        ])
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "id": "a1",
+                    "user_id": "u1",
+                    "action": "topic.create",
+                    "resource_type": "topic",
+                    "resource_id": "t1",
+                    "created_at": datetime.now(UTC),
+                    "total": 42,
+                },
+            ]
+        )
 
         items, total = await get_audit_trail(mock_conn, resource_type="topic", limit=50)
         assert isinstance(items, list)
@@ -137,7 +149,8 @@ class TestAuditTrailDB:
 
     def test_sql_constants_exist(self):
         """SQL constants for audit trail must be defined."""
-        from services.api.anveshak.api.db.audit import SQL_INSERT_AUDIT, SQL_GET_AUDIT_TRAIL
+        from services.api.anveshak.api.db.audit import SQL_GET_AUDIT_TRAIL, SQL_INSERT_AUDIT
+
         assert "INSERT" in SQL_INSERT_AUDIT.upper()
         assert "SELECT" in SQL_GET_AUDIT_TRAIL.upper()
 
@@ -146,6 +159,7 @@ class TestAuditTrailDB:
 # 2. Dead-letter queue DB functions
 # ===================================================================
 
+
 class TestDeadLetterQueue:
     """db/failed_jobs.py must store and retrieve failed ARQ job payloads."""
 
@@ -153,6 +167,7 @@ class TestDeadLetterQueue:
     async def test_record_failed_job_callable(self):
         """record_failed_job function must exist."""
         from services.api.anveshak.api.db.failed_jobs import record_failed_job
+
         assert callable(record_failed_job)
 
     @pytest.mark.asyncio
@@ -196,10 +211,17 @@ class TestDeadLetterQueue:
         """list_failed_jobs must return a list of dicts."""
         from services.api.anveshak.api.db.failed_jobs import list_failed_jobs
 
-        mock_conn.fetch = AsyncMock(return_value=[
-            {"id": "j1", "job_id": "job-001", "function_name": "generate_report",
-             "error": "timeout", "failed_at": datetime.now(UTC)},
-        ])
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "id": "j1",
+                    "job_id": "job-001",
+                    "function_name": "generate_report",
+                    "error": "timeout",
+                    "failed_at": datetime.now(UTC),
+                },
+            ]
+        )
 
         result = await list_failed_jobs(mock_conn, limit=50)
         assert isinstance(result, list)
@@ -223,6 +245,7 @@ class TestDeadLetterQueue:
             SQL_INSERT_FAILED_JOB,
             SQL_LIST_FAILED_JOBS,
         )
+
         assert "INSERT" in SQL_INSERT_FAILED_JOB.upper()
         assert "SELECT" in SQL_LIST_FAILED_JOBS.upper()
 
@@ -230,6 +253,7 @@ class TestDeadLetterQueue:
 # ===================================================================
 # 3. Audit trail API endpoint
 # ===================================================================
+
 
 class TestAuditTrailEndpoint:
     """GET /api/v1/system/audit-trail must return audit entries (admin only)."""
@@ -246,6 +270,7 @@ class TestAuditTrailEndpoint:
 # 4. Failed jobs API endpoint
 # ===================================================================
 
+
 class TestFailedJobsEndpoint:
     """GET /api/v1/system/failed-jobs must return DLQ entries (admin only)."""
 
@@ -261,6 +286,7 @@ class TestFailedJobsEndpoint:
 # 5. HSTS + CSP headers
 # ===================================================================
 
+
 class TestSecurityHeaders:
     """Security middleware must include HSTS when enabled."""
 
@@ -269,16 +295,14 @@ class TestSecurityHeaders:
         from pathlib import Path
 
         source = Path("services/api/anveshak/api/middleware/security.py").read_text()
-        assert "Strict-Transport-Security" in source, \
-            "Security middleware must set HSTS header"
+        assert "Strict-Transport-Security" in source, "Security middleware must set HSTS header"
 
     def test_csp_header_logic_exists(self):
         """SecurityHeadersMiddleware source must reference Content-Security-Policy."""
         from pathlib import Path
 
         source = Path("services/api/anveshak/api/middleware/security.py").read_text()
-        assert "Content-Security-Policy" in source, \
-            "Security middleware must set CSP header"
+        assert "Content-Security-Policy" in source, "Security middleware must set CSP header"
 
     def test_hsts_setting_exists(self):
         """Settings must have hsts_enabled flag."""
@@ -292,6 +316,7 @@ class TestSecurityHeaders:
 # 6. Backup volume name
 # ===================================================================
 
+
 class TestBackupScript:
     """backup.sh must reference the correct Docker volume name."""
 
@@ -300,15 +325,18 @@ class TestBackupScript:
         from pathlib import Path
 
         content = Path("scripts/backup.sh").read_text()
-        assert "anveshak_media_store" not in content, \
+        assert "anveshak_media_store" not in content, (
             "backup.sh references non-existent volume 'anveshak_media_store' — should be 'anveshak_vision_media'"
-        assert "anveshak_vision_media" in content, \
+        )
+        assert "anveshak_vision_media" in content, (
             "backup.sh must use volume 'anveshak_vision_media' (matches compose.yml)"
+        )
 
 
 # ===================================================================
 # 7. Redis AOF configuration
 # ===================================================================
+
 
 class TestRedisAOF:
     """Redis must have AOF persistence enabled."""
@@ -318,21 +346,22 @@ class TestRedisAOF:
         from pathlib import Path
 
         content = Path("infra/compose.yml").read_text()
-        assert "--appendonly yes" in content or "appendonly yes" in content, \
+        assert "--appendonly yes" in content or "appendonly yes" in content, (
             "Redis must have AOF enabled (--appendonly yes) to prevent ARQ job loss"
+        )
 
     def test_compose_redis_has_appendfsync(self):
         """compose.yml Redis command must include --appendfsync everysec."""
         from pathlib import Path
 
         content = Path("infra/compose.yml").read_text()
-        assert "appendfsync" in content, \
-            "Redis must specify --appendfsync for durability control"
+        assert "appendfsync" in content, "Redis must specify --appendfsync for durability control"
 
 
 # ===================================================================
 # 8. Migration 005 exists
 # ===================================================================
+
 
 class TestMigrationAuditTables:
     """Initial migration must create audit_trail and failed_jobs tables."""
@@ -343,8 +372,9 @@ class TestMigrationAuditTables:
 
         migration_dir = Path("services/api/migrations/versions")
         files = [f.name for f in migration_dir.iterdir()]
-        assert any("001" in f for f in files), \
+        assert any("001" in f for f in files), (
             "Migration 001 must exist in services/api/migrations/versions/"
+        )
 
     def test_migration_creates_audit_trail(self):
         """Migration 001 must create audit_trail table."""
@@ -357,8 +387,7 @@ class TestMigrationAuditTables:
                 content = f.read_text()
                 break
 
-        assert "audit_trail" in content.lower(), \
-            "Migration 001 must create audit_trail table"
+        assert "audit_trail" in content.lower(), "Migration 001 must create audit_trail table"
 
     def test_migration_creates_failed_jobs(self):
         """Migration 001 must create failed_jobs table."""
@@ -371,5 +400,4 @@ class TestMigrationAuditTables:
                 content = f.read_text()
                 break
 
-        assert "failed_jobs" in content.lower(), \
-            "Migration 001 must create failed_jobs table"
+        assert "failed_jobs" in content.lower(), "Migration 001 must create failed_jobs table"

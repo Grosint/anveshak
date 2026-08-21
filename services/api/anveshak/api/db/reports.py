@@ -1,9 +1,10 @@
 """Report repository — all SQL for the reports domain."""
+
 from __future__ import annotations
 
 from typing import Any
 
-import asyncpg
+from anveshak.db import DBConnection
 
 # ---------------------------------------------------------------------------
 # SQL constants
@@ -59,8 +60,9 @@ SQL_GET_REPORT_GEOJSON = "SELECT generated_at, geojson FROM reports WHERE id = $
 # Repository functions
 # ---------------------------------------------------------------------------
 
+
 async def insert_report(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     report_id: str,
     topic_id: str,
     report_type: str,
@@ -74,21 +76,25 @@ async def insert_report(
 ) -> None:
     await conn.execute(
         SQL_INSERT_REPORT,
-        report_id, topic_id, report_type,
-        time_start, time_end, credibility_min,
-        tracker_id, now, labels_json,
+        report_id,
+        topic_id,
+        report_type,
+        time_start,
+        time_end,
+        credibility_min,
+        tracker_id,
+        now,
+        labels_json,
     )
 
 
-async def fetch_report(
-    conn: asyncpg.Connection, report_id: str
-) -> dict[str, Any] | None:
+async def fetch_report(conn: DBConnection, report_id: str) -> dict[str, Any] | None:
     row = await conn.fetchrow(SQL_FETCH_REPORT, report_id)
     return dict(row) if row else None
 
 
 async def list_topic_reports(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     topic_id: str,
     limit: int = 50,
     offset: int = 0,
@@ -99,8 +105,6 @@ async def list_topic_reports(
     return items, total
 
 
-async def get_report_geojson(
-    conn: asyncpg.Connection, report_id: str
-) -> dict[str, Any] | None:
+async def get_report_geojson(conn: DBConnection, report_id: str) -> dict[str, Any] | None:
     row = await conn.fetchrow(SQL_GET_REPORT_GEOJSON, report_id)
     return dict(row) if row else None

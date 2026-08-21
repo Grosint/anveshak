@@ -6,6 +6,7 @@ Tests:
   - get_trace_id returns None when no active span
   - inject_trace_id structlog processor works without OTEL
 """
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -16,7 +17,6 @@ pytestmark = pytest.mark.unit
 
 
 class TestConfigureTracing:
-
     def test_noop_when_disabled(self):
         from anveshak.tracing import configure_tracing
 
@@ -32,7 +32,6 @@ class TestConfigureTracing:
 
 
 class TestGetTraceId:
-
     def test_returns_none_without_active_span(self):
         from anveshak.tracing import get_trace_id
 
@@ -42,7 +41,6 @@ class TestGetTraceId:
 
 
 class TestInjectTraceId:
-
     def test_processor_passes_through_without_otel(self):
         from anveshak.tracing import inject_trace_id
 

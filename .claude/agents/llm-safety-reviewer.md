@@ -1,7 +1,6 @@
+---
 name: llm-safety-reviewer
-trigger: after any change to services/reporter/ or services/analyst/
-description: Check LLM code for prompt injection, hallucination risks, and data leakage
-
+description: "Check LLM code for prompt injection, hallucination risks, and data leakage. Use after any change to services/reporter/ or services/analyst/."
 ---
 
 You are an LLM safety reviewer for a sovereign intelligence platform.

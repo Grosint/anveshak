@@ -1,12 +1,13 @@
 """Catalog & discovery repository — SQL for source catalog and discovered sources."""
+
 from __future__ import annotations
 
 import json
 import uuid
 from datetime import UTC, datetime
-from typing import Any, Optional
+from typing import Any
 
-import asyncpg
+from anveshak.db import DBConnection
 
 # ---------------------------------------------------------------------------
 # SQL constants — source_catalog
@@ -160,7 +161,7 @@ SQL_DISMISS_DISCOVERED = """
 
 
 async def list_catalog_suggestions(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     keywords: list[str],
 ) -> list[dict[str, Any]]:
     """List catalog entries whose domain_tags overlap with topic keywords."""
@@ -168,22 +169,20 @@ async def list_catalog_suggestions(
     return [dict(r) for r in rows]
 
 
-async def get_catalog_entry(
-    conn: asyncpg.Connection, entry_id: str
-) -> dict[str, Any] | None:
+async def get_catalog_entry(conn: DBConnection, entry_id: str) -> dict[str, Any] | None:
     """Fetch a single catalog entry by ID."""
     row = await conn.fetchrow(SQL_GET_CATALOG_ENTRY, entry_id)
     return dict(row) if row else None
 
 
-async def list_all_catalog(conn: asyncpg.Connection) -> list[dict[str, Any]]:
+async def list_all_catalog(conn: DBConnection) -> list[dict[str, Any]]:
     """List all catalog entries (admin view)."""
     rows = await conn.fetch(SQL_LIST_ALL_CATALOG)
     return [dict(r) for r in rows]
 
 
 async def insert_catalog_approval(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     catalog_entry_id: str,
     topic_id: str,
     source_id: str,
@@ -193,13 +192,17 @@ async def insert_catalog_approval(
     """Record that an analyst approved a catalog entry for a topic."""
     await conn.execute(
         SQL_INSERT_CATALOG_APPROVAL,
-        catalog_entry_id, topic_id, source_id, approved_by,
-        datetime.now(UTC), labels_json,
+        catalog_entry_id,
+        topic_id,
+        source_id,
+        approved_by,
+        datetime.now(UTC),
+        labels_json,
     )
 
 
 async def update_catalog_effectiveness(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     catalog_entry_id: str,
     signal_contribution_count: int,
     relevance_hit_rate: float,
@@ -226,7 +229,7 @@ async def update_catalog_effectiveness(
 
 
 async def list_discovered(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     topic_id: str,
     status: str | None = None,
 ) -> list[dict[str, Any]]:
@@ -239,7 +242,7 @@ async def list_discovered(
 
 
 async def upsert_discovered(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     topic_id: str,
     domain_or_handle: str,
     platform: str,
@@ -247,14 +250,14 @@ async def upsert_discovered(
     citation_count: int = 1,
     confidence_score: float | None = None,
     evidence: dict[str, Any] | None = None,
-    labels_json: str = '{}',
+    labels_json: str = "{}",
 ) -> None:
     """Insert or update a discovered source.
 
     ON CONFLICT increments citation_count and merges evidence.
     """
     now = datetime.now(UTC)
-    evidence_json = json.dumps(evidence) if evidence else '{}'
+    evidence_json = json.dumps(evidence) if evidence else "{}"
     await conn.execute(
         SQL_UPSERT_DISCOVERED,
         str(uuid.uuid4()),  # id
@@ -271,7 +274,7 @@ async def upsert_discovered(
 
 
 async def approve_discovered(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     discovered_id: str,
     source_id: str,
 ) -> None:
@@ -285,7 +288,7 @@ async def approve_discovered(
 
 
 async def dismiss_discovered(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     discovered_id: str,
 ) -> None:
     """Dismiss a discovered source suggestion."""

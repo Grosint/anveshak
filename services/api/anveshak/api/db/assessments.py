@@ -3,6 +3,7 @@
 Phase 0: deterministic stats from content_items, extracted_entities,
 identifier_occurrences, narrative_clusters, and credibility_audit_log.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -10,6 +11,7 @@ from typing import Any
 
 import asyncpg
 import structlog
+from anveshak.db import DBConnection
 
 log = structlog.get_logger(__name__)
 
@@ -187,8 +189,9 @@ SQL_SOURCE_SNAPSHOT = """
 # Repository functions
 # ---------------------------------------------------------------------------
 
+
 async def insert_assessment(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     *,
     assessment_id: str,
     topic_id: str,
@@ -205,23 +208,28 @@ async def insert_assessment(
     """Insert a new source assessment. ON CONFLICT DO NOTHING for dedup."""
     await conn.execute(
         SQL_INSERT_ASSESSMENT,
-        assessment_id, topic_id, source_id, org_id,
-        time_window_start, time_window_end,
-        stats_json, content_item_count, source_snapshot_json,
-        now, labels_json,
+        assessment_id,
+        topic_id,
+        source_id,
+        org_id,
+        time_window_start,
+        time_window_end,
+        stats_json,
+        content_item_count,
+        source_snapshot_json,
+        now,
+        labels_json,
     )
 
 
-async def fetch_assessment(
-    conn: asyncpg.Connection, assessment_id: str
-) -> dict[str, Any] | None:
+async def fetch_assessment(conn: DBConnection, assessment_id: str) -> dict[str, Any] | None:
     """Fetch a single assessment by ID."""
     row = await conn.fetchrow(SQL_FETCH_ASSESSMENT, assessment_id)
     return dict(row) if row else None
 
 
 async def list_assessments(
-    conn: asyncpg.Connection, topic_id: str, source_id: str
+    conn: DBConnection, topic_id: str, source_id: str
 ) -> list[dict[str, Any]]:
     """List all assessments for a source in a topic, newest first."""
     rows = await conn.fetch(SQL_LIST_ASSESSMENTS, topic_id, source_id)
@@ -229,7 +237,7 @@ async def list_assessments(
 
 
 async def count_source_content(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     topic_id: str,
     source_id: str,
     time_start: datetime,
@@ -237,14 +245,16 @@ async def count_source_content(
 ) -> int:
     """Count content items for a source within a topic and time window."""
     result = await conn.fetchval(
-        SQL_COUNT_SOURCE_CONTENT, topic_id, source_id, time_start, time_end,
+        SQL_COUNT_SOURCE_CONTENT,
+        topic_id,
+        source_id,
+        time_start,
+        time_end,
     )
     return int(result or 0)
 
 
-async def get_source_snapshot(
-    conn: asyncpg.Connection, source_id: str
-) -> dict[str, Any]:
+async def get_source_snapshot(conn: DBConnection, source_id: str) -> dict[str, Any]:
     """Get current source metadata for snapshot."""
     row = await conn.fetchrow(SQL_SOURCE_SNAPSHOT, source_id)
     if row is None:
@@ -253,7 +263,7 @@ async def get_source_snapshot(
 
 
 async def compute_source_stats(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     *,
     topic_id: str,
     source_id: str,
@@ -293,23 +303,22 @@ async def compute_source_stats(
     lang_rows = await conn.fetch(SQL_SOURCE_LANGUAGES, *params)
     total_lang = sum(r["count"] for r in lang_rows) or 1
     language_breakdown = [
-        {"language": r["language"], "count": r["count"],
-         "pct": round(r["count"] / total_lang * 100, 1)}
+        {
+            "language": r["language"],
+            "count": r["count"],
+            "pct": round(r["count"] / total_lang * 100, 1),
+        }
         for r in lang_rows
     ]
 
     # Volume timeline
     vol_rows = await conn.fetch(SQL_SOURCE_VOLUME_TIMELINE, *params)
-    volume_timeline = [
-        {"date": str(r["date"]), "count": r["count"]}
-        for r in vol_rows
-    ]
+    volume_timeline = [{"date": str(r["date"]), "count": r["count"]} for r in vol_rows]
 
     # Top entities
     ent_rows = await conn.fetch(SQL_SOURCE_TOP_ENTITIES, *params)
     top_entities = [
-        {"entity_text": r["entity_text"], "entity_type": r["entity_type"],
-         "count": r["count"]}
+        {"entity_text": r["entity_text"], "entity_type": r["entity_type"], "count": r["count"]}
         for r in ent_rows
     ]
 
@@ -317,9 +326,11 @@ async def compute_source_stats(
     try:
         id_rows = await conn.fetch(SQL_SOURCE_IDENTIFIER_OVERLAP, *params)
         identifier_overlap = [
-            {"identifier_type": r["identifier_type"],
-             "identifier_value": r["identifier_value"],
-             "source_count": r["source_count"]}
+            {
+                "identifier_type": r["identifier_type"],
+                "identifier_value": r["identifier_value"],
+                "source_count": r["source_count"],
+            }
             for r in id_rows
         ]
     except asyncpg.PostgresError as exc:
@@ -330,8 +341,11 @@ async def compute_source_stats(
     # Cluster participation
     cluster_rows = await conn.fetch(SQL_SOURCE_CLUSTER_PARTICIPATION, *params)
     cluster_participation = [
-        {"cluster_id": r["cluster_id"], "label": r["label"] or "Unlabeled",
-         "item_count": r["item_count"]}
+        {
+            "cluster_id": r["cluster_id"],
+            "label": r["label"] or "Unlabeled",
+            "item_count": r["item_count"],
+        }
         for r in cluster_rows
     ]
 
@@ -346,8 +360,12 @@ async def compute_source_stats(
     # Credibility trajectory (source-scoped, not topic-scoped)
     cred_rows = await conn.fetch(SQL_SOURCE_CREDIBILITY_TRAJECTORY, source_id)
     credibility_trajectory = [
-        {"old_score": r["old_score"], "new_score": r["new_score"],
-         "reason": r["reason"], "date": str(r["created_at"])}
+        {
+            "old_score": r["old_score"],
+            "new_score": r["new_score"],
+            "reason": r["reason"],
+            "date": str(r["created_at"]),
+        }
         for r in cred_rows
     ]
 

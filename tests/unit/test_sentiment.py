@@ -7,6 +7,7 @@ Tests:
   - Short/empty text → neutral default
   - Returns SentimentResult dataclass
 """
+
 from __future__ import annotations
 
 import pytest
@@ -15,7 +16,6 @@ pytestmark = pytest.mark.unit
 
 
 class TestAnalyseSentiment:
-
     def test_positive_text(self):
         from anveshak.analyst.sentiment import analyse_sentiment
 
@@ -57,7 +57,7 @@ class TestAnalyseSentiment:
         assert result.compound == 0.0
 
     def test_returns_sentiment_result_type(self):
-        from anveshak.analyst.sentiment import analyse_sentiment, SentimentResult
+        from anveshak.analyst.sentiment import SentimentResult, analyse_sentiment
 
         result = analyse_sentiment("This is a normal sentence for testing purposes.")
         assert isinstance(result, SentimentResult)

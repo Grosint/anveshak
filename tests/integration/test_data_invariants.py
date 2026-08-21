@@ -8,10 +8,11 @@ Verifies Anveshak's architectural rules hold in the actual database:
 
 Requires: make up (PostgreSQL running with seeded or live data)
 """
+
 from __future__ import annotations
 
-import pytest
 import asyncpg
+import pytest
 
 from tests.conftest import POSTGRES_URL
 
@@ -29,12 +30,11 @@ async def db_pool():
 # Invariant checks
 # ---------------------------------------------------------------------------
 
+
 async def test_no_null_content_hash(db_pool):
     """Rule 3: Every content_item MUST have a content_hash."""
     async with db_pool.acquire() as conn:
-        count = await conn.fetchval(
-            "SELECT COUNT(*) FROM content_items WHERE content_hash IS NULL"
-        )
+        count = await conn.fetchval("SELECT COUNT(*) FROM content_items WHERE content_hash IS NULL")
     assert count == 0, f"{count} content_items have NULL content_hash"
 
 

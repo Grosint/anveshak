@@ -1,8 +1,9 @@
 """Unit tests for reporter LLM calling and output validation.
 
 pytest.mark.unit — mocks Ollama, never calls real LLM.
-CLAUDE.md rule 9: LLM output parsed through Pydantic before use.
+AGENTS.md rule 9: LLM output parsed through Pydantic before use.
 """
+
 from __future__ import annotations
 
 import json
@@ -10,7 +11,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
-
 
 pytestmark = pytest.mark.unit
 
@@ -46,6 +46,7 @@ def _make_settings():
 # ReportContent model
 # ---------------------------------------------------------------------------
 
+
 class TestReportContentModel:
     """ReportContent Pydantic model validates LLM output."""
 
@@ -71,7 +72,7 @@ class TestReportContentModel:
             ReportContent(**bad)
 
     def test_labels_field_present_and_required(self):
-        """CLAUDE.md rule 2: labels is NEVER Optional."""
+        """AGENTS.md rule 2: labels is NEVER Optional."""
         from anveshak.reporter.llm import ReportContent
 
         assert "labels" in ReportContent.model_fields
@@ -89,6 +90,7 @@ class TestReportContentModel:
 # ---------------------------------------------------------------------------
 # parse_llm_response
 # ---------------------------------------------------------------------------
+
 
 class TestParseLlmResponse:
     """parse_llm_response raises ValueError on bad JSON, ValidationError on bad schema."""
@@ -125,6 +127,7 @@ class TestParseLlmResponse:
 # ---------------------------------------------------------------------------
 # call_ollama_with_retry
 # ---------------------------------------------------------------------------
+
 
 class TestCallOllamaWithRetry:
     """call_ollama_with_retry returns ReportContent on success, None after max retries."""
@@ -189,6 +192,7 @@ class TestCallOllamaWithRetry:
 # _extract_json_from_text tests
 # ---------------------------------------------------------------------------
 
+
 class TestExtractJsonFromText:
     """Tests for JSON extraction from LLM output with various wrappings."""
 
@@ -223,6 +227,7 @@ class TestExtractJsonFromText:
 # parse_llm_response — extended tests
 # ---------------------------------------------------------------------------
 
+
 class TestParseLlmResponseExtended:
     """Additional parse_llm_response tests covering edge cases."""
 
@@ -256,6 +261,7 @@ class TestParseLlmResponseExtended:
 # ---------------------------------------------------------------------------
 # call_ollama_with_retry — extended tests
 # ---------------------------------------------------------------------------
+
 
 class TestCallOllamaWithRetryExtended:
     """Additional retry logic tests."""

@@ -8,6 +8,7 @@ Usage:
     make demo-check
     python scripts/demo_check.py
 """
+
 from __future__ import annotations
 
 import json
@@ -54,6 +55,7 @@ def _authed_headers(token: str) -> dict:
 # Step 1 — All 5 Anveshak services healthy
 # ---------------------------------------------------------------------------
 
+
 def check_services() -> list[Check]:
     checks = []
     services = [
@@ -66,11 +68,15 @@ def check_services() -> list[Check]:
     for name, url in services:
         status, body = http_get(url)
         passed = status == 200
-        checks.append(Check(
-            f"Step 1 — {name} service",
-            passed,
-            f"HTTP {status}" if passed else f"HTTP {status} — {body.get('error', body.get('detail', 'no response'))}",
-        ))
+        checks.append(
+            Check(
+                f"Step 1 — {name} service",
+                passed,
+                f"HTTP {status}"
+                if passed
+                else f"HTTP {status} — {body.get('error', body.get('detail', 'no response'))}",
+            )
+        )
     return checks
 
 
@@ -78,31 +84,41 @@ def check_services() -> list[Check]:
 # Step 2 — Ollama models loaded
 # ---------------------------------------------------------------------------
 
+
 def check_ollama_models() -> list[Check]:
     status, body = http_get("http://localhost:11434/api/tags")
     if status != 200:
         return [Check("Step 2 — Ollama endpoint", False, f"HTTP {status}")]
 
-    models = [m.get("name", "") for m in (body if isinstance(body, list) else body.get("models", []))]
+    models = [
+        m.get("name", "") for m in (body if isinstance(body, list) else body.get("models", []))
+    ]
     configured_model = os.environ.get("OLLAMA_MODEL", "qwen2:7b")
     found = any(configured_model in m for m in models)
-    return [Check(
-        f"Step 2 — Ollama model: {configured_model}",
-        found,
-        "loaded" if found else f"not found — run: docker exec anveshak-ollama ollama pull {configured_model}",
-    )]
+    return [
+        Check(
+            f"Step 2 — Ollama model: {configured_model}",
+            found,
+            "loaded"
+            if found
+            else f"not found — run: docker exec anveshak-ollama ollama pull {configured_model}",
+        )
+    ]
 
 
 # ---------------------------------------------------------------------------
 # Step 3 — Demo login
 # ---------------------------------------------------------------------------
 
+
 def demo_login(base: str) -> tuple[Check, str | None]:
     try:
-        data = json.dumps({
-            "username": "demo@anveshak.local",
-            "password": "AnveshakDemo2024!",
-        }).encode()
+        data = json.dumps(
+            {
+                "username": "demo@anveshak.local",
+                "password": "AnveshakDemo2024!",
+            }
+        ).encode()
         req = urllib.request.Request(
             f"{base}/api/v1/auth/login",
             data=data,
@@ -116,12 +132,15 @@ def demo_login(base: str) -> tuple[Check, str | None]:
         return Check("Step 3 — Demo login", False, str(e)), None
 
     passed = bool(token)
-    return Check("Step 3 — Demo login", passed, "OK" if passed else "no access_token returned"), token
+    return Check(
+        "Step 3 — Demo login", passed, "OK" if passed else "no access_token returned"
+    ), token
 
 
 # ---------------------------------------------------------------------------
 # Step 4 — Topics loaded (≥3)
 # ---------------------------------------------------------------------------
+
 
 def check_topics(base: str, token: str) -> Check:
     status, body = http_get(f"{base}/api/v1/topics", headers=_authed_headers(token))
@@ -138,6 +157,7 @@ def check_topics(base: str, token: str) -> Check:
 # Step 5 — Intelligence signal exists (≥1 active signal)
 # ---------------------------------------------------------------------------
 
+
 def check_signals(base: str, token: str) -> Check:
     status, body = http_get(f"{base}/api/v1/signals?status=new", headers=_authed_headers(token))
     count = len(body) if isinstance(body, list) else body.get("total", 0)
@@ -153,6 +173,7 @@ def check_signals(base: str, token: str) -> Check:
 # Step 6 — Vision analysis: deepfake score is a float (not bool)
 # ---------------------------------------------------------------------------
 
+
 def check_vision_deepfake(base: str, token: str) -> Check:
     # The demo vision job result for content item e0000000-...-000000000003
     job_id = "f0000000-0000-0000-0000-000000000001"
@@ -161,7 +182,11 @@ def check_vision_deepfake(base: str, token: str) -> Check:
         headers=_authed_headers(token),
     )
     if status != 200:
-        return Check("Step 6 — Vision deepfake score", False, f"HTTP {status} (seed_demo.sql may not be loaded)")
+        return Check(
+            "Step 6 — Vision deepfake score",
+            False,
+            f"HTTP {status} (seed_demo.sql may not be loaded)",
+        )
 
     result = body.get("result") or {}
     score = result.get("deepfake_score")
@@ -172,13 +197,16 @@ def check_vision_deepfake(base: str, token: str) -> Check:
     return Check(
         "Step 6 — Vision deepfake score",
         is_float,
-        f"deepfake_score={score} (float ✓)" if is_float else f"deepfake_score={score!r} is not a 0–1 float",
+        f"deepfake_score={score} (float ✓)"
+        if is_float
+        else f"deepfake_score={score!r} is not a 0–1 float",
     )
 
 
 # ---------------------------------------------------------------------------
 # Step 7 — Report exists with generated_at set
 # ---------------------------------------------------------------------------
+
 
 def check_report(base: str, token: str) -> Check:
     topic_id = "b0000000-0000-0000-0000-000000000002"
@@ -191,20 +219,27 @@ def check_report(base: str, token: str) -> Check:
 
     reports = body if isinstance(body, list) else []
     if not reports:
-        return Check("Step 7 — Intelligence report", False, "no reports found for UAV topic (seed_demo.sql may not be loaded)")
+        return Check(
+            "Step 7 — Intelligence report",
+            False,
+            "no reports found for UAV topic (seed_demo.sql may not be loaded)",
+        )
 
     first = reports[0]
     has_generated_at = bool(first.get("generated_at"))
     return Check(
         "Step 7 — Intelligence report",
         has_generated_at,
-        f"report '{first.get('title', '')[:50]}...' generated_at set ✓" if has_generated_at else "generated_at is null",
+        f"report '{first.get('title', '')[:50]}...' generated_at set ✓"
+        if has_generated_at
+        else "generated_at is null",
     )
 
 
 # ---------------------------------------------------------------------------
 # Step 8 — Grafana health
 # ---------------------------------------------------------------------------
+
 
 def check_grafana() -> Check:
     status, body = http_get("http://localhost:3001/api/health")
@@ -219,6 +254,7 @@ def check_grafana() -> Check:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> int:
     base = "http://localhost:8000"
@@ -291,10 +327,10 @@ def main() -> int:
 
     print("RESULT: READY FOR DEMO")
     print()
-    print(f"  Analyst workbench: http://localhost:3000")
-    print(f"  Login:             demo@anveshak.local / AnveshakDemo2024!")
-    print(f"  Prometheus:        http://localhost:9090")
-    print(f"  Grafana:           http://localhost:3001")
+    print("  Analyst workbench: http://localhost:3000")
+    print("  Login:             demo@anveshak.local / AnveshakDemo2024!")
+    print("  Prometheus:        http://localhost:9090")
+    print("  Grafana:           http://localhost:3001")
     return 0
 
 

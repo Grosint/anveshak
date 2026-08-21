@@ -1,9 +1,10 @@
 """asyncpg-based DB layer for the reporter service."""
+
 from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any
 
 import asyncpg
@@ -173,9 +174,11 @@ SQL_FETCH_TOPIC_TEMPLATE_MATCHES = """
 # Pool management
 # ---------------------------------------------------------------------------
 
+
 async def get_pool(postgres_url: str) -> asyncpg.Pool:
     """Create and return an asyncpg connection pool with JSONB codec."""
     from anveshak.db import create_db_pool
+
     pool = await create_db_pool(postgres_url)
     log.info("reporter.db_pool_created")
     return pool
@@ -184,6 +187,7 @@ async def get_pool(postgres_url: str) -> asyncpg.Pool:
 # ---------------------------------------------------------------------------
 # Query functions
 # ---------------------------------------------------------------------------
+
 
 async def fetch_report(pool: asyncpg.Pool, report_id: str) -> dict[str, Any] | None:
     """Return full report row including aggregated source_warnings, or None."""
@@ -566,75 +570,65 @@ SQL_REPORT_LANGUAGE_BREAKDOWN = """
 # Data-Driven Report — v2 fetch functions
 # ---------------------------------------------------------------------------
 
-async def fetch_report_topic_stats(
-    pool: asyncpg.Pool, topic_id: str
-) -> dict[str, Any]:
+
+async def fetch_report_topic_stats(pool: asyncpg.Pool, topic_id: str) -> dict[str, Any]:
     """Return topic name + aggregate counts for stats boxes."""
     async with pool.acquire() as conn:
         row = await conn.fetchrow(SQL_REPORT_TOPIC_STATS, topic_id)
     if row is None:
-        return {"name": "Unknown", "content_count": 0, "source_count": 0,
-                "cluster_count": 0, "signal_count": 0}
+        return {
+            "name": "Unknown",
+            "content_count": 0,
+            "source_count": 0,
+            "cluster_count": 0,
+            "signal_count": 0,
+        }
     return dict(row)
 
 
-async def fetch_report_topic_sources(
-    pool: asyncpg.Pool, topic_id: str
-) -> list[dict[str, Any]]:
+async def fetch_report_topic_sources(pool: asyncpg.Pool, topic_id: str) -> list[dict[str, Any]]:
     """Return source inventory for report data sheet."""
     async with pool.acquire() as conn:
         rows = await conn.fetch(SQL_REPORT_TOPIC_SOURCES, topic_id)
     return [dict(r) for r in rows]
 
 
-async def fetch_report_topic_clusters(
-    pool: asyncpg.Pool, topic_id: str
-) -> list[dict[str, Any]]:
+async def fetch_report_topic_clusters(pool: asyncpg.Pool, topic_id: str) -> list[dict[str, Any]]:
     """Return active narrative clusters."""
     async with pool.acquire() as conn:
         rows = await conn.fetch(SQL_REPORT_TOPIC_CLUSTERS, topic_id)
     return [dict(r) for r in rows]
 
 
-async def fetch_report_signals(
-    pool: asyncpg.Pool, topic_id: str
-) -> list[dict[str, Any]]:
+async def fetch_report_signals(pool: asyncpg.Pool, topic_id: str) -> list[dict[str, Any]]:
     """Return recent signals with cluster labels."""
     async with pool.acquire() as conn:
         rows = await conn.fetch(SQL_REPORT_SIGNALS, topic_id)
     return [dict(r) for r in rows]
 
 
-async def fetch_report_entities(
-    pool: asyncpg.Pool, topic_id: str
-) -> list[dict[str, Any]]:
+async def fetch_report_entities(pool: asyncpg.Pool, topic_id: str) -> list[dict[str, Any]]:
     """Return top entities by mention count."""
     async with pool.acquire() as conn:
         rows = await conn.fetch(SQL_REPORT_ENTITIES, topic_id)
     return [dict(r) for r in rows]
 
 
-async def fetch_report_sentiment_trend(
-    pool: asyncpg.Pool, topic_id: str
-) -> list[dict[str, Any]]:
+async def fetch_report_sentiment_trend(pool: asyncpg.Pool, topic_id: str) -> list[dict[str, Any]]:
     """Return daily sentiment aggregation for last 30 days."""
     async with pool.acquire() as conn:
         rows = await conn.fetch(SQL_REPORT_SENTIMENT_TREND, topic_id)
     return [dict(r) for r in rows]
 
 
-async def fetch_report_keywords(
-    pool: asyncpg.Pool, topic_id: str
-) -> list[dict[str, Any]]:
+async def fetch_report_keywords(pool: asyncpg.Pool, topic_id: str) -> list[dict[str, Any]]:
     """Return trending keywords from last 7 days."""
     async with pool.acquire() as conn:
         rows = await conn.fetch(SQL_REPORT_KEYWORDS, topic_id)
     return [dict(r) for r in rows]
 
 
-async def fetch_report_evidence_items(
-    pool: asyncpg.Pool, topic_id: str
-) -> list[dict[str, Any]]:
+async def fetch_report_evidence_items(pool: asyncpg.Pool, topic_id: str) -> list[dict[str, Any]]:
     """Return content items for evidence appendix."""
     async with pool.acquire() as conn:
         rows = await conn.fetch(SQL_REPORT_EVIDENCE_ITEMS, topic_id)
@@ -650,9 +644,7 @@ async def fetch_report_language_breakdown(
     return [dict(r) for r in rows]
 
 
-async def fetch_report_data_bundle(
-    pool: asyncpg.Pool, topic_id: str
-) -> dict[str, Any]:
+async def fetch_report_data_bundle(pool: asyncpg.Pool, topic_id: str) -> dict[str, Any]:
     """Fetch all structured data for a data-driven report.
 
     Runs all queries concurrently via asyncio.gather for performance.
@@ -731,18 +723,14 @@ SQL_SET_ASSESSMENT_FAILED = """
 """
 
 
-async def fetch_assessment(
-    pool: asyncpg.Pool, assessment_id: str
-) -> dict[str, Any] | None:
+async def fetch_assessment(pool: asyncpg.Pool, assessment_id: str) -> dict[str, Any] | None:
     """Fetch assessment row for the reporter worker."""
     async with pool.acquire() as conn:
         row = await conn.fetchrow(SQL_FETCH_ASSESSMENT, assessment_id)
     return dict(row) if row else None
 
 
-async def fetch_source_info(
-    pool: asyncpg.Pool, source_id: str
-) -> dict[str, Any] | None:
+async def fetch_source_info(pool: asyncpg.Pool, source_id: str) -> dict[str, Any] | None:
     """Fetch source name, platform, url_or_handle for assessment prompt."""
     async with pool.acquire() as conn:
         row = await conn.fetchrow(SQL_FETCH_SOURCE_INFO, source_id)

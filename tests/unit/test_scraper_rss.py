@@ -2,11 +2,11 @@
 
 All tests run on CPU with no external dependencies (network mocked via httpx.MockTransport).
 """
+
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -40,6 +40,7 @@ _EMPTY_RSS = b"""<?xml version="1.0" encoding="UTF-8"?>
 def _make_http_response(content: bytes, url: str = "https://example.com/feed", status: int = 200):
     """Build a minimal httpx.Response with a request set (required for raise_for_status)."""
     import httpx
+
     request = httpx.Request("GET", url)
     return httpx.Response(status_code=status, content=content, request=request)
 
@@ -47,6 +48,7 @@ def _make_http_response(content: bytes, url: str = "https://example.com/feed", s
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 def test_rss_content_hash_deterministic():
@@ -85,9 +87,11 @@ def test_rss_short_summary_triggers_full_fetch():
     """Entry with summary < rss_full_text_min_chars triggers fetch_url() for full text."""
     from anveshak.scraper import rss as rss_module
 
-    full_text = "Full article: J-20 stealth fighters have been observed at Hotan airbase " \
-                "in satellite imagery from multiple commercial providers, confirming a " \
-                "significant forward deployment along the Line of Actual Control."
+    full_text = (
+        "Full article: J-20 stealth fighters have been observed at Hotan airbase "
+        "in satellite imagery from multiple commercial providers, confirming a "
+        "significant forward deployment along the Line of Actual Control."
+    )
 
     async def _run():
         with patch("anveshak.scraper.rss.fetch_url", new=AsyncMock(return_value=full_text)):
@@ -135,17 +139,15 @@ def test_rss_empty_feed_returns_empty_list():
 @pytest.mark.unit
 def test_rss_feed_fetch_failure_returns_empty_list():
     """Network failure fetching the feed returns [] — never raises."""
-    from anveshak.scraper import rss as rss_module
     import httpx
+    from anveshak.scraper import rss as rss_module
 
     async def _run():
         with patch("anveshak.scraper.rss.httpx.AsyncClient") as mock_client_cls:
             mock_client = AsyncMock()
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.get = AsyncMock(
-                side_effect=httpx.ConnectError("Connection refused")
-            )
+            mock_client.get = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
             mock_client_cls.return_value = mock_client
 
             items = await rss_module.fetch_rss_items("https://dead-feed.example.com/feed")
@@ -159,6 +161,7 @@ def test_rss_feed_fetch_failure_returns_empty_list():
 def test_fetch_py_user_agent_not_bot_declared():
     """fetch.py User-Agent must not contain 'Anveshak/1.0' — that string is a bot declaration."""
     import inspect
+
     import anveshak.scraper.fetch as fetch_module
 
     source = inspect.getsource(fetch_module)

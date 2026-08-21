@@ -6,6 +6,7 @@ cookie banners, and repetitive boilerplate.
 
 All thresholds are configurable via environment variables (see settings.py).
 """
+
 from __future__ import annotations
 
 import re

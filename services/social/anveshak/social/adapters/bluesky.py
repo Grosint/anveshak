@@ -6,9 +6,10 @@ Bluesky's API is public-read with password auth for search endpoints.
 BlueskyQuotaGuard: atomic Redis INCR counter for daily API call cap (7200/day).
 Mirrors XSpendGuard pattern — see learned/redis-atomic-budget-guard.md.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import AsyncIterator
 
 import structlog
@@ -16,14 +17,13 @@ from arq import ArqRedis
 from atproto import AsyncClient
 from atproto_client.exceptions import AtProtocolError
 
+from ..settings import settings
 from .base import (
     AdapterAuthError,
-    AdapterDegradedError,
     AdapterRateLimitError,
     RawItem,
     SourceAdapterBase,
 )
-from ..settings import settings
 
 log = structlog.get_logger(__name__)
 
@@ -33,6 +33,7 @@ _MAX_RESULTS_PER_KEYWORD = 25
 # ---------------------------------------------------------------------------
 # Quota Guard — Redis atomic counter (daily cap)
 # ---------------------------------------------------------------------------
+
 
 def _daily_key() -> str:
     """Redis key for the current day's Bluesky call counter."""
@@ -95,9 +96,15 @@ return new_count
         key = _daily_key()
         ttl = _seconds_until_day_end()
 
-        result = int(await self._redis.eval(
-            self._LUA_CHECK_AND_INCREMENT, 1, key, self._cap, ttl
-        ))
+        # redis-py declares keys_and_args as str, and the Lua calls tonumber()
+        # on every ARGV, so pass strings rather than relying on client encoding.
+        # redis-py types eval() against the sync client, which declares a str
+        # return. ArqRedis is async and awaits fine at runtime.
+        result = int(
+            await self._redis.eval(  # pyright: ignore[reportGeneralTypeIssues]
+                self._LUA_CHECK_AND_INCREMENT, 1, key, str(self._cap), str(ttl)
+            )
+        )
 
         if result == -1:
             log.warning(
@@ -144,8 +151,11 @@ class BlueskyAdapter(SourceAdapterBase):
     async def authenticate(self) -> None:
         """Login with handle + password from settings (criteria 3.17)."""
         if not settings.bluesky_adapter_enabled:
-            log.warning("social.adapter_disabled", adapter=self.adapter_id,
-                        hint="Set BLUESKY_ADAPTER_ENABLED=true to activate")
+            log.warning(
+                "social.adapter_disabled",
+                adapter=self.adapter_id,
+                hint="Set BLUESKY_ADAPTER_ENABLED=true to activate",
+            )
             return
         if not settings.bluesky_handle or not settings.bluesky_password:
             raise AdapterAuthError(
@@ -153,9 +163,7 @@ class BlueskyAdapter(SourceAdapterBase):
             )
         try:
             self._client = AsyncClient()
-            profile = await self._client.login(
-                settings.bluesky_handle, settings.bluesky_password
-            )
+            profile = await self._client.login(settings.bluesky_handle, settings.bluesky_password)
             self._my_did = profile.did
             log.info("bluesky.authenticated", handle=settings.bluesky_handle)
         except AtProtocolError as exc:
@@ -196,7 +204,14 @@ class BlueskyAdapter(SourceAdapterBase):
                     continue
                 seen_uris.add(uri)
 
-                text = post.record.text if hasattr(post.record, "text") else ""
+                # atproto types post.record as the base Record union. The feed
+                # yields app.bsky.feed.post records, which do carry .text, and
+                # the hasattr guard covers the rest.
+                text = (
+                    post.record.text  # pyright: ignore[reportAttributeAccessIssue]
+                    if hasattr(post.record, "text")
+                    else ""
+                )
                 if not text:
                     continue
 
@@ -216,10 +231,11 @@ class BlueskyAdapter(SourceAdapterBase):
 
                 yield RawItem(
                     raw_text=text,
-                    url=url,    # criteria 3.19
+                    url=url,  # criteria 3.19
                     platform=self.platform,
                     captured_at=self._parse_indexed_at(post.indexed_at),
-                    source_handle=settings.bluesky_handle,  # registered source handle
+                    # authenticate() rejects a missing handle, so this is set by now.
+                    source_handle=settings.bluesky_handle or "",  # registered source handle
                     media_urls=self._extract_media_urls(post),
                     engagement=engagement or None,
                     author_id=getattr(post.author, "did", None),
@@ -240,9 +256,7 @@ class BlueskyAdapter(SourceAdapterBase):
         if self._client is None:
             return {"status": "DOWN", "checked_at": datetime.now(UTC).isoformat()}
         try:
-            await self._client.app.bsky.feed.search_posts(
-                params={"q": "test", "limit": 1}
-            )
+            await self._client.app.bsky.feed.search_posts(params={"q": "test", "limit": 1})
             return {"status": "HEALTHY", "checked_at": datetime.now(UTC).isoformat()}
         except Exception as exc:
             return {
@@ -285,8 +299,7 @@ class BlueskyAdapter(SourceAdapterBase):
                         cid = img.image.ref.link
                         did = post.author.did
                         urls.append(
-                            f"https://bsky.social/xrpc/com.atproto.sync.getBlob"
-                            f"?did={did}&cid={cid}"
+                            f"https://bsky.social/xrpc/com.atproto.sync.getBlob?did={did}&cid={cid}"
                         )
         except Exception:
             pass

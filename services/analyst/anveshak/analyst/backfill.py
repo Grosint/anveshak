@@ -12,9 +12,10 @@ Design decisions:
 - Similarity threshold is env-var controlled (BACKFILL_SIMILARITY_THRESHOLD).
 - The backfill job is idempotent: ON CONFLICT DO NOTHING.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 import asyncpg
 import structlog
@@ -61,6 +62,7 @@ _BACKFILL_LIMIT = 500  # max items per backfill run — prevents OOM on large co
 # ---------------------------------------------------------------------------
 # Core functions (unit-testable with injected pool / mocked results)
 # ---------------------------------------------------------------------------
+
 
 def _build_query_text(name: str, keywords: list[str]) -> str:
     """Combine topic name + keywords into a single query string for embedding."""

@@ -2,10 +2,10 @@
 
 pytest.mark.unit — no network, uses geonamescache (bundled data).
 """
+
 from __future__ import annotations
 
 import pytest
-
 
 pytestmark = pytest.mark.unit
 
@@ -139,7 +139,7 @@ class TestCustomLocationsOverlay:
 
     def test_custom_location_takes_priority_over_geonamescache(self):
         """Custom overlay has higher priority than geonamescache cities."""
-        from anveshak.reporter.geocoder import geocode_locations, _CUSTOM_LOCATIONS
+        from anveshak.reporter.geocoder import _CUSTOM_LOCATIONS, geocode_locations
 
         # Pick a location from custom overlay
         if _CUSTOM_LOCATIONS:

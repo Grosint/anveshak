@@ -3,19 +3,19 @@
 All tests use a mock Redis client. No real Redis required (pytest.mark.unit).
 The spend guard is the most safety-critical piece of Phase 3 — every path is tested.
 """
+
 from __future__ import annotations
 
 import re
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from anveshak.social.adapters.x_adapter import XSpendGuard, _monthly_key, _seconds_until_month_end
-
 
 # ---------------------------------------------------------------------------
 # Mock Redis helper
 # ---------------------------------------------------------------------------
+
 
 def make_mock_redis(eval_returns: list[int]) -> MagicMock:
     """Build a mock ArqRedis that returns successive values from eval (Lua script).
@@ -31,6 +31,7 @@ def make_mock_redis(eval_returns: list[int]) -> MagicMock:
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestXSpendGuardUnderCap:
     """Calls below cap — should be permitted and counter incremented."""
@@ -128,12 +129,12 @@ class TestXSpendGuardMonthlyReset:
 
     def test_seconds_until_month_end_within_max(self):
         ttl = _seconds_until_month_end()
-        assert ttl <= 31 * 24 * 3600 + 1   # max ~31 days + 1s buffer
+        assert ttl <= 31 * 24 * 3600 + 1  # max ~31 days + 1s buffer
 
     @pytest.mark.asyncio
     async def test_new_month_key_uses_lua(self):
         """Simulating month boundary: Lua script handles TTL atomically."""
-        redis = make_mock_redis([1])   # first read of new month
+        redis = make_mock_redis([1])  # first read of new month
         guard = XSpendGuard(redis, cap=100)
         await guard.check_and_increment()
         redis.eval.assert_called_once()
@@ -145,7 +146,7 @@ class TestXSpendGuardMonthlyReset:
         January 2027 would share a counter — silently capping reads at
         whatever was left from 11 months ago.
         """
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
 
         key = _monthly_key()
         now = datetime.now(UTC)
@@ -173,8 +174,7 @@ class TestXSpendGuardMonthlyReset:
         Bug caught: if the code only handles month + 1 without checking
         month == 12, it would try to create datetime(2026, 13, 1) → crash.
         """
-        from unittest.mock import patch
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
 
         fake_dec_31 = datetime(2026, 12, 31, 23, 0, 0, tzinfo=UTC)
         with patch("anveshak.social.adapters.x_adapter.datetime") as mock_dt:

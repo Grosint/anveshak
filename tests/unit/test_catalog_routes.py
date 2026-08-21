@@ -1,8 +1,9 @@
 """Unit tests for catalog API routes — mock DB, verify endpoint logic."""
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -14,6 +15,7 @@ LABELS_JSON = '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _fake_catalog_row(**overrides):
     """Build a dict mimicking a source_catalog DB row."""
@@ -67,6 +69,7 @@ def _fake_discovered_row(**overrides):
 # GET /api/v1/topics/{topic_id}/catalog-suggestions
 # ---------------------------------------------------------------------------
 
+
 async def test_catalog_suggestions_returns_list():
     """GET catalog-suggestions returns matching catalog entries."""
     from anveshak.api.routes.catalog import get_catalog_suggestions
@@ -74,8 +77,10 @@ async def test_catalog_suggestions_returns_list():
     mock_conn = AsyncMock()
     mock_user = {"user_id": "test-user", "role": "analyst", "org_id": "org-test"}
 
-    with patch("anveshak.api.routes.catalog.topics_db.verify_topic_access", new=AsyncMock()), \
-         patch("anveshak.api.routes.catalog.catalog_db") as mock_db:
+    with (
+        patch("anveshak.api.routes.catalog.topics_db.verify_topic_access", new=AsyncMock()),
+        patch("anveshak.api.routes.catalog.catalog_db") as mock_db,
+    ):
         # Mock: topic exists with keywords
         mock_conn.fetchrow = AsyncMock(return_value={"keywords": ["china", "military"]})
         mock_db.list_catalog_suggestions = AsyncMock(return_value=[_fake_catalog_row()])
@@ -105,6 +110,7 @@ async def test_catalog_suggestions_404_on_missing_topic():
 # POST /api/v1/topics/{topic_id}/catalog-approve
 # ---------------------------------------------------------------------------
 
+
 async def test_catalog_approve_creates_source_and_links():
     """POST catalog-approve creates a source, links to topic, records approval."""
     from anveshak.api.routes.catalog import approve_catalog_entry
@@ -112,10 +118,11 @@ async def test_catalog_approve_creates_source_and_links():
     mock_conn = AsyncMock()
     mock_user = {"user_id": "test-user", "role": "analyst", "org_id": "org-test"}
 
-    with patch("anveshak.api.routes.catalog.topics_db.verify_topic_access", new=AsyncMock()), \
-         patch("anveshak.api.routes.catalog.catalog_db") as mock_catalog_db, \
-         patch("anveshak.api.routes.catalog.sources_db") as mock_sources_db:
-
+    with (
+        patch("anveshak.api.routes.catalog.topics_db.verify_topic_access", new=AsyncMock()),
+        patch("anveshak.api.routes.catalog.catalog_db") as mock_catalog_db,
+        patch("anveshak.api.routes.catalog.sources_db") as mock_sources_db,
+    ):
         mock_catalog_db.get_catalog_entry = AsyncMock(return_value=_fake_catalog_row())
         mock_sources_db.insert_source = AsyncMock()
         mock_sources_db.add_topic_source = AsyncMock()
@@ -159,6 +166,7 @@ async def test_catalog_approve_404_on_missing_entry():
 # GET /api/v1/catalog
 # ---------------------------------------------------------------------------
 
+
 async def test_list_all_catalog_returns_entries():
     """GET /api/v1/catalog returns all catalog entries."""
     from anveshak.api.routes.catalog import list_catalog
@@ -167,10 +175,12 @@ async def test_list_all_catalog_returns_entries():
     mock_user = {"user_id": "test-user", "role": "admin"}
 
     with patch("anveshak.api.routes.catalog.catalog_db") as mock_db:
-        mock_db.list_all_catalog = AsyncMock(return_value=[
-            _fake_catalog_row(),
-            _fake_catalog_row(id="cat-2", name="Another Source"),
-        ])
+        mock_db.list_all_catalog = AsyncMock(
+            return_value=[
+                _fake_catalog_row(),
+                _fake_catalog_row(id="cat-2", name="Another Source"),
+            ]
+        )
 
         result = await list_catalog(db=mock_conn, user=mock_user)
 
@@ -181,6 +191,7 @@ async def test_list_all_catalog_returns_entries():
 # GET /api/v1/topics/{topic_id}/discovered
 # ---------------------------------------------------------------------------
 
+
 async def test_list_discovered_returns_sources():
     """GET discovered sources returns list for topic."""
     from anveshak.api.routes.catalog import list_discovered_sources
@@ -188,8 +199,10 @@ async def test_list_discovered_returns_sources():
     mock_conn = AsyncMock()
     mock_user = {"user_id": "test-user", "role": "analyst", "org_id": "org-test"}
 
-    with patch("anveshak.api.routes.catalog.topics_db.verify_topic_access", new=AsyncMock()), \
-         patch("anveshak.api.routes.catalog.catalog_db") as mock_db:
+    with (
+        patch("anveshak.api.routes.catalog.topics_db.verify_topic_access", new=AsyncMock()),
+        patch("anveshak.api.routes.catalog.catalog_db") as mock_db,
+    ):
         mock_db.list_discovered = AsyncMock(return_value=[_fake_discovered_row()])
 
         result = await list_discovered_sources(
@@ -204,6 +217,7 @@ async def test_list_discovered_returns_sources():
 # POST /api/v1/topics/{topic_id}/discovered/{id}/approve
 # ---------------------------------------------------------------------------
 
+
 async def test_approve_discovered_creates_source():
     """POST approve discovered creates source and updates status."""
     from anveshak.api.routes.catalog import approve_discovered_source
@@ -211,10 +225,11 @@ async def test_approve_discovered_creates_source():
     mock_conn = AsyncMock()
     mock_user = {"user_id": "test-user", "role": "analyst", "org_id": "org-test"}
 
-    with patch("anveshak.api.routes.catalog.topics_db.verify_topic_access", new=AsyncMock()), \
-         patch("anveshak.api.routes.catalog.catalog_db") as mock_catalog_db, \
-         patch("anveshak.api.routes.catalog.sources_db") as mock_sources_db:
-
+    with (
+        patch("anveshak.api.routes.catalog.topics_db.verify_topic_access", new=AsyncMock()),
+        patch("anveshak.api.routes.catalog.catalog_db") as mock_catalog_db,
+        patch("anveshak.api.routes.catalog.sources_db") as mock_sources_db,
+    ):
         mock_conn.fetchrow = AsyncMock(return_value=_fake_discovered_row())
         mock_sources_db.insert_source = AsyncMock()
         mock_sources_db.add_topic_source = AsyncMock()
@@ -238,6 +253,7 @@ async def test_approve_discovered_creates_source():
 # POST /api/v1/topics/{topic_id}/discovered/{id}/dismiss
 # ---------------------------------------------------------------------------
 
+
 async def test_dismiss_discovered_updates_status():
     """POST dismiss discovered sets status to dismissed."""
     from anveshak.api.routes.catalog import dismiss_discovered_source
@@ -245,8 +261,10 @@ async def test_dismiss_discovered_updates_status():
     mock_conn = AsyncMock()
     mock_user = {"user_id": "test-user", "role": "analyst", "org_id": "org-test"}
 
-    with patch("anveshak.api.routes.catalog.topics_db.verify_topic_access", new=AsyncMock()), \
-         patch("anveshak.api.routes.catalog.catalog_db") as mock_catalog_db:
+    with (
+        patch("anveshak.api.routes.catalog.topics_db.verify_topic_access", new=AsyncMock()),
+        patch("anveshak.api.routes.catalog.catalog_db") as mock_catalog_db,
+    ):
         mock_conn.fetchrow = AsyncMock(return_value=_fake_discovered_row())
         mock_catalog_db.dismiss_discovered = AsyncMock()
 

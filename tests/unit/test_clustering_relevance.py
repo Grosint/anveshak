@@ -2,9 +2,8 @@
 
 pytest.mark.unit — tests SQL constants and function signatures, no DB required.
 """
-from __future__ import annotations
 
-import pytest
+from __future__ import annotations
 
 
 class TestClusteringSQLRelevanceFilter:
@@ -34,6 +33,7 @@ class TestLoadEmbeddingsSignature:
 
     def test_has_relevance_threshold_parameter(self):
         import inspect
+
         from anveshak.analyst.clustering import load_embeddings
 
         sig = inspect.signature(load_embeddings)

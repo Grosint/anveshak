@@ -5,15 +5,16 @@ keyword overlap + identifier validation + embedding similarity.
 
 Pure functions — no DB, no I/O. Safe to unit-test without infrastructure.
 """
+
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
 
-
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class ScamTemplate:
@@ -56,6 +57,7 @@ _CONFIDENCE_THRESHOLD = 0.5
 # Cosine similarity
 # ---------------------------------------------------------------------------
 
+
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
     """Compute cosine similarity between two vectors."""
     dot = sum(x * y for x, y in zip(a, b))
@@ -69,6 +71,7 @@ def _cosine_similarity(a: list[float], b: list[float]) -> float:
 # ---------------------------------------------------------------------------
 # Matching engine
 # ---------------------------------------------------------------------------
+
 
 def match_templates(
     content_keywords: set[str],
@@ -114,8 +117,7 @@ def match_templates(
 
         # Embedding similarity
         embedding_score = 0.0
-        if (content_embedding is not None
-                and t.reference_embedding is not None):
+        if content_embedding is not None and t.reference_embedding is not None:
             embedding_score = _cosine_similarity(content_embedding, t.reference_embedding)
 
         confidence = max(kw_id_confidence, embedding_score)
@@ -149,9 +151,19 @@ BUILTIN_TEMPLATES: list[ScamTemplate] = [
         display="Investment Fraud",
         category="fraud",
         keywords=[
-            "invest", "guaranteed", "returns", "profit", "double",
-            "money", "daily", "monthly", "scheme", "fixed return",
-            "100%", "no risk", "minimum investment",
+            "invest",
+            "guaranteed",
+            "returns",
+            "profit",
+            "double",
+            "money",
+            "daily",
+            "monthly",
+            "scheme",
+            "fixed return",
+            "100%",
+            "no risk",
+            "minimum investment",
         ],
         min_keyword_hits=3,
         expected_identifiers=["PHONE_IN", "UPI", "CRYPTO_BTC", "CRYPTO_ETH"],
@@ -164,9 +176,18 @@ BUILTIN_TEMPLATES: list[ScamTemplate] = [
         display="Mule Account Recruitment",
         category="fraud",
         keywords=[
-            "bank", "account", "commission", "per transaction", "easy money",
-            "salary", "income", "rent your account", "lend account",
-            "no risk", "just provide", "earn daily",
+            "bank",
+            "account",
+            "commission",
+            "per transaction",
+            "easy money",
+            "salary",
+            "income",
+            "rent your account",
+            "lend account",
+            "no risk",
+            "just provide",
+            "earn daily",
         ],
         min_keyword_hits=3,
         expected_identifiers=["PHONE_IN", "TELEGRAM_HANDLE", "UPI"],
@@ -179,9 +200,18 @@ BUILTIN_TEMPLATES: list[ScamTemplate] = [
         display="Mule-as-a-Service",
         category="fraud",
         keywords=[
-            "account", "rent", "bank account", "monthly", "payment",
-            "kyc", "documents", "aadhaar", "pan card", "passbook",
-            "provide details", "bulk accounts",
+            "account",
+            "rent",
+            "bank account",
+            "monthly",
+            "payment",
+            "kyc",
+            "documents",
+            "aadhaar",
+            "pan card",
+            "passbook",
+            "provide details",
+            "bulk accounts",
         ],
         min_keyword_hits=3,
         expected_identifiers=["PHONE_IN", "UPI", "PAN"],
@@ -194,9 +224,19 @@ BUILTIN_TEMPLATES: list[ScamTemplate] = [
         display="Digital Arrest Scam",
         category="fraud",
         keywords=[
-            "police", "arrest", "warrant", "case", "legal",
-            "pay", "fine", "cybercrime", "narcotics", "parcel",
-            "customs", "court", "immediate",
+            "police",
+            "arrest",
+            "warrant",
+            "case",
+            "legal",
+            "pay",
+            "fine",
+            "cybercrime",
+            "narcotics",
+            "parcel",
+            "customs",
+            "court",
+            "immediate",
         ],
         min_keyword_hits=3,
         expected_identifiers=["PHONE_IN"],
@@ -209,9 +249,18 @@ BUILTIN_TEMPLATES: list[ScamTemplate] = [
         display="Job Fraud",
         category="fraud",
         keywords=[
-            "job", "work from home", "salary", "hiring", "vacancy",
-            "apply", "registration fee", "earn", "part time",
-            "data entry", "typing job", "guaranteed placement",
+            "job",
+            "work from home",
+            "salary",
+            "hiring",
+            "vacancy",
+            "apply",
+            "registration fee",
+            "earn",
+            "part time",
+            "data entry",
+            "typing job",
+            "guaranteed placement",
         ],
         min_keyword_hits=3,
         expected_identifiers=["PHONE_IN", "UPI", "EMAIL"],
@@ -224,16 +273,26 @@ BUILTIN_TEMPLATES: list[ScamTemplate] = [
         display="Pump and Dump",
         category="fraud",
         keywords=[
-            "stock", "buy", "target", "multibagger", "tip",
-            "profit", "guaranteed", "insider", "breakout",
-            "100%", "double", "short term",
+            "stock",
+            "buy",
+            "target",
+            "multibagger",
+            "tip",
+            "profit",
+            "guaranteed",
+            "insider",
+            "breakout",
+            "100%",
+            "double",
+            "short term",
         ],
         min_keyword_hits=3,
         expected_identifiers=["PHONE_IN", "TELEGRAM_HANDLE"],
         severity="CRITICAL",
         reference_embedding=None,
         legal_sections=[
-            "SEBI (PFUTP) Regulations", "SEBI Act Section 12A",
+            "SEBI (PFUTP) Regulations",
+            "SEBI Act Section 12A",
             "IPC 420",
         ],
     ),
@@ -242,9 +301,17 @@ BUILTIN_TEMPLATES: list[ScamTemplate] = [
         display="Fake Research Report",
         category="fraud",
         keywords=[
-            "research", "report", "analyst", "target price", "buy",
-            "strong buy", "recommendation", "sebi registered",
-            "advisory", "premium", "tips",
+            "research",
+            "report",
+            "analyst",
+            "target price",
+            "buy",
+            "strong buy",
+            "recommendation",
+            "sebi registered",
+            "advisory",
+            "premium",
+            "tips",
         ],
         min_keyword_hits=3,
         expected_identifiers=["TELEGRAM_HANDLE", "PHONE_IN"],
@@ -260,9 +327,19 @@ BUILTIN_TEMPLATES: list[ScamTemplate] = [
         display="Drug Sale",
         category="narco",
         keywords=[
-            "maal", "stuff", "delivery", "gram", "pure",
-            "quality", "available", "hash", "weed", "md",
-            "lsd", "cocaine", "heroin",
+            "maal",
+            "stuff",
+            "delivery",
+            "gram",
+            "pure",
+            "quality",
+            "available",
+            "hash",
+            "weed",
+            "md",
+            "lsd",
+            "cocaine",
+            "heroin",
         ],
         min_keyword_hits=3,
         expected_identifiers=["PHONE_IN", "TELEGRAM_HANDLE", "CRYPTO_TRC20"],
@@ -275,9 +352,18 @@ BUILTIN_TEMPLATES: list[ScamTemplate] = [
         display="Drug Delivery Recruitment",
         category="narco",
         keywords=[
-            "delivery", "driver", "parcel", "pickup", "drop",
-            "payment", "cash", "courier", "package", "transport",
-            "no questions", "discreet",
+            "delivery",
+            "driver",
+            "parcel",
+            "pickup",
+            "drop",
+            "payment",
+            "cash",
+            "courier",
+            "package",
+            "transport",
+            "no questions",
+            "discreet",
         ],
         min_keyword_hits=3,
         expected_identifiers=["PHONE_IN", "TELEGRAM_HANDLE"],
@@ -290,9 +376,17 @@ BUILTIN_TEMPLATES: list[ScamTemplate] = [
         display="Fake SIM Sale",
         category="fraud",
         keywords=[
-            "sim", "sim card", "pre-activated", "bulk", "no kyc",
-            "available", "whatsapp", "telegram", "ready to use",
-            "anonymous", "unregistered",
+            "sim",
+            "sim card",
+            "pre-activated",
+            "bulk",
+            "no kyc",
+            "available",
+            "whatsapp",
+            "telegram",
+            "ready to use",
+            "anonymous",
+            "unregistered",
         ],
         min_keyword_hits=3,
         expected_identifiers=["PHONE_IN", "TELEGRAM_HANDLE"],
@@ -305,9 +399,18 @@ BUILTIN_TEMPLATES: list[ScamTemplate] = [
         display="Crypto Cashout",
         category="fraud",
         keywords=[
-            "usdt", "cash", "convert", "rate", "exchange",
-            "crypto", "withdraw", "p2p", "otc", "tether",
-            "bitcoin", "hawala",
+            "usdt",
+            "cash",
+            "convert",
+            "rate",
+            "exchange",
+            "crypto",
+            "withdraw",
+            "p2p",
+            "otc",
+            "tether",
+            "bitcoin",
+            "hawala",
         ],
         min_keyword_hits=3,
         expected_identifiers=["CRYPTO_TRC20", "CRYPTO_ETH", "TELEGRAM_HANDLE", "UPI"],

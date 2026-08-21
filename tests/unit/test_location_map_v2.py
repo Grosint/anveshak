@@ -2,12 +2,10 @@
 
 pytest.mark.unit — mocked DB.
 """
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import pytest
-
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 

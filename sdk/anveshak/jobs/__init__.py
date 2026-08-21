@@ -30,6 +30,7 @@ JOB_GENERATE_REPORT = "generate_report"
 # Enqueue helper — thin wrapper so callers don't hold an arq pool reference
 # ---------------------------------------------------------------------------
 
+
 async def enqueue(pool: Any, job_name: str, *args: Any, **kwargs: Any) -> Any:
     """Enqueue an ARQ job and return the job handle.
 

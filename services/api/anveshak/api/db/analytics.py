@@ -1,9 +1,10 @@
 """Analytics repository — cross-topic aggregate queries for dashboard."""
+
 from __future__ import annotations
 
 from typing import Any
 
-import asyncpg
+from anveshak.db import DBConnection
 
 # ---------------------------------------------------------------------------
 # SQL constants — $1 = days (integer), $2 = org_id (text)
@@ -118,9 +119,8 @@ SQL_ACTIVE_TOPICS = "SELECT COUNT(*) FROM topics WHERE status = 'active' AND org
 # Repository function
 # ---------------------------------------------------------------------------
 
-async def get_dashboard_data(
-    conn: asyncpg.Connection, days: int = 30, *, org_id: str
-) -> dict[str, Any]:
+
+async def get_dashboard_data(conn: DBConnection, days: int = 30, *, org_id: str) -> dict[str, Any]:
     """Return cross-topic aggregate analytics for the dashboard, scoped to org."""
     volume_rows = await conn.fetch(SQL_CONTENT_VOLUME_TREND, days, org_id)
     platform_rows = await conn.fetch(SQL_CONTENT_BY_PLATFORM, days, org_id)
@@ -136,8 +136,13 @@ async def get_dashboard_data(
         "content_by_platform": [dict(r) for r in platform_rows],
         "content_by_language": [dict(r) for r in language_rows],
         "top_entities": [dict(r) for r in entity_rows],
-        "sentiment_distribution": dict(sentiment_row) if sentiment_row else {
-            "positive": 0, "neutral": 0, "negative": 0, "total": 0,
+        "sentiment_distribution": dict(sentiment_row)
+        if sentiment_row
+        else {
+            "positive": 0,
+            "neutral": 0,
+            "negative": 0,
+            "total": 0,
         },
         "signal_activity_trend": [dict(r) for r in signal_rows],
         "recent_activity": [dict(r) for r in activity_rows],

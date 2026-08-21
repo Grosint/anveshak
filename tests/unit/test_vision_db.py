@@ -7,9 +7,10 @@ Tests:
   - topic_content_items join table insert when topic_id provided
   - No join table insert when topic_id is None
 """
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, call
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -17,15 +18,18 @@ pytestmark = pytest.mark.unit
 
 
 class TestGetOrCreateStubContentItem:
-
     @pytest.mark.asyncio
     async def test_creates_stub_with_topic_id(self, mock_conn: AsyncMock) -> None:
         """When topic_id provided, it's passed as $5 to INSERT."""
         mock_conn.fetchrow = AsyncMock(return_value={"id": "ci-new"})
 
         from services.api.anveshak.api.db.vision import get_or_create_stub_content_item
+
         result = await get_or_create_stub_content_item(
-            mock_conn, "abc123hash", "photo.jpg", topic_id="topic-42",
+            mock_conn,
+            "abc123hash",
+            "photo.jpg",
+            topic_id="topic-42",
         )
 
         assert result == "ci-new"
@@ -40,8 +44,11 @@ class TestGetOrCreateStubContentItem:
         mock_conn.fetchrow = AsyncMock(return_value={"id": "ci-new"})
 
         from services.api.anveshak.api.db.vision import get_or_create_stub_content_item
+
         result = await get_or_create_stub_content_item(
-            mock_conn, "abc123hash", "photo.jpg",
+            mock_conn,
+            "abc123hash",
+            "photo.jpg",
         )
 
         assert result == "ci-new"
@@ -62,8 +69,12 @@ class TestGetOrCreateStubContentItem:
         )
 
         from services.api.anveshak.api.db.vision import get_or_create_stub_content_item
+
         result = await get_or_create_stub_content_item(
-            mock_conn, "abc123hash", "photo.jpg", topic_id="topic-42",
+            mock_conn,
+            "abc123hash",
+            "photo.jpg",
+            topic_id="topic-42",
         )
 
         assert result == "ci-existing"
@@ -81,8 +92,12 @@ class TestGetOrCreateStubContentItem:
         mock_conn.fetchrow = AsyncMock(return_value={"id": "ci-new"})
 
         from services.api.anveshak.api.db.vision import get_or_create_stub_content_item
+
         await get_or_create_stub_content_item(
-            mock_conn, "abc123hash", "photo.jpg", topic_id="topic-99",
+            mock_conn,
+            "abc123hash",
+            "photo.jpg",
+            topic_id="topic-99",
         )
 
         # execute called twice: manual source upsert + topic_content_items upsert

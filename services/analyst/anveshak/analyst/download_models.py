@@ -12,6 +12,7 @@ Verifies:
 Skips downloads if models are already present in HF_HOME.
 Used by the analyst-init container in compose.yml.
 """
+
 from __future__ import annotations
 
 import sys
@@ -29,12 +30,16 @@ def main() -> None:
     # 1. spaCy NLP models — baked into image via Dockerfile.
     #    Verify they're loadable and log status.
     import spacy
+
     try:
         spacy.load(settings.spacy_en_model)
         log.info("download_models.spacy_ok", model=settings.spacy_en_model)
     except OSError:
-        log.error("download_models.spacy_missing", model=settings.spacy_en_model,
-                   hint="Model should be baked into image via Dockerfile ARG")
+        log.error(
+            "download_models.spacy_missing",
+            model=settings.spacy_en_model,
+            hint="Model should be baked into image via Dockerfile ARG",
+        )
 
     # 2. Sentence-transformers embedding model
     log.info("download_models.embedding", model=settings.embedding_model)

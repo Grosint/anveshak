@@ -4,16 +4,17 @@ Criteria 1.21: GET /api/v1/content/{id}   — full item + entities
 Criteria 1.23: GET /api/v1/search         — pgvector cosine similarity search
 Criteria 1.24: similarity_score float in search results
 """
+
 from __future__ import annotations
 
-import asyncpg
 import structlog
+from anveshak.db import DBConnection
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..auth.rbac import require_role
-from ..db.pool import get_db
 from ..db import content as content_db
 from ..db import topics as topics_db
+from ..db.pool import get_db
 from ..embedding import embed_query as _embed_query
 
 log = structlog.get_logger(__name__)
@@ -24,10 +25,11 @@ router = APIRouter(prefix="/api/v1", tags=["content"])
 # Routes
 # ---------------------------------------------------------------------------
 
+
 @router.get("/content/{content_id}")
 async def get_content_item(
     content_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Full content item including extracted entities (criteria 1.21)."""
@@ -43,7 +45,7 @@ async def get_content_item(
 async def search_content(
     q: str = Query(..., min_length=1, description="Search query text"),
     topic_id: str = Query(..., description="Topic to search within"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """pgvector cosine similarity search within a topic (criteria 1.23, 1.24)."""
