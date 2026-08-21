@@ -1,8 +1,9 @@
 # Host venv Rebuild, Python Pinning, and the Quality-Target Backlog
 
 Written 2026-08-20, alongside the `chore/harness-agnostic-agents` branch.
-Last updated 2026-08-21, after a fourth session that added item 10 and closed the three findings
-item 9 left open.
+Last updated 2026-08-21, after a fourth session that added items 10 and 11: it closed the three
+findings item 9 left open, and ran the two gates that had never been run, `make test-integration`
+in full and `make test-scrape`.
 
 The original scope was the venv rebuild.
 Verifying it uncovered that four Makefile quality targets had been silently dead, so this document
@@ -11,7 +12,7 @@ now also tracks the backlog that exposed.
 Items 1 to 8 are committed on `chore/harness-agnostic-agents` as the single commit `694de76`.
 The ten-way split suggested under item 6 was not used, so that one commit mixes a 446-file reformat
 with substantive fixes; worth knowing before bisecting anything in this range.
-Items 9 and 10 are in the working tree on top of it, uncommitted.
+Items 9, 10 and 11 are in the working tree on top of it, uncommitted.
 
 ## Status at a glance
 
@@ -38,13 +39,14 @@ Done:
 - [x] All four findings recorded on 2026-08-20 are closed; see [Closed findings](#closed-findings)
 - [x] [10. The three findings item 9 left open](#10-the-three-findings-item-9-left-open) - NULL
       centroids repaired, both schedulers given a real heartbeat, the analyst backlog measured
+- [x] [11. `make test-scrape`](#11-make-test-scrape-item-d) - run with internet, item D; 20 of 22
+      pass with 1 skip, and three reporting defects in the harness are fixed
 
 Open, in suggested order:
 
-- [ ] [A. Commit items 9 and 10](#6-commit-the-branch) - suggested 6-way split at item 6
+- [ ] [A. Commit items 9, 10 and 11](#6-commit-the-branch) - suggested 6-way split at item 6
 - [ ] [B. `make test-integration` end to end](#5-verification-integration-now-passes) - run in full; steps 1 to 3 pass, steps 4 and 5 need a stack that is not competing for memory and CPU
 - [ ] [C. `make test-ci`](#5-verification-integration-now-passes) - the gate that matters, never run end to end
-- [ ] [D. `make test-scrape`](#5-verification-integration-now-passes) - needs internet
 
 Gate status as of the end of the 2026-08-21 sessions:
 
@@ -64,6 +66,9 @@ make test-integration  # run in full, item B. Steps 1-3 green: 128 passed, 4/4, 
                        # and CPU by the running stack, not by a code defect.
 make test-ci        # NEVER RUN, item C. Contains test-integration, so it inherits
                     # the constraint above.
+make test-scrape    # run, item D. 20/22 passed, 2 failed, 1 skipped. The two failures
+                    # are one unreachable onion and an X keyword search that returns
+                    # nothing on this API tier. Duration swings from 5 to 23 minutes.
 ```
 
 Everything above except `test-frontend` was re-run at the end of the item 10 session.
@@ -139,11 +144,11 @@ See [Resolved work](#resolved-work) for how items 1 to 4 and 7 to 9 were closed,
 
 ## Next session: start here
 
-Items 9 and 10 are uncommitted on `chore/harness-agnostic-agents`; items 1 to 8 are in `694de76`.
+Items 9, 10 and 11 are uncommitted on `chore/harness-agnostic-agents`; items 1 to 8 are in `694de76`.
 
 Do this first:
 
-1. Commit items 9 and 10, using the 6-way split under [item 6](#6-commit-the-branch).
+1. Commit items 9, 10 and 11, using the 6-way split under [item 6](#6-commit-the-branch).
    Doing this before the long test runs means a failure has something to bisect against.
 2. `make test-integration` and read all five steps. Only step 1 has been confirmed green.
 3. `make test-ci`, the gate that actually matters and has never been run end to end.
@@ -1004,6 +1009,64 @@ One practical consequence for item C: `analyse-worker` was at 291 percent CPU se
 backlog while integration step 5 ran inside the same container, which is why that step took far
 longer than its usual time. Let the queue quieten before treating a `test-ci` duration as normal.
 
+### 11. `make test-scrape`, item D
+
+Run on 2026-08-21 with internet available. It had never been run.
+Three of the seven rows failed, and only one of those three was a real source problem.
+
+#### The scraper block was killed by its own budget
+
+`scripts/test_scrape.py` gave the in-container source tests 600s, and the duration of those tests
+swings by an order of magnitude with load and network conditions. Two runs an hour apart:
+1330s the first time, of which the ten RSS feeds were 1128s with BBC World alone at 466s, and 322s
+the second time with BBC World at 34s. The feeds are fetched through the production path at its
+per-domain rate limit while the rest of the stack competes for the same host, so the slow run is
+as real as the fast one and 600s sits right in the middle of the spread.
+
+So the run was killed mid-RSS every time, and `subprocess.run` discarded every partial result with
+it. What the operator saw was a single row:
+
+```
+error   anveshak-scrape-web-scheduler-1   ✗ FAIL   0   600.0s   Timeout (600s)
+```
+
+A working scraper, reported as one opaque failure.
+The timeout is now 1800s, with the measurement recorded next to it.
+
+#### A timeout that could not be diagnosed
+
+`test_scrape_sources.py` redirects stderr to `/dev/null` so library log noise cannot corrupt the
+JSON on stdout. That is correct, and it also meant a killed run left nothing at all to look at.
+
+`_progress()` now writes to the original fd 2, one line per phase and per source, and the
+orchestrator's `TimeoutExpired` handler reports the last `[progress]` line it received. A run that
+is killed now says which source it was on, rather than only that it ran out of time.
+
+#### A disabled adapter is not a failure
+
+`REDDIT_ADAPTER_ENABLED=false` was reported as `✗ FAIL`. Every adapter ships disabled by
+architectural rule 1, so a stock configuration was guaranteed to show failures, which is exactly
+the condition under which people stop reading a test's output.
+
+`_skipped()` in `scripts/test_scrape_social.py` reports `SKIP` for all three adapters that can be
+switched off, the table renders it dimmed, the summary counts skips separately, and the exit code
+now keys on `status == "FAIL"` rather than `!= "PASS"`.
+
+#### What the sources themselves said
+
+Final run: **20 of 22 passed, 2 failed, 1 skipped**. All ten RSS feeds, all five Crawl4AI web
+fetches, the BBC Tor mirror at 56108 chars through the Tor circuit, Telegram auth and both
+channels, and X auth.
+
+Two genuine results are worth keeping:
+
+- **Tor Project onion, FAIL.** `scraper.darkweb_fetch_failed` with
+  `Proxy Server could not connect: General SOCKS server failure`, while the BBC mirror through the
+  same circuit succeeded seconds later. That is one unreachable hidden service, not a broken Tor
+  path.
+- **X keyword search returned no tweets.** The bearer token is accepted and the spend guard is
+  intact, so this is the API tier rather than the adapter.
+
 ## Remaining work
 
 ### 5. Verification: integration now passes
@@ -1075,7 +1138,7 @@ Still unrun:
 
 - `make test-ci` - runs unit, contract, integration, frontend, and the 80 percent coverage gate.
   It contains `test-integration`, so it inherits the constraint above.
-- `make test-scrape` - needs internet
+- `make test-scrape` - now run, see [item 11](#11-make-test-scrape-item-d)
 
 `make test-ci` is the one that matters, since the segfault that used to break it did not reproduce and
 that should be confirmed end to end rather than inferred.
@@ -1104,7 +1167,7 @@ The split that was suggested at the time, kept for the record:
 9. The `scam_templates` seed restored to the baseline migration, item 8
 10. The integration test fixes, item 5
 
-Items 9 and 10 are still uncommitted, and are small enough to split properly.
+Items 9, 10 and 11 are still uncommitted, and are small enough to split properly.
 Suggested, in this order:
 
 1. **Env forwarding.** `infra/compose.yml` (the `environment:` blocks and the `x-common-env`
@@ -1144,6 +1207,9 @@ Suggested, in this order:
    The four `scripts/test_*.py` diagnostics changed too, `_exc_detail()` in all four and
    `_generation_or_error()` in the Ollama one. They are test tooling with no runtime effect, so
    they can ride along or go in their own commit.
+7. **Item 11.** `scripts/test_scrape.py`, `scripts/test_scrape_sources.py` and
+   `scripts/test_scrape_social.py`: the 1800s timeout with its measurement, `_progress()` and the
+   `TimeoutExpired` reporting, and `SKIP` for a disabled adapter. Harness only, no service code.
 
 Commits 1 and 2 both change how running services behave, the first in what they read from the
 environment and the second in when they are declared unhealthy. Both need to be revertable on
