@@ -2,6 +2,7 @@
 
 pytest.mark.unit — pure functions, no DB, no GPU, no Ollama.
 """
+
 from __future__ import annotations
 
 from unittest.mock import patch

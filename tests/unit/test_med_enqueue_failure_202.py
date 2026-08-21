@@ -3,6 +3,7 @@
 POST /topics must return 202 (not 201) when topic is created but
 backfill job enqueue fails, so the analyst knows processing is delayed.
 """
+
 from __future__ import annotations
 
 import json
@@ -14,7 +15,6 @@ pytestmark = pytest.mark.unit
 
 
 class TestEnqueueFailureReturns202:
-
     @pytest.mark.asyncio
     async def test_enqueue_failure_returns_202_with_warning(self):
         """When Redis enqueue fails, response must be 202 with warning field."""
@@ -56,6 +56,4 @@ class TestEnqueueFailureReturns202:
             assert "warning" in body
         else:
             # Dict response — check for warning key
-            assert "warning" in result, (
-                "Enqueue failure must return a warning field in response"
-            )
+            assert "warning" in result, "Enqueue failure must return a warning field in response"

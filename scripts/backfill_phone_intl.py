@@ -6,6 +6,7 @@ misclassified as DATE by spaCy) and inserts PHONE_INTL extracted_entities rows.
 Usage:
     uv run python scripts/backfill_phone_intl.py [--dry-run]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -15,7 +16,6 @@ import uuid
 
 import asyncpg
 import structlog
-
 from anveshak.analyst.identifiers import extract_identifiers
 
 log = structlog.get_logger(__name__)
@@ -84,14 +84,9 @@ async def main(dry_run: bool = False) -> None:
                 continue
 
             # Check what already exists
-            existing = {
-                r["entity_text"]
-                for r in await conn.fetch(SQL_EXISTING, content_id)
-            }
+            existing = {r["entity_text"] for r in await conn.fetch(SQL_EXISTING, content_id)}
 
-            new_phones = [
-                m for m in phone_intl if m.normalized_value not in existing
-            ]
+            new_phones = [m for m in phone_intl if m.normalized_value not in existing]
 
             if not new_phones:
                 continue
@@ -119,9 +114,7 @@ async def main(dry_run: bool = False) -> None:
                     inserted_total += 1
 
                 # Clean up misclassified DATE entities
-                deleted = await conn.execute(
-                    SQL_DELETE_MISCLASSIFIED, content_id
-                )
+                deleted = await conn.execute(SQL_DELETE_MISCLASSIFIED, content_id)
                 count = int(deleted.split()[-1])
                 if count:
                     cleaned_total += count

@@ -2,13 +2,13 @@
 
 Pure functions for extraction/ranking + async job functions for ARQ scheduling.
 """
+
 from __future__ import annotations
 
 import json
 import uuid
 from collections import Counter
 from datetime import UTC, datetime
-from typing import Any
 from urllib.parse import urlparse
 
 import asyncpg
@@ -136,9 +136,7 @@ def filter_existing_domains(
 ) -> dict[str, int]:
     """Remove domains that are already registered as sources."""
     return {
-        domain: count
-        for domain, count in domain_counts.items()
-        if domain not in existing_domains
+        domain: count for domain, count in domain_counts.items() if domain not in existing_domains
     }
 
 
@@ -170,9 +168,7 @@ async def discover_snowball_sources(
             return 0
 
         # Extract domains with frequency
-        domain_counts = extract_domains_with_frequency(
-            [dict(r) for r in link_rows]
-        )
+        domain_counts = extract_domains_with_frequency([dict(r) for r in link_rows])
 
         # Fetch existing source domains
         existing_rows = await conn.fetch(SQL_EXISTING_SOURCE_URLS)

@@ -1,25 +1,39 @@
 """Identifier search DB layer — queries for Engine C Step 7.
 
-All SQL is module-level constants. Functions take asyncpg.Connection
+All SQL is module-level constants. Functions take DBConnection
 and return plain dicts (no Pydantic — route layer handles serialization).
 """
+
 from __future__ import annotations
 
 from typing import Any, Optional
 
-import asyncpg
-
+from anveshak.db import DBConnection
 
 # ---------------------------------------------------------------------------
 # Identifier types covered by the partial index (Engine C migration 009)
 # ---------------------------------------------------------------------------
 
 IDENTIFIER_TYPES = (
-    "PHONE_IN", "PHONE_INTL", "UPI", "EMAIL", "CRYPTO_BTC", "CRYPTO_ETH",
-    "CRYPTO_TRC20", "TELEGRAM_HANDLE", "INSTAGRAM_HANDLE",
-    "FACEBOOK_HANDLE", "X_HANDLE",
-    "URL_DOMAIN", "GSTIN", "UDYAM", "PAN", "IFSC",
-    "BANK_ACCOUNT", "SEBI_REG", "AIRCRAFT_ID",
+    "PHONE_IN",
+    "PHONE_INTL",
+    "UPI",
+    "EMAIL",
+    "CRYPTO_BTC",
+    "CRYPTO_ETH",
+    "CRYPTO_TRC20",
+    "TELEGRAM_HANDLE",
+    "INSTAGRAM_HANDLE",
+    "FACEBOOK_HANDLE",
+    "X_HANDLE",
+    "URL_DOMAIN",
+    "GSTIN",
+    "UDYAM",
+    "PAN",
+    "IFSC",
+    "BANK_ACCOUNT",
+    "SEBI_REG",
+    "AIRCRAFT_ID",
 )
 
 # SQL fragment generated from IDENTIFIER_TYPES — single source of truth
@@ -29,6 +43,9 @@ _ID_TYPES_SQL = ", ".join(f"'{t}'" for t in IDENTIFIER_TYPES)
 # SQL constants
 # ---------------------------------------------------------------------------
 
+# Safe despite the f-string: the only interpolation is _ID_TYPES_SQL, built
+# from the hardcoded IDENTIFIER_TYPES tuple above. Every user-supplied value
+# is passed as a bind param ($1, $2, ...), never interpolated.
 SQL_SEARCH_IDENTIFIERS = f"""
     SELECT ee.entity_type, ee.entity_text, ee.confidence,
            ee.content_item_id, ci.url AS content_url, ci.topic_id
@@ -39,7 +56,7 @@ SQL_SEARCH_IDENTIFIERS = f"""
       AND ee.entity_text ILIKE $2
     ORDER BY ee.confidence DESC
     LIMIT $3
-"""
+"""  # nosec B608
 
 SQL_SEARCH_IDENTIFIERS_WITH_TYPE = """
     SELECT ee.entity_type, ee.entity_text, ee.confidence,
@@ -53,6 +70,9 @@ SQL_SEARCH_IDENTIFIERS_WITH_TYPE = """
     LIMIT $4
 """
 
+# Safe despite the f-string: the only interpolation is _ID_TYPES_SQL, built
+# from the hardcoded IDENTIFIER_TYPES tuple above. Every user-supplied value
+# is passed as a bind param ($1, $2, ...), never interpolated.
 SQL_TOP_IDENTIFIERS = f"""
     SELECT ee.entity_type AS identifier_type,
            ee.entity_text AS identifier_value,
@@ -68,7 +88,7 @@ SQL_TOP_IDENTIFIERS = f"""
     HAVING COUNT(DISTINCT ee.content_item_id) >= $2
     ORDER BY COUNT(DISTINCT ee.content_item_id) DESC
     LIMIT $3
-"""
+"""  # nosec B608
 
 SQL_TOP_IDENTIFIERS_WITH_TYPE = """
     SELECT ee.entity_type AS identifier_type,
@@ -127,6 +147,9 @@ SQL_CLUSTER_ITEMS = """
     ORDER BY ci.captured_at DESC
 """
 
+# Safe despite the f-string: the only interpolation is _ID_TYPES_SQL, built
+# from the hardcoded IDENTIFIER_TYPES tuple above. Every user-supplied value
+# is passed as a bind param ($1, $2, ...), never interpolated.
 SQL_EXPORT_IDENTIFIERS = f"""
     SELECT ee.entity_type, ee.entity_text, ee.confidence,
            ee.content_item_id, ci.url AS content_url,
@@ -139,7 +162,7 @@ SQL_EXPORT_IDENTIFIERS = f"""
       AND ee.entity_type IN ({_ID_TYPES_SQL})
     ORDER BY ee.entity_type, ee.entity_text
     LIMIT $2
-"""
+"""  # nosec B608
 
 SQL_SEARCH_IDENTIFIERS_GLOBAL = """
     SELECT ic.identifier_type, ic.identifier_value,
@@ -230,8 +253,9 @@ SQL_LIST_TOPIC_TEMPLATES = """
 # DB functions
 # ---------------------------------------------------------------------------
 
+
 async def search_identifiers(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     *,
     q: str,
     topic_id: str,
@@ -243,18 +267,23 @@ async def search_identifiers(
     if identifier_type:
         rows = await conn.fetch(
             SQL_SEARCH_IDENTIFIERS_WITH_TYPE,
-            topic_id, identifier_type, pattern, limit,
+            topic_id,
+            identifier_type,
+            pattern,
+            limit,
         )
     else:
         rows = await conn.fetch(
             SQL_SEARCH_IDENTIFIERS,
-            topic_id, pattern, limit,
+            topic_id,
+            pattern,
+            limit,
         )
     return [dict(r) for r in rows]
 
 
 async def get_top_identifiers(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     *,
     topic_id: str,
     identifier_type: Optional[str] = None,
@@ -265,17 +294,23 @@ async def get_top_identifiers(
     if identifier_type:
         rows = await conn.fetch(
             SQL_TOP_IDENTIFIERS_WITH_TYPE,
-            topic_id, identifier_type, min_items, limit,
+            topic_id,
+            identifier_type,
+            min_items,
+            limit,
         )
     else:
         rows = await conn.fetch(
-            SQL_TOP_IDENTIFIERS, topic_id, min_items, limit,
+            SQL_TOP_IDENTIFIERS,
+            topic_id,
+            min_items,
+            limit,
         )
     return [dict(r) for r in rows]
 
 
 async def list_identifier_clusters(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     *,
     topic_id: str,
     identifier_type: Optional[str] = None,
@@ -286,7 +321,10 @@ async def list_identifier_clusters(
     if identifier_type:
         rows = await conn.fetch(
             SQL_LIST_CLUSTERS_WITH_TYPE,
-            topic_id, identifier_type, limit, offset,
+            topic_id,
+            identifier_type,
+            limit,
+            offset,
         )
     else:
         rows = await conn.fetch(SQL_LIST_CLUSTERS, topic_id, limit, offset)
@@ -294,7 +332,7 @@ async def list_identifier_clusters(
 
 
 async def get_cluster_detail(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     *,
     cluster_id: str,
 ) -> Optional[dict[str, Any]]:
@@ -311,7 +349,7 @@ async def get_cluster_detail(
 
 
 async def export_identifiers(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     *,
     topic_id: str,
     limit: int = 5000,
@@ -322,7 +360,7 @@ async def export_identifiers(
 
 
 async def search_identifiers_global(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     *,
     q: str,
     org_id: str,
@@ -334,18 +372,23 @@ async def search_identifiers_global(
     if identifier_type:
         rows = await conn.fetch(
             SQL_SEARCH_IDENTIFIERS_GLOBAL_WITH_TYPE,
-            org_id, identifier_type, pattern, limit,
+            org_id,
+            identifier_type,
+            pattern,
+            limit,
         )
     else:
         rows = await conn.fetch(
             SQL_SEARCH_IDENTIFIERS_GLOBAL,
-            org_id, pattern, limit,
+            org_id,
+            pattern,
+            limit,
         )
     return [dict(r) for r in rows]
 
 
 async def get_identifier_convergence(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     *,
     org_id: str,
     limit: int = 20,
@@ -356,7 +399,7 @@ async def get_identifier_convergence(
 
 
 async def get_co_occurrence(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     *,
     topic_id: str,
     identifier_a: str,
@@ -366,7 +409,10 @@ async def get_co_occurrence(
     """Content items where both identifiers co-occur."""
     rows = await conn.fetch(
         SQL_CO_OCCURRENCE,
-        topic_id, identifier_a, identifier_b, limit,
+        topic_id,
+        identifier_a,
+        identifier_b,
+        limit,
     )
     return [dict(r) for r in rows]
 
@@ -375,8 +421,9 @@ async def get_co_occurrence(
 # Template linking functions
 # ---------------------------------------------------------------------------
 
+
 async def link_template(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     *,
     topic_id: str,
     template_id: str,
@@ -386,7 +433,7 @@ async def link_template(
 
 
 async def unlink_template(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     *,
     topic_id: str,
     template_id: str,
@@ -396,7 +443,7 @@ async def unlink_template(
 
 
 async def list_topic_templates(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     *,
     topic_id: str,
 ) -> list[dict[str, Any]]:

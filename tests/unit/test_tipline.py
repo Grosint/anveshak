@@ -8,42 +8,36 @@ Tests for POST /api/v1/tipline/ingest:
   - Rate limiting (100 req/min per API key)
   - Error handling (missing fields, invalid topic, etc.)
 """
+
 from __future__ import annotations
 
-import hashlib
 import re
-import uuid
-from datetime import datetime, UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+from services.api.anveshak.api.db.tipline import (
+    SQL_GET_TIPLINE_SOURCE,
+    SQL_INSERT_TIPLINE_CONTENT,
+    SQL_LOOKUP_API_KEY,
+    get_or_create_tipline_source,
+    insert_tipline_content,
+    lookup_api_key,
+)
+from services.api.anveshak.api.routes.tipline import (
+    TiplineIngestRequest,
+    TiplineIngestResponse,
+    _compute_hash,
+    _normalise,
+)
 
 pytestmark = pytest.mark.unit
 
 
 # ---------------------------------------------------------------------------
-# Import targets
-# ---------------------------------------------------------------------------
-
-from services.api.anveshak.api.routes.tipline import (
-    TiplineIngestRequest,
-    TiplineIngestResponse,
-    _normalise,
-    _compute_hash,
-)
-from services.api.anveshak.api.db.tipline import (
-    SQL_LOOKUP_API_KEY,
-    SQL_INSERT_TIPLINE_CONTENT,
-    SQL_GET_TIPLINE_SOURCE,
-    lookup_api_key,
-    insert_tipline_content,
-    get_or_create_tipline_source,
-)
-
-
-# ---------------------------------------------------------------------------
 # TiplineIngestRequest validation
 # ---------------------------------------------------------------------------
+
 
 class TestTiplineRequestValidation:
     """Pydantic request model enforces required fields."""
@@ -84,9 +78,10 @@ class TestTiplineRequestValidation:
             TiplineIngestRequest(text="", topic_id="topic-001")
 
     def test_labels_field_exists(self):
-        """CLAUDE.md: every Pydantic model MUST have labels field."""
+        """AGENTS.md: every Pydantic model MUST have labels field."""
         req = TiplineIngestRequest(
-            text="Test", topic_id="t-001",
+            text="Test",
+            topic_id="t-001",
         )
         assert hasattr(req, "labels")
 
@@ -120,6 +115,7 @@ class TestTiplineResponseModel:
 # Normalisation + hashing helpers
 # ---------------------------------------------------------------------------
 
+
 class TestNormalisationHelpers:
     """Same normalisation logic as social/ingest.py — lowercase + collapse whitespace."""
 
@@ -152,15 +148,18 @@ class TestNormalisationHelpers:
 # DB: API key lookup
 # ---------------------------------------------------------------------------
 
+
 class TestApiKeyLookup:
     """lookup_api_key returns org_id if key exists, None otherwise."""
 
     @pytest.mark.asyncio
     async def test_valid_key_returns_org(self, mock_conn):
-        mock_conn.fetchrow = AsyncMock(return_value={
-            "org_id": "org-001",
-            "name": "Police Tipline",
-        })
+        mock_conn.fetchrow = AsyncMock(
+            return_value={
+                "org_id": "org-001",
+                "name": "Police Tipline",
+            }
+        )
         result = await lookup_api_key(mock_conn, "valid-api-key-123")
         assert result is not None
         assert result["org_id"] == "org-001"
@@ -180,6 +179,7 @@ class TestApiKeyLookup:
 # ---------------------------------------------------------------------------
 # DB: tipline source get-or-create
 # ---------------------------------------------------------------------------
+
 
 class TestTiplineSource:
     """Auto-create a 'tipline' source for the org if not exists."""
@@ -207,6 +207,7 @@ class TestTiplineSource:
 # ---------------------------------------------------------------------------
 # DB: content insertion
 # ---------------------------------------------------------------------------
+
 
 class TestTiplineContentInsert:
     """insert_tipline_content creates content_item with ON CONFLICT dedup."""
@@ -258,6 +259,7 @@ class TestTiplineContentInsert:
 # Route: full ingest flow (mocked deps)
 # ---------------------------------------------------------------------------
 
+
 class TestTiplineIngestRoute:
     """Integration-style unit tests for the ingest route handler."""
 
@@ -274,8 +276,9 @@ class TestTiplineIngestRoute:
     @pytest.mark.asyncio
     async def test_missing_api_key_returns_401(self, mock_deps):
         """No X-Api-Key header → 401."""
-        from services.api.anveshak.api.routes.tipline import ingest_tipline
         from fastapi import HTTPException
+
+        from services.api.anveshak.api.routes.tipline import ingest_tipline
 
         conn, arq_pool, request = mock_deps
         request.headers = {}
@@ -292,8 +295,9 @@ class TestTiplineIngestRoute:
     @pytest.mark.asyncio
     async def test_invalid_api_key_returns_401(self, mock_deps):
         """Invalid API key → 401."""
-        from services.api.anveshak.api.routes.tipline import ingest_tipline
         from fastapi import HTTPException
+
+        from services.api.anveshak.api.routes.tipline import ingest_tipline
 
         conn, arq_pool, request = mock_deps
         request.headers = {"x-api-key": "bad-key"}
@@ -314,18 +318,22 @@ class TestTiplineIngestRoute:
     @pytest.mark.asyncio
     async def test_topic_not_found_returns_404(self, mock_deps):
         """Valid key but topic doesn't belong to org → 404."""
-        from services.api.anveshak.api.routes.tipline import ingest_tipline
         from fastapi import HTTPException
+
+        from services.api.anveshak.api.routes.tipline import ingest_tipline
 
         conn, arq_pool, request = mock_deps
         request.headers = {"x-api-key": "valid-key"}
 
-        with patch(
-            "services.api.anveshak.api.routes.tipline.tipline_db.lookup_api_key",
-            new=AsyncMock(return_value={"org_id": "org-001", "name": "test"}),
-        ), patch(
-            "services.api.anveshak.api.routes.tipline.tipline_db.verify_topic_org",
-            new=AsyncMock(return_value=False),
+        with (
+            patch(
+                "services.api.anveshak.api.routes.tipline.tipline_db.lookup_api_key",
+                new=AsyncMock(return_value={"org_id": "org-001", "name": "test"}),
+            ),
+            patch(
+                "services.api.anveshak.api.routes.tipline.tipline_db.verify_topic_org",
+                new=AsyncMock(return_value=False),
+            ),
         ):
             with pytest.raises(HTTPException) as exc_info:
                 await ingest_tipline(
@@ -344,18 +352,23 @@ class TestTiplineIngestRoute:
         conn, arq_pool, request = mock_deps
         request.headers = {"x-api-key": "valid-key"}
 
-        with patch(
-            "services.api.anveshak.api.routes.tipline.tipline_db.lookup_api_key",
-            new=AsyncMock(return_value={"org_id": "org-001", "name": "test"}),
-        ), patch(
-            "services.api.anveshak.api.routes.tipline.tipline_db.verify_topic_org",
-            new=AsyncMock(return_value=True),
-        ), patch(
-            "services.api.anveshak.api.routes.tipline.tipline_db.get_or_create_tipline_source",
-            new=AsyncMock(return_value={"id": "src-001", "credibility_score": 50.0}),
-        ), patch(
-            "services.api.anveshak.api.routes.tipline.tipline_db.insert_tipline_content",
-            new=AsyncMock(return_value={"id": "ci-new-001"}),
+        with (
+            patch(
+                "services.api.anveshak.api.routes.tipline.tipline_db.lookup_api_key",
+                new=AsyncMock(return_value={"org_id": "org-001", "name": "test"}),
+            ),
+            patch(
+                "services.api.anveshak.api.routes.tipline.tipline_db.verify_topic_org",
+                new=AsyncMock(return_value=True),
+            ),
+            patch(
+                "services.api.anveshak.api.routes.tipline.tipline_db.get_or_create_tipline_source",
+                new=AsyncMock(return_value={"id": "src-001", "credibility_score": 50.0}),
+            ),
+            patch(
+                "services.api.anveshak.api.routes.tipline.tipline_db.insert_tipline_content",
+                new=AsyncMock(return_value={"id": "ci-new-001"}),
+            ),
         ):
             result = await ingest_tipline(
                 body=TiplineIngestRequest(text="scam call +919876543210", topic_id="topic-001"),
@@ -379,18 +392,23 @@ class TestTiplineIngestRoute:
         conn, arq_pool, request = mock_deps
         request.headers = {"x-api-key": "valid-key"}
 
-        with patch(
-            "services.api.anveshak.api.routes.tipline.tipline_db.lookup_api_key",
-            new=AsyncMock(return_value={"org_id": "org-001", "name": "test"}),
-        ), patch(
-            "services.api.anveshak.api.routes.tipline.tipline_db.verify_topic_org",
-            new=AsyncMock(return_value=True),
-        ), patch(
-            "services.api.anveshak.api.routes.tipline.tipline_db.get_or_create_tipline_source",
-            new=AsyncMock(return_value={"id": "src-001", "credibility_score": 50.0}),
-        ), patch(
-            "services.api.anveshak.api.routes.tipline.tipline_db.insert_tipline_content",
-            new=AsyncMock(return_value=None),  # ON CONFLICT → None
+        with (
+            patch(
+                "services.api.anveshak.api.routes.tipline.tipline_db.lookup_api_key",
+                new=AsyncMock(return_value={"org_id": "org-001", "name": "test"}),
+            ),
+            patch(
+                "services.api.anveshak.api.routes.tipline.tipline_db.verify_topic_org",
+                new=AsyncMock(return_value=True),
+            ),
+            patch(
+                "services.api.anveshak.api.routes.tipline.tipline_db.get_or_create_tipline_source",
+                new=AsyncMock(return_value={"id": "src-001", "credibility_score": 50.0}),
+            ),
+            patch(
+                "services.api.anveshak.api.routes.tipline.tipline_db.insert_tipline_content",
+                new=AsyncMock(return_value=None),  # ON CONFLICT → None
+            ),
         ):
             result = await ingest_tipline(
                 body=TiplineIngestRequest(text="same scam msg", topic_id="topic-001"),
@@ -412,18 +430,23 @@ class TestTiplineIngestRoute:
         request.headers = {"x-api-key": "valid-key"}
         arq_pool.enqueue_job = AsyncMock(side_effect=Exception("Redis down"))
 
-        with patch(
-            "services.api.anveshak.api.routes.tipline.tipline_db.lookup_api_key",
-            new=AsyncMock(return_value={"org_id": "org-001", "name": "test"}),
-        ), patch(
-            "services.api.anveshak.api.routes.tipline.tipline_db.verify_topic_org",
-            new=AsyncMock(return_value=True),
-        ), patch(
-            "services.api.anveshak.api.routes.tipline.tipline_db.get_or_create_tipline_source",
-            new=AsyncMock(return_value={"id": "src-001", "credibility_score": 50.0}),
-        ), patch(
-            "services.api.anveshak.api.routes.tipline.tipline_db.insert_tipline_content",
-            new=AsyncMock(return_value={"id": "ci-new-002"}),
+        with (
+            patch(
+                "services.api.anveshak.api.routes.tipline.tipline_db.lookup_api_key",
+                new=AsyncMock(return_value={"org_id": "org-001", "name": "test"}),
+            ),
+            patch(
+                "services.api.anveshak.api.routes.tipline.tipline_db.verify_topic_org",
+                new=AsyncMock(return_value=True),
+            ),
+            patch(
+                "services.api.anveshak.api.routes.tipline.tipline_db.get_or_create_tipline_source",
+                new=AsyncMock(return_value={"id": "src-001", "credibility_score": 50.0}),
+            ),
+            patch(
+                "services.api.anveshak.api.routes.tipline.tipline_db.insert_tipline_content",
+                new=AsyncMock(return_value={"id": "ci-new-002"}),
+            ),
         ):
             result = await ingest_tipline(
                 body=TiplineIngestRequest(text="important scam tip", topic_id="topic-001"),
@@ -440,15 +463,17 @@ class TestTiplineIngestRoute:
 # Rate limiting: tipline-specific (100 req/min per API key)
 # ---------------------------------------------------------------------------
 
+
 class TestTiplineRateLimit:
     """Rate limit: 100 requests/minute per API key."""
 
     def test_rate_limit_path_in_middleware(self):
         """Tipline path should be rate-limited in the middleware."""
         from services.api.anveshak.api.middleware.rate_limit import (
-            _TIPLINE_PATH,
             _TIPLINE_LIMIT,
+            _TIPLINE_PATH,
         )
+
         assert _TIPLINE_PATH == "/api/v1/tipline/ingest"
         assert _TIPLINE_LIMIT == 100
 
@@ -456,6 +481,7 @@ class TestTiplineRateLimit:
 # ---------------------------------------------------------------------------
 # SQL safety checks
 # ---------------------------------------------------------------------------
+
 
 class TestSqlSafety:
     """All SQL uses parameterised queries — no f-strings."""

@@ -13,10 +13,10 @@ XPollingAdapter:  default mode — tweepy recent search, 15-min intervals
 XStreamAdapter:   raises NotImplementedError (Enterprise API required, criteria 3.26)
 make_x_adapter(): factory that returns the correct class by settings.x_adapter_mode
 """
+
 from __future__ import annotations
 
-import calendar
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import AsyncIterator
 
 import structlog
@@ -24,19 +24,20 @@ import tweepy
 import tweepy.asynchronous
 from arq import ArqRedis
 
+from ..settings import settings
 from .base import (
     AdapterAuthError,
     AdapterRateLimitError,
     RawItem,
     SourceAdapterBase,
 )
-from ..settings import settings
 
 log = structlog.get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Spend Guard — Redis atomic counter (criteria 3.22–3.24)
 # ---------------------------------------------------------------------------
+
 
 def _monthly_key() -> str:
     """Redis key for the current month's X read counter."""
@@ -46,7 +47,6 @@ def _monthly_key() -> str:
 def _seconds_until_month_end() -> int:
     """Seconds from now until midnight on the 1st of next month (UTC)."""
     now = datetime.now(UTC)
-    last_day = calendar.monthrange(now.year, now.month)[1]
     # First second of next month
     if now.month == 12:
         next_month_start = datetime(now.year + 1, 1, 1, tzinfo=UTC)
@@ -100,9 +100,15 @@ return new_count
         key = _monthly_key()
         ttl = _seconds_until_month_end()
 
-        result = int(await self._redis.eval(
-            self._LUA_CHECK_AND_INCREMENT, 1, key, self._cap, ttl
-        ))
+        # redis-py declares keys_and_args as str, and the Lua calls tonumber()
+        # on every ARGV, so pass strings rather than relying on client encoding.
+        # redis-py types eval() against the sync client, which declares a str
+        # return. ArqRedis is async and awaits fine at runtime.
+        result = int(
+            await self._redis.eval(  # pyright: ignore[reportGeneralTypeIssues]
+                self._LUA_CHECK_AND_INCREMENT, 1, key, str(self._cap), str(ttl)
+            )
+        )
 
         if result == -1:
             log.warning(
@@ -128,6 +134,7 @@ return new_count
 # X Polling Adapter (criteria 3.20–3.25)
 # ---------------------------------------------------------------------------
 
+
 class XPollingAdapter(SourceAdapterBase):
     """Polls Twitter/X recent search API.
 
@@ -151,20 +158,19 @@ class XPollingAdapter(SourceAdapterBase):
     async def authenticate(self) -> None:
         """Initialise tweepy AsyncClient from bearer token (criteria 3.20)."""
         if not settings.x_adapter_enabled:
-            log.warning("social.adapter_disabled", adapter=self.adapter_id,
-                        hint="Set X_ADAPTER_ENABLED=true to activate")
+            log.warning(
+                "social.adapter_disabled",
+                adapter=self.adapter_id,
+                hint="Set X_ADAPTER_ENABLED=true to activate",
+            )
             return
         if not settings.x_bearer_token:
-            raise AdapterAuthError(
-                "X adapter enabled but X_BEARER_TOKEN not set"
-            )
+            raise AdapterAuthError("X adapter enabled but X_BEARER_TOKEN not set")
         if settings.x_adapter_mode != "polling":
-            raise ValueError(
-                f"XPollingAdapter called with mode={settings.x_adapter_mode}"
-            )
+            raise ValueError(f"XPollingAdapter called with mode={settings.x_adapter_mode}")
         self._client = tweepy.asynchronous.AsyncClient(
             bearer_token=settings.x_bearer_token,
-            wait_on_rate_limit=False,   # we manage rate limit ourselves
+            wait_on_rate_limit=False,  # we manage rate limit ourselves
         )
         self._spend_guard = XSpendGuard(self._redis, settings.x_monthly_read_cap)
         log.info("x.authenticated", mode="polling", cap=settings.x_monthly_read_cap)
@@ -187,7 +193,7 @@ class XPollingAdapter(SourceAdapterBase):
         # SPEND GUARD — must check before every API call (criteria 3.22, 3.30)
         allowed = await self._spend_guard.check_and_increment()
         if not allowed:
-            return   # hard stop — no API call made (criteria 3.30)
+            return  # hard stop — no API call made (criteria 3.30)
 
         try:
             response = await self._client.search_recent_tweets(
@@ -203,10 +209,13 @@ class XPollingAdapter(SourceAdapterBase):
             log.warning("x.search_error", error=str(exc))
             return
 
-        if not response.data:
+        # tweepy types AsyncClient.search_recent_tweets as returning the union
+        # ClientResponse | Response | dict; with the default return_type it is a
+        # Response, which carries .data.
+        if not response.data:  # pyright: ignore[reportAttributeAccessIssue]
             return
 
-        for tweet in response.data:
+        for tweet in response.data:  # pyright: ignore[reportAttributeAccessIssue]
             # Capture engagement metrics from public_metrics
             engagement: dict[str, int | float] = {}
             metrics = getattr(tweet, "public_metrics", None) or {}
@@ -226,7 +235,8 @@ class XPollingAdapter(SourceAdapterBase):
                 url=f"https://x.com/i/web/status/{tweet.id}",
                 platform=self.platform,
                 captured_at=tweet.created_at or datetime.now(UTC),
-                source_handle=settings.x_bearer_token[:8] + "...",  # anonymised
+                # authenticate() rejects a missing token, so this is set by now.
+                source_handle=(settings.x_bearer_token or "")[:8] + "...",  # anonymised
                 language=tweet.lang if hasattr(tweet, "lang") else None,
                 engagement=engagement or None,
                 author_id=str(tweet.author_id) if getattr(tweet, "author_id", None) else None,
@@ -251,6 +261,7 @@ class XPollingAdapter(SourceAdapterBase):
 # ---------------------------------------------------------------------------
 # X Stream Adapter — Enterprise API only (criteria 3.26)
 # ---------------------------------------------------------------------------
+
 
 class XStreamAdapter(SourceAdapterBase):
     """Real-time filtered stream — requires X Enterprise API contract."""
@@ -282,6 +293,7 @@ class XStreamAdapter(SourceAdapterBase):
 # ---------------------------------------------------------------------------
 # Factory function
 # ---------------------------------------------------------------------------
+
 
 def make_x_adapter(redis: ArqRedis) -> SourceAdapterBase:
     """Return the correct X adapter based on settings.x_adapter_mode."""

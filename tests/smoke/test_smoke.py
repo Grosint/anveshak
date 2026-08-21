@@ -3,6 +3,7 @@
 Verifies all services are reachable and healthy.
 Run: make test-smoke
 """
+
 from __future__ import annotations
 
 import json

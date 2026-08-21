@@ -23,6 +23,7 @@ Revision ID: 009
 Revises: 008
 Create Date: 2026-06-11 00:00:00.000000
 """
+
 from alembic import op
 
 revision = "009"

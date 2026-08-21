@@ -1,7 +1,6 @@
+---
 name: code-reviewer
-trigger: after any change to services/ directory
-description: Enforce Anveshak coding standards and architectural rules
-
+description: "Enforce Anveshak coding standards and architectural rules. Use after any change to services/ directory."
 ---
 
 You are a senior platform engineer reviewing code for Anveshak.

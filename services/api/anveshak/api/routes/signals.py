@@ -1,19 +1,28 @@
 """Signals endpoints — threshold-based intelligence notifications (Phase 2, criteria 2.14–2.20)."""
+
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Optional
 
-import asyncpg
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from anveshak.db import DBConnection
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
 
-from ..auth.rbac import require_role, is_super_admin, get_user_org
-from ..db.pool import get_db, get_pool
-from ..db import signals as signals_db
+from ..auth.rbac import get_user_org, is_super_admin, require_org_context, require_role
 from ..db import audit as audit_db
+from ..db import signals as signals_db
 from ..db import topics as topics_db
+from ..db.pool import get_db, get_pool
 from ..pagination import paginate_rows
 
 log = structlog.get_logger(__name__)
@@ -50,12 +59,15 @@ async def broadcast_signal(signal: dict) -> None:
 # WebSocket endpoint (criteria 2.17, 2.18, 2.20)
 # ---------------------------------------------------------------------------
 
+
 @router.websocket("/ws/{analyst_session_id}")
 async def signal_websocket(
     websocket: WebSocket,
     analyst_session_id: str,
     token: str = Query(..., description="Bearer JWT token — same token used for REST endpoints"),
-    since: str | None = Query(default=None, description="ISO datetime — replay missed signals after this timestamp"),
+    since: str | None = Query(
+        default=None, description="ISO datetime — replay missed signals after this timestamp"
+    ),
 ):
     """WebSocket endpoint for real-time signal delivery to analyst sessions.
 
@@ -65,6 +77,7 @@ async def signal_websocket(
     - Status flow: new → acknowledged → dismissed (criteria 2.14)
     """
     from ..auth.jwt import verify_token
+
     try:
         user_payload = verify_token(token)
     except Exception:
@@ -101,14 +114,16 @@ async def signal_websocket(
                 async with pool.acquire() as conn:
                     missed = await signals_db.get_missed_signals(conn, since_dt, org_id=ws_org_id)
                     for row in missed:
-                        await websocket.send_json({
-                            "type": "signal_replay",
-                            "signal_id": row["id"],
-                            "topic_id": row["topic_id"],
-                            "cluster_id": row["cluster_id"],
-                            "signal_type": row["signal_type"],
-                            "created_at": row["created_at"].isoformat(),
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": "signal_replay",
+                                "signal_id": row["id"],
+                                "topic_id": row["topic_id"],
+                                "cluster_id": row["cluster_id"],
+                                "signal_type": row["signal_type"],
+                                "created_at": row["created_at"].isoformat(),
+                            }
+                        )
                     log.info(
                         "signals.ws_replay_sent",
                         session_id=analyst_session_id,
@@ -130,15 +145,20 @@ async def signal_websocket(
 # REST endpoints
 # ---------------------------------------------------------------------------
 
+
 @router.get("")
 async def list_signals(
     status: str = Query(default="new", pattern="^(new|acknowledged|dismissed)$"),
     topic_id: Optional[str] = Query(default=None, description="Filter signals to a specific topic"),
-    since: Optional[datetime] = Query(default=None, description="ISO datetime — only return signals at or after this time"),
-    until: Optional[datetime] = Query(default=None, description="ISO datetime — only return signals at or before this time"),
+    since: Optional[datetime] = Query(
+        default=None, description="ISO datetime — only return signals at or after this time"
+    ),
+    until: Optional[datetime] = Query(
+        default=None, description="ISO datetime — only return signals at or before this time"
+    ),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ):
     """List signals by status with optional time range and topic filter (criteria 2.14 status flow)."""
@@ -146,7 +166,9 @@ async def list_signals(
         _since = since or datetime.min.replace(tzinfo=UTC)
         _until = until or datetime.now(UTC)
         _org_id = None if is_super_admin(user) else get_user_org(user)
-        items = await signals_db.list_signals_filtered(db, status, _since, _until, topic_id=topic_id, org_id=_org_id)
+        items = await signals_db.list_signals_filtered(
+            db, status, _since, _until, topic_id=topic_id, org_id=_org_id
+        )
         return paginate_rows(items, len(items), 0, len(items) or limit)
     if topic_id:
         items, total = await signals_db.list_signals(db, status, limit, offset, topic_id=topic_id)
@@ -154,7 +176,9 @@ async def list_signals(
     if is_super_admin(user):
         items, total = await signals_db.list_signals(db, status, limit, offset)
         return paginate_rows(items, total, offset, limit)
-    org_id = get_user_org(user)
+    # Super-admin already returned above, so a non-super-admin with no org is a
+    # broken token: 400 beats silently listing nothing.
+    org_id = require_org_context(user)
     items, total = await signals_db.list_signals_by_org(db, status, org_id, limit, offset)
     return paginate_rows(items, total, offset, limit)
 
@@ -164,7 +188,7 @@ async def daily_signal_counts(
     status: str = Query(default="new", pattern="^(new|acknowledged|dismissed)$"),
     since: datetime = Query(..., description="ISO datetime — start of range"),
     until: datetime = Query(..., description="ISO datetime — end of range"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ):
     """Return per-day signal counts for the calendar strip (no LIMIT, lightweight)."""
@@ -175,7 +199,7 @@ async def daily_signal_counts(
 @router.get("/{signal_id}")
 async def get_signal(
     signal_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ):
     """Fetch a single signal by ID."""
@@ -188,13 +212,14 @@ async def get_signal(
 @router.get("/{signal_id}/connections")
 async def get_signal_connections(
     signal_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ):
     """Return graph data (nodes + edges) for a signal's connections."""
     # Verify org access via signal's topic_id before returning graph data
     signal_row = await db.fetchrow(
-        "SELECT topic_id FROM signals WHERE id = $1", signal_id,
+        "SELECT topic_id FROM signals WHERE id = $1",
+        signal_id,
     )
     if not signal_row:
         raise HTTPException(status_code=404, detail="Signal not found")
@@ -207,7 +232,7 @@ async def get_signal_connections(
 async def acknowledge_signal(
     signal_id: str,
     request: Request,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Transition signal: new → acknowledged (criteria 2.15)."""
@@ -215,7 +240,11 @@ async def acknowledge_signal(
     if not row:
         raise HTTPException(status_code=404, detail="Signal not found or not in 'new' state")
     await audit_db.log_action(
-        db, user["sub"], "signal.acknowledge", "signal", signal_id,
+        db,
+        user["sub"],
+        "signal.acknowledge",
+        "signal",
+        signal_id,
         ip_address=request.client.host if request.client else "",
     )
     return {"signal_id": signal_id, "status": "acknowledged"}
@@ -225,7 +254,7 @@ async def acknowledge_signal(
 async def dismiss_signal(
     signal_id: str,
     request: Request,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Transition signal: new|acknowledged → dismissed (criteria 2.16)."""
@@ -236,7 +265,11 @@ async def dismiss_signal(
             detail="Signal not found or already dismissed",
         )
     await audit_db.log_action(
-        db, user["sub"], "signal.dismiss", "signal", signal_id,
+        db,
+        user["sub"],
+        "signal.dismiss",
+        "signal",
+        signal_id,
         ip_address=request.client.host if request.client else "",
     )
     return {"signal_id": signal_id, "status": "dismissed"}

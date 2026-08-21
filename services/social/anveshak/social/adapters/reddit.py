@@ -4,28 +4,30 @@ Uses PRAW (synchronous) wrapped in asyncio.to_thread() since PRAW has no
 native async support. Polls both `new` and `hot` feeds per subreddit source.
 Content deduplication is handled downstream via content_hash ON CONFLICT.
 """
+
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import AsyncIterator
 
 import praw
 import praw.exceptions
+import praw.models
 import structlog
 
+from ..settings import settings
 from .base import (
     AdapterAuthError,
-    AdapterDegradedError,
     AdapterRateLimitError,
     RawItem,
     SourceAdapterBase,
+    require_client,
 )
-from ..settings import settings
 
 log = structlog.get_logger(__name__)
 
-_BACKOFF_SECONDS = [5, 15, 60]   # exponential backoff steps on rate limit
+_BACKOFF_SECONDS = [5, 15, 60]  # exponential backoff steps on rate limit
 
 
 class RedditAdapter(SourceAdapterBase):
@@ -48,8 +50,11 @@ class RedditAdapter(SourceAdapterBase):
     async def authenticate(self) -> None:
         """Initialise PRAW client from settings (criteria 3.12)."""
         if not settings.reddit_adapter_enabled:
-            log.warning("social.adapter_disabled", adapter=self.adapter_id,
-                        hint="Set REDDIT_ADAPTER_ENABLED=true to activate")
+            log.warning(
+                "social.adapter_disabled",
+                adapter=self.adapter_id,
+                hint="Set REDDIT_ADAPTER_ENABLED=true to activate",
+            )
             return
         if not settings.reddit_client_id or not settings.reddit_client_secret:
             raise AdapterAuthError(
@@ -62,8 +67,11 @@ class RedditAdapter(SourceAdapterBase):
                 user_agent=settings.reddit_user_agent,
                 # read-only mode — no username/password needed for public subreddits
             )
-            # Verify credentials by calling a lightweight endpoint in a thread
-            await asyncio.to_thread(lambda: self._reddit.user.me())
+            # Verify credentials by calling a lightweight endpoint in a thread.
+            # Bind the client first: a lambda closing over self._reddit is not
+            # narrowed by the assignment above.
+            client = self._reddit
+            await asyncio.to_thread(lambda: client.user.me())
         except praw.exceptions.PRAWException as exc:
             raise AdapterAuthError(f"Reddit authentication failed: {exc}") from exc
 
@@ -90,8 +98,9 @@ class RedditAdapter(SourceAdapterBase):
     async def health(self) -> dict:
         if self._reddit is None:
             return {"status": "DOWN", "checked_at": datetime.now(UTC).isoformat()}
+        client = self._reddit
         try:
-            await asyncio.to_thread(lambda: list(self._reddit.subreddit("announcements").hot(limit=1)))
+            await asyncio.to_thread(lambda: list(client.subreddit("announcements").hot(limit=1)))
             return {"status": "HEALTHY", "checked_at": datetime.now(UTC).isoformat()}
         except Exception as exc:
             return {
@@ -112,6 +121,7 @@ class RedditAdapter(SourceAdapterBase):
     ) -> AsyncIterator[RawItem]:
         """Poll new + hot feeds for a subreddit with backoff on rate-limit."""
         for feed_type in ("new", "hot"):
+            posts = None
             for attempt, backoff in enumerate([0] + _BACKOFF_SECONDS):
                 if backoff:
                     log.warning(
@@ -122,9 +132,7 @@ class RedditAdapter(SourceAdapterBase):
                     )
                     await asyncio.sleep(backoff)
                 try:
-                    posts = await asyncio.to_thread(
-                        self._fetch_feed, subreddit_name, feed_type
-                    )
+                    posts = await asyncio.to_thread(self._fetch_feed, subreddit_name, feed_type)
                     break
                 except praw.exceptions.RedditAPIException as exc:
                     if "RATELIMIT" in str(exc).upper():
@@ -148,6 +156,11 @@ class RedditAdapter(SourceAdapterBase):
                     )
                     return
 
+            if posts is None:
+                # Every attempt fell through without assigning. Skip this feed
+                # rather than silently reprocessing the previous feed's posts.
+                continue
+
             for post in posts:
                 text = self._post_to_text(post)
                 if not text:
@@ -166,7 +179,7 @@ class RedditAdapter(SourceAdapterBase):
 
                 yield RawItem(
                     raw_text=text,
-                    url=f"https://www.reddit.com{post.permalink}",   # criteria 3.15
+                    url=f"https://www.reddit.com{post.permalink}",  # criteria 3.15
                     platform=self.platform,
                     captured_at=datetime.fromtimestamp(post.created_utc, tz=UTC),
                     source_handle=handle,
@@ -178,7 +191,7 @@ class RedditAdapter(SourceAdapterBase):
 
     def _fetch_feed(self, subreddit_name: str, feed_type: str) -> list:
         """Synchronous PRAW call — runs in asyncio.to_thread()."""
-        sub = self._reddit.subreddit(subreddit_name)
+        sub = require_client(self._reddit, "reddit").subreddit(subreddit_name)
         feed = sub.new(limit=25) if feed_type == "new" else sub.hot(limit=25)
         return list(feed)
 
@@ -194,8 +207,10 @@ class RedditAdapter(SourceAdapterBase):
     def _extract_media_urls(post: praw.models.Submission) -> list[str]:
         """Extract image/video URLs for Phase 4 media ingestion."""
         urls: list[str] = []
-        if hasattr(post, "url") and post.url and any(
-            post.url.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".gif", ".mp4")
+        if (
+            hasattr(post, "url")
+            and post.url
+            and any(post.url.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".gif", ".mp4"))
         ):
             urls.append(post.url)
         return urls

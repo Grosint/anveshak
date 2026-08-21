@@ -1,15 +1,17 @@
 """Geocoded locations endpoints — analyst override + listing."""
+
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, ConfigDict
 from typing import Optional
-import asyncpg
-import structlog
 
-from ..db.pool import get_db
-from ..auth.rbac import require_role
+import structlog
+from anveshak.db import DBConnection
 from anveshak.models import Labels
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, ConfigDict, Field
+
+from ..auth.rbac import require_role
+from ..db.pool import get_db
 
 log = structlog.get_logger(__name__)
 
@@ -60,23 +62,28 @@ SQL_UPDATE_GEOCODED_LOCATION = """
 # Request/Response models
 # ---------------------------------------------------------------------------
 
+
 class UpdateGeocodedLocationRequest(BaseModel):
     model_config = ConfigDict(strict=True)
     latitude: float
     longitude: float
-    labels: Labels = {}
+    # default_factory, not {}: pydantic does not validate defaults, so `= {}`
+    # left .labels a plain dict whenever the caller omitted it, and anything
+    # reading .labels.classification got an AttributeError.
+    labels: Labels = Field(default_factory=Labels)
 
 
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
+
 @router.get("")
 async def list_geocoded_locations(
     entity_type: Optional[str] = Query(None),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """List geocoded locations, optionally filtered by entity type."""
@@ -90,7 +97,7 @@ async def list_geocoded_locations(
 @router.get("/{location_id}")
 async def get_geocoded_location(
     location_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Get a single geocoded location by ID."""
@@ -104,7 +111,7 @@ async def get_geocoded_location(
 async def update_geocoded_location(
     location_id: str,
     req: UpdateGeocodedLocationRequest,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Analyst override — correct coordinates for a geocoded location.

@@ -11,6 +11,7 @@ Label staleness detection (Phase 5 — P3):
   - compute_item_hash: SHA-256 of sorted content_item_ids
   - check_label_staleness: compare stored hash vs current composition
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -137,18 +138,20 @@ SQL_CLUSTER_TOP_ENTITIES = """
 # Pydantic output model (criteria 2.7 — LLM output validated before storage)
 # ---------------------------------------------------------------------------
 
+
 class ClusterLabel(BaseModel):
     model_config = ConfigDict(strict=True)
 
     label: str
     summary: str = ""
     confidence: float  # 0.0–1.0
-    labels: dict = {}  # CLAUDE.md rule 2 — mandatory on all models
+    labels: dict = {}  # AGENTS.md rule 2 — mandatory on all models
 
 
 # ---------------------------------------------------------------------------
 # Structured context from CTE query
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class ClusterContext:
@@ -274,8 +277,9 @@ def build_label_prompt(ctx: ClusterContext) -> str:
 
     # Entity table
     if ctx.entities:
-        entity_lines = [f"  {etype}: {etext} ({cnt} mentions)"
-                        for etype, etext, cnt in ctx.entities]
+        entity_lines = [
+            f"  {etype}: {etext} ({cnt} mentions)" for etype, etext, cnt in ctx.entities
+        ]
         parts.append("Entities:\n" + "\n".join(entity_lines))
 
     # Platform breakdown
@@ -306,6 +310,7 @@ def build_label_prompt(ctx: ClusterContext) -> str:
 # Ollama call
 # ---------------------------------------------------------------------------
 
+
 async def call_ollama_label(prompt: str) -> str:
     """Async call to Ollama for cluster label generation (criteria 2.6).
 
@@ -329,6 +334,7 @@ async def call_ollama_label(prompt: str) -> str:
 # ---------------------------------------------------------------------------
 # Parser + fallback
 # ---------------------------------------------------------------------------
+
 
 def parse_label(raw: str) -> ClusterLabel:
     """Parse and validate Ollama output through ClusterLabel (criteria 2.7).
@@ -376,6 +382,7 @@ def fallback_label(
 # Label staleness detection (Phase 5 — P3)
 # ---------------------------------------------------------------------------
 
+
 def compute_item_hash(content_item_ids: list[str]) -> str:
     """SHA-256 of sorted, comma-joined IDs — detects composition changes."""
     canonical = ",".join(sorted(content_item_ids))
@@ -411,6 +418,7 @@ async def check_label_staleness(cluster_id: str, pool: asyncpg.Pool) -> bool:
 # ---------------------------------------------------------------------------
 # Top-level orchestrator (called from ARQ job)
 # ---------------------------------------------------------------------------
+
 
 async def generate_label_for_cluster(cluster_id: str, pool: asyncpg.Pool) -> str:
     """Generate and persist a label + executive summary for a narrative cluster.

@@ -5,9 +5,10 @@ Tests:
   - Enabled adapter with valid credentials proceeds to authenticate
   - Disabled adapter is skipped entirely
 """
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -40,13 +41,14 @@ def _make_settings(**overrides):
 
 
 class TestCredentialValidation:
-
     @pytest.mark.asyncio
     async def test_bluesky_enabled_missing_handle_warns(self):
         """Bluesky enabled but handle not set → warning logged, not added."""
-        from anveshak.social.jobs import _ADAPTERS, _validate_adapter_credentials
+        from anveshak.social.jobs import _validate_adapter_credentials
 
-        s = _make_settings(bluesky_adapter_enabled=True, bluesky_handle=None, bluesky_password="pass")
+        s = _make_settings(
+            bluesky_adapter_enabled=True, bluesky_handle=None, bluesky_password="pass"
+        )
         issues = _validate_adapter_credentials("bluesky", s)
         assert len(issues) > 0
         assert any("BLUESKY_HANDLE" in i for i in issues)
@@ -56,7 +58,9 @@ class TestCredentialValidation:
         """Bluesky enabled but password not set → warning logged."""
         from anveshak.social.jobs import _validate_adapter_credentials
 
-        s = _make_settings(bluesky_adapter_enabled=True, bluesky_handle="user.bsky.social", bluesky_password=None)
+        s = _make_settings(
+            bluesky_adapter_enabled=True, bluesky_handle="user.bsky.social", bluesky_password=None
+        )
         issues = _validate_adapter_credentials("bluesky", s)
         assert len(issues) > 0
         assert any("BLUESKY_PASSWORD" in i for i in issues)
@@ -79,7 +83,9 @@ class TestCredentialValidation:
         """Reddit enabled but client_id not set → warning."""
         from anveshak.social.jobs import _validate_adapter_credentials
 
-        s = _make_settings(reddit_adapter_enabled=True, reddit_client_id=None, reddit_client_secret="sec")
+        s = _make_settings(
+            reddit_adapter_enabled=True, reddit_client_id=None, reddit_client_secret="sec"
+        )
         issues = _validate_adapter_credentials("reddit", s)
         assert len(issues) > 0
 

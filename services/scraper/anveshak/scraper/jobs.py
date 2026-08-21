@@ -2,44 +2,50 @@
 
 WorkerSettings is the entry point for `arq services.scraper.jobs.WorkerSettings`.
 """
+
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from html.parser import HTMLParser
-from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 from urllib.parse import urljoin, urlparse
 
 import arq
-from arq import cron
 import asyncpg
 import structlog
+from anveshak.media.downloader import download_media_asset
+from arq import cron
 from arq.connections import RedisSettings
 
-from anveshak.media.downloader import download_media_asset
-
-import hashlib
-
-from .clean import clean_extracted_text, compute_clean_hash, score_content_quality, extract_title
+from .clean import clean_extracted_text, compute_clean_hash, extract_title, score_content_quality
 from .fetch import (
-    fetch_url, fetch_url_with_crawler, create_shared_crawler,
-    fetch_html, extract_article_links,
-    create_tor_crawler, fetch_url_via_tor,
     check_robots_allowed,
+    create_shared_crawler,
+    create_tor_crawler,
+    extract_article_links,
+    fetch_html,
+    fetch_url,
+    fetch_url_via_tor,
+    fetch_url_with_crawler,
 )
 from .health import run_all_health_checks
 from .lang import detect_language
-from .rate_limiter import DomainRateLimiter
-from .rss import fetch_rss_items
 from .metrics import (
-    scraper_items_fetched_total, scraper_fetch_errors_total,
-    scraper_fetch_duration_seconds, scraper_darkweb_fetch_duration_seconds,
-    arq_jobs_failed_total, scraper_content_quality_total,
-    scraper_url_seen_skip_total, scraper_links_discovered,
+    arq_jobs_failed_total,
+    scraper_content_quality_total,
+    scraper_darkweb_fetch_duration_seconds,
+    scraper_fetch_duration_seconds,
+    scraper_fetch_errors_total,
+    scraper_items_fetched_total,
+    scraper_links_discovered,
+    scraper_url_seen_skip_total,
 )
 from .normalise import compute_content_hash
+from .rate_limiter import DomainRateLimiter
+from .rss import fetch_rss_items
 from .settings import settings
 
 log = structlog.get_logger(__name__)
@@ -139,6 +145,7 @@ async def _mark_url_seen(redis, url: str) -> None:
 # Media URL extraction from HTML (stdlib html.parser — no extra deps)
 # ---------------------------------------------------------------------------
 
+
 class _MediaURLExtractor(HTMLParser):
     """Extract absolute image and video source URLs from raw HTML."""
 
@@ -151,11 +158,7 @@ class _MediaURLExtractor(HTMLParser):
         if tag not in {"img", "video", "source"}:
             return
         attrs_dict = dict(attrs)
-        raw = (
-            attrs_dict.get("src")
-            or attrs_dict.get("data-src")
-            or attrs_dict.get("data-lazy-src")
-        )
+        raw = attrs_dict.get("src") or attrs_dict.get("data-src") or attrs_dict.get("data-lazy-src")
         if not raw:
             return
         abs_url = urljoin(self.base_url, raw)
@@ -174,6 +177,7 @@ def _extract_media_urls(html: str, base_url: str) -> list[str]:
 # ARQ job
 # ---------------------------------------------------------------------------
 
+
 async def scrape_topic(ctx: dict, topic_id: str) -> int:
     """Scrape all active web sources for a topic.
 
@@ -184,7 +188,7 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
     Returns the number of new content_items inserted (duplicates excluded).
     """
     db_pool: asyncpg.Pool = ctx["db_pool"]
-    redis = ctx["redis"]   # ARQ Redis pool — used to dispatch vision jobs
+    redis = ctx["redis"]  # ARQ Redis pool — used to dispatch vision jobs
 
     async with db_pool.acquire() as conn:
         topic = await conn.fetchrow(SQL_GET_TOPIC, topic_id)
@@ -202,7 +206,10 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
     seen_media_urls: set[str] = set()  # URL-level dedup across pages in this job
 
     async def _insert_content(
-        raw_text: str, url: str, source_id: str, credibility_score: float,
+        raw_text: str,
+        url: str,
+        source_id: str,
+        credibility_score: float,
     ) -> Optional[str]:
         """Insert a content item, return content_item_id or None if dedup hit."""
         content_hash = compute_content_hash(raw_text)
@@ -238,12 +245,11 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
         if result is not None:
             content_item_id = result["id"]
             counter["inserted"] += 1
-            scraper_items_fetched_total.labels(
-                topic_id=topic_id, source_platform="web"
-            ).inc()
+            scraper_items_fetched_total.labels(topic_id=topic_id, source_platform="web").inc()
             try:
                 await redis.enqueue_job(
-                    "analyse_content", content_item_id,
+                    "analyse_content",
+                    content_item_id,
                     _queue_name="arq:analyst",
                 )
             except Exception as exc:
@@ -296,7 +302,10 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
                             )
                             if link_fetched:
                                 content_item_id = await _insert_content(
-                                    link_fetched, link_url, source_id, cred_score,
+                                    link_fetched,
+                                    link_url,
+                                    source_id,
+                                    cred_score,
                                 )
                                 await _mark_url_seen(redis, link_url)
                                 if content_item_id and settings.media_download_enabled:
@@ -315,6 +324,7 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
                 else:
                     # --- Direct article mode: source URL IS the content ---
                     import time as _time
+
                     _t0 = _time.monotonic()
                     fetched_text = await asyncio.wait_for(
                         fetch_url_with_crawler(url, crawler, run_cfg),
@@ -324,7 +334,9 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
                     if not fetched_text:
                         return
 
-                    content_item_id = await _insert_content(fetched_text, url, source_id, cred_score)
+                    content_item_id = await _insert_content(
+                        fetched_text, url, source_id, cred_score
+                    )
 
                     # Politeness delay between fetches (criteria 1.11)
                     if settings.scraper_default_delay_s > 0:
@@ -344,9 +356,7 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
                 scraper_fetch_errors_total.labels(error_type="TimeoutError").inc()
                 log.warning("scraper.source_timeout", url=url)
             except Exception as exc:
-                scraper_fetch_errors_total.labels(
-                    error_type=type(exc).__name__
-                ).inc()
+                scraper_fetch_errors_total.labels(error_type=type(exc).__name__).inc()
                 log.warning("scraper.source_failed", url=url, error=str(exc))
 
     # Shared browser instance — one Chromium for the entire job
@@ -355,6 +365,7 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
             await asyncio.gather(*[_process(s, crawler, run_cfg) for s in sources])
     except Exception as exc:
         log.error("scraper.browser_launch_failed", error=str(exc))
+
         # Fallback: process without shared browser (uses trafilatura only)
         async def _process_fallback(source: asyncpg.Record) -> None:
             async with semaphore:
@@ -365,13 +376,16 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
                     fetched_text = await fetch_url(url)
                     if fetched_text:
                         await _insert_content(
-                            fetched_text, url, source["id"],
+                            fetched_text,
+                            url,
+                            source["id"],
                             float(source["credibility_score"]),
                         )
                         if settings.scraper_default_delay_s > 0:
                             await asyncio.sleep(settings.scraper_default_delay_s)
                 except Exception as exc:
                     log.warning("scraper.fallback_failed", url=url, error=str(exc))
+
         await asyncio.gather(*[_process_fallback(s) for s in sources])
 
     log.info(
@@ -391,7 +405,7 @@ async def poll_rss_sources(ctx: dict, topic_id: str) -> int:
     Returns the number of new content_items inserted.
     """
     db_pool: asyncpg.Pool = ctx["db_pool"]
-    redis = ctx["redis"]   # ARQ Redis pool — enqueue analyse_content
+    redis = ctx["redis"]  # ARQ Redis pool — enqueue analyse_content
 
     async with db_pool.acquire() as conn:
         topic = await conn.fetchrow(SQL_GET_TOPIC, topic_id)
@@ -430,15 +444,15 @@ async def poll_rss_sources(ctx: dict, topic_id: str) -> int:
                                 str(uuid.uuid4()),
                                 topic_id,
                                 source["id"],
-                                item.raw_text,              # raw_text (preserved as-is)
-                                effective_clean,            # clean_text (cleaned)
-                                rss_language,               # language — detected at scrape time
+                                item.raw_text,  # raw_text (preserved as-is)
+                                effective_clean,  # clean_text (cleaned)
+                                rss_language,  # language — detected at scrape time
                                 content_hash,
                                 item.url,
                                 item.published_at,  # captured_at = article publish time
                                 float(source["credibility_score"]),
-                                now,                # created_at
-                                now,                # updated_at
+                                now,  # created_at
+                                now,  # updated_at
                                 _LABELS_JSON,
                                 quality,
                                 c_hash,
@@ -454,7 +468,8 @@ async def poll_rss_sources(ctx: dict, topic_id: str) -> int:
                             ).inc()
                             try:
                                 await redis.enqueue_job(
-                                    "analyse_content", rss_item_id,
+                                    "analyse_content",
+                                    rss_item_id,
                                     _queue_name="arq:analyst",
                                 )
                             except Exception as enq_exc:
@@ -495,7 +510,7 @@ async def scrape_darkweb_topic(ctx: dict, topic_id: str) -> int:
     Returns the number of new content_items inserted.
     """
     db_pool: asyncpg.Pool = ctx["db_pool"]
-    redis = ctx["redis"]   # ARQ Redis pool — enqueue analyse_content
+    redis = ctx["redis"]  # ARQ Redis pool — enqueue analyse_content
 
     async with db_pool.acquire() as conn:
         topic = await conn.fetchrow(SQL_GET_TOPIC, topic_id)
@@ -512,7 +527,10 @@ async def scrape_darkweb_topic(ctx: dict, topic_id: str) -> int:
     counter: dict[str, int] = {"inserted": 0}
 
     async def _insert_darkweb_content(
-        raw_text: str, url: str, source_id: str, credibility_score: float,
+        raw_text: str,
+        url: str,
+        source_id: str,
+        credibility_score: float,
     ) -> Optional[str]:
         """Insert a dark web content item with RESTRICTED labels."""
         content_hash = compute_content_hash(raw_text)
@@ -548,12 +566,11 @@ async def scrape_darkweb_topic(ctx: dict, topic_id: str) -> int:
         if result is not None:
             content_item_id = result["id"]
             counter["inserted"] += 1
-            scraper_items_fetched_total.labels(
-                topic_id=topic_id, source_platform="darkweb"
-            ).inc()
+            scraper_items_fetched_total.labels(topic_id=topic_id, source_platform="darkweb").inc()
             try:
                 await redis.enqueue_job(
-                    "analyse_content", content_item_id,
+                    "analyse_content",
+                    content_item_id,
                     _queue_name="arq:analyst",
                 )
             except Exception as exc:
@@ -572,38 +589,29 @@ async def scrape_darkweb_topic(ctx: dict, topic_id: str) -> int:
             cred_score = float(source["credibility_score"])
             try:
                 import time as _time
+
                 _t0 = _time.monotonic()
                 fetched_text = await asyncio.wait_for(
                     fetch_url_via_tor(url, crawler, run_cfg),
                     timeout=settings.darkweb_request_timeout_s,
                 )
-                scraper_darkweb_fetch_duration_seconds.observe(
-                    _time.monotonic() - _t0
-                )
+                scraper_darkweb_fetch_duration_seconds.observe(_time.monotonic() - _t0)
                 if not fetched_text:
                     return
-                await _insert_darkweb_content(
-                    fetched_text, url, source_id, cred_score
-                )
+                await _insert_darkweb_content(fetched_text, url, source_id, cred_score)
             except asyncio.TimeoutError:
-                scraper_fetch_errors_total.labels(
-                    error_type="DarkwebTimeoutError"
-                ).inc()
+                scraper_fetch_errors_total.labels(error_type="DarkwebTimeoutError").inc()
                 log.warning("darkweb.source_timeout", url=url)
             except ValueError as exc:
                 # DNS leak prevention — should never happen if sources are validated
                 log.error("darkweb.dns_leak_blocked", url=url, error=str(exc))
             except Exception as exc:
-                scraper_fetch_errors_total.labels(
-                    error_type=type(exc).__name__
-                ).inc()
+                scraper_fetch_errors_total.labels(error_type=type(exc).__name__).inc()
                 log.warning("darkweb.source_failed", url=url, error=str(exc))
 
     try:
         async with create_tor_crawler() as (crawler, run_cfg):
-            await asyncio.gather(
-                *[_process_onion(s, crawler, run_cfg) for s in sources]
-            )
+            await asyncio.gather(*[_process_onion(s, crawler, run_cfg) for s in sources])
     except Exception as exc:
         log.error("darkweb.tor_crawler_failed", error=str(exc))
         # Fallback: trafilatura-only via Tor (no browser)
@@ -614,19 +622,20 @@ async def scrape_darkweb_topic(ctx: dict, topic_id: str) -> int:
                 url = source["url_or_handle"]
                 try:
                     from .fetch import validate_onion_url
+
                     validate_onion_url(url)
                     fetched_text = await _trafilatura_fetch(
                         url, proxy_url=settings.darkweb_tor_proxy_url
                     )
                     if fetched_text:
                         await _insert_darkweb_content(
-                            fetched_text, url, source["id"],
+                            fetched_text,
+                            url,
+                            source["id"],
                             float(source["credibility_score"]),
                         )
                 except Exception as exc:
-                    log.warning(
-                        "darkweb.fallback_failed", url=url, error=str(exc)
-                    )
+                    log.warning("darkweb.fallback_failed", url=url, error=str(exc))
 
         await asyncio.gather(*[_fallback(s) for s in sources])
 
@@ -655,6 +664,7 @@ async def _download_page_media(
     """
     try:
         import httpx
+
         async with httpx.AsyncClient(
             timeout=settings.scraper_request_timeout_s,
             follow_redirects=True,
@@ -719,6 +729,7 @@ async def _download_page_media(
 # ARQ worker lifecycle
 # ---------------------------------------------------------------------------
 
+
 async def check_all_source_health(ctx: dict) -> int:
     """Daily health check for all active web and RSS sources.
 
@@ -734,6 +745,7 @@ async def check_all_source_health(ctx: dict) -> int:
 
 async def on_startup(ctx: dict) -> None:
     from anveshak.db import create_db_pool
+
     ctx["db_pool"] = await create_db_pool(settings.postgres_url)
     log.info("scraper_worker.ready", concurrency=settings.scraper_concurrency)
 
@@ -754,7 +766,7 @@ async def on_job_result(ctx: dict, result) -> None:  # type: ignore[type-arg]
 class WorkerSettings:
     """Entry point: arq services.scraper.jobs.WorkerSettings"""
 
-    queue_name = "arq:scraper"   # Isolated queue — avoids cross-worker job theft
+    queue_name = "arq:scraper"  # Isolated queue — avoids cross-worker job theft
 
     functions = [
         # 8C.5 — scrape_topic: ON CONFLICT DO NOTHING makes it safe to retry
@@ -773,4 +785,4 @@ class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
     max_jobs = settings.scraper_concurrency
     job_timeout = settings.scraper_job_timeout_s  # default 300s (5 min)
-    keep_result = 3600   # 8C.6 — keep results 1h
+    keep_result = 3600  # 8C.6 — keep results 1h

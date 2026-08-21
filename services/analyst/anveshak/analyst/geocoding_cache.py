@@ -3,6 +3,7 @@
 No expiry — coordinates don't change. Fail-open on Redis errors.
 Explicit invalidation via geocode_cache_invalidate().
 """
+
 from __future__ import annotations
 
 import json

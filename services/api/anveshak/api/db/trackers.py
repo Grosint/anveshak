@@ -4,13 +4,14 @@ Trackers are analyst-owned objects that survive Leiden re-clustering.
 Content is linked via tracker_content_items with provenance tracking.
 Notes are append-only and immutable.
 """
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, UTC
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
-import asyncpg
+from anveshak.db import DBConnection
 
 # ---------------------------------------------------------------------------
 # SQL constants
@@ -236,7 +237,7 @@ SQL_GET_CLUSTER_CENTROID = """
 # ---------------------------------------------------------------------------
 
 
-async def generate_case_number(conn: asyncpg.Connection) -> str:
+async def generate_case_number(conn: DBConnection) -> str:
     """Generate next case number: TRK-{year}-{sequence:04d}."""
     seq_val = await conn.fetchval("SELECT nextval('tracker_case_seq')")
     year = datetime.now(UTC).year
@@ -244,7 +245,7 @@ async def generate_case_number(conn: asyncpg.Connection) -> str:
 
 
 async def create_tracker(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     *,
     topic_id: str,
     title: str,
@@ -265,23 +266,43 @@ async def create_tracker(
 
     await conn.execute(
         SQL_INSERT_TRACKER,
-        tracker_id, case_number, org_id, topic_id, origin_cluster_id,
-        title, external_case_ref, centroid, centroid_threshold,
-        status, priority, assigned_to, created_by,
-        now, now, _LABELS_JSON,
+        tracker_id,
+        case_number,
+        org_id,
+        topic_id,
+        origin_cluster_id,
+        title,
+        external_case_ref,
+        centroid,
+        centroid_threshold,
+        status,
+        priority,
+        assigned_to,
+        created_by,
+        now,
+        now,
+        _LABELS_JSON,
     )
 
     # Log creation
-    await _log_audit(conn, tracker_id, "created", created_by, {
-        "title": title, "status": status, "priority": priority,
-    })
+    await _log_audit(
+        conn,
+        tracker_id,
+        "created",
+        created_by,
+        {
+            "title": title,
+            "status": status,
+            "priority": priority,
+        },
+    )
 
     row = await conn.fetchrow(SQL_GET_TRACKER, tracker_id)
     return dict(row) if row else {"id": tracker_id, "case_number": case_number}
 
 
 async def create_tracker_from_cluster(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     cluster_id: str,
     user_id: str,
     *,
@@ -314,16 +335,14 @@ async def create_tracker_from_cluster(
     return tracker
 
 
-async def get_tracker(
-    conn: asyncpg.Connection, tracker_id: str
-) -> dict[str, Any] | None:
+async def get_tracker(conn: DBConnection, tracker_id: str) -> dict[str, Any] | None:
     """Get a single tracker with content/pending counts."""
     row = await conn.fetchrow(SQL_GET_TRACKER, tracker_id)
     return dict(row) if row else None
 
 
 async def list_trackers_by_org(
-    conn: asyncpg.Connection, org_id: str, limit: int = 50, offset: int = 0
+    conn: DBConnection, org_id: str, limit: int = 50, offset: int = 0
 ) -> tuple[list[dict[str, Any]], int]:
     rows = await conn.fetch(SQL_LIST_TRACKERS_BY_ORG, org_id, limit, offset)
     total = rows[0]["total"] if rows else 0
@@ -332,7 +351,7 @@ async def list_trackers_by_org(
 
 
 async def list_trackers_by_topic(
-    conn: asyncpg.Connection, topic_id: str, org_id: str, limit: int = 50, offset: int = 0
+    conn: DBConnection, topic_id: str, org_id: str, limit: int = 50, offset: int = 0
 ) -> tuple[list[dict[str, Any]], int]:
     rows = await conn.fetch(SQL_LIST_TRACKERS_BY_TOPIC, topic_id, org_id, limit, offset)
     total = rows[0]["total"] if rows else 0
@@ -341,7 +360,7 @@ async def list_trackers_by_topic(
 
 
 async def update_tracker_status(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     tracker_id: str,
     status: str,
     user_id: str,
@@ -358,15 +377,27 @@ async def update_tracker_status(
 
     await conn.execute(
         SQL_UPDATE_TRACKER_STATUS,
-        status, concluded_by, concluded_at, closing_summary, now, tracker_id,
+        status,
+        concluded_by,
+        concluded_at,
+        closing_summary,
+        now,
+        tracker_id,
     )
-    await _log_audit(conn, tracker_id, "status_changed", user_id, {
-        "status": status, "closing_summary": closing_summary,
-    })
+    await _log_audit(
+        conn,
+        tracker_id,
+        "status_changed",
+        user_id,
+        {
+            "status": status,
+            "closing_summary": closing_summary,
+        },
+    )
 
 
 async def update_tracker_priority(
-    conn: asyncpg.Connection, tracker_id: str, priority: str, user_id: str
+    conn: DBConnection, tracker_id: str, priority: str, user_id: str
 ) -> None:
     now = datetime.now(UTC)
     await conn.execute(SQL_UPDATE_TRACKER_PRIORITY, priority, now, tracker_id)
@@ -374,7 +405,7 @@ async def update_tracker_priority(
 
 
 async def update_tracker_assignment(
-    conn: asyncpg.Connection, tracker_id: str, assigned_to: str | None, user_id: str
+    conn: DBConnection, tracker_id: str, assigned_to: str | None, user_id: str
 ) -> None:
     now = datetime.now(UTC)
     await conn.execute(SQL_UPDATE_TRACKER_ASSIGNMENT, assigned_to, now, tracker_id)
@@ -383,8 +414,9 @@ async def update_tracker_assignment(
 
 # -- Content management --
 
+
 async def add_content(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     tracker_id: str,
     content_item_id: str,
     attached_by: str,
@@ -400,110 +432,134 @@ async def add_content(
 
     await conn.execute(
         SQL_INSERT_TRACKER_CONTENT,
-        tracker_id, content_item_id, attached_by, status,
-        similarity_score, confirmed_by, confirmed_at, now,
+        tracker_id,
+        content_item_id,
+        attached_by,
+        status,
+        similarity_score,
+        confirmed_by,
+        confirmed_at,
+        now,
     )
-    await _log_audit(conn, tracker_id, "content_added", user_id, {
-        "content_item_id": content_item_id, "attached_by": attached_by,
-    })
+    await _log_audit(
+        conn,
+        tracker_id,
+        "content_added",
+        user_id,
+        {
+            "content_item_id": content_item_id,
+            "attached_by": attached_by,
+        },
+    )
 
 
 async def confirm_content(
-    conn: asyncpg.Connection, tracker_id: str, content_item_id: str, user_id: str
+    conn: DBConnection, tracker_id: str, content_item_id: str, user_id: str
 ) -> None:
     now = datetime.now(UTC)
     await conn.execute(SQL_CONFIRM_CONTENT, user_id, now, tracker_id, content_item_id)
-    await _log_audit(conn, tracker_id, "content_confirmed", user_id, {
-        "content_item_id": content_item_id,
-    })
+    await _log_audit(
+        conn,
+        tracker_id,
+        "content_confirmed",
+        user_id,
+        {
+            "content_item_id": content_item_id,
+        },
+    )
 
 
-async def confirm_all_pending(
-    conn: asyncpg.Connection, tracker_id: str, user_id: str
-) -> None:
+async def confirm_all_pending(conn: DBConnection, tracker_id: str, user_id: str) -> None:
     now = datetime.now(UTC)
     await conn.execute(SQL_CONFIRM_ALL_PENDING, user_id, now, tracker_id)
     await _log_audit(conn, tracker_id, "all_pending_confirmed", user_id, {})
 
 
 async def reject_content(
-    conn: asyncpg.Connection, tracker_id: str, content_item_id: str, user_id: str
+    conn: DBConnection, tracker_id: str, content_item_id: str, user_id: str
 ) -> None:
     """Reject a pending item: remove from tracker, add to exclusions."""
     now = datetime.now(UTC)
     await conn.execute(SQL_DELETE_TRACKER_CONTENT, tracker_id, content_item_id)
     await conn.execute(SQL_INSERT_EXCLUSION, tracker_id, content_item_id, user_id, now)
-    await _log_audit(conn, tracker_id, "content_rejected", user_id, {
-        "content_item_id": content_item_id,
-    })
+    await _log_audit(
+        conn,
+        tracker_id,
+        "content_rejected",
+        user_id,
+        {
+            "content_item_id": content_item_id,
+        },
+    )
 
 
 async def list_content(
-    conn: asyncpg.Connection, tracker_id: str, limit: int = 50, offset: int = 0
+    conn: DBConnection, tracker_id: str, limit: int = 50, offset: int = 0
 ) -> list[dict[str, Any]]:
     rows = await conn.fetch(SQL_LIST_TRACKER_CONTENT, tracker_id, limit, offset)
     return [dict(r) for r in rows]
 
 
-async def list_pending(
-    conn: asyncpg.Connection, tracker_id: str
-) -> list[dict[str, Any]]:
+async def list_pending(conn: DBConnection, tracker_id: str) -> list[dict[str, Any]]:
     rows = await conn.fetch(SQL_LIST_PENDING_CONTENT, tracker_id)
     return [dict(r) for r in rows]
 
 
 # -- Notes (append-only) --
 
-async def add_note(
-    conn: asyncpg.Connection, tracker_id: str, user_id: str, body: str
-) -> dict[str, Any]:
+
+async def add_note(conn: DBConnection, tracker_id: str, user_id: str, body: str) -> dict[str, Any]:
     """Add an immutable note to a tracker."""
     note_id = str(uuid.uuid4())
     now = datetime.now(UTC)
     await conn.execute(
         SQL_INSERT_NOTE,
-        note_id, tracker_id, user_id, body, now, _LABELS_JSON,
+        note_id,
+        tracker_id,
+        user_id,
+        body,
+        now,
+        _LABELS_JSON,
     )
     await _log_audit(conn, tracker_id, "note_added", user_id, {"note_id": note_id})
-    return {"id": note_id, "tracker_id": tracker_id, "user_id": user_id,
-            "body": body, "created_at": now}
+    return {
+        "id": note_id,
+        "tracker_id": tracker_id,
+        "user_id": user_id,
+        "body": body,
+        "created_at": now,
+    }
 
 
-async def list_notes(
-    conn: asyncpg.Connection, tracker_id: str
-) -> list[dict[str, Any]]:
+async def list_notes(conn: DBConnection, tracker_id: str) -> list[dict[str, Any]]:
     rows = await conn.fetch(SQL_LIST_NOTES, tracker_id)
     return [dict(r) for r in rows]
 
 
 # -- Signals --
 
-async def link_signal(
-    conn: asyncpg.Connection, tracker_id: str, signal_id: str, user_id: str
-) -> None:
+
+async def link_signal(conn: DBConnection, tracker_id: str, signal_id: str, user_id: str) -> None:
     now = datetime.now(UTC)
     await conn.execute(SQL_LINK_SIGNAL, tracker_id, signal_id, now, user_id)
     await _log_audit(conn, tracker_id, "signal_linked", user_id, {"signal_id": signal_id})
 
 
-async def list_tracker_reports(
-    conn: asyncpg.Connection, tracker_id: str
-) -> list[dict[str, Any]]:
+async def list_tracker_reports(conn: DBConnection, tracker_id: str) -> list[dict[str, Any]]:
     rows = await conn.fetch(SQL_LIST_TRACKER_REPORTS, tracker_id)
     return [dict(r) for r in rows]
 
 
-async def list_signals(
-    conn: asyncpg.Connection, tracker_id: str
-) -> list[dict[str, Any]]:
+async def list_signals(conn: DBConnection, tracker_id: str) -> list[dict[str, Any]]:
     rows = await conn.fetch(SQL_LIST_TRACKER_SIGNALS, tracker_id)
     return [dict(r) for r in rows]
 
 
 # -- Audit log --
 
+
 async def _log_audit(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     tracker_id: str,
     action: str,
     actor_id: str,
@@ -511,15 +567,20 @@ async def _log_audit(
 ) -> None:
     """Append to tracker audit log."""
     import json
+
     await conn.execute(
         SQL_INSERT_AUDIT_LOG,
-        str(uuid.uuid4()), tracker_id, action, actor_id,
-        json.dumps(detail), datetime.now(UTC),
+        str(uuid.uuid4()),
+        tracker_id,
+        action,
+        actor_id,
+        json.dumps(detail),
+        datetime.now(UTC),
     )
 
 
 async def list_audit_log(
-    conn: asyncpg.Connection, tracker_id: str, limit: int = 100, offset: int = 0
+    conn: DBConnection, tracker_id: str, limit: int = 100, offset: int = 0
 ) -> list[dict[str, Any]]:
     rows = await conn.fetch(SQL_LIST_AUDIT_LOG, tracker_id, limit, offset)
     return [dict(r) for r in rows]
@@ -527,15 +588,15 @@ async def list_audit_log(
 
 # -- Access control --
 
-async def verify_tracker_access(
-    conn: asyncpg.Connection, tracker_id: str, user: dict
-) -> None:
+
+async def verify_tracker_access(conn: DBConnection, tracker_id: str, user: dict) -> None:
     """Raise 404 if tracker doesn't belong to user's org."""
-    from ..auth.rbac import is_super_admin, get_user_org
+    from ..auth.rbac import get_user_org, is_super_admin
 
     if is_super_admin(user):
         return
     row = await conn.fetchrow(SQL_GET_TRACKER_ORG, tracker_id)
     if not row or row["org_id"] != get_user_org(user):
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail="Tracker not found")

@@ -9,10 +9,10 @@ Tests for:
 
 pytest.mark.unit — no external dependencies.
 """
+
 from __future__ import annotations
 
 import ast
-import inspect
 from pathlib import Path
 
 import pytest
@@ -25,6 +25,7 @@ ROUTES_DIR = Path("services/api/anveshak/api/routes")
 # ===================================================================
 # F1: logout must use Redis dependency injection
 # ===================================================================
+
 
 class TestLogoutRedisInjection:
     """logout() must inject Redis via FastAPI Depends, not default None."""
@@ -56,6 +57,7 @@ class TestLogoutRedisInjection:
 # F2: no unused math import in auth.py
 # ===================================================================
 
+
 class TestNoUnusedMathImport:
     """auth.py must not import math (unused)."""
 
@@ -67,6 +69,7 @@ class TestNoUnusedMathImport:
 # ===================================================================
 # F3: no unused get_current_user imports in route files
 # ===================================================================
+
 
 class TestNoUnusedGetCurrentUserImports:
     """Route files that use require_role() must not also import get_current_user."""
@@ -97,25 +100,23 @@ class TestNoUnusedGetCurrentUserImports:
 # W3: export endpoints must have audit trail
 # ===================================================================
 
+
 class TestExportAuditTrail:
     """Export route file must import and call audit_db.log_action."""
 
     def test_export_imports_audit(self):
         source = (ROUTES_DIR / "export.py").read_text()
-        assert "audit" in source.lower(), (
-            "export.py must import audit_db for compliance logging"
-        )
+        assert "audit" in source.lower(), "export.py must import audit_db for compliance logging"
 
     def test_export_calls_log_action(self):
         source = (ROUTES_DIR / "export.py").read_text()
-        assert "log_action" in source, (
-            "export.py must call log_action() to audit data exports"
-        )
+        assert "log_action" in source, "export.py must call log_action() to audit data exports"
 
 
 # ===================================================================
 # W4: security middleware must import settings at module level
 # ===================================================================
+
 
 class TestGetRedisReturnType:
     """_get_redis() must have a return type annotation."""
@@ -126,8 +127,7 @@ class TestGetRedisReturnType:
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef) and node.name == "_get_redis":
                 assert node.returns is not None, (
-                    "_get_redis() at line {} missing return type annotation"
-                    .format(node.lineno)
+                    "_get_redis() at line {} missing return type annotation".format(node.lineno)
                 )
                 return
         pytest.fail("_get_redis() not found in auth.py")
@@ -147,7 +147,11 @@ class TestSecurityMiddlewareImport:
                     if isinstance(child, (ast.Import, ast.ImportFrom)):
                         # json/base64 imports in _extract_analyst_id are okay
                         # but 'from ..settings import settings' inside dispatch is not
-                        if isinstance(child, ast.ImportFrom) and child.module and "settings" in child.module:
+                        if (
+                            isinstance(child, ast.ImportFrom)
+                            and child.module
+                            and "settings" in child.module
+                        ):
                             pytest.fail(
                                 f"security.py:dispatch() has 'from ..settings import settings' "
                                 f"at line {child.lineno} — move to module level"

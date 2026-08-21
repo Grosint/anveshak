@@ -1,23 +1,22 @@
 """Anveshak Reporter Service — M5: LLM report generation, GIS output, PDF export."""
+
 from __future__ import annotations
 
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, UTC
-from typing import Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any, Literal, Optional
 
 import structlog
 from arq import create_pool as arq_create_pool
 from arq.connections import RedisSettings
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from prometheus_client import make_asgi_app
 from pydantic import BaseModel, ConfigDict
-from typing import Literal
-
-from .metrics import REGISTRY as REPORTER_REGISTRY
 
 from . import db as db_module
+from .metrics import REGISTRY as REPORTER_REGISTRY
 from .pdf import generate_pdf
 from .settings import settings
 
@@ -28,15 +27,14 @@ log = structlog.get_logger(__name__)
 # Lifespan
 # ---------------------------------------------------------------------------
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup: pre-warm embedding model, create DB pool and ARQ pool."""
     log.info("reporter.starting")
 
     app.state.db_pool = await db_module.get_pool(settings.postgres_url)
-    app.state.arq_pool = await arq_create_pool(
-        RedisSettings.from_dsn(settings.redis_url)
-    )
+    app.state.arq_pool = await arq_create_pool(RedisSettings.from_dsn(settings.redis_url))
 
     log.info("reporter.ready")
     yield
@@ -65,10 +63,13 @@ app.mount("/metrics", make_asgi_app(registry=REPORTER_REGISTRY))
 # Request models
 # ---------------------------------------------------------------------------
 
+
 class GenerateReportRequest(BaseModel):
     model_config = ConfigDict(strict=True)
     topic_id: str
-    report_type: Literal["intelligence_brief", "research_summary", "weekly_digest"] = "intelligence_brief"
+    report_type: Literal["intelligence_brief", "research_summary", "weekly_digest"] = (
+        "intelligence_brief"
+    )
     # Explicit window takes precedence; time_window_hours is a convenience fallback
     time_window_start: Optional[datetime] = None
     time_window_end: Optional[datetime] = None
@@ -79,6 +80,7 @@ class GenerateReportRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
 
 @app.get("/health")
 async def health():
@@ -111,7 +113,9 @@ async def create_report(req: GenerateReportRequest) -> dict:
         credibility_min=req.credibility_min,
     )
 
-    arq_job = await app.state.arq_pool.enqueue_job("generate_report", report_id, _queue_name="arq:reporter")
+    arq_job = await app.state.arq_pool.enqueue_job(
+        "generate_report", report_id, _queue_name="arq:reporter"
+    )
     arq_job_id = arq_job.job_id if arq_job else None
 
     log.info(
@@ -156,15 +160,13 @@ async def get_report_geojson(report_id: str) -> dict:
 
 
 @app.get("/api/v1/reports/{report_id}/pdf")
-async def get_report_pdf(report_id: str) -> FileResponse:
+async def get_report_pdf(report_id: str) -> Response:
     """Download report as PDF.
 
     If PDF is already cached (pdf_path set), serve it immediately.
     If not, generate on-demand and return.
     Returns HTTP 202 with Retry-After header while still pending.
     """
-    from fastapi.responses import Response
-
     report = await db_module.fetch_report(app.state.db_pool, report_id)
     if report is None:
         raise HTTPException(status_code=404, detail="Report not found")
@@ -180,6 +182,7 @@ async def get_report_pdf(report_id: str) -> FileResponse:
     existing_path: Optional[str] = report.get("pdf_path")
     if existing_path:
         import os
+
         if os.path.exists(existing_path):
             return FileResponse(
                 existing_path,
@@ -192,11 +195,10 @@ async def get_report_pdf(report_id: str) -> FileResponse:
     is_v2 = content_md.startswith("<!-- report-v2 -->")
 
     if is_v2:
-        # v2: data-driven report — fetch structured data from DB
-        topic_id = report.get("topic_id")
-        data_bundle = await db_module.fetch_report_data_bundle(
-            app.state.db_pool, topic_id
-        )
+        # v2: data-driven report — fetch structured data from DB.
+        # reports.topic_id is NOT NULL, so this is always present.
+        topic_id = str(report["topic_id"])
+        data_bundle = await db_module.fetch_report_data_bundle(app.state.db_pool, topic_id)
         identifiers = await db_module.fetch_topic_identifiers(app.state.db_pool, topic_id)
         template_matches = await db_module.fetch_topic_template_matches(app.state.db_pool, topic_id)
 
@@ -259,6 +261,7 @@ def _parse_labels(labels: Any) -> dict:
         return labels
     if isinstance(labels, str):
         import json
+
         try:
             parsed = json.loads(labels)
             return parsed if isinstance(parsed, dict) else {}
@@ -312,4 +315,6 @@ def _enrich_report_data_from_md(report_data: dict, content_md: Optional[str]) ->
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=settings.port)  # nosec B104 — containerized service must bind all interfaces; network isolation enforced by Docker/k3s
+
+    # containerized service must bind all interfaces; network isolation enforced by Docker/k3s
+    uvicorn.run(app, host="0.0.0.0", port=settings.port)  # nosec B104

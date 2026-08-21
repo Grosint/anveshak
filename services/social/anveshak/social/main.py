@@ -8,10 +8,12 @@ X/Twitter uses its own poll interval (settings.x_poll_interval_s, default 900s)
 which may differ from the global poll_interval_s used by other adapters (criteria 3.25).
 Both default to 900s. Adjust x_poll_interval_s independently to control X API spend.
 """
+
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+
 import structlog
 from anveshak.logging import configure_logging
 
@@ -58,11 +60,12 @@ async def main() -> None:
         log.warning(
             "social.no_adapters_enabled",
             hint="Set TELEGRAM_ADAPTER_ENABLED=true, REDDIT_ADAPTER_ENABLED=true, "
-                 "BLUESKY_ADAPTER_ENABLED=true, X_ADAPTER_ENABLED=true, "
-                 "YOUTUBE_ADAPTER_ENABLED=true, or WHATSAPP_ADAPTER_ENABLED=true",
+            "BLUESKY_ADAPTER_ENABLED=true, X_ADAPTER_ENABLED=true, "
+            "YOUTUBE_ADAPTER_ENABLED=true, or WHATSAPP_ADAPTER_ENABLED=true",
         )
 
     from anveshak.db import create_db_pool
+
     db_pool = await create_db_pool(settings.postgres_url, min_size=1, max_size=3)
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
     arq_pool = await create_pool(redis_settings)
@@ -70,7 +73,8 @@ async def main() -> None:
     log.info("social.ready", adapters=enabled)
 
     # Detect missed polling window on restart
-    from .backfill import get_last_poll_at, save_last_poll_at, detect_poll_gap
+    from .backfill import detect_poll_gap, get_last_poll_at, save_last_poll_at
+
     last_poll = await get_last_poll_at(arq_pool)
     gap = detect_poll_gap(last_poll, settings.poll_interval_s)
     if gap:
@@ -82,12 +86,9 @@ async def main() -> None:
     try:
         while True:
             now = datetime.now(UTC)
-            x_due = (
-                settings.x_adapter_enabled
-                and (
-                    last_x_poll_at is None
-                    or (now - last_x_poll_at).total_seconds() >= settings.x_poll_interval_s
-                )
+            x_due = settings.x_adapter_enabled and (
+                last_x_poll_at is None
+                or (now - last_x_poll_at).total_seconds() >= settings.x_poll_interval_s
             )
 
             await enqueue_topic_polls(db_pool, arq_pool, include_x=x_due)
@@ -123,7 +124,9 @@ async def enqueue_topic_polls(
         return
 
     for topic in topics:
-        await arq_pool.enqueue_job("poll_social_topic", topic["id"], include_x=include_x, _queue_name="arq:social")
+        await arq_pool.enqueue_job(
+            "poll_social_topic", topic["id"], include_x=include_x, _queue_name="arq:social"
+        )
         log.debug("social.topic_enqueued", topic_id=topic["id"], include_x=include_x)
 
     log.info("social.topics_enqueued", count=len(topics), include_x=include_x)

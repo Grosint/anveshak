@@ -1,10 +1,19 @@
-"""Migration tests — verify 007_organizations and 008_rls_policies schema.
+"""Migration tests for the org multi-tenancy and RLS schema.
 
 Checks that the organizations table, org_id columns, org_sources table,
-and RLS policies exist after migration.
+and RLS policies exist after migration. This schema originally arrived as
+007_organizations and 008_rls_policies, both since squashed into
+001_initial_schema, so nothing here names a migration file.
+
+Schema only. The default org is seed data, not migration data: migration 007
+backfilled it, the squashed schema creates the tables empty, and
+scripts/seed_demo.sql owns it now. The test DB is never seeded, so asserting
+it here could only ever skip. That assertion lives in
+tests/unit/test_org_multitenancy.py::TestSeedDefaultOrg, against the seed SQL.
 
 Requires: Docker Compose (PostgreSQL), migrations applied.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -12,8 +21,7 @@ import pytest
 pytestmark = [pytest.mark.migration, pytest.mark.asyncio]
 
 
-class TestMigration007:
-
+class TestOrgSchema:
     async def test_organizations_table_exists(self, db_pool):
         async with db_pool.acquire() as conn:
             exists = await conn.fetchval(
@@ -70,17 +78,8 @@ class TestMigration007:
             )
         assert exists, "idx_topics_org index must exist"
 
-    async def test_default_org_exists(self, db_pool):
-        async with db_pool.acquire() as conn:
-            org = await conn.fetchrow(
-                "SELECT id, name FROM organizations WHERE id = 'org-anshul'"
-            )
-        assert org is not None, "Default org 'org-anshul' must exist after migration"
-        assert org["name"] == "Anshul"
 
-
-class TestMigration008:
-
+class TestRLSSchema:
     async def test_rls_enabled_on_topics(self, db_pool):
         async with db_pool.acquire() as conn:
             enabled = await conn.fetchval(

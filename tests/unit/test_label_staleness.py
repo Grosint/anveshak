@@ -4,18 +4,18 @@ Tests:
   - compute_item_hash determinism
   - Staleness detection with NULL hash, changed hash, same hash
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from anveshak.analyst.labeller import compute_item_hash, check_label_staleness
-
+from anveshak.analyst.labeller import check_label_staleness, compute_item_hash
 
 # ---------------------------------------------------------------------------
 # compute_item_hash tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 def test_compute_item_hash_deterministic():
@@ -44,6 +44,7 @@ def test_compute_item_hash_is_64_hex():
 # ---------------------------------------------------------------------------
 # check_label_staleness tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio

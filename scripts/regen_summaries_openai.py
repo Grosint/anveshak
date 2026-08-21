@@ -6,6 +6,7 @@ Public news content only — no classified data sent to cloud.
 Usage:
     OPENAI_API_KEY=sk-... uv run python scripts/regen_summaries_openai.py
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -50,17 +51,17 @@ SYSTEM_PROMPT = (
     "You will receive excerpts from news articles and social media posts that belong to "
     "a single narrative cluster (they discuss a related theme).\n\n"
     "Produce a JSON response with:\n"
-    "1. \"label\": A concise headline (5-12 words) capturing the narrative theme.\n"
-    "2. \"summary\": An executive summary (2-4 sentences) for a security briefing. "
+    '1. "label": A concise headline (5-12 words) capturing the narrative theme.\n'
+    '2. "summary": An executive summary (2-4 sentences) for a security briefing. '
     "State: what is happening, which countries/organisations/actors are involved, "
     "and why it matters for defence/security. Be specific — name entities.\n"
-    "3. \"confidence\": float 0.0-1.0 indicating how well the excerpts support a coherent narrative.\n\n"
+    '3. "confidence": float 0.0-1.0 indicating how well the excerpts support a coherent narrative.\n\n'
     "Rules:\n"
     "- Only use facts present in the provided excerpts.\n"
     "- If excerpts are mostly navigation garbage or boilerplate, set confidence < 0.3 "
     "and write a brief label from whatever real content exists.\n"
     "- Do not speculate or infer beyond what the text says.\n\n"
-    "Respond with valid JSON only: {\"label\": \"...\", \"summary\": \"...\", \"confidence\": 0.0}"
+    'Respond with valid JSON only: {"label": "...", "summary": "...", "confidence": 0.0}'
 )
 
 BOUNDARY = "===CONTEXT==="
@@ -131,16 +132,25 @@ async def main():
             confidence = result.get("confidence", 0.0)
 
             if confidence < 0.3:
-                log.info("regen.low_confidence", cluster_id=cluster_id,
-                         label=label, confidence=confidence)
+                log.info(
+                    "regen.low_confidence",
+                    cluster_id=cluster_id,
+                    label=label,
+                    confidence=confidence,
+                )
 
             async with pool.acquire() as conn:
                 await conn.execute(SQL_UPDATE, label, summary, cluster_id)
 
             generated += 1
-            log.info("regen.success", cluster_id=cluster_id,
-                     label=label, summary=summary[:80],
-                     confidence=confidence, items=len(texts))
+            log.info(
+                "regen.success",
+                cluster_id=cluster_id,
+                label=label,
+                summary=summary[:80],
+                confidence=confidence,
+                items=len(texts),
+            )
 
         except Exception as exc:
             failed += 1

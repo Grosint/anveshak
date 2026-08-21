@@ -7,15 +7,17 @@ Responsibilities:
   - Push WebSocket notifications via injected broadcast function
   - Status flow: new → acknowledged → dismissed only (criteria 2.14)
 """
+
 from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Awaitable, Callable
 
 import asyncpg
 import structlog
+from anveshak.db import DBConnection
 
 from .identifier_signals import check_identifier_signals
 from .metrics import analyst_signals_fired_total
@@ -108,6 +110,7 @@ SQL_DUPLICATE_TOPIC_SIGNAL_CHECK = """
 # Core functions (all pure / injectable — unit-testable)
 # ---------------------------------------------------------------------------
 
+
 def build_signal_payload(
     signal_id: str,
     topic_id: str,
@@ -133,7 +136,7 @@ def build_signal_payload(
 
 
 async def is_duplicate_signal(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     cluster_id: str,
     signal_type: str,
 ) -> bool:
@@ -143,7 +146,7 @@ async def is_duplicate_signal(
 
 
 async def fire_signal(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     topic_id: str,
     cluster_id: str,
     cluster_label: str,
@@ -169,10 +172,12 @@ async def fire_signal(
         f"Cluster '{cluster_label}' confirmed by "
         f"{independent_source_count} independent source platforms"
     )
-    evidence = json.dumps({
-        "cluster_id": cluster_id,
-        "independent_source_count": independent_source_count,
-    })
+    evidence = json.dumps(
+        {
+            "cluster_id": cluster_id,
+            "independent_source_count": independent_source_count,
+        }
+    )
 
     await conn.execute(
         SQL_INSERT_SIGNAL,
@@ -266,18 +271,21 @@ async def check_sentiment_shifts(
             # Dedup: skip if sentiment_shift already fired for this topic in 24h
             existing = await conn.fetchrow(
                 SQL_DUPLICATE_TOPIC_SIGNAL_CHECK,
-                topic_id, _SIGNAL_TYPE_SENTIMENT_SHIFT,
+                topic_id,
+                _SIGNAL_TYPE_SENTIMENT_SHIFT,
             )
             if existing:
                 continue
 
             baseline = await conn.fetchrow(
                 SQL_SENTIMENT_BASELINE,
-                topic_id, settings.sentiment_shift_baseline_days,
+                topic_id,
+                settings.sentiment_shift_baseline_days,
             )
             recent = await conn.fetchrow(
                 SQL_SENTIMENT_RECENT,
-                topic_id, settings.sentiment_shift_window_hours,
+                topic_id,
+                settings.sentiment_shift_window_hours,
             )
 
             if not baseline or not recent:
@@ -298,19 +306,25 @@ async def check_sentiment_shifts(
                 f"{settings.sentiment_shift_window_hours}h "
                 f"(baseline: {baseline_avg:.2f}, recent: {recent_avg:.2f})"
             )
-            evidence = json.dumps({
-                "baseline_avg": round(baseline_avg, 4),
-                "recent_avg": round(recent_avg, 4),
-                "drop": round(drop, 4),
-                "window_hours": settings.sentiment_shift_window_hours,
-                "baseline_days": settings.sentiment_shift_baseline_days,
-            })
+            evidence = json.dumps(
+                {
+                    "baseline_avg": round(baseline_avg, 4),
+                    "recent_avg": round(recent_avg, 4),
+                    "drop": round(drop, 4),
+                    "window_hours": settings.sentiment_shift_window_hours,
+                    "baseline_days": settings.sentiment_shift_baseline_days,
+                }
+            )
 
             await conn.execute(
                 SQL_INSERT_SIGNAL,
-                signal_id, topic_id, None,
+                signal_id,
+                topic_id,
+                None,
                 _SIGNAL_TYPE_SENTIMENT_SHIFT,
-                description, evidence, now,
+                description,
+                evidence,
+                now,
             )
             analyst_signals_fired_total.labels(severity="MEDIUM").inc()
 
@@ -340,6 +354,7 @@ async def check_sentiment_shifts(
 # ---------------------------------------------------------------------------
 # Polling loop (long-running — called from main.py)
 # ---------------------------------------------------------------------------
+
 
 async def signal_engine_loop(pool: asyncpg.Pool, broadcast: BroadcastFn) -> None:
     """Infinite loop: check signals every settings.signal_check_interval_s seconds.
@@ -377,8 +392,9 @@ async def signal_engine_loop(pool: asyncpg.Pool, broadcast: BroadcastFn) -> None
 # Missed-signal replay (criteria 2.20)
 # ---------------------------------------------------------------------------
 
+
 async def fetch_missed_signals(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     since: datetime,
 ) -> list[dict]:
     """Return signals created after `since` for replay on WebSocket reconnect."""

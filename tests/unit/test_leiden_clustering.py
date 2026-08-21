@@ -10,11 +10,11 @@ Scenarios:
   6. Sparse topic (3 items)
   7. All articles different — no clusters form (20 items)
 """
+
 from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from anveshak.analyst.clustering import (
     EmbeddingRow,
     find_narrative_clusters,
@@ -35,7 +35,9 @@ def _make_narrative_base(seed: int, dim: int = 384) -> np.ndarray:
 
 
 def _make_article(
-    base: np.ndarray, rng: np.random.RandomState, noise: float = 0.03,
+    base: np.ndarray,
+    rng: np.random.RandomState,
+    noise: float = 0.03,
 ) -> np.ndarray:
     """Perturb base to simulate an article embedding (cosine sim ~0.85-0.95)."""
     perturbed = base + rng.uniform(-noise, noise, size=len(base))
@@ -70,12 +72,14 @@ def _make_rows(
     for i in range(count):
         vec = _make_article(base, rng)
         minhash = _make_minhash(base_hashes, rng, entity_overlap) if base_hashes else None
-        rows.append(EmbeddingRow(
-            content_item_id=f"{platform}-{rng.randint(0, 2**31)}",
-            vector=vec,
-            source_id=platform,
-            entity_minhash=minhash,
-        ))
+        rows.append(
+            EmbeddingRow(
+                content_item_id=f"{platform}-{rng.randint(0, 2**31)}",
+                vector=vec,
+                source_id=platform,
+                entity_minhash=minhash,
+            )
+        )
     return rows
 
 
@@ -100,7 +104,9 @@ class TestSingleNarrativeSmallBatch:
 
         assert len(groups) == 1, f"Expected 1 cluster, got {len(groups)}"
         cluster_indices = list(groups.values())[0]
-        assert len(cluster_indices) == 6, f"Expected all 6 items in cluster, got {len(cluster_indices)}"
+        assert len(cluster_indices) == 6, (
+            f"Expected all 6 items in cluster, got {len(cluster_indices)}"
+        )
 
     def test_platforms_are_diverse(self):
         rng = np.random.RandomState(42)
@@ -149,21 +155,25 @@ class TestBridgeArticleEntityOverlap:
         bridge_vec = (bridge_vec / np.linalg.norm(bridge_vec)).astype(np.float32)
         # 50% overlap with each narrative's entities
         bridge_hash = list(hashes_a[:64]) + list(hashes_b[64:])
-        rows.append(EmbeddingRow(
-            content_item_id="bridge-article",
-            vector=bridge_vec,
-            source_id="web",
-            entity_minhash=bridge_hash,
-        ))
+        rows.append(
+            EmbeddingRow(
+                content_item_id="bridge-article",
+                vector=bridge_vec,
+                source_id="web",
+                entity_minhash=bridge_hash,
+            )
+        )
 
         # Unrelated article
         unrelated_vec = _make_article(base_unrelated, rng)
-        rows.append(EmbeddingRow(
-            content_item_id="unrelated",
-            vector=unrelated_vec,
-            source_id="web",
-            entity_minhash=None,
-        ))
+        rows.append(
+            EmbeddingRow(
+                content_item_id="unrelated",
+                vector=unrelated_vec,
+                source_id="web",
+                entity_minhash=None,
+            )
+        )
 
         return rows
 
@@ -269,10 +279,7 @@ class TestSparseTopic:
         rng = np.random.RandomState(42)
         base = _make_narrative_base(seed=601)
 
-        rows = (
-            _make_rows(base, 2, "telegram", rng)
-            + _make_rows(base, 1, "web", rng)
-        )
+        rows = _make_rows(base, 2, "telegram", rng) + _make_rows(base, 1, "web", rng)
 
         groups, _edge_count = find_narrative_clusters(rows)
         assert len(groups) == 1, f"Expected 1 cluster from 3 similar items, got {len(groups)}"
@@ -291,12 +298,14 @@ class TestAllDifferentNoClusters:
         rows: list[EmbeddingRow] = []
         for i in range(20):
             base = _make_narrative_base(seed=7000 + i)
-            rows.append(EmbeddingRow(
-                content_item_id=f"unrelated-{i}",
-                vector=base.astype(np.float32),
-                source_id="web",
-                entity_minhash=None,
-            ))
+            rows.append(
+                EmbeddingRow(
+                    content_item_id=f"unrelated-{i}",
+                    vector=base.astype(np.float32),
+                    source_id="web",
+                    entity_minhash=None,
+                )
+            )
 
         # Verify pairwise similarities are low
         vecs = np.vstack([r.vector for r in rows]).astype(np.float64)

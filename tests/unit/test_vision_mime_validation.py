@@ -4,6 +4,7 @@ Critical fix: analyse_upload accepts any file extension from the user
 without validating actual file content. A .php disguised as .jpg must
 be rejected based on magic bytes, not filename.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -53,25 +54,25 @@ class TestValidateUploadMime:
         assert "video" in mime or "mp4" in mime.lower() or mime == "video/mp4"
 
     def test_rejects_php_disguised_as_jpg(self):
-        from anveshak.vision.mime_check import validate_upload_mime, UnsafeMimeError
+        from anveshak.vision.mime_check import UnsafeMimeError, validate_upload_mime
 
         with pytest.raises(UnsafeMimeError):
             validate_upload_mime(PHP_CONTENT, "exploit.jpg")
 
     def test_rejects_html_disguised_as_png(self):
-        from anveshak.vision.mime_check import validate_upload_mime, UnsafeMimeError
+        from anveshak.vision.mime_check import UnsafeMimeError, validate_upload_mime
 
         with pytest.raises(UnsafeMimeError):
             validate_upload_mime(HTML_CONTENT, "page.png")
 
     def test_rejects_empty_bytes(self):
-        from anveshak.vision.mime_check import validate_upload_mime, UnsafeMimeError
+        from anveshak.vision.mime_check import UnsafeMimeError, validate_upload_mime
 
         with pytest.raises(UnsafeMimeError):
             validate_upload_mime(b"", "empty.jpg")
 
     def test_rejects_unknown_binary(self):
-        from anveshak.vision.mime_check import validate_upload_mime, UnsafeMimeError
+        from anveshak.vision.mime_check import UnsafeMimeError, validate_upload_mime
 
         with pytest.raises(UnsafeMimeError):
             validate_upload_mime(RANDOM_BYTES, "unknown.bin")

@@ -12,12 +12,13 @@ Tests:
   E5: Source downgrade → report_source_warnings inserted, report untouched
   E6: Vision 0.0 deepfake vs NULL — must distinguish real from error
 """
+
 from __future__ import annotations
 
 import hashlib
 import json
 import uuid
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -29,6 +30,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 # ---------------------------------------------------------------------------
 # E1: Empty clean_text → quality gate skips
 # ---------------------------------------------------------------------------
+
 
 async def test_empty_clean_text_skipped_by_quality_gate(db_pool, make_topic, make_source):
     """Analyst quality gate must reject empty clean_text without crashing.
@@ -55,6 +57,7 @@ async def test_empty_clean_text_skipped_by_quality_gate(db_pool, make_topic, mak
 # E2: Report with zero RAG chunks → set_report_failed
 # ---------------------------------------------------------------------------
 
+
 async def test_report_with_no_content_marked_failed(db_pool, make_topic):
     """Report for topic with zero content items must be marked failed, not crash.
 
@@ -76,8 +79,13 @@ async def test_report_with_no_content_marked_failed(db_pool, make_topic):
             ) VALUES ($1, $2, 'intelligence_brief', $3, $4, 30.0, '{}'::jsonb,
                       $5, $6, $7)
             """,
-            report_id, topic_id, now - timedelta(hours=72), now,
-            now, now, LABELS_JSON,
+            report_id,
+            topic_id,
+            now - timedelta(hours=72),
+            now,
+            now,
+            now,
+            LABELS_JSON,
         )
 
         # Verify: no content for this topic
@@ -94,7 +102,9 @@ async def test_report_with_no_content_marked_failed(db_pool, make_topic):
             SET generation_error = $1, updated_at = $2
             WHERE id = $3 AND generated_at IS NULL
             """,
-            error_msg, now, report_id,
+            error_msg,
+            now,
+            report_id,
         )
 
         # Verify report state
@@ -111,6 +121,7 @@ async def test_report_with_no_content_marked_failed(db_pool, make_topic):
 # E3: Clustering with zero embedded items → empty result
 # ---------------------------------------------------------------------------
 
+
 async def test_clustering_zero_embeddings_returns_empty(db_pool, make_topic, make_source):
     """Clustering query with no embedded items must return empty, not crash."""
     topic_id = await make_topic(name="No Embeddings Topic")
@@ -118,7 +129,9 @@ async def test_clustering_zero_embeddings_returns_empty(db_pool, make_topic, mak
 
     # Insert content WITHOUT embedding
     await insert_content_item(
-        db_pool, topic_id, source_id,
+        db_pool,
+        topic_id,
+        source_id,
         text="Content without embedding — not yet analysed",
         embedding=None,
     )
@@ -142,6 +155,7 @@ async def test_clustering_zero_embeddings_returns_empty(db_pool, make_topic, mak
 # ---------------------------------------------------------------------------
 # E4: Report replay idempotent — generated_at sentinel
 # ---------------------------------------------------------------------------
+
 
 async def test_report_replay_does_not_overwrite(db_pool, make_topic):
     """Replayed generate_report job must NOT overwrite a completed report.
@@ -167,9 +181,15 @@ async def test_report_replay_does_not_overwrite(db_pool, make_topic):
                       '{"src-1": {"credibility_score": 80}}'::jsonb, 0.85,
                       $7, $8, $9)
             """,
-            report_id, topic_id, now - timedelta(hours=72), now,
-            original_content, now,
-            now, now, LABELS_JSON,
+            report_id,
+            topic_id,
+            now - timedelta(hours=72),
+            now,
+            original_content,
+            now,
+            now,
+            now,
+            LABELS_JSON,
         )
 
         # Attempt replay: UPDATE with WHERE generated_at IS NULL
@@ -180,14 +200,14 @@ async def test_report_replay_does_not_overwrite(db_pool, make_topic):
             SET content_md = $1, generated_at = $2, confidence_score = 0.99
             WHERE id = $3 AND generated_at IS NULL
             """,
-            replay_content, now, report_id,
+            replay_content,
+            now,
+            report_id,
         )
 
         # Should affect 0 rows (sentinel guard)
         rows_affected = int(result.split()[-1])
-        assert rows_affected == 0, (
-            f"Replay should be no-op (0 rows), got {rows_affected}"
-        )
+        assert rows_affected == 0, f"Replay should be no-op (0 rows), got {rows_affected}"
 
         # Verify original content unchanged
         row = await conn.fetchrow(
@@ -201,6 +221,7 @@ async def test_report_replay_does_not_overwrite(db_pool, make_topic):
 # ---------------------------------------------------------------------------
 # E5: Source downgrade → warning inserted, report untouched
 # ---------------------------------------------------------------------------
+
 
 async def test_source_downgrade_inserts_warning_not_modifies_report(
     db_pool, make_topic, make_source
@@ -228,9 +249,16 @@ async def test_source_downgrade_inserts_warning_not_modifies_report(
             ) VALUES ($1, $2, 'intelligence_brief', $3, $4, 30.0, $5, $6,
                       $7::jsonb, 0.8, $8, $9, $10)
             """,
-            report_id, topic_id, now - timedelta(hours=72), now,
-            original_content, now,
-            snapshot, now, now, LABELS_JSON,
+            report_id,
+            topic_id,
+            now - timedelta(hours=72),
+            now,
+            original_content,
+            now,
+            snapshot,
+            now,
+            now,
+            LABELS_JSON,
         )
 
         # Downgrade source: 80 → 40
@@ -249,7 +277,12 @@ async def test_source_downgrade_inserts_warning_not_modifies_report(
             ) VALUES ($1, $2, $3, 'Good Source', 'credibility_downgraded',
                       80.0, 40.0, $4, $5, $6)
             """,
-            warning_id, report_id, source_id, now, now, LABELS_JSON,
+            warning_id,
+            report_id,
+            source_id,
+            now,
+            now,
+            LABELS_JSON,
         )
 
         # Verify: warning exists
@@ -269,7 +302,11 @@ async def test_source_downgrade_inserts_warning_not_modifies_report(
         assert report["content_md"] == original_content, "Report content must be immutable"
         assert report["generated_at"] is not None, "generated_at must remain set"
         # Snapshot still shows old score (frozen at gen time)
-        snap = json.loads(report["source_snapshot"]) if isinstance(report["source_snapshot"], str) else report["source_snapshot"]
+        snap = (
+            json.loads(report["source_snapshot"])
+            if isinstance(report["source_snapshot"], str)
+            else report["source_snapshot"]
+        )
         assert snap[source_id]["credibility_score"] == 80.0, (
             "Snapshot must preserve score at generation time"
         )
@@ -278,6 +315,7 @@ async def test_source_downgrade_inserts_warning_not_modifies_report(
 # ---------------------------------------------------------------------------
 # E6: Vision 0.0 vs NULL deepfake_score distinction
 # ---------------------------------------------------------------------------
+
 
 async def test_deepfake_score_zero_vs_null_distinction(db_pool, make_topic, make_source):
     """0.0 means 'definitely real'. NULL means 'error/not processed'.
@@ -293,9 +331,9 @@ async def test_deepfake_score_zero_vs_null_distinction(db_pool, make_topic, make
 
     async with db_pool.acquire() as conn:
         scores = {
-            "real": 0.0,     # Definitely real — no penalty
+            "real": 0.0,  # Definitely real — no penalty
             "unknown": None,  # Error/not processed — skip
-            "fake": 0.9,     # Likely deepfake — penalty
+            "fake": 0.9,  # Likely deepfake — penalty
         }
 
         media_ids = {}
@@ -314,8 +352,15 @@ async def test_deepfake_score_zero_vs_null_distinction(db_pool, make_topic, make
                 ) VALUES ($1,$2,$3,'t','t','en',$4,'https://x.com',$5,80.0,$6,$7,$8,$9)
                 ON CONFLICT(content_hash) DO NOTHING
                 """,
-                item_id, topic_id, source_id, ch, now,
-                TEST_ORG_ID, now, now, LABELS_JSON,
+                item_id,
+                topic_id,
+                source_id,
+                ch,
+                now,
+                TEST_ORG_ID,
+                now,
+                now,
+                LABELS_JSON,
             )
             await conn.execute(
                 """
@@ -324,7 +369,11 @@ async def test_deepfake_score_zero_vs_null_distinction(db_pool, make_topic, make
                     content_hash, created_at, labels
                 ) VALUES ($1, $2, 'image', '/tmp/test.jpg', $3, $4, $5)
                 """,
-                media_id, item_id, media_hash, now, LABELS_JSON,
+                media_id,
+                item_id,
+                media_hash,
+                now,
+                LABELS_JSON,
             )
             await conn.execute(
                 """
@@ -332,7 +381,11 @@ async def test_deepfake_score_zero_vs_null_distinction(db_pool, make_topic, make
                     id, media_asset_id, deepfake_score, processed_at, labels
                 ) VALUES ($1, $2, $3, $4, $5)
                 """,
-                str(uuid.uuid4()), media_id, score, now, LABELS_JSON,
+                str(uuid.uuid4()),
+                media_id,
+                score,
+                now,
+                LABELS_JSON,
             )
             media_ids[label] = media_id
 

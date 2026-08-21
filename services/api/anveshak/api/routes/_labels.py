@@ -1,4 +1,5 @@
 """Dynamic labels helper — replaces hardcoded _LABELS_JSON constants."""
+
 from __future__ import annotations
 
 import json

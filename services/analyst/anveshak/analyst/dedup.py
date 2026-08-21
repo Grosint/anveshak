@@ -10,13 +10,15 @@ Design:
   - Canonical pair ordering (a < b) via CHECK constraint on table.
   - Idempotent: ON CONFLICT DO NOTHING.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 import asyncpg
 import numpy as np
 import structlog
+from anveshak.db import DBConnection
 
 from .clustering import load_embeddings
 from .settings import settings
@@ -46,6 +48,7 @@ SQL_GET_DUPLICATE_IDS = """
 # Core functions
 # ---------------------------------------------------------------------------
 
+
 async def detect_near_duplicates(
     topic_id: str,
     pool: asyncpg.Pool,
@@ -60,7 +63,7 @@ async def detect_near_duplicates(
         return []
 
     # Respect batch size limit to keep O(N²) bounded
-    batch = rows[:settings.near_duplicate_batch_size]
+    batch = rows[: settings.near_duplicate_batch_size]
 
     ids = [r.content_item_id for r in batch]
     matrix = np.vstack([r.vector for r in batch])  # (N, 384)
@@ -105,7 +108,11 @@ async def upsert_near_duplicates(
         async with conn.transaction():
             for a_id, b_id, score in pairs:
                 result = await conn.execute(
-                    SQL_UPSERT_NEAR_DUPLICATE, a_id, b_id, score, now,
+                    SQL_UPSERT_NEAR_DUPLICATE,
+                    a_id,
+                    b_id,
+                    score,
+                    now,
                 )
                 if result == "INSERT 0 1":
                     inserted += 1
@@ -116,7 +123,7 @@ async def upsert_near_duplicates(
 
 async def get_duplicate_ids_for_cluster(
     content_item_ids: list[str],
-    conn: asyncpg.Connection,
+    conn: DBConnection,
 ) -> set[str]:
     """Return content_item IDs that are the 'b' side of a near-duplicate pair.
 

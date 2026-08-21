@@ -8,14 +8,12 @@ Verifies:
 
 pytest.mark.unit -- no external dependencies.
 """
+
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 
 _JOBS = "anveshak.analyst.jobs"
 
@@ -26,6 +24,7 @@ class TestTemplateSQLExists:
 
     def test_sql_get_templates_for_topic(self):
         from anveshak.analyst.jobs import SQL_GET_TEMPLATES_FOR_TOPIC
+
         sql = SQL_GET_TEMPLATES_FOR_TOPIC.lower()
         assert "scam_templates" in sql, "Must query scam_templates table"
         assert "topic_templates" in sql, "Must consider topic_templates linkage"
@@ -37,6 +36,7 @@ class TestLoadTemplatesFromDB:
 
     def test_function_exists(self):
         from anveshak.analyst.jobs import load_templates_for_topic
+
         assert callable(load_templates_for_topic)
 
     @pytest.mark.asyncio
@@ -148,12 +148,19 @@ class TestAnalyseContentUsesDBTemplates:
             patch(f"{_JOBS}.encode_text", return_value=[0.1] * 384),
             patch(f"{_JOBS}.build_topic_query_embedding", return_value=[0.2] * 384),
             patch(f"{_JOBS}.compute_topic_relevance", return_value=0.5),
-            patch(f"{_JOBS}.analyse_sentiment", return_value=type("S", (), {"compound": 0.0, "positive": 0.0, "negative": 0.0, "neutral": 1.0})()),
+            patch(
+                f"{_JOBS}.analyse_sentiment",
+                return_value=type(
+                    "S", (), {"compound": 0.0, "positive": 0.0, "negative": 0.0, "neutral": 1.0}
+                )(),
+            ),
             patch(f"{_JOBS}.extract_keywords", return_value=[]),
             patch(f"{_JOBS}.compute_entity_minhash", return_value=None),
             patch(f"{_JOBS}.extract_identifiers", return_value=[]),
             patch(f"{_JOBS}.match_templates", return_value=None),
-            patch(f"{_JOBS}.load_templates_for_topic", new_callable=AsyncMock, return_value=[]) as mock_load,
+            patch(
+                f"{_JOBS}.load_templates_for_topic", new_callable=AsyncMock, return_value=[]
+            ) as mock_load,
             patch(f"{_JOBS}.analyst_nlp_jobs_total"),
             patch(f"{_JOBS}.analyst_nlp_duration_seconds"),
             patch(f"{_JOBS}.analyst_relevance_score"),
@@ -161,6 +168,7 @@ class TestAnalyseContentUsesDBTemplates:
             patch(f"{_JOBS}.analyst_identifiers_extracted_total"),
         ):
             from anveshak.analyst.jobs import analyse_content
+
             await analyse_content({"db_pool": pool}, "ci-1")
 
         # Must have called load_templates_for_topic with conn and topic_id

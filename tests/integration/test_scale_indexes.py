@@ -6,6 +6,7 @@ to avoid full table scans on every clustering cycle (every 5 minutes).
 
 pytest.mark.integration — requires running PostgreSQL.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -33,8 +34,7 @@ class TestScaleIndexes:
             """)
 
         assert row is not None, (
-            "Missing composite index on content_items(topic_id, captured_at). "
-            "Run: make migrate"
+            "Missing composite index on content_items(topic_id, captured_at). Run: make migrate"
         )
         assert "idx_content_items_topic_captured" in row["indexname"]
 

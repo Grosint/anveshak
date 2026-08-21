@@ -8,13 +8,14 @@ Tests DB layer functions and route-level logic for 6 identifier endpoints:
   5. GET /identifiers/export — CSV/JSON export
   6. GET /identifiers/co-occurrence — content items sharing two identifiers
 """
+
 from __future__ import annotations
 
 import csv
 import io
 import json
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -40,7 +41,6 @@ from anveshak.api.routes.identifiers import (
     _rows_to_json,
     router,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -178,6 +178,7 @@ def _fake_export_row(
 # 1. search_identifiers
 # ===========================================================================
 
+
 class TestSearchIdentifiers:
     """DB function: search extracted_entities with partial match."""
 
@@ -188,7 +189,9 @@ class TestSearchIdentifiers:
         conn.fetch.return_value = [row]
 
         result = await search_identifiers(
-            conn, q="9876543210", topic_id=TOPIC_ID,
+            conn,
+            q="9876543210",
+            topic_id=TOPIC_ID,
         )
         assert len(result) == 1
         assert result[0]["entity_text"] == "9876543210"
@@ -199,7 +202,10 @@ class TestSearchIdentifiers:
         conn.fetch.return_value = [_fake_search_row(entity_type="PHONE_IN")]
 
         await search_identifiers(
-            conn, q="987654", topic_id=TOPIC_ID, identifier_type="PHONE_IN",
+            conn,
+            q="987654",
+            topic_id=TOPIC_ID,
+            identifier_type="PHONE_IN",
         )
         # SQL should contain type filter
         sql = conn.fetch.call_args[0][0]
@@ -212,7 +218,9 @@ class TestSearchIdentifiers:
         conn.fetch.return_value = [_fake_search_row(entity_text="9876543210")]
 
         result = await search_identifiers(
-            conn, q="543210", topic_id=TOPIC_ID,
+            conn,
+            q="543210",
+            topic_id=TOPIC_ID,
         )
         assert len(result) == 1
 
@@ -222,7 +230,9 @@ class TestSearchIdentifiers:
         conn.fetch.return_value = []
 
         result = await search_identifiers(
-            conn, q="nonexistent", topic_id=TOPIC_ID,
+            conn,
+            q="nonexistent",
+            topic_id=TOPIC_ID,
         )
         assert result == []
 
@@ -232,7 +242,10 @@ class TestSearchIdentifiers:
         conn.fetch.return_value = []
 
         await search_identifiers(
-            conn, q="987", topic_id=TOPIC_ID, limit=10,
+            conn,
+            q="987",
+            topic_id=TOPIC_ID,
+            limit=10,
         )
         # Limit param passed to SQL
         args = conn.fetch.call_args[0]
@@ -252,6 +265,7 @@ class TestSearchIdentifiers:
 # ===========================================================================
 # 2. get_top_identifiers
 # ===========================================================================
+
 
 class TestGetTopIdentifiers:
     """DB function: most frequent identifiers from extracted_entities (grouped)."""
@@ -276,7 +290,9 @@ class TestGetTopIdentifiers:
         conn.fetch.return_value = [_fake_top_row()]
 
         await get_top_identifiers(
-            conn, topic_id=TOPIC_ID, identifier_type="PHONE_IN",
+            conn,
+            topic_id=TOPIC_ID,
+            identifier_type="PHONE_IN",
         )
         sql = conn.fetch.call_args[0][0]
         assert "entity_type" in sql or "identifier_type" in sql
@@ -302,6 +318,7 @@ class TestGetTopIdentifiers:
     async def test_queries_extracted_entities_not_clusters(self):
         """Top should query extracted_entities directly, not identifier_clusters."""
         from anveshak.api.db.identifiers import SQL_TOP_IDENTIFIERS
+
         sql = SQL_TOP_IDENTIFIERS.lower()
         assert "extracted_entities" in sql
         assert "identifier_clusters" not in sql
@@ -310,6 +327,7 @@ class TestGetTopIdentifiers:
     async def test_groups_by_type_and_value(self):
         """SQL must GROUP BY to aggregate across content items."""
         from anveshak.api.db.identifiers import SQL_TOP_IDENTIFIERS
+
         sql = SQL_TOP_IDENTIFIERS.lower()
         assert "group by" in sql
 
@@ -346,6 +364,7 @@ class TestGetTopIdentifiers:
 # 3. list_identifier_clusters
 # ===========================================================================
 
+
 class TestListIdentifierClusters:
     """DB function: list identifier clusters for a topic."""
 
@@ -364,7 +383,9 @@ class TestListIdentifierClusters:
         conn.fetch.return_value = [_fake_cluster_row(identifier_type="PHONE_IN")]
 
         await list_identifier_clusters(
-            conn, topic_id=TOPIC_ID, identifier_type="PHONE_IN",
+            conn,
+            topic_id=TOPIC_ID,
+            identifier_type="PHONE_IN",
         )
         sql = conn.fetch.call_args[0][0]
         assert "identifier_type" in sql
@@ -375,7 +396,10 @@ class TestListIdentifierClusters:
         conn.fetch.return_value = []
 
         await list_identifier_clusters(
-            conn, topic_id=TOPIC_ID, limit=10, offset=20,
+            conn,
+            topic_id=TOPIC_ID,
+            limit=10,
+            offset=20,
         )
         args = conn.fetch.call_args[0]
         assert 10 in args
@@ -395,6 +419,7 @@ class TestListIdentifierClusters:
 # ===========================================================================
 # 4. get_cluster_detail
 # ===========================================================================
+
 
 class TestGetClusterDetail:
     """DB function: full cluster detail with items and sources."""
@@ -453,6 +478,7 @@ class TestGetClusterDetail:
 # 5. export_identifiers
 # ===========================================================================
 
+
 class TestExportIdentifiers:
     """DB function: flat identifier export for CSV/JSON."""
 
@@ -490,6 +516,7 @@ class TestExportIdentifiers:
 # 6. get_co_occurrence
 # ===========================================================================
 
+
 class TestGetCoOccurrence:
     """DB function: content items where both identifiers appear."""
 
@@ -525,8 +552,10 @@ class TestGetCoOccurrence:
         conn.fetch.return_value = []
 
         await get_co_occurrence(
-            conn, topic_id=TOPIC_ID,
-            identifier_a="a", identifier_b="b",
+            conn,
+            topic_id=TOPIC_ID,
+            identifier_a="a",
+            identifier_b="b",
         )
         args = conn.fetch.call_args[0]
         assert TOPIC_ID in args
@@ -537,8 +566,10 @@ class TestGetCoOccurrence:
         conn.fetch.return_value = []
 
         await get_co_occurrence(
-            conn, topic_id=TOPIC_ID,
-            identifier_a="phone123", identifier_b="upi@bank",
+            conn,
+            topic_id=TOPIC_ID,
+            identifier_a="phone123",
+            identifier_b="upi@bank",
         )
         args = conn.fetch.call_args[0]
         assert "phone123" in args
@@ -548,6 +579,7 @@ class TestGetCoOccurrence:
 # ===========================================================================
 # 7. Route-level constants and structure
 # ===========================================================================
+
 
 class TestRouteConstants:
     """Verify route module exports expected constants."""
@@ -579,17 +611,20 @@ class TestRouteConstants:
 # 8. SQL constants exist and are well-formed
 # ===========================================================================
 
+
 class TestSQLConstants:
     """Verify SQL constants are defined in DB module."""
 
     def test_search_sql_uses_trigram_or_like(self):
         from anveshak.api.db.identifiers import SQL_SEARCH_IDENTIFIERS
+
         sql = SQL_SEARCH_IDENTIFIERS.lower()
         # Must use ILIKE or trigram for partial match
         assert "ilike" in sql or "%" in sql or "similarity" in sql
 
     def test_top_sql_queries_extracted_entities(self):
         from anveshak.api.db.identifiers import SQL_TOP_IDENTIFIERS
+
         sql = SQL_TOP_IDENTIFIERS.lower()
         assert "extracted_entities" in sql
         assert "group by" in sql
@@ -597,21 +632,25 @@ class TestSQLConstants:
 
     def test_clusters_sql_scopes_to_topic(self):
         from anveshak.api.db.identifiers import SQL_LIST_CLUSTERS
+
         assert "topic_id" in SQL_LIST_CLUSTERS.lower()
 
     def test_cluster_detail_sql_joins_items(self):
         from anveshak.api.db.identifiers import SQL_CLUSTER_ITEMS
+
         sql = SQL_CLUSTER_ITEMS.lower()
         assert "identifier_cluster_items" in sql
         assert "join" in sql
 
     def test_export_sql_joins_sources(self):
         from anveshak.api.db.identifiers import SQL_EXPORT_IDENTIFIERS
+
         sql = SQL_EXPORT_IDENTIFIERS.lower()
         assert "source" in sql
 
     def test_co_occurrence_sql_self_joins(self):
         from anveshak.api.db.identifiers import SQL_CO_OCCURRENCE
+
         sql = SQL_CO_OCCURRENCE.lower()
         # Must join extracted_entities to itself
         assert "extracted_entities" in sql
@@ -619,6 +658,7 @@ class TestSQLConstants:
     def test_identifier_type_filter_uses_partial_index_types(self):
         """When filtering by type, SQL should reference Engine C identifier types."""
         from anveshak.api.db.identifiers import SQL_SEARCH_IDENTIFIERS
+
         sql = SQL_SEARCH_IDENTIFIERS.lower()
         # Must filter by entity_type within identifier types
         assert "entity_type" in sql
@@ -627,6 +667,7 @@ class TestSQLConstants:
 # ===========================================================================
 # 9. CSV/JSON export helpers
 # ===========================================================================
+
 
 class TestExportHelpers:
     """Test _rows_to_csv and _rows_to_json pure functions."""

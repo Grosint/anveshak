@@ -8,6 +8,7 @@ Usage (from host):
     docker cp scripts/test_analyst_models.py anveshak-analyse-worker-1:/tmp/
     docker exec anveshak-analyse-worker-1 python /tmp/test_analyst_models.py
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -16,7 +17,7 @@ import os
 import sys
 import time
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any
 
 # Suppress log noise so JSON on stdout is clean
@@ -82,16 +83,24 @@ async def _setup(pool):
     """Create test topic and source if they don't exist."""
     async with pool.acquire() as conn:
         await conn.execute(SQL_ENSURE_ORG)
-        await conn.execute(SQL_ENSURE_TOPIC, TEST_TOPIC_ID, "Analyst Model Tests",
-                           ["test", "integration"])
-        await conn.execute(SQL_ENSURE_SOURCE, TEST_SOURCE_ID, "test-source",
-                           "https://example.com/test", "web", 50.0)
+        await conn.execute(
+            SQL_ENSURE_TOPIC, TEST_TOPIC_ID, "Analyst Model Tests", ["test", "integration"]
+        )
+        await conn.execute(
+            SQL_ENSURE_SOURCE,
+            TEST_SOURCE_ID,
+            "test-source",
+            "https://example.com/test",
+            "web",
+            50.0,
+        )
         await conn.execute(SQL_LINK_TOPIC_SOURCE, TEST_TOPIC_ID, TEST_SOURCE_ID)
 
 
 def _compute_hash(text: str) -> str:
     """SHA-256 of normalised text — same algorithm as scraper/normalise.py."""
     import hashlib
+
     normalised = " ".join(text.lower().split())
     return hashlib.sha256(normalised.encode("utf-8")).hexdigest()
 
@@ -104,9 +113,22 @@ async def _insert_item(pool, text: str, url: str) -> str:
     async with pool.acquire() as conn:
         await conn.fetchrow(
             SQL_INSERT,
-            item_id, TEST_TOPIC_ID, TEST_SOURCE_ID,
-            text, text, "en", content_hash, url, now, 50.0,
-            now, now, labels, "good", content_hash, "Test",
+            item_id,
+            TEST_TOPIC_ID,
+            TEST_SOURCE_ID,
+            text,
+            text,
+            "en",
+            content_hash,
+            url,
+            now,
+            50.0,
+            now,
+            now,
+            labels,
+            "good",
+            content_hash,
+            "Test",
         )
     return item_id
 
@@ -123,6 +145,7 @@ async def _cleanup(pool, item_ids: list[str]):
 # Tests
 # ---------------------------------------------------------------------------
 
+
 async def test_spacy_ner(pool) -> tuple[dict, str]:
     """spaCy NER extracts entities from intelligence-relevant English text."""
     text = (
@@ -134,6 +157,7 @@ async def test_spacy_ner(pool) -> tuple[dict, str]:
     t0 = time.monotonic()
     try:
         from anveshak.analyst.jobs import analyse_content
+
         ctx = {"db_pool": pool}
         await analyse_content(ctx, item_id)
 
@@ -142,9 +166,12 @@ async def test_spacy_ner(pool) -> tuple[dict, str]:
                 "SELECT COUNT(*) FROM extracted_entities WHERE content_item_id = $1", item_id
             )
         elapsed = time.monotonic() - t0
-        return _result("spacy_ner", count > 0,
-                        f"{count} entities extracted" if count > 0 else "No entities found",
-                        elapsed), item_id
+        return _result(
+            "spacy_ner",
+            count > 0,
+            f"{count} entities extracted" if count > 0 else "No entities found",
+            elapsed,
+        ), item_id
     except Exception as exc:
         return _result("spacy_ner", False, str(exc)[:200], time.monotonic() - t0), item_id
 
@@ -159,18 +186,20 @@ async def test_embedding(pool) -> tuple[dict, str]:
     t0 = time.monotonic()
     try:
         from anveshak.analyst.jobs import analyse_content
+
         ctx = {"db_pool": pool}
         await analyse_content(ctx, item_id)
 
         async with pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT embedding FROM content_items WHERE id = $1", item_id
-            )
+            row = await conn.fetchrow("SELECT embedding FROM content_items WHERE id = $1", item_id)
         elapsed = time.monotonic() - t0
         has_embedding = row is not None and row["embedding"] is not None
-        return _result("embedding", has_embedding,
-                        "embedding set" if has_embedding else "embedding is NULL",
-                        elapsed), item_id
+        return _result(
+            "embedding",
+            has_embedding,
+            "embedding set" if has_embedding else "embedding is NULL",
+            elapsed,
+        ), item_id
     except Exception as exc:
         return _result("embedding", False, str(exc)[:200], time.monotonic() - t0), item_id
 
@@ -185,18 +214,22 @@ async def test_sentiment(pool) -> tuple[dict, str]:
     t0 = time.monotonic()
     try:
         from anveshak.analyst.jobs import analyse_content
+
         ctx = {"db_pool": pool}
         await analyse_content(ctx, item_id)
 
         async with pool.acquire() as conn:
-            labels = await conn.fetchval(
-                "SELECT labels FROM content_items WHERE id = $1", item_id
-            )
+            labels = await conn.fetchval("SELECT labels FROM content_items WHERE id = $1", item_id)
         elapsed = time.monotonic() - t0
-        has_sentiment = labels is not None and "sentiment" in (json.loads(labels) if isinstance(labels, str) else labels)
-        return _result("vader_sentiment", has_sentiment,
-                        "sentiment scores in labels" if has_sentiment else "no sentiment in labels",
-                        elapsed), item_id
+        has_sentiment = labels is not None and "sentiment" in (
+            json.loads(labels) if isinstance(labels, str) else labels
+        )
+        return _result(
+            "vader_sentiment",
+            has_sentiment,
+            "sentiment scores in labels" if has_sentiment else "no sentiment in labels",
+            elapsed,
+        ), item_id
     except Exception as exc:
         return _result("vader_sentiment", False, str(exc)[:200], time.monotonic() - t0), item_id
 
@@ -211,18 +244,17 @@ async def test_language_detection(pool) -> tuple[dict, str]:
     t0 = time.monotonic()
     try:
         from anveshak.analyst.jobs import analyse_content
+
         ctx = {"db_pool": pool}
         await analyse_content(ctx, item_id)
 
         async with pool.acquire() as conn:
-            lang = await conn.fetchval(
-                "SELECT language FROM content_items WHERE id = $1", item_id
-            )
+            lang = await conn.fetchval("SELECT language FROM content_items WHERE id = $1", item_id)
         elapsed = time.monotonic() - t0
         ok = lang is not None and len(lang) >= 2
-        return _result("language_detection", ok,
-                        f"language={lang}" if ok else f"language={lang!r}",
-                        elapsed), item_id
+        return _result(
+            "language_detection", ok, f"language={lang}" if ok else f"language={lang!r}", elapsed
+        ), item_id
     except Exception as exc:
         return _result("language_detection", False, str(exc)[:200], time.monotonic() - t0), item_id
 
@@ -231,17 +263,20 @@ async def test_language_detection(pool) -> tuple[dict, str]:
 # Main
 # ---------------------------------------------------------------------------
 
+
 async def main():
     import asyncpg
+    from anveshak.analyst.embeddings import load_encoder
 
     # Load models at startup (same as production worker)
     from anveshak.analyst.nlp import load_models
-    from anveshak.analyst.embeddings import load_encoder
+
     load_models()
     load_encoder()
 
-    postgres_url = os.environ.get("POSTGRES_URL",
-                                   "postgresql://anveshak:anveshak@postgres:5432/anveshak")
+    postgres_url = os.environ.get(
+        "POSTGRES_URL", "postgresql://anveshak:anveshak@postgres:5432/anveshak"
+    )
     pool = await asyncpg.create_pool(postgres_url, min_size=1, max_size=3)
 
     await _setup(pool)

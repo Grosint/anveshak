@@ -1,20 +1,21 @@
 """Keyword alert rules — CRUD for analyst-defined keyword monitoring."""
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any
 
-import asyncpg
 import structlog
+from anveshak.db import DBConnection
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict
 
-from ..auth.rbac import require_role, get_user_org
-from ..db.pool import get_db
+from ..auth.rbac import get_user_org, require_role
 from ..db import alerts as alerts_db
-from ..db import topics as topics_db
 from ..db import audit as audit_db
+from ..db import topics as topics_db
+from ..db.pool import get_db
 
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api/v1/topics/{topic_id}/alerts", tags=["alerts"])
@@ -38,7 +39,7 @@ async def create_alert_rule(
     topic_id: str,
     req: CreateAlertRuleRequest,
     request: Request,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     await topics_db.verify_topic_access(db, topic_id, user)
@@ -50,21 +51,36 @@ async def create_alert_rule(
     rule_id = str(uuid.uuid4())
     now = datetime.now(UTC)
     await alerts_db.create_rule(
-        db, rule_id, topic_id, req.keywords, req.match_mode,
-        user.get("sub", ""), get_user_org(user), now,
+        db,
+        rule_id,
+        topic_id,
+        req.keywords,
+        req.match_mode,
+        user.get("sub", ""),
+        get_user_org(user),
+        now,
     )
     await audit_db.log_action(
-        db, user["sub"], "alert_rule.create", "keyword_alert_rule", rule_id,
+        db,
+        user["sub"],
+        "alert_rule.create",
+        "keyword_alert_rule",
+        rule_id,
         {"topic_id": topic_id, "keywords": req.keywords, "match_mode": req.match_mode},
         request.client.host if request.client else "",
     )
-    return {"id": rule_id, "topic_id": topic_id, "keywords": req.keywords, "match_mode": req.match_mode}
+    return {
+        "id": rule_id,
+        "topic_id": topic_id,
+        "keywords": req.keywords,
+        "match_mode": req.match_mode,
+    }
 
 
 @router.get("")
 async def list_alert_rules(
     topic_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ) -> list[dict[str, Any]]:
     await topics_db.verify_topic_access(db, topic_id, user)
@@ -76,7 +92,7 @@ async def update_alert_rule(
     topic_id: str,
     rule_id: str,
     req: UpdateAlertRuleRequest,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     await topics_db.verify_topic_access(db, topic_id, user)
@@ -90,7 +106,7 @@ async def update_alert_rule(
 async def delete_alert_rule(
     topic_id: str,
     rule_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, str]:
     await topics_db.verify_topic_access(db, topic_id, user)
@@ -105,7 +121,7 @@ async def list_alert_triggers(
     topic_id: str,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ) -> list[dict[str, Any]]:
     await topics_db.verify_topic_access(db, topic_id, user)

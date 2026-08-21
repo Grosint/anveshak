@@ -6,10 +6,10 @@ not just in mocked unit tests. These catch SQL bugs that mocks can't.
 Requires: Docker Compose (PostgreSQL), migration 007+008 applied.
 Run: make test-integration or pytest tests/integration/ -m integration
 """
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, UTC
 
 import pytest
 
@@ -22,12 +22,16 @@ LABELS = '{"classification":"OPEN","domain":"osint"}'
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 async def _create_org(conn, name: str, slug: str) -> str:
     org_id = str(uuid.uuid4())
     await conn.execute(
         "INSERT INTO organizations (id, name, slug, is_active, created_at, updated_at, labels) "
         "VALUES ($1, $2, $3, true, NOW(), NOW(), $4::jsonb)",
-        org_id, name, slug, LABELS,
+        org_id,
+        name,
+        slug,
+        LABELS,
     )
     return org_id
 
@@ -38,7 +42,11 @@ async def _create_topic(conn, name: str, org_id: str) -> str:
         "INSERT INTO topics (id, name, keywords, signal_threshold, status, "
         "created_at, updated_at, labels, org_id) "
         "VALUES ($1, $2, $3, 2, 'active', NOW(), NOW(), $4::jsonb, $5)",
-        topic_id, name, ["test"], LABELS, org_id,
+        topic_id,
+        name,
+        ["test"],
+        LABELS,
+        org_id,
     )
     return topic_id
 
@@ -49,12 +57,17 @@ async def _create_source(conn, name: str, org_id: str) -> str:
         "INSERT INTO sources (id, name, url_or_handle, platform, credibility_score, "
         "is_active, created_at, updated_at, labels, org_id) "
         "VALUES ($1, $2, $3, 'web', 75.0, true, NOW(), NOW(), $4::jsonb, $5)",
-        source_id, name, f"https://{name.lower().replace(' ', '-')}.com", LABELS, org_id,
+        source_id,
+        name,
+        f"https://{name.lower().replace(' ', '-')}.com",
+        LABELS,
+        org_id,
     )
     # Link to org_sources
     await conn.execute(
         "INSERT INTO org_sources (org_id, source_id) VALUES ($1, $2)",
-        org_id, source_id,
+        org_id,
+        source_id,
     )
     return source_id
 
@@ -63,8 +76,8 @@ async def _create_source(conn, name: str, org_id: str) -> str:
 # 1. Topic isolation
 # ---------------------------------------------------------------------------
 
-class TestTopicOrgIsolation:
 
+class TestTopicOrgIsolation:
     async def test_list_topics_by_org_returns_only_own_topics(self, db_conn):
         """Topics from org-B must not appear in org-A's list."""
         from anveshak.api.db.topics import list_topics_by_org
@@ -88,8 +101,8 @@ class TestTopicOrgIsolation:
 
     async def test_verify_topic_access_blocks_cross_org(self, db_conn):
         """verify_topic_access raises 404 for wrong org."""
-        from fastapi import HTTPException
         from anveshak.api.db.topics import verify_topic_access
+        from fastapi import HTTPException
 
         org_a = await _create_org(db_conn, "Org A", f"org-a-{uuid.uuid4().hex[:6]}")
         org_b = await _create_org(db_conn, "Org B", f"org-b-{uuid.uuid4().hex[:6]}")
@@ -128,8 +141,8 @@ class TestTopicOrgIsolation:
 # 2. Source isolation via org_sources
 # ---------------------------------------------------------------------------
 
-class TestSourceOrgIsolation:
 
+class TestSourceOrgIsolation:
     async def test_list_sources_by_org_filters_via_org_sources(self, db_conn):
         """Only sources linked in org_sources are visible to the org."""
         from anveshak.api.db.sources import list_sources_by_org
@@ -140,16 +153,19 @@ class TestSourceOrgIsolation:
         src_a = await _create_source(db_conn, "Source Alpha", org_a)
         src_b = await _create_source(db_conn, "Source Beta", org_b)
 
-        sources_for_a = await list_sources_by_org(db_conn, org_a)
+        # list_sources_by_org is paginated: it returns (rows, total).
+        sources_for_a, total_a = await list_sources_by_org(db_conn, org_a)
         source_ids_a = {s["id"] for s in sources_for_a}
+
+        assert total_a >= 1
 
         assert src_a in source_ids_a
         assert src_b not in source_ids_a
 
     async def test_verify_source_access_blocks_invisible_source(self, db_conn):
         """verify_source_access raises 404 for source not in org_sources."""
-        from fastapi import HTTPException
         from anveshak.api.db.sources import verify_source_access
+        from fastapi import HTTPException
 
         org_a = await _create_org(db_conn, "Org A", f"org-a-{uuid.uuid4().hex[:6]}")
         org_b = await _create_org(db_conn, "Org B", f"org-b-{uuid.uuid4().hex[:6]}")
@@ -165,11 +181,11 @@ class TestSourceOrgIsolation:
 # 3. User isolation
 # ---------------------------------------------------------------------------
 
-class TestUserOrgIsolation:
 
+class TestUserOrgIsolation:
     async def test_list_users_by_org_filters(self, db_conn):
         """list_users_by_org returns only users in that org."""
-        from anveshak.api.db.users import list_users_by_org, create_user
+        from anveshak.api.db.users import create_user, list_users_by_org
 
         org_a = await _create_org(db_conn, "Org A", f"org-a-{uuid.uuid4().hex[:6]}")
         org_b = await _create_org(db_conn, "Org B", f"org-b-{uuid.uuid4().hex[:6]}")
@@ -190,8 +206,8 @@ class TestUserOrgIsolation:
 # 4. Organization CRUD
 # ---------------------------------------------------------------------------
 
-class TestOrganizationCRUD:
 
+class TestOrganizationCRUD:
     async def test_create_and_get_org(self, db_conn):
         """Create an org and retrieve it."""
         from anveshak.api.db.organizations import create_organization, get_organization
@@ -222,7 +238,9 @@ class TestOrganizationCRUD:
     async def test_update_organization(self, db_conn):
         """Update org name and active status."""
         from anveshak.api.db.organizations import (
-            create_organization, get_organization, update_organization,
+            create_organization,
+            get_organization,
+            update_organization,
         )
 
         slug = f"upd-{uuid.uuid4().hex[:6]}"
@@ -239,8 +257,8 @@ class TestOrganizationCRUD:
 # 5. Signal isolation (signals inherit org via topic)
 # ---------------------------------------------------------------------------
 
-class TestSignalOrgIsolation:
 
+class TestSignalOrgIsolation:
     async def test_list_signals_by_org_filters_via_topic(self, db_conn):
         """Signals only appear for the org that owns the topic."""
         from anveshak.api.db.signals import list_signals_by_org
@@ -259,7 +277,9 @@ class TestSignalOrgIsolation:
                 "INSERT INTO signals (id, topic_id, signal_type, description, "
                 "status, created_at, updated_at, labels) "
                 "VALUES ($1, $2, 'threshold_breach', 'test', 'new', NOW(), NOW(), $3::jsonb)",
-                sig_id, tid, LABELS,
+                sig_id,
+                tid,
+                LABELS,
             )
 
         signals_a, total_a = await list_signals_by_org(db_conn, "new", org_a)

@@ -5,9 +5,10 @@ Route calls list_signals_by_org(org_id) ignoring topic_id param.
 
 pytest.mark.unit — mocks DB, no external dependencies.
 """
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -19,7 +20,6 @@ def _fake_user(role="analyst", org_id="org_cyber"):
 
 
 class TestListSignalsTopicFilter:
-
     @pytest.mark.asyncio
     async def test_org_user_with_topic_id_calls_topic_scoped_query(self):
         """When topic_id is provided, must call list_signals with topic_id, not list_signals_by_org."""
@@ -33,10 +33,14 @@ class TestListSignalsTopicFilter:
             mock_db.list_signals = AsyncMock(return_value=([], 0))
 
             await list_signals(
-                status="new", topic_id="topic-123",
-                since=None, until=None,
-                limit=50, offset=0,
-                db=db, user=user,
+                status="new",
+                topic_id="topic-123",
+                since=None,
+                until=None,
+                limit=50,
+                offset=0,
+                db=db,
+                user=user,
             )
 
             # Must NOT call org-wide query
@@ -57,10 +61,14 @@ class TestListSignalsTopicFilter:
             mock_db.list_signals = AsyncMock(return_value=([], 0))
 
             await list_signals(
-                status="new", topic_id=None,
-                since=None, until=None,
-                limit=50, offset=0,
-                db=db, user=user,
+                status="new",
+                topic_id=None,
+                since=None,
+                until=None,
+                limit=50,
+                offset=0,
+                db=db,
+                user=user,
             )
 
             # Org-scoped when no topic_id
@@ -70,7 +78,8 @@ class TestListSignalsTopicFilter:
     @pytest.mark.asyncio
     async def test_time_filtered_with_topic_id_passes_topic(self):
         """Time-range queries with topic_id must also filter by topic."""
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
+
         from anveshak.api.routes.signals import list_signals
 
         db = AsyncMock()
@@ -82,12 +91,21 @@ class TestListSignalsTopicFilter:
             mock_db.list_signals_filtered = AsyncMock(return_value=[])
 
             await list_signals(
-                status="new", topic_id="topic-123",
-                since=since, until=until,
-                limit=50, offset=0,
-                db=db, user=user,
+                status="new",
+                topic_id="topic-123",
+                since=since,
+                until=until,
+                limit=50,
+                offset=0,
+                db=db,
+                user=user,
             )
 
             mock_db.list_signals_filtered.assert_awaited_once_with(
-                db, "new", since, until, topic_id="topic-123", org_id="org_cyber",
+                db,
+                "new",
+                since,
+                until,
+                topic_id="topic-123",
+                org_id="org_cyber",
             )

@@ -10,6 +10,7 @@ Only *hard* failures (connection errors, HTTP errors, empty responses) increment
 the consecutive failure counter.  Soft warnings (paywall heuristic, short content)
 set status to ``degraded`` but do NOT accumulate toward ``down``.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -18,7 +19,7 @@ from typing import Optional
 import httpx
 import structlog
 
-from .fetch import fetch_url, validate_onion_url, _trafilatura_fetch
+from .fetch import fetch_url, validate_onion_url
 from .metrics import scraper_circuit_breaker_total
 from .settings import settings
 
@@ -30,10 +31,15 @@ _BROWSER_UA = (
 )
 # Only patterns that strongly indicate a hard paywall gate — generic nav-bar
 # words like "subscribe" cause false positives on almost every news site.
-_PAYWALL_PATTERNS = frozenset({
-    "paywall", "premium content",
-    "sign in to read", "create an account", "subscribers only",
-})
+_PAYWALL_PATTERNS = frozenset(
+    {
+        "paywall",
+        "premium content",
+        "sign in to read",
+        "create an account",
+        "subscribers only",
+    }
+)
 
 SQL_GET_ALL_ACTIVE_SOURCES = """
     SELECT id, url_or_handle, platform, consecutive_failures, health_status
@@ -54,7 +60,7 @@ SQL_UPDATE_HEALTH = """
 
 @dataclass
 class HealthResult:
-    status: str           # healthy | degraded | down
+    status: str  # healthy | degraded | down
     error: Optional[str]  # None when healthy
     hard_failure: bool = field(default=True)  # False for soft warnings (paywall heuristic)
 
@@ -71,6 +77,7 @@ async def check_rss_health(url: str) -> HealthResult:
             resp.raise_for_status()
 
         import asyncio
+
         import feedparser  # lazy — only imported in scraper worker
 
         loop = asyncio.get_event_loop()
@@ -95,6 +102,7 @@ async def check_darkweb_health(url: str) -> HealthResult:
 
     try:
         import inspect
+
         client_kwargs: dict = {
             "timeout": settings.darkweb_request_timeout_s,
             "follow_redirects": True,
@@ -130,13 +138,25 @@ async def check_web_health(url: str) -> HealthResult:
     try:
         text = await fetch_url(url)
         if not text:
-            return HealthResult("degraded", "Fetch returned no content — may be blocked or paywalled", hard_failure=True)
+            return HealthResult(
+                "degraded",
+                "Fetch returned no content — may be blocked or paywalled",
+                hard_failure=True,
+            )
         if len(text) < 200:
-            return HealthResult("degraded", f"Content too short ({len(text)} chars) — possible paywall", hard_failure=False)
+            return HealthResult(
+                "degraded",
+                f"Content too short ({len(text)} chars) — possible paywall",
+                hard_failure=False,
+            )
         lower = text.lower()
         for pattern in _PAYWALL_PATTERNS:
             if pattern in lower:
-                return HealthResult("degraded", f"Possible paywall detected: '{pattern}' found in content", hard_failure=False)
+                return HealthResult(
+                    "degraded",
+                    f"Possible paywall detected: '{pattern}' found in content",
+                    hard_failure=False,
+                )
         return HealthResult("healthy", None)
     except Exception as exc:
         return HealthResult("degraded", str(exc)[:200], hard_failure=True)
@@ -185,7 +205,10 @@ async def run_all_health_checks(db_pool) -> int:
             async with db_pool.acquire() as conn:
                 await conn.execute(
                     SQL_UPDATE_HEALTH,
-                    source_id, new_status, new_failures, result.error,
+                    source_id,
+                    new_status,
+                    new_failures,
+                    result.error,
                 )
 
             # Circuit breaker recovery: log when a "down" source comes back

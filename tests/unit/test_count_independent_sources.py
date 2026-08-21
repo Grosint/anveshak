@@ -4,7 +4,6 @@ pytest.mark.unit — pure function, no DB, no network.
 count_independent_sources counts distinct platform strings — this is the
 core correctness guarantee for signal_threshold logic.
 """
-import pytest
 
 from anveshak.analyst.clustering import count_independent_sources
 

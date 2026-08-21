@@ -1,8 +1,9 @@
 """Source Assessment model — immutable source intelligence card.
 
-Follows Report immutability pattern (CLAUDE.md rule 4):
+Follows Report immutability pattern (AGENTS.md rule 4):
 generated_at is set ONCE via WHERE generated_at IS NULL guard.
 """
+
 from __future__ import annotations
 
 from datetime import datetime

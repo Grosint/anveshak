@@ -7,6 +7,7 @@ Tests:
   - Short/empty text → empty list
   - Keywords are non-empty strings
 """
+
 from __future__ import annotations
 
 import pytest
@@ -23,7 +24,6 @@ region.
 
 
 class TestExtractKeywords:
-
     def test_extracts_relevant_keywords(self):
         from anveshak.analyst.keywords import extract_keywords
 
@@ -34,7 +34,7 @@ class TestExtractKeywords:
         assert any("navy" in kw or "maritime" in kw or "exercise" in kw for kw in kw_texts)
 
     def test_returns_keyword_result_type(self):
-        from anveshak.analyst.keywords import extract_keywords, KeywordResult
+        from anveshak.analyst.keywords import KeywordResult, extract_keywords
 
         results = extract_keywords(SAMPLE_TEXT)
         assert all(isinstance(r, KeywordResult) for r in results)

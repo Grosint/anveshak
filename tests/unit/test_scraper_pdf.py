@@ -8,6 +8,7 @@ Tests:
 
 pytest.mark.unit — uses mock bytes, no real PDFs.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -90,8 +91,6 @@ class TestFetchPdfText:
     async def test_fetches_and_extracts(self):
         from anveshak.scraper.pdf_extract import fetch_pdf_text
 
-        import httpx as real_httpx
-
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.content = b"%PDF-data"
@@ -101,8 +100,10 @@ class TestFetchPdfText:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.get = AsyncMock(return_value=mock_resp)
 
-        with patch("httpx.AsyncClient", return_value=mock_client), \
-             patch("anveshak.scraper.pdf_extract.extract_pdf_text") as mock_extract:
+        with (
+            patch("httpx.AsyncClient", return_value=mock_client),
+            patch("anveshak.scraper.pdf_extract.extract_pdf_text") as mock_extract,
+        ):
             mock_extract.return_value = "Extracted PDF text."
 
             result = await fetch_pdf_text("https://example.com/report.pdf")

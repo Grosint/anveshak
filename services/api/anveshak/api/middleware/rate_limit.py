@@ -12,6 +12,7 @@ Limits (per 60-second window):
 
 8D.4: Exceeded → HTTP 429 JSON {"detail": "Rate limit exceeded", "retry_after": N}
 """
+
 from __future__ import annotations
 
 import time
@@ -90,8 +91,9 @@ def _jwt_sub(request: Request) -> str | None:
     if not auth.startswith("Bearer "):
         return None
     try:
-        import json
         import base64
+        import json
+
         token = auth.removeprefix("Bearer ")
         payload_b64 = token.split(".")[1]
         payload_b64 += "=" * (-len(payload_b64) % 4)

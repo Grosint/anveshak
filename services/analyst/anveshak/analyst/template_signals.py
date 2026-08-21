@@ -12,6 +12,7 @@ delivery, same status flow (new -> acknowledged -> dismissed).
 Signals table cluster_id FK references narrative_clusters — template
 signal references go in evidence JSONB instead, cluster_id set NULL.
 """
+
 from __future__ import annotations
 
 import json
@@ -21,6 +22,7 @@ from typing import Awaitable, Callable
 
 import asyncpg
 import structlog
+from anveshak.db import DBConnection
 
 from .metrics import analyst_signals_fired_total
 
@@ -91,6 +93,7 @@ SQL_INSERT_SIGNAL = """
 # ---------------------------------------------------------------------------
 # Pure functions
 # ---------------------------------------------------------------------------
+
 
 def compute_template_match_threshold(severity: str) -> int:
     """Map template severity to required match count in 24h window.
@@ -172,8 +175,9 @@ def build_template_signal_payload(
 # Async DB functions
 # ---------------------------------------------------------------------------
 
+
 async def is_duplicate_template_signal(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     template_name: str,
     topic_id: str,
 ) -> bool:
@@ -187,7 +191,7 @@ async def is_duplicate_template_signal(
 
 
 async def fire_template_signal(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     *,
     topic_id: str,
     template_name: str,
@@ -216,16 +220,18 @@ async def fire_template_signal(
         match_count=match_count,
         max_confidence=confidence,
     )
-    evidence = json.dumps(build_template_evidence(
-        template_name=template_name,
-        template_display=template_display,
-        confidence=confidence,
-        matched_keywords=matched_keywords,
-        extracted_identifiers=extracted_identifiers,
-        legal_sections=legal_sections,
-        content_item_id=content_item_id,
-        match_count=match_count,
-    ))
+    evidence = json.dumps(
+        build_template_evidence(
+            template_name=template_name,
+            template_display=template_display,
+            confidence=confidence,
+            matched_keywords=matched_keywords,
+            extracted_identifiers=extracted_identifiers,
+            legal_sections=legal_sections,
+            content_item_id=content_item_id,
+            match_count=match_count,
+        )
+    )
 
     await conn.execute(
         SQL_INSERT_SIGNAL,

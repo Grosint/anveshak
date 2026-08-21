@@ -4,10 +4,11 @@ Called at the end of analyse_content after NLP enrichment.
 Fires are inserted into keyword_alert_triggers table.
 Non-critical enrichment: failures are logged, never crash the pipeline.
 """
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 import asyncpg
 import structlog

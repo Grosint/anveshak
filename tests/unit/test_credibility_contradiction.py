@@ -3,14 +3,13 @@
 pytest.mark.unit -- no external dependencies, no DB, no network.
 All DB calls mocked with AsyncMock.
 """
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from anveshak.analyst.credibility import run_contradiction_update, clamp_score
-
+from anveshak.analyst.credibility import run_contradiction_update
 
 _MOD = "anveshak.analyst.credibility"
 
@@ -56,9 +55,9 @@ def _make_pool(source_rows: list[dict]) -> AsyncMock:
 # Tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestContradictionDropsHighNoiseRatio:
-
     @pytest.mark.asyncio
     async def test_drops_high_noise_ratio(self):
         """8/10 noise ratio (0.8) >= 0.6 threshold → score reduced by 5.0."""
@@ -86,7 +85,6 @@ class TestContradictionDropsHighNoiseRatio:
 
 @pytest.mark.unit
 class TestContradictionSkipsBelowRatio:
-
     @pytest.mark.asyncio
     async def test_skips_below_ratio_threshold(self):
         """4/10 noise ratio (0.4) < 0.6 threshold → skip."""
@@ -110,7 +108,6 @@ class TestContradictionSkipsBelowRatio:
 
 @pytest.mark.unit
 class TestContradictionSkipsMinDrop:
-
     @pytest.mark.asyncio
     async def test_skips_when_drop_below_min(self):
         """old_score 0.5, new would be 0.0 (clamped) → |0.5 - 0.0| = 0.5 > 1.0? No.
@@ -140,7 +137,6 @@ class TestContradictionSkipsMinDrop:
 
 @pytest.mark.unit
 class TestContradictionDivisionByZero:
-
     @pytest.mark.asyncio
     async def test_division_by_zero_safe(self):
         """total_count=0 → noise_ratio=0.0 → skip (below threshold)."""
@@ -165,7 +161,6 @@ class TestContradictionDivisionByZero:
 
 @pytest.mark.unit
 class TestContradictionClampsScore:
-
     @pytest.mark.asyncio
     async def test_clamps_score_to_zero(self):
         """Score 3.0 - drop 5.0 = -2.0 → clamped to 0.0 (never negative)."""
@@ -195,7 +190,6 @@ class TestContradictionClampsScore:
 
 @pytest.mark.unit
 class TestContradictionAuditLog:
-
     @pytest.mark.asyncio
     async def test_audit_log_written(self):
         """apply_credibility_drop called with correct source_id, old, new scores."""
@@ -224,4 +218,6 @@ class TestContradictionAuditLog:
         assert kwargs["old_score"] == 60.0
         assert kwargs["new_score"] == 55.0
         assert "reason" in kwargs
-        assert "noise ratio" in kwargs["reason"].lower() or "unclustered" in kwargs["reason"].lower()
+        assert (
+            "noise ratio" in kwargs["reason"].lower() or "unclustered" in kwargs["reason"].lower()
+        )

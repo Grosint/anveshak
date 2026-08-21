@@ -7,6 +7,7 @@ Revision ID: 007
 Revises: 006
 Create Date: 2026-05-29 00:00:00.000000
 """
+
 from alembic import op
 
 revision = "007"
@@ -69,9 +70,7 @@ def upgrade() -> None:
     op.execute("UPDATE topics SET org_id = 'org-anshul' WHERE org_id IS NULL")
     op.execute("UPDATE sources SET org_id = 'org-anshul' WHERE org_id IS NULL")
     op.execute("UPDATE content_items SET org_id = 'org-anshul' WHERE org_id IS NULL")
-    op.execute(
-        "UPDATE credibility_audit_log SET org_id = 'org-anshul' WHERE org_id IS NULL"
-    )
+    op.execute("UPDATE credibility_audit_log SET org_id = 'org-anshul' WHERE org_id IS NULL")
 
     # ------------------------------------------------------------------
     # 5. Set NOT NULL + FK constraints

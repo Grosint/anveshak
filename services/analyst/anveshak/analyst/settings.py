@@ -15,8 +15,17 @@ class AnalystSettings(BaseSettings):
     # Upgrade: facebook/nllb-200-1.3B or facebook/nllb-200-3.3B on GPU.
     translation_enabled: bool = True
     translation_model: str = "facebook/nllb-200-distilled-600M"
-    translation_max_chars: int = 1500    # truncate before translation (Chinese chars ≈ 1 token each)
-    translation_max_tokens: int = 512    # max output tokens per translation call
+    translation_max_chars: int = 1500  # truncate before translation (Chinese chars ≈ 1 token each)
+    translation_max_tokens: int = 512  # max output tokens per translation call
+    # Hard cap on ENCODER INPUT tokens. translation_max_chars is a character
+    # budget and cannot bound tokens: 1500 Devanagari chars tokenise to ~514,
+    # which overruns the model's 512 position limit and sends generation into a
+    # degenerate regime that never terminates. Must stay below the model limit.
+    translation_max_input_tokens: int = 480
+    # Threads per torch op. Torch defaults to os.cpu_count(), so max_jobs
+    # concurrent analyse jobs oversubscribe every core (4 jobs x 12 threads on
+    # 12 cores). Hardware-controlled, see hardware.md.
+    torch_num_threads: int = 2
 
     # Embeddings — hardware-controlled, see hardware.md
     embedding_model: str = "all-MiniLM-L6-v2"
@@ -29,34 +38,40 @@ class AnalystSettings(BaseSettings):
     llm_max_tokens: int = 512
 
     # Clustering — Leiden community detection on blended similarity graph
-    clustering_similarity_threshold: float = 0.55  # min blended similarity to form an edge in the graph
-    clustering_min_cluster_size: int = 2            # communities smaller than this are discarded
-    clustering_window_days: int = 30      # only cluster content from last N days (0 = no filter)
+    clustering_similarity_threshold: float = (
+        0.55  # min blended similarity to form an edge in the graph
+    )
+    clustering_min_cluster_size: int = 2  # communities smaller than this are discarded
+    clustering_window_days: int = 30  # only cluster content from last N days (0 = no filter)
     cluster_archive_after_days: int = 90  # archive clusters older than N days
     cluster_assign_threshold: float = 0.60  # cosine sim to assign new item to existing cluster
-    entity_blend_weight: float = 0.3        # weight of entity similarity in distance matrix (0=embedding only, 1=entity only)
-    minhash_num_perm: int = 128             # MinHash permutations (higher=more accurate, slower)
+    entity_blend_weight: float = (
+        0.3  # weight of entity similarity in distance matrix (0=embedding only, 1=entity only)
+    )
+    minhash_num_perm: int = 128  # MinHash permutations (higher=more accurate, slower)
 
     # Label staleness detection
     label_staleness_change_threshold: float = 0.30  # re-label if >30% items changed
 
     # Credibility auto-update (deepfake drop — 7.3, 7.4)
     credibility_update_interval_s: int = 86400  # 24h
-    credibility_deepfake_drop: float = 1.0      # pts subtracted per high-risk deepfake item
-    credibility_min_auto_drop: float = 1.0      # minimum drop delta to write audit log (noise filter)
+    credibility_deepfake_drop: float = 1.0  # pts subtracted per high-risk deepfake item
+    credibility_min_auto_drop: float = 1.0  # minimum drop delta to write audit log (noise filter)
 
     # Cross-verification boost (7.1) — hardware-controlled, see hardware.md
-    credibility_high_threshold: float = 60.0    # min score for a source to be "high credibility"
-    credibility_cross_verify_boost: float = 5.0 # pts added per cross-verification pass
-    credibility_min_auto_boost: float = 1.0     # minimum boost delta to write audit log (separate from drops)
+    credibility_high_threshold: float = 60.0  # min score for a source to be "high credibility"
+    credibility_cross_verify_boost: float = 5.0  # pts added per cross-verification pass
+    credibility_min_auto_boost: float = (
+        1.0  # minimum boost delta to write audit log (separate from drops)
+    )
 
     # Contradiction scoring (7.2)
-    credibility_contradiction_drop: float = 5.0       # pts subtracted per contradiction pass
-    credibility_noise_ratio_threshold: float = 0.6    # fraction of unclustered items to trigger drop
-    credibility_contradiction_min_items: int = 5      # source must have >= N items to be evaluated
+    credibility_contradiction_drop: float = 5.0  # pts subtracted per contradiction pass
+    credibility_noise_ratio_threshold: float = 0.6  # fraction of unclustered items to trigger drop
+    credibility_contradiction_min_items: int = 5  # source must have >= N items to be evaluated
 
     # Content quality gate — skip embedding for boilerplate/nav text
-    content_min_length: int = 100           # min clean_text chars to embed
+    content_min_length: int = 100  # min clean_text chars to embed
     content_min_unique_word_ratio: float = 0.4  # unique words / total words
     content_max_punctuation_ratio: float = 0.3  # punctuation chars / total chars
 
@@ -69,37 +84,37 @@ class AnalystSettings(BaseSettings):
     # Auto-calibration of per-topic relevance thresholds
     # Runs periodically, computes percentile of score distribution per topic,
     # and sets topics.topic_relevance_threshold so ~60% of content survives.
-    relevance_calibration_interval_s: int = 21600       # 6 hours
-    relevance_calibration_target_pct: float = 0.40      # percentile cutoff (keep top 60%)
-    relevance_calibration_floor: float = 0.08           # never accept pure noise
-    relevance_calibration_ceiling: float = 0.50         # never filter everything
-    relevance_calibration_min_items: int = 20           # skip topics with too few scored items
+    relevance_calibration_interval_s: int = 21600  # 6 hours
+    relevance_calibration_target_pct: float = 0.40  # percentile cutoff (keep top 60%)
+    relevance_calibration_floor: float = 0.08  # never accept pure noise
+    relevance_calibration_ceiling: float = 0.50  # never filter everything
+    relevance_calibration_min_items: int = 20  # skip topics with too few scored items
 
     # Near-duplicate detection (semantic dedup)
     near_duplicate_similarity_threshold: float = 0.95  # cosine similarity floor
     near_duplicate_batch_size: int = 200  # max items to compare per topic per run
 
     # pgvector HNSW index — migration-only params, see hardware.md
-    hnsw_m: int = 16                  # max connections per layer
-    hnsw_ef_construction: int = 64    # build-time search width
+    hnsw_m: int = 16  # max connections per layer
+    hnsw_ef_construction: int = 64  # build-time search width
 
     # Engine C — Identifier intelligence
-    identifier_extraction_enabled: bool = True    # extract phones, UPI, crypto, etc. from content
-    template_matching_enabled: bool = True         # match content against scam/fraud templates
-    identifier_cluster_interval_s: int = 300       # identifier clustering loop interval (seconds)
+    identifier_extraction_enabled: bool = True  # extract phones, UPI, crypto, etc. from content
+    template_matching_enabled: bool = True  # match content against scam/fraud templates
+    identifier_cluster_interval_s: int = 300  # identifier clustering loop interval (seconds)
 
     # Signal engine
     signal_check_interval_s: int = 300  # check every 5 minutes
 
     # Sentiment shift signal — fires when avg compound drops sharply
-    sentiment_shift_threshold: float = 0.3    # min compound drop to trigger signal
-    sentiment_shift_window_hours: int = 24    # recent window to compare
-    sentiment_shift_baseline_days: int = 7    # baseline average window
+    sentiment_shift_threshold: float = 0.3  # min compound drop to trigger signal
+    sentiment_shift_window_hours: int = 24  # recent window to compare
+    sentiment_shift_baseline_days: int = 7  # baseline average window
 
     # Cross-topic cluster convergence
     cross_topic_similarity_threshold: float = 0.85  # centroid cosine similarity
-    cross_topic_check_interval_s: int = 900         # 15 minutes (0 = disabled)
-    cross_topic_max_pairs: int = 50                  # max convergence pairs per cycle
+    cross_topic_check_interval_s: int = 900  # 15 minutes (0 = disabled)
+    cross_topic_max_pairs: int = 50  # max convergence pairs per cycle
 
     # Historical backfill — criterion 2.9
     backfill_similarity_threshold: float = 0.85  # cosine similarity floor; see hardware.md

@@ -28,6 +28,7 @@ JSON log line emitted in production::
      "logger": "anveshak.scraper.main", "event": "scraper.ready",
      "service": "scraper", "environment": "production", "port": 8001}
 """
+
 from __future__ import annotations
 
 import logging
@@ -70,8 +71,7 @@ def configure_logging(service: str) -> None:
         final_renderer = structlog.dev.ConsoleRenderer(colors=True)
 
     structlog.configure(
-        processors=shared_processors
-        + [structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
+        processors=shared_processors + [structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
         wrapper_class=structlog.stdlib.BoundLogger,
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),

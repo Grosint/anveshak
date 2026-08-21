@@ -2,19 +2,24 @@
 
 Models are loaded ONCE via load_models() at service startup, not per-request.
 """
+
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import structlog
 
 from .settings import settings
 
+if TYPE_CHECKING:
+    from spacy.language import Language
+
 log = structlog.get_logger(__name__)
 
 # Module-level model registry — populated by load_models() at startup (criteria 1.17).
-_MODELS: dict[str, "spacy.Language"] = {}  # noqa: F821
+_MODELS: dict[str, "Language"] = {}
 
 # Texts shorter than this are too ambiguous for langdetect — default to 'en'.
 _MIN_LANGDETECT_LEN = 30
@@ -34,17 +39,13 @@ def load_models() -> None:
         _MODELS["en"] = spacy.load(model_name)
         log.info("nlp.model_loaded", lang="en", model=model_name)
     except OSError as exc:
-        raise RuntimeError(
-            f"spaCy model '{model_name}' failed to load: {exc}"
-        ) from exc
+        raise RuntimeError(f"spaCy model '{model_name}' failed to load: {exc}") from exc
 
 
 def get_loaded_models() -> dict[str, bool]:
     """Return which spaCy models are loaded. Used by health checks."""
     return {lang: lang in _MODELS for lang in ["en"]}
 
-
-import re
 
 _RE_URL = re.compile(r"https?://\S+")
 _RE_MARKDOWN_LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
@@ -69,7 +70,8 @@ def detect_language(text: str) -> str:
     if len(cleaned.strip()) < _MIN_LANGDETECT_LEN:
         return "en"
     try:
-        from langdetect import detect, LangDetectException
+        from langdetect import detect
+
         lang = detect(cleaned)
     except Exception:
         return "en"
@@ -82,8 +84,11 @@ def detect_language(text: str) -> str:
     # Translation (NLLB) uses this to decide whether to translate to English.
     # NER will fall back to the English model in parse_entities().
     if lang != "en" and lang not in _MODELS:
-        log.info("nlp.non_english_detected", detected=lang,
-                 note="no spaCy model for this language; NER will use English model")
+        log.info(
+            "nlp.non_english_detected",
+            detected=lang,
+            note="no spaCy model for this language; NER will use English model",
+        )
     return lang
 
 
@@ -102,9 +107,10 @@ def _get_nlp(lang: str):
 @dataclass
 class EntityDTO:
     """Lightweight DTO for NER output — no DB dependency."""
-    entity_type: str    # PERSON | ORG | LOCATION | FACILITY | DATE | EVENT | …
+
+    entity_type: str  # PERSON | ORG | LOCATION | FACILITY | DATE | EVENT | …
     entity_text: str
-    confidence: float   # spaCy v3 doesn't expose per-span confidence; always 1.0
+    confidence: float  # spaCy v3 doesn't expose per-span confidence; always 1.0
     language: str
 
 

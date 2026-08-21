@@ -6,6 +6,7 @@ Tests:
   - Topic similarity uses pgvector distance
   - Cluster duplicates use cosine similarity threshold
 """
+
 from __future__ import annotations
 
 import pytest
@@ -14,7 +15,6 @@ pytestmark = pytest.mark.unit
 
 
 class TestEntityCooccurrenceSQL:
-
     def test_cooccurrence_query_has_topic_filter(self):
         from anveshak.api.routes.intelligence import SQL_ENTITY_COOCCURRENCE
 
@@ -34,7 +34,6 @@ class TestEntityCooccurrenceSQL:
 
 
 class TestTopicSimilaritySQL:
-
     def test_similarity_query_uses_pgvector(self):
         from anveshak.api.routes.intelligence import SQL_TOPIC_SIMILARITY
 
@@ -52,7 +51,6 @@ class TestTopicSimilaritySQL:
 
 
 class TestClusterDuplicatesSQL:
-
     def test_duplicates_query_uses_cosine_distance(self):
         from anveshak.api.routes.intelligence import SQL_CLUSTER_DUPLICATES
 
@@ -70,7 +68,6 @@ class TestClusterDuplicatesSQL:
 
 
 class TestSourceDiscoverySQL:
-
     def test_outbound_links_extracts_urls(self):
         from anveshak.api.routes.intelligence import SQL_OUTBOUND_LINKS
 

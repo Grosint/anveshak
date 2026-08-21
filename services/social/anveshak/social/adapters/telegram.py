@@ -6,11 +6,11 @@ Media attachments are downloaded to the configured media path for Phase 4 ingest
 
 Session string is generated once via scripts/bootstrap_telegram_session.py.
 """
+
 from __future__ import annotations
 
-import asyncio
 import os
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -24,21 +24,21 @@ from telethon.errors import (
     UserDeactivatedBanError,
 )
 from telethon.sessions import StringSession
-from telethon.tl.types import MessageMediaPhoto, MessageMediaDocument
+from telethon.tl.types import MessageMediaDocument, MessageMediaPhoto
 
+from ..settings import settings
 from .base import (
     AdapterAuthError,
-    AdapterDegradedError,
     AdapterRateLimitError,
     RawItem,
     SourceAdapterBase,
+    require_client,
 )
-from ..settings import settings
 
 log = structlog.get_logger(__name__)
 
 _MEDIA_BASE = Path(os.environ.get("MEDIA_STORAGE_ROOT", "/app/media"))
-_MESSAGES_PER_CHANNEL = 50   # max messages per poll cycle per channel
+_MESSAGES_PER_CHANNEL = 50  # max messages per poll cycle per channel
 
 
 class TelegramAdapter(SourceAdapterBase):
@@ -63,13 +63,14 @@ class TelegramAdapter(SourceAdapterBase):
     async def authenticate(self) -> None:
         """Connect with StringSession from settings (criteria 3.6)."""
         if not settings.telegram_adapter_enabled:
-            log.warning("social.adapter_disabled", adapter=self.adapter_id,
-                        hint="Set TELEGRAM_ADAPTER_ENABLED=true to activate")
+            log.warning(
+                "social.adapter_disabled",
+                adapter=self.adapter_id,
+                hint="Set TELEGRAM_ADAPTER_ENABLED=true to activate",
+            )
             return
         if not settings.telegram_api_id or not settings.telegram_api_hash:
-            raise AdapterAuthError(
-                "TELEGRAM_API_ID and TELEGRAM_API_HASH are required"
-            )
+            raise AdapterAuthError("TELEGRAM_API_ID and TELEGRAM_API_HASH are required")
         if not settings.telegram_session_string:
             raise AdapterAuthError(
                 "TELEGRAM_SESSION_STRING not set. "
@@ -89,13 +90,9 @@ class TelegramAdapter(SourceAdapterBase):
                 )
             log.info("telegram.authenticated")
         except SessionExpiredError as exc:
-            raise AdapterAuthError(
-                "Telegram session expired — regenerate session string"
-            ) from exc
+            raise AdapterAuthError("Telegram session expired — regenerate session string") from exc
         except UserDeactivatedBanError as exc:
-            raise AdapterAuthError(
-                "Telegram account is banned"
-            ) from exc
+            raise AdapterAuthError("Telegram account is banned") from exc
         except (ConnectionError, TimeoutError, OSError) as exc:
             raise AdapterAuthError(
                 f"Telegram connection failed — check network/firewall: {exc}"
@@ -139,17 +136,23 @@ class TelegramAdapter(SourceAdapterBase):
             channel_id = self._normalise_handle(handle)
             entity = await self._client.get_entity(channel_id)
             full = await self._client(
-                __import__("telethon.tl.functions.channels", fromlist=["GetFullChannelRequest"])
-                .GetFullChannelRequest(channel=entity)
+                __import__(
+                    "telethon.tl.functions.channels", fromlist=["GetFullChannelRequest"]
+                ).GetFullChannelRequest(channel=entity)
             )
-            chat = full.chats[0] if full.chats else entity
-            full_chat = full.full_chat
+            # telethon types client(request) as list; GetFullChannelRequest
+            # actually returns a ChatFull with .chats and .full_chat.
+            chat = full.chats[0] if full.chats else entity  # pyright: ignore[reportAttributeAccessIssue]
+            full_chat = full.full_chat  # pyright: ignore[reportAttributeAccessIssue]
+            # Bind once: two separate getattr calls are not the same value to a
+            # type checker, and would not be at runtime either if chat mutated.
+            chat_date = getattr(chat, "date", None)
             return {
                 "title": getattr(chat, "title", None),
                 "username": getattr(chat, "username", None),
                 "about": getattr(full_chat, "about", None) or "",
                 "participants_count": getattr(full_chat, "participants_count", None),
-                "created_at": getattr(chat, "date", None).isoformat() if getattr(chat, "date", None) else None,
+                "created_at": chat_date.isoformat() if chat_date else None,
                 "is_verified": getattr(chat, "verified", False),
                 "is_scam": getattr(chat, "scam", False),
                 "is_fake": getattr(chat, "fake", False),
@@ -172,10 +175,9 @@ class TelegramAdapter(SourceAdapterBase):
         self, channel_id: str, handle: str, topic_id: str
     ) -> AsyncIterator[RawItem]:
         """Yield messages from one channel. Handles access errors gracefully (criteria 3.11)."""
+        client = require_client(self._client, "telegram")
         try:
-            async for message in self._client.iter_messages(
-                channel_id, limit=_MESSAGES_PER_CHANNEL
-            ):
+            async for message in client.iter_messages(channel_id, limit=_MESSAGES_PER_CHANNEL):
                 if not message.text and not message.media:
                     continue
 
@@ -198,10 +200,13 @@ class TelegramAdapter(SourceAdapterBase):
                 if message.forward and message.forward.chat:
                     fwd_chat = message.forward.chat
                     fwd_channel_id = str(fwd_chat.id)
-                    fwd_channel_name = getattr(fwd_chat, "title", None) or getattr(fwd_chat, "username", None)
+                    fwd_channel_name = getattr(fwd_chat, "title", None) or getattr(
+                        fwd_chat, "username", None
+                    )
                 elif message.forward and message.forward.from_id:
                     # from_id is a TypePeer (PeerChannel/PeerUser/PeerChat), not an int
                     from telethon import utils as tl_utils
+
                     fwd_channel_id = str(tl_utils.get_peer_id(message.forward.from_id))
 
                 # Capture engagement metrics (views/forwards) and reply threading
@@ -218,6 +223,7 @@ class TelegramAdapter(SourceAdapterBase):
                 author_id = None
                 if getattr(message, "from_id", None):
                     from telethon import utils as _tl_utils
+
                     try:
                         author_id = str(_tl_utils.get_peer_id(message.from_id))
                     except Exception:
@@ -227,7 +233,9 @@ class TelegramAdapter(SourceAdapterBase):
                     raw_text=text or f"[media] {msg_url}",
                     url=msg_url,
                     platform=self.platform,
-                    captured_at=message.date.replace(tzinfo=UTC) if message.date.tzinfo is None else message.date,
+                    captured_at=message.date.replace(tzinfo=UTC)
+                    if message.date.tzinfo is None
+                    else message.date,
                     source_handle=handle,
                     media_urls=media_urls,
                     forwarded_from_channel_id=fwd_channel_id,
@@ -238,9 +246,9 @@ class TelegramAdapter(SourceAdapterBase):
                 )
 
         except ChannelPrivateError:
-            log.warning("telegram.channel_private", channel=channel_id)   # criteria 3.11
+            log.warning("telegram.channel_private", channel=channel_id)  # criteria 3.11
         except ChannelInvalidError:
-            log.warning("telegram.channel_invalid", channel=channel_id)   # criteria 3.11
+            log.warning("telegram.channel_invalid", channel=channel_id)  # criteria 3.11
         except SessionExpiredError:
             log.warning("telegram.session_expired_mid_channel", channel=channel_id)
             self._needs_reauth = True
@@ -265,17 +273,28 @@ class TelegramAdapter(SourceAdapterBase):
 
             # Download to a temp name first; rename once we have the hash
             tmp_path = date_path / f"tmp_{message.id}"
-            downloaded = await self._client.download_media(message, file=str(tmp_path))
+            client = require_client(self._client, "telegram")
+            downloaded = await client.download_media(message, file=str(tmp_path))
             if not downloaded:
+                return None
+            if not isinstance(downloaded, str):
+                # Telethon returns bytes only when downloading to memory. We always
+                # pass a file path, so this means the call did something unexpected.
+                log.warning(
+                    "telegram.media_download_not_a_path",
+                    returned_type=type(downloaded).__name__,
+                )
                 return None
 
             # Compute hash of raw bytes and rename
             import hashlib
-            raw_bytes = Path(downloaded).read_bytes()
+
+            downloaded_path = Path(downloaded)
+            raw_bytes = downloaded_path.read_bytes()
             file_hash = hashlib.sha256(raw_bytes).hexdigest()
-            ext = Path(downloaded).suffix or ".bin"
+            ext = downloaded_path.suffix or ".bin"
             final_path = date_path / f"{file_hash}{ext}"
-            Path(downloaded).rename(final_path)
+            downloaded_path.rename(final_path)
             return final_path
         except Exception as exc:
             log.warning("telegram.media_download_failed", error=str(exc))

@@ -2,11 +2,10 @@
 
 pytest.mark.unit — no external dependencies.
 """
-import asyncio
-import time
+
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
 
 
 @pytest.fixture
@@ -27,7 +26,9 @@ class TestDomainRateLimiter:
         from anveshak.scraper.rate_limiter import DomainRateLimiter
 
         limiter = DomainRateLimiter()
-        with patch("anveshak.scraper.rate_limiter.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        with patch(
+            "anveshak.scraper.rate_limiter.asyncio.sleep", new_callable=AsyncMock
+        ) as mock_sleep:
             await limiter.wait("https://example.com/article1")
             mock_sleep.assert_not_awaited()
 
@@ -38,7 +39,9 @@ class TestDomainRateLimiter:
         from anveshak.scraper.rate_limiter import DomainRateLimiter
 
         limiter = DomainRateLimiter()
-        with patch("anveshak.scraper.rate_limiter.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        with patch(
+            "anveshak.scraper.rate_limiter.asyncio.sleep", new_callable=AsyncMock
+        ) as mock_sleep:
             await limiter.wait("https://example.com/page1")
             await limiter.wait("https://example.com/page2")
             # Second call should have triggered a sleep
@@ -53,7 +56,9 @@ class TestDomainRateLimiter:
         from anveshak.scraper.rate_limiter import DomainRateLimiter
 
         limiter = DomainRateLimiter()
-        with patch("anveshak.scraper.rate_limiter.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        with patch(
+            "anveshak.scraper.rate_limiter.asyncio.sleep", new_callable=AsyncMock
+        ) as mock_sleep:
             await limiter.wait("https://example.com/page1")
             await limiter.wait("https://other.com/page1")
             # No sleep — different domains
@@ -68,7 +73,9 @@ class TestDomainRateLimiter:
         from anveshak.scraper.rate_limiter import DomainRateLimiter
 
         limiter = DomainRateLimiter()
-        with patch("anveshak.scraper.rate_limiter.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        with patch(
+            "anveshak.scraper.rate_limiter.asyncio.sleep", new_callable=AsyncMock
+        ) as mock_sleep:
             await limiter.wait("https://example.com/page1")
             await limiter.wait("https://example.com/page2")
             assert mock_sleep.await_count == 1

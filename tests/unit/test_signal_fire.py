@@ -9,9 +9,11 @@ Bugs caught:
 
 pytest.mark.unit — no DB, no Redis, no external dependencies.
 """
+
 import json
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 pytestmark = pytest.mark.unit
 
@@ -42,7 +44,6 @@ def _cluster_row(cluster_id: str, topic_id: str, label, isc: int, threshold: int
 
 
 class TestFireSignal:
-
     @pytest.mark.asyncio
     @patch("anveshak.analyst.signal_engine.analyst_signals_fired_total")
     async def test_dedup_returns_none(self, mock_metric):
@@ -53,7 +54,8 @@ class TestFireSignal:
         # is_duplicate_signal does conn.fetchrow → returns a row (truthy)
         conn.fetchrow.return_value = {"id": "existing-signal-id"}
 
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
+
         result = await fire_signal(conn, "t1", "c1", "Test cluster", 3, datetime.now(UTC))
 
         assert result is None
@@ -68,7 +70,8 @@ class TestFireSignal:
         conn = AsyncMock()
         conn.fetchrow.return_value = None  # no duplicate
 
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
+
         result = await fire_signal(conn, "t1", "c1", "Test cluster", 3, datetime.now(UTC))
 
         assert result is not None
@@ -85,7 +88,8 @@ class TestFireSignal:
         conn = AsyncMock()
         conn.fetchrow.return_value = None
 
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
+
         await fire_signal(conn, "t1", "c1", "Test cluster", 5, datetime.now(UTC))
 
         # SQL_INSERT_SIGNAL args: signal_id, topic_id, cluster_id, signal_type, description, evidence, now
@@ -102,7 +106,6 @@ class TestFireSignal:
 
 
 class TestCheckSignals:
-
     @pytest.mark.asyncio
     @patch("anveshak.analyst.signal_engine.fire_signal", new_callable=AsyncMock)
     @patch("anveshak.analyst.signal_engine.build_signal_payload")

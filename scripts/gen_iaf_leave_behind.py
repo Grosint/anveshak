@@ -8,6 +8,7 @@ Must run inside the report-worker container (has WeasyPrint + DB access):
     docker exec anveshak-report-worker-1 python /tmp/gen_iaf_leave_behind.py
     docker cp anveshak-report-worker-1:/tmp/iaf_leave_behind.pdf .
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -34,58 +35,139 @@ OUTPUT_PATH = "/tmp/iaf_leave_behind.pdf"
 # ---------------------------------------------------------------------------
 _NOISE_ENTITIES = {
     # Global noise — not relevant to IAF air intelligence
-    "fifa", "iran", "pentagon", "lebanon", "spain",
-    "world cup", "ukraine", "russia", "gaza", "israel",
-    "turkey", "germany", "japan", "portugal", "croatia",
-    "south korea", "italy", "mexico", "copa", "euro",
-    "champions league", "premier league", "la liga",
+    "fifa",
+    "iran",
+    "pentagon",
+    "lebanon",
+    "spain",
+    "world cup",
+    "ukraine",
+    "russia",
+    "gaza",
+    "israel",
+    "turkey",
+    "germany",
+    "japan",
+    "portugal",
+    "croatia",
+    "south korea",
+    "italy",
+    "mexico",
+    "copa",
+    "euro",
+    "champions league",
+    "premier league",
+    "la liga",
     # Browser/HTML artifacts
-    "mozilla firefox", "google chrome", "safari", "webkit",
+    "mozilla firefox",
+    "google chrome",
+    "safari",
+    "webkit",
     # Geopolitical noise from scraped defence sites (not IAF-relevant)
-    "hezbollah", "venezuela", "mali", "morocco", "north africa",
-    "sweden", "indonesia", "egypt", "france", "switzerland",
-    "brazil", "argentina", "naval group", "pbc", "dixon",
-    "idf", "sipri",
+    "hezbollah",
+    "venezuela",
+    "mali",
+    "morocco",
+    "north africa",
+    "sweden",
+    "indonesia",
+    "egypt",
+    "france",
+    "switzerland",
+    "brazil",
+    "argentina",
+    "naval group",
+    "pbc",
+    "dixon",
+    "idf",
+    "sipri",
     # SIPRI/Bellingcat site boilerplate extracted by NER
-    "solna", "stockholm international", "stockholm international peace research institute sipri",
-    "sipri 2026", "codex h", "newsletter", "safran", "skysat",
-    "click 'cookie", "click 'cookie'", "cookie", "cookie policy",
-    "poland", "syria", "instagram", "reddit",
+    "solna",
+    "stockholm international",
+    "stockholm international peace research institute sipri",
+    "sipri 2026",
+    "codex h",
+    "newsletter",
+    "safran",
+    "skysat",
+    "click 'cookie",
+    "click 'cookie'",
+    "cookie",
+    "cookie policy",
+    "poland",
+    "syria",
+    "instagram",
+    "reddit",
     # More scraped site noise
-    "planet labs", "maxar", "airbus defence",
-    "consortium", "ambystoma", "carabelleda", "dubai", "georgia",
-    "nasa", "west africa programme", "programme", "army",
-    "boeing", "naval group",
+    "planet labs",
+    "maxar",
+    "airbus defence",
+    "consortium",
+    "ambystoma",
+    "carabelleda",
+    "dubai",
+    "georgia",
+    "nasa",
+    "west africa programme",
+    "programme",
+    "army",
+    "boeing",
+    "naval group",
     # HTML artifacts that leak through NER
-    "target=\"_blank", "target=\"_blank\"", "target=_blank",
-    "target=\"", "href=", "class=",
+    'target="_blank',
+    'target="_blank"',
+    "target=_blank",
+    'target="',
+    "href=",
+    "class=",
 }
 
 # HTML artifact detector — catches target=, href=, class= etc.
 _HTML_ARTIFACT_RE = re.compile(
-    r'target=|href=|src=|dir=|class=|style=|xmlns|</?[a-z]|\.css|\.js|'
-    r'mozilla|firefox|chrome|safari|webkit|opera|edge|trident|'
-    r'windows nt|macintosh|linux x86|compatible|gecko|applewebkit',
+    r"target=|href=|src=|dir=|class=|style=|xmlns|</?[a-z]|\.css|\.js|"
+    r"mozilla|firefox|chrome|safari|webkit|opera|edge|trident|"
+    r"windows nt|macintosh|linux x86|compatible|gecko|applewebkit",
     re.IGNORECASE,
 )
 
 _NOISE_DOMAINS = {
-    "facebook.com", "twitter.com", "x.com", "google.com",
-    "apple.co", "bit.ly", "t.co", "instagram.com",
+    "facebook.com",
+    "twitter.com",
+    "x.com",
+    "google.com",
+    "apple.co",
+    "bit.ly",
+    "t.co",
+    "instagram.com",
 }
 
 _LANG_NAMES = {
-    "en": "English", "hi": "Hindi", "zh": "Chinese", "ar": "Arabic",
-    "ur": "Urdu", "ru": "Russian", "fr": "French", "de": "German",
+    "en": "English",
+    "hi": "Hindi",
+    "zh": "Chinese",
+    "ar": "Arabic",
+    "ur": "Urdu",
+    "ru": "Russian",
+    "fr": "French",
+    "de": "German",
 }
 
 _TYPE_OVERRIDES = {
-    "hotan": "GPE", "kashgar": "GPE", "skardu": "GPE",
-    "lhasa": "GPE", "shigatse": "GPE", "ngari": "GPE",
-    "aksai chin": "GPE", "ladakh": "GPE", "xinjiang": "GPE",
+    "hotan": "GPE",
+    "kashgar": "GPE",
+    "skardu": "GPE",
+    "lhasa": "GPE",
+    "shigatse": "GPE",
+    "ngari": "GPE",
+    "aksai chin": "GPE",
+    "ladakh": "GPE",
+    "xinjiang": "GPE",
     # NER misclassifications
-    "bellingcat": "ORG", "plaaf": "ORG", "amca": "ORG",
-    "iaf": "ORG", "planet labs": "ORG",
+    "bellingcat": "ORG",
+    "plaaf": "ORG",
+    "amca": "ORG",
+    "iaf": "ORG",
+    "planet labs": "ORG",
 }
 
 
@@ -97,13 +179,12 @@ async def main() -> None:
 
     async with pool.acquire() as conn:
         # ── Topic name ──
-        topic = await conn.fetchrow(
-            "SELECT name, keywords FROM topics WHERE id = $1", TOPIC_ID
-        )
+        topic = await conn.fetchrow("SELECT name, keywords FROM topics WHERE id = $1", TOPIC_ID)
         assert topic, f"Topic {TOPIC_ID} not found"
 
         # ── Aggregate stats across all 3 IAF topics ──
-        stats = await conn.fetchrow("""
+        stats = await conn.fetchrow(
+            """
             SELECT
                 (SELECT COUNT(*) FROM content_items WHERE topic_id = ANY($1)) AS content_count,
                 (SELECT COUNT(DISTINCT source_id) FROM content_items WHERE topic_id = ANY($1)) AS source_count,
@@ -111,17 +192,22 @@ async def main() -> None:
                 (SELECT COUNT(*) FROM signals WHERE topic_id = ANY($1)) AS signal_count,
                 (SELECT MIN(captured_at) FROM content_items WHERE topic_id = ANY($1)) AS earliest,
                 (SELECT MAX(captured_at) FROM content_items WHERE topic_id = ANY($1)) AS latest
-        """, ALL_TOPIC_IDS)
+        """,
+            ALL_TOPIC_IDS,
+        )
 
         # ── Sources — use seed source rows only (iaf-src-*) for correct credibility ──
-        source_rows = await conn.fetch("""
+        source_rows = await conn.fetch(
+            """
             SELECT s.name, s.platform, s.credibility_score,
                    (SELECT COUNT(*) FROM content_items ci
                     WHERE ci.source_id = s.id AND ci.topic_id = ANY($1)) AS item_count
             FROM sources s
             WHERE s.id LIKE 'iaf-src-%'
             ORDER BY item_count DESC
-        """, ALL_TOPIC_IDS)
+        """,
+            ALL_TOPIC_IDS,
+        )
         sources = []
         for r in source_rows:
             d = dict(r)
@@ -130,13 +216,16 @@ async def main() -> None:
             sources.append(d)
 
         # ── Clusters from all IAF topics (top 15 by ISC, skip noise ISC=1) ──
-        cluster_rows = await conn.fetch("""
+        cluster_rows = await conn.fetch(
+            """
             SELECT label, item_count, independent_source_count, executive_summary
             FROM narrative_clusters
             WHERE topic_id = ANY($1) AND independent_source_count >= 2
             ORDER BY independent_source_count DESC, item_count DESC
             LIMIT 15
-        """, ALL_TOPIC_IDS)
+        """,
+            ALL_TOPIC_IDS,
+        )
         clusters = []
         for r in cluster_rows:
             d = dict(r)
@@ -146,7 +235,8 @@ async def main() -> None:
 
         # ── Signals — prioritize seed signals, then AI-generated ──
         # Seed signals first (hand-crafted, richer descriptions)
-        signal_rows = await conn.fetch("""
+        signal_rows = await conn.fetch(
+            """
             (SELECT s.signal_type, s.description, s.status, s.created_at
              FROM signals s
              WHERE s.topic_id = ANY($1) AND s.id LIKE 'iaf-sig-%'
@@ -162,7 +252,9 @@ async def main() -> None:
                AND s.description NOT ILIKE '%URL_DOMAIN%google%'
              ORDER BY s.created_at DESC
              LIMIT 30)
-        """, ALL_TOPIC_IDS)
+        """,
+            ALL_TOPIC_IDS,
+        )
         signals = []
         _CLUSTER_NAME_RE = re.compile(r"Cluster '([^']+)'")
         _IDENT_RE = re.compile(r"Identifier (\S+) '([^']+)'")
@@ -185,13 +277,16 @@ async def main() -> None:
         signals = signals[:10]
 
         # ── Identifiers across all topics ──
-        ident_rows = await conn.fetch("""
+        ident_rows = await conn.fetch(
+            """
             SELECT identifier_type, identifier_value, source_count, content_item_count
             FROM identifier_clusters
             WHERE topic_id = ANY($1)
             ORDER BY source_count DESC, content_item_count DESC
             LIMIT 15
-        """, ALL_TOPIC_IDS)
+        """,
+            ALL_TOPIC_IDS,
+        )
         identifiers = []
         for r in ident_rows:
             d = dict(r)
@@ -200,7 +295,8 @@ async def main() -> None:
             identifiers.append(d)
 
         # ── Top entities — aggressive noise filtering for IAF context ──
-        entity_rows = await conn.fetch("""
+        entity_rows = await conn.fetch(
+            """
             SELECT ee.entity_type,
                    INITCAP(LOWER(ee.entity_text)) AS entity_text,
                    SUM(cnt) AS mention_count
@@ -233,7 +329,9 @@ async def main() -> None:
             HAVING SUM(cnt) >= 3
             ORDER BY mention_count DESC
             LIMIT 60
-        """, ALL_TOPIC_IDS)
+        """,
+            ALL_TOPIC_IDS,
+        )
         # Merge duplicates (different casing → same entity) and filter noise
         merged: dict[str, dict] = {}
         for r in entity_rows:
@@ -246,7 +344,13 @@ async def main() -> None:
                 continue
             # Skip very short generic abbreviations (2-3 chars) unless known
             if len(text_lower) <= 3 and text_lower not in {
-                "iaf", "paf", "lac", "bsf", "ncb", "nia", "pla",
+                "iaf",
+                "paf",
+                "lac",
+                "bsf",
+                "ncb",
+                "nia",
+                "pla",
             }:
                 continue
             # Skip entities containing quotes/apostrophes (cookie banners etc)
@@ -266,23 +370,29 @@ async def main() -> None:
         entities = sorted(merged.values(), key=lambda x: x["mention_count"], reverse=True)[:20]
 
         # ── Language breakdown ──
-        lang_rows = await conn.fetch("""
+        lang_rows = await conn.fetch(
+            """
             SELECT COALESCE(language, 'unknown') AS language, COUNT(*) AS count
             FROM content_items
             WHERE topic_id = ANY($1) AND language IS NOT NULL
             GROUP BY language
             ORDER BY count DESC
-        """, ALL_TOPIC_IDS)
+        """,
+            ALL_TOPIC_IDS,
+        )
         language_breakdown = []
         for r in lang_rows:
             code = r["language"]
-            language_breakdown.append({
-                "language": _LANG_NAMES.get(code, code),
-                "count": r["count"],
-            })
+            language_breakdown.append(
+                {
+                    "language": _LANG_NAMES.get(code, code),
+                    "count": r["count"],
+                }
+            )
 
         # ── Evidence items from high-ISC clusters ──
-        evidence_rows = await conn.fetch("""
+        evidence_rows = await conn.fetch(
+            """
             SELECT ci.clean_text, ci.url, ci.captured_at, ci.credibility_score_at_capture,
                    s.name AS source_name, s.platform,
                    nc.label AS cluster_label
@@ -294,19 +404,23 @@ async def main() -> None:
               AND LENGTH(ci.clean_text) > 80
             ORDER BY nc.independent_source_count DESC, ci.captured_at DESC
             LIMIT 20
-        """, ALL_TOPIC_IDS)
+        """,
+            ALL_TOPIC_IDS,
+        )
         evidence_items = []
         for r in evidence_rows:
             text = r["clean_text"] or ""
-            evidence_items.append({
-                "title": r["cluster_label"],
-                "snippet": text[:300] + ("..." if len(text) > 300 else ""),
-                "url": r["url"] or "",
-                "captured_at": str(r["captured_at"]),
-                "credibility_score_at_capture": r["credibility_score_at_capture"] or 0,
-                "source_name": r["source_name"],
-                "platform": r["platform"],
-            })
+            evidence_items.append(
+                {
+                    "title": r["cluster_label"],
+                    "snippet": text[:300] + ("..." if len(text) > 300 else ""),
+                    "url": r["url"] or "",
+                    "captured_at": str(r["captured_at"]),
+                    "credibility_score_at_capture": r["credibility_score_at_capture"] or 0,
+                    "source_name": r["source_name"],
+                    "platform": r["platform"],
+                }
+            )
 
         # ── Keyword frequency from primary topic ──
         keywords_list = topic["keywords"] or []
@@ -315,12 +429,15 @@ async def main() -> None:
             count_row = await conn.fetchrow(
                 "SELECT COUNT(*) AS cnt FROM content_items "
                 "WHERE topic_id = ANY($1) AND clean_text ILIKE $2",
-                ALL_TOPIC_IDS, f"%{kw}%",
+                ALL_TOPIC_IDS,
+                f"%{kw}%",
             )
-            keyword_stats.append({
-                "keyword": kw,
-                "frequency": count_row["cnt"] if count_row else 0,
-            })
+            keyword_stats.append(
+                {
+                    "keyword": kw,
+                    "frequency": count_row["cnt"] if count_row else 0,
+                }
+            )
         keyword_stats.sort(key=lambda x: x["frequency"], reverse=True)
 
     await pool.close()

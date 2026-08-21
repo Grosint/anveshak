@@ -2,13 +2,12 @@
 
 pytest.mark.unit — no external dependencies, no DB, no network.
 """
-import pytest
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
-
+import pytest
 from anveshak.scraper.health import HealthResult, _next_status, check_web_health
-
 
 # ---------------------------------------------------------------------------
 # _next_status — pure function tests
@@ -138,8 +137,9 @@ class TestCheckRssHealth:
     @pytest.mark.asyncio
     async def test_check_rss_health_empty_entries(self):
         """Feed reachable but feedparser returns entries=[] → degraded, 'no entries'."""
-        from anveshak.scraper.health import check_rss_health
         import types
+
+        from anveshak.scraper.health import check_rss_health
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -155,11 +155,16 @@ class TestCheckRssHealth:
 
         empty_feed = types.SimpleNamespace(entries=[])
 
-        with patch("anveshak.scraper.health.httpx.AsyncClient", return_value=acm), \
-             patch("anveshak.scraper.health.feedparser.parse", return_value=empty_feed) if False else \
-             patch("anveshak.scraper.health.httpx.AsyncClient", return_value=acm):
+        with (
+            patch("anveshak.scraper.health.httpx.AsyncClient", return_value=acm),
+            patch("anveshak.scraper.health.feedparser.parse", return_value=empty_feed)
+            if False
+            else patch("anveshak.scraper.health.httpx.AsyncClient", return_value=acm),
+        ):
             # feedparser is lazy-imported inside the function, patch via the module
-            with patch.dict("sys.modules", {"feedparser": MagicMock(parse=MagicMock(return_value=empty_feed))}):
+            with patch.dict(
+                "sys.modules", {"feedparser": MagicMock(parse=MagicMock(return_value=empty_feed))}
+            ):
                 result = await check_rss_health("https://example.com/feed.xml")
 
         assert result.status == "degraded"
@@ -177,7 +182,9 @@ class TestCheckRssHealth:
         mock_client = AsyncMock()
         mock_client.get.return_value = mock_response
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "Forbidden", request=MagicMock(), response=mock_response,
+            "Forbidden",
+            request=MagicMock(),
+            response=mock_response,
         )
 
         acm = MagicMock()
@@ -263,9 +270,7 @@ class TestCheckWebHealthExtended:
     @patch("anveshak.scraper.health.fetch_url", new_callable=AsyncMock)
     async def test_paywall_uppercase(self, mock_fetch_url):
         """'SUBSCRIBERS ONLY' in uppercase → degraded because .lower() on line 136 catches it."""
-        mock_fetch_url.return_value = (
-            "THIS ARTICLE IS FOR SUBSCRIBERS ONLY. " * 10
-        )
+        mock_fetch_url.return_value = "THIS ARTICLE IS FOR SUBSCRIBERS ONLY. " * 10
         result = await check_web_health("https://example.com/premium")
         assert result.status == "degraded"
         assert result.hard_failure is False

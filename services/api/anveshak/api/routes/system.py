@@ -1,19 +1,18 @@
 """System endpoints — pipeline health, audit trail, failed jobs."""
+
 from __future__ import annotations
 
 from typing import Optional
 
-import asyncpg
 import structlog
-from fastapi import APIRouter, Depends, Query
-
-from fastapi import HTTPException
+from anveshak.db import DBConnection
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..auth.rbac import require_role
 from ..db import analytics as analytics_db
-from ..db import system as system_db
 from ..db import audit as audit_db
 from ..db import failed_jobs as failed_jobs_db
+from ..db import system as system_db
 from ..db import topics as topics_db
 from ..db.pool import get_db
 from ..pagination import paginate_rows
@@ -24,7 +23,7 @@ log = structlog.get_logger(__name__)
 
 @router.get("/pipeline-health")
 async def pipeline_health(
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("admin")),
 ):
     """Return live pipeline metrics for validation and monitoring.
@@ -39,7 +38,7 @@ async def pipeline_health(
 
 @router.get("/vector-health")
 async def vector_health(
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("admin")),
 ):
     """Return vector pipeline health metrics for validation.
@@ -54,11 +53,13 @@ async def vector_health(
 
 @router.get("/audit-trail")
 async def get_audit_trail(
-    resource_type: Optional[str] = Query(None, description="Filter by resource type (omit for all)"),
+    resource_type: Optional[str] = Query(
+        None, description="Filter by resource type (omit for all)"
+    ),
     resource_id: Optional[str] = Query(None, description="Filter by resource ID"),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0, description="Offset for cursor-based pagination"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Return audit trail entries. Analysts must provide resource_id (scoped to their org)."""
@@ -74,7 +75,7 @@ async def get_audit_trail(
 @router.get("/analytics-dashboard")
 async def analytics_dashboard(
     days: int = Query(30, ge=1, le=365),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Cross-topic aggregate analytics for the intelligence dashboard, org-scoped."""
@@ -88,7 +89,7 @@ async def analytics_dashboard(
 async def get_failed_jobs(
     queue_name: Optional[str] = Query(None, description="Filter by ARQ queue"),
     limit: int = Query(100, ge=1, le=1000),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("admin")),
 ):
     """Return dead-letter queue entries (admin only)."""

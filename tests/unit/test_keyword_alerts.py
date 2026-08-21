@@ -1,5 +1,4 @@
 """Tests for keyword alert matching logic."""
-import pytest
 
 
 class TestKeywordMatching:
@@ -39,34 +38,42 @@ class TestKeywordMatching:
 class TestCheckKeywordAlertsSql:
     def test_active_rules_sql_filters_active(self):
         from anveshak.analyst.keyword_alerts import SQL_ACTIVE_RULES
+
         assert "is_active = TRUE" in SQL_ACTIVE_RULES
 
     def test_insert_trigger_has_on_conflict(self):
         from anveshak.analyst.keyword_alerts import SQL_INSERT_TRIGGER
+
         assert "ON CONFLICT DO NOTHING" in SQL_INSERT_TRIGGER
 
     def test_insert_trigger_has_labels(self):
         from anveshak.analyst.keyword_alerts import SQL_INSERT_TRIGGER
+
         assert '"classification":"OPEN"' in SQL_INSERT_TRIGGER
 
 
 class TestAlertDbSql:
     def test_list_rules_sql_exists(self):
         from anveshak.api.db.alerts import SQL_LIST_RULES
+
         assert "keyword_alert_rules" in SQL_LIST_RULES
 
     def test_insert_rule_sql_has_labels(self):
         from anveshak.api.db.alerts import SQL_INSERT_RULE
+
         assert '"classification":"OPEN"' in SQL_INSERT_RULE
 
     def test_delete_rule_returns_id(self):
         from anveshak.api.db.alerts import SQL_DELETE_RULE
+
         assert "RETURNING id" in SQL_DELETE_RULE
 
 
 class TestAlertRouterRegistered:
     def test_alerts_router_in_main(self):
         import inspect
+
         from anveshak.api import main
+
         source = inspect.getsource(main)
         assert "alerts_router" in source

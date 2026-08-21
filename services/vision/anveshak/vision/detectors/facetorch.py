@@ -7,12 +7,13 @@ Model: prithivMLmods/Deep-Fake-Detector-v2-Model (ViT-base, ~92% accuracy).
 Input:  [1, 3, 224, 224] float32 (ImageNet-normalised)
 Output: [1, 2] float32 logits — softmax → FAKE_INDEX is fake probability
 """
+
 from __future__ import annotations
 
 import structlog
 
-from .base import DeepfakeDetector
 from ..settings import settings
+from .base import DeepfakeDetector
 
 log = structlog.get_logger(__name__)
 
@@ -54,7 +55,6 @@ class FacetorchDetector(DeepfakeDetector):
         )
 
     def _infer(self, image_bytes: bytes) -> float:
-        import numpy as np
         import scipy.special
 
         arr = self.preprocess_image(image_bytes, self.MODEL_INPUT_SIZE)
@@ -64,6 +64,8 @@ class FacetorchDetector(DeepfakeDetector):
         outputs = self._model.run(None, {input_name: arr})
 
         # Output: [1, 2] logits → softmax → FAKE_INDEX is fake probability
-        logits = outputs[0][0]  # shape (2,)
+        # onnxruntime types run() as returning Sequence[Any | SparseTensor];
+        # these models return dense ndarrays.
+        logits = outputs[0][0]  # pyright: ignore[reportIndexIssue]  # shape (2,)
         probs = scipy.special.softmax(logits)
         return float(probs[FAKE_INDEX])

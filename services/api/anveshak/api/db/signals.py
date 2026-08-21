@@ -1,10 +1,10 @@
 """Signal repository — all SQL for the signals domain."""
+
 from __future__ import annotations
 
-import json
 from typing import Any
 
-import asyncpg
+from anveshak.db import DBConnection
 
 # ---------------------------------------------------------------------------
 # SQL constants
@@ -299,7 +299,8 @@ SQL_DAILY_COUNTS_BY_ORG = """
 # Repository functions
 # ---------------------------------------------------------------------------
 
-async def _enrich_signal(conn: asyncpg.Connection, signal: dict) -> dict:
+
+async def _enrich_signal(conn: DBConnection, signal: dict) -> dict:
     """Add source breakdown and timeline to a signal dict (single-signal fallback)."""
     cluster_id = signal.get("cluster_id")
     if not cluster_id:
@@ -320,7 +321,9 @@ async def _enrich_signal(conn: asyncpg.Connection, signal: dict) -> dict:
 
     timeline = await conn.fetchrow(SQL_SIGNAL_TIMELINE, cluster_id)
     if timeline:
-        signal["first_seen"] = timeline["first_seen"].isoformat() if timeline["first_seen"] else None
+        signal["first_seen"] = (
+            timeline["first_seen"].isoformat() if timeline["first_seen"] else None
+        )
         signal["last_seen"] = timeline["last_seen"].isoformat() if timeline["last_seen"] else None
     else:
         signal["first_seen"] = None
@@ -329,7 +332,7 @@ async def _enrich_signal(conn: asyncpg.Connection, signal: dict) -> dict:
     return signal
 
 
-async def _batch_enrich(conn: asyncpg.Connection, signals: list[dict[str, Any]]) -> list[dict[str, Any]]:
+async def _batch_enrich(conn: DBConnection, signals: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Batch-enrich all signals with 2 queries total (instead of 2 per signal)."""
     cluster_ids = list({s["cluster_id"] for s in signals if s.get("cluster_id")})
 
@@ -357,11 +360,13 @@ async def _batch_enrich(conn: asyncpg.Connection, signals: list[dict[str, Any]])
             sources_by_cluster[cid] = []
         if src_key not in seen_sources[cid]:
             seen_sources[cid].add(src_key)
-            sources_by_cluster[cid].append({
-                "source_name": r["source_name"],
-                "platform": r["platform"],
-                "credibility_score": float(r["credibility_score"]),
-            })
+            sources_by_cluster[cid].append(
+                {
+                    "source_name": r["source_name"],
+                    "platform": r["platform"],
+                    "credibility_score": float(r["credibility_score"]),
+                }
+            )
 
     # Index timelines by cluster_id
     timeline_by_cluster: dict[str, dict] = {}
@@ -384,7 +389,8 @@ async def _batch_enrich(conn: asyncpg.Connection, signals: list[dict[str, Any]])
 
 
 async def get_signal(
-    conn: asyncpg.Connection, signal_id: str,
+    conn: DBConnection,
+    signal_id: str,
 ) -> dict[str, Any] | None:
     """Fetch a single signal by ID with cluster/topic enrichment."""
     row = await conn.fetchrow(SQL_GET_SIGNAL_BY_ID, signal_id)
@@ -396,7 +402,10 @@ async def get_signal(
 
 
 async def list_signals(
-    conn: asyncpg.Connection, status: str, limit: int = 50, offset: int = 0,
+    conn: DBConnection,
+    status: str,
+    limit: int = 50,
+    offset: int = 0,
     topic_id: str | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
     if topic_id:
@@ -409,8 +418,11 @@ async def list_signals(
 
 
 async def list_signals_by_org(
-    conn: asyncpg.Connection, status: str, org_id: str,
-    limit: int = 50, offset: int = 0,
+    conn: DBConnection,
+    status: str,
+    org_id: str,
+    limit: int = 50,
+    offset: int = 0,
 ) -> tuple[list[dict[str, Any]], int]:
     """Return signals filtered by topic's org_id."""
     rows = await conn.fetch(SQL_LIST_SIGNALS_BY_ORG, status, org_id, limit, offset)
@@ -420,8 +432,13 @@ async def list_signals_by_org(
 
 
 async def list_signals_filtered(
-    conn: asyncpg.Connection, status: str, since: Any, until: Any,
-    *, topic_id: str | None = None, org_id: str | None = None,
+    conn: DBConnection,
+    status: str,
+    since: Any,
+    until: Any,
+    *,
+    topic_id: str | None = None,
+    org_id: str | None = None,
 ) -> list[dict[str, Any]]:
     if topic_id:
         rows = await conn.fetch(SQL_LIST_SIGNALS_SINCE_BY_TOPIC, status, since, until, topic_id)
@@ -433,23 +450,17 @@ async def list_signals_filtered(
     return await _batch_enrich(conn, signals)
 
 
-async def acknowledge_signal(
-    conn: asyncpg.Connection, signal_id: str, now: Any
-) -> dict[str, Any] | None:
+async def acknowledge_signal(conn: DBConnection, signal_id: str, now: Any) -> dict[str, Any] | None:
     row = await conn.fetchrow(SQL_ACKNOWLEDGE, now, signal_id)
     return dict(row) if row else None
 
 
-async def dismiss_signal(
-    conn: asyncpg.Connection, signal_id: str, now: Any
-) -> dict[str, Any] | None:
+async def dismiss_signal(conn: DBConnection, signal_id: str, now: Any) -> dict[str, Any] | None:
     row = await conn.fetchrow(SQL_DISMISS, now, signal_id)
     return dict(row) if row else None
 
 
-async def get_signal_connections(
-    conn: asyncpg.Connection, signal_id: str
-) -> dict[str, Any]:
+async def get_signal_connections(conn: DBConnection, signal_id: str) -> dict[str, Any]:
     """Build graph data (nodes + edges) for a signal's connections."""
     rows = await conn.fetch(SQL_SIGNAL_CONNECTIONS, signal_id)
     if not rows:
@@ -470,7 +481,7 @@ async def get_signal_connections(
 
 
 async def _build_cluster_graph(
-    rows: list, first: dict, conn: asyncpg.Connection, signal_id: str
+    rows: list, first: dict, conn: DBConnection, signal_id: str
 ) -> dict[str, Any]:
     """Build graph from cluster-linked signal (original path)."""
     nodes: dict[str, dict] = {}
@@ -508,7 +519,9 @@ async def _build_cluster_graph(
                 "label": r["content_title"] or r["content_excerpt"] or "Content",
                 "data": {
                     "url": r["content_url"],
-                    "captured_at": r["content_captured_at"].isoformat() if r["content_captured_at"] else None,
+                    "captured_at": r["content_captured_at"].isoformat()
+                    if r["content_captured_at"]
+                    else None,
                 },
             }
             edges.append({"source": cluster_node_id, "target": ci_id, "type": "contains"})
@@ -522,7 +535,9 @@ async def _build_cluster_graph(
                     "label": r["source_name"] or "Source",
                     "data": {
                         "platform": r["source_platform"],
-                        "credibility": float(r["source_credibility"]) if r["source_credibility"] else None,
+                        "credibility": float(r["source_credibility"])
+                        if r["source_credibility"]
+                        else None,
                     },
                 }
             if not any(e["source"] == ci_id and e["target"] == src_id for e in edges):
@@ -579,7 +594,9 @@ def _build_topic_graph(rows: list, first: dict) -> dict[str, Any]:
                 "label": r["content_title"] or r["content_excerpt"] or "Content",
                 "data": {
                     "url": r["content_url"],
-                    "captured_at": r["content_captured_at"].isoformat() if r["content_captured_at"] else None,
+                    "captured_at": r["content_captured_at"].isoformat()
+                    if r["content_captured_at"]
+                    else None,
                 },
             }
             edges.append({"source": topic_node_id, "target": ci_id, "type": "contains"})
@@ -593,7 +610,9 @@ def _build_topic_graph(rows: list, first: dict) -> dict[str, Any]:
                     "label": r["source_name"] or "Source",
                     "data": {
                         "platform": r["source_platform"],
-                        "credibility": float(r["source_credibility"]) if r["source_credibility"] else None,
+                        "credibility": float(r["source_credibility"])
+                        if r["source_credibility"]
+                        else None,
                     },
                 }
             if not any(e["source"] == ci_id and e["target"] == src_id for e in edges):
@@ -603,22 +622,25 @@ def _build_topic_graph(rows: list, first: dict) -> dict[str, Any]:
 
 
 async def daily_signal_counts(
-    conn: asyncpg.Connection, status: str, since: Any, until: Any,
-    *, org_id: str | None = None,
+    conn: DBConnection,
+    status: str,
+    since: Any,
+    until: Any,
+    *,
+    org_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Return per-day signal counts for the calendar strip."""
     if org_id:
         rows = await conn.fetch(SQL_DAILY_COUNTS_BY_ORG, status, since, until, org_id)
     else:
         rows = await conn.fetch(SQL_DAILY_COUNTS, status, since, until)
-    return [
-        {"date": r["signal_date"].isoformat(), "count": r["count"]}
-        for r in rows
-    ]
+    return [{"date": r["signal_date"].isoformat(), "count": r["count"]} for r in rows]
 
 
 async def get_missed_signals(
-    conn: asyncpg.Connection, since: Any, org_id: str | None = None,
+    conn: DBConnection,
+    since: Any,
+    org_id: str | None = None,
 ) -> list[dict[str, Any]]:
     rows = await conn.fetch(SQL_MISSED_SIGNALS, since, org_id)
     return [dict(r) for r in rows]

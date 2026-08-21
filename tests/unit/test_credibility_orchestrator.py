@@ -9,8 +9,10 @@ Bugs caught:
 
 pytest.mark.unit — no DB, no Redis, no external dependencies.
 """
-import pytest
+
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 pytestmark = pytest.mark.unit
 
@@ -64,7 +66,6 @@ def _cross_verify_row(source_id: str, credibility_score: float):
 
 
 class TestRunCredibilityUpdate:
-
     @pytest.mark.asyncio
     @patch("anveshak.analyst.credibility.apply_credibility_drop", new_callable=AsyncMock)
     @patch("anveshak.analyst.credibility.find_deepfake_amplifiers", new_callable=AsyncMock)
@@ -139,7 +140,6 @@ class TestRunCredibilityUpdate:
 
 
 class TestRunCrossVerificationUpdate:
-
     @pytest.mark.asyncio
     @patch("anveshak.analyst.credibility.apply_credibility_boost", new_callable=AsyncMock)
     @patch("anveshak.analyst.credibility.settings")

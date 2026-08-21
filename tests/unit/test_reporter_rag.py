@@ -2,12 +2,12 @@
 
 pytest.mark.unit — no DB, no network, no real embedding model.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 
 pytestmark = pytest.mark.unit
 
@@ -87,9 +87,21 @@ class TestAssembleContext:
 
 def _data_bundle():
     return {
-        "topic_stats": {"name": "Test", "content_count": 5, "source_count": 2, "cluster_count": 1, "signal_count": 0},
-        "sources": [], "clusters": [], "signals": [], "entities": [],
-        "sentiment_trend": [], "keywords": [], "evidence_items": [], "language_breakdown": [],
+        "topic_stats": {
+            "name": "Test",
+            "content_count": 5,
+            "source_count": 2,
+            "cluster_count": 1,
+            "signal_count": 0,
+        },
+        "sources": [],
+        "clusters": [],
+        "signals": [],
+        "entities": [],
+        "sentiment_trend": [],
+        "keywords": [],
+        "evidence_items": [],
+        "language_breakdown": [],
     }
 
 
@@ -99,8 +111,8 @@ class TestRAGCredibilityFiltering:
     @pytest.mark.asyncio
     async def test_credibility_min_passed_to_fetch_rag_chunks(self):
         """generate_report passes report's credibility_min_filter to fetch_rag_chunks."""
-        from anveshak.reporter.worker import generate_report
         from anveshak.reporter.llm import BlufContent
+        from anveshak.reporter.worker import generate_report
 
         report = {
             "id": "report-1",
@@ -111,20 +123,32 @@ class TestRAGCredibilityFiltering:
         topic = {"id": "topic-1", "name": "Test", "keywords": ["test"]}
         chunks = [{"id": "c1", "source_id": "s1", "clean_text": "text", "url": "https://x.com"}]
 
-        ctx = {"db": AsyncMock(), "settings": MagicMock(
-            rag_top_k=10, rag_max_context_tokens=4000,
-            ollama_model="test", ollama_host="http://ollama:11434",
-            ollama_report_timeout_s=30, ollama_retry_max=2,
-            topic_relevance_threshold=0.35,
-        )}
+        ctx = {
+            "db": AsyncMock(),
+            "settings": MagicMock(
+                rag_top_k=10,
+                rag_max_context_tokens=4000,
+                ollama_model="test",
+                ollama_host="http://ollama:11434",
+                ollama_report_timeout_s=30,
+                ollama_retry_max=2,
+                topic_relevance_threshold=0.35,
+            ),
+        }
 
-        with patch("anveshak.reporter.worker.db") as mock_db, \
-             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed, \
-             patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_llm, \
-             patch("anveshak.reporter.worker.render_bluf_prompt", return_value="bluf prompt"), \
-             patch("anveshak.reporter.worker.geocode_locations") as mock_geo, \
-             patch("anveshak.reporter.worker.build_geojson") as mock_geojson, \
-             patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract:
+        with (
+            patch("anveshak.reporter.worker.db") as mock_db,
+            patch(
+                "anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock
+            ) as mock_embed,
+            patch(
+                "anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock
+            ) as mock_llm,
+            patch("anveshak.reporter.worker.render_bluf_prompt", return_value="bluf prompt"),
+            patch("anveshak.reporter.worker.geocode_locations") as mock_geo,
+            patch("anveshak.reporter.worker.build_geojson") as mock_geojson,
+            patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract,
+        ):
             mock_db.fetch_report = AsyncMock(return_value=report)
             mock_db.fetch_topic = AsyncMock(return_value=topic)
             mock_db.fetch_report_data_bundle = AsyncMock(return_value=_data_bundle())
@@ -138,7 +162,8 @@ class TestRAGCredibilityFiltering:
             mock_db.update_job_status = AsyncMock()
             mock_embed.return_value = [0.1] * 384
             mock_llm.return_value = BlufContent(
-                bluf="Test.", confidence_level=0.8,
+                bluf="Test.",
+                confidence_level=0.8,
                 labels={"classification": "OPEN", "domain": "report", "owner_org": "anveshak"},
             )
             mock_geo.return_value = []
@@ -167,15 +192,25 @@ class TestRAGCredibilityFiltering:
         }
         topic = {"id": "topic-1", "name": "Test", "keywords": []}
 
-        ctx = {"db": AsyncMock(), "settings": MagicMock(
-            rag_top_k=10, rag_max_context_tokens=4000,
-            ollama_model="test", ollama_host="http://o:11434",
-            ollama_report_timeout_s=30, ollama_retry_max=2,
-            topic_relevance_threshold=0.35,
-        )}
+        ctx = {
+            "db": AsyncMock(),
+            "settings": MagicMock(
+                rag_top_k=10,
+                rag_max_context_tokens=4000,
+                ollama_model="test",
+                ollama_host="http://o:11434",
+                ollama_report_timeout_s=30,
+                ollama_retry_max=2,
+                topic_relevance_threshold=0.35,
+            ),
+        }
 
-        with patch("anveshak.reporter.worker.db") as mock_db, \
-             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed:
+        with (
+            patch("anveshak.reporter.worker.db") as mock_db,
+            patch(
+                "anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock
+            ) as mock_embed,
+        ):
             mock_db.fetch_report = AsyncMock(return_value=report)
             mock_db.fetch_topic = AsyncMock(return_value=topic)
             mock_db.fetch_report_data_bundle = AsyncMock(return_value=_data_bundle())

@@ -3,6 +3,7 @@
 Streaming CSV to avoid loading entire dataset in memory.
 Row limit enforced to prevent accidental data dumps.
 """
+
 from __future__ import annotations
 
 import csv
@@ -10,8 +11,8 @@ import io
 import json
 from typing import Any
 
-import asyncpg
 import structlog
+from anveshak.db import DBConnection
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
@@ -69,6 +70,7 @@ SQL_EXPORT_ENTITIES = """
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _rows_to_csv(rows: list[dict[str, Any]], columns: list[str]) -> str:
     """Convert rows to CSV string."""
     buf = io.StringIO()
@@ -88,7 +90,7 @@ def _rows_to_json(rows: list[dict[str, Any]]) -> str:
     return json.dumps(rows, default=str, indent=2)
 
 
-async def _fetch_rows(db: asyncpg.Connection, sql: str, topic_id: str, limit: int) -> list[dict]:
+async def _fetch_rows(db: DBConnection, sql: str, topic_id: str, limit: int) -> list[dict]:
     rows = await db.fetch(sql, topic_id, limit)
     return [dict(r) for r in rows]
 
@@ -113,18 +115,38 @@ def _make_response(data: str, fmt: str, filename: str) -> StreamingResponse:
 # ---------------------------------------------------------------------------
 
 CONTENT_COLUMNS = [
-    "id", "url", "clean_text", "language", "credibility_score_at_capture",
-    "captured_at", "content_hash", "source_id", "source_name", "platform",
+    "id",
+    "url",
+    "clean_text",
+    "language",
+    "credibility_score_at_capture",
+    "captured_at",
+    "content_hash",
+    "source_id",
+    "source_name",
+    "platform",
 ]
 
 SIGNAL_COLUMNS = [
-    "id", "topic_id", "signal_type", "description", "status",
-    "created_at", "delivered_at", "cluster_label",
+    "id",
+    "topic_id",
+    "signal_type",
+    "description",
+    "status",
+    "created_at",
+    "delivered_at",
+    "cluster_label",
 ]
 
 ENTITY_COLUMNS = [
-    "id", "entity_type", "entity_text", "confidence",
-    "language", "created_at", "content_url", "topic_id",
+    "id",
+    "entity_type",
+    "entity_text",
+    "confidence",
+    "language",
+    "created_at",
+    "content_url",
+    "topic_id",
 ]
 
 
@@ -134,7 +156,7 @@ async def export_content(
     topic_id: str = Query(..., description="Topic ID to export"),
     format: str = Query("csv", pattern="^(csv|json)$", description="Export format"),
     limit: int = Query(1000, ge=1, le=MAX_EXPORT_ROWS, description="Max rows"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Export content items for a topic as CSV or JSON."""
@@ -146,7 +168,11 @@ async def export_content(
     data = _rows_to_csv(rows, CONTENT_COLUMNS) if format == "csv" else _rows_to_json(rows)
     log.info("export.content", topic_id=topic_id, format=format, rows=len(rows))
     await audit_db.log_action(
-        db, user["sub"], "export.content", "topic", topic_id,
+        db,
+        user["sub"],
+        "export.content",
+        "topic",
+        topic_id,
         {"format": format, "rows": len(rows)},
         request.client.host if request.client else "",
     )
@@ -159,7 +185,7 @@ async def export_signals(
     topic_id: str = Query(..., description="Topic ID to export"),
     format: str = Query("csv", pattern="^(csv|json)$", description="Export format"),
     limit: int = Query(1000, ge=1, le=MAX_EXPORT_ROWS, description="Max rows"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Export signals for a topic as CSV or JSON."""
@@ -171,7 +197,11 @@ async def export_signals(
     data = _rows_to_csv(rows, SIGNAL_COLUMNS) if format == "csv" else _rows_to_json(rows)
     log.info("export.signals", topic_id=topic_id, format=format, rows=len(rows))
     await audit_db.log_action(
-        db, user["sub"], "export.signals", "topic", topic_id,
+        db,
+        user["sub"],
+        "export.signals",
+        "topic",
+        topic_id,
         {"format": format, "rows": len(rows)},
         request.client.host if request.client else "",
     )
@@ -184,7 +214,7 @@ async def export_entities(
     topic_id: str = Query(..., description="Topic ID to export"),
     format: str = Query("csv", pattern="^(csv|json)$", description="Export format"),
     limit: int = Query(5000, ge=1, le=MAX_EXPORT_ROWS, description="Max rows"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Export extracted entities for a topic as CSV or JSON."""
@@ -196,7 +226,11 @@ async def export_entities(
     data = _rows_to_csv(rows, ENTITY_COLUMNS) if format == "csv" else _rows_to_json(rows)
     log.info("export.entities", topic_id=topic_id, format=format, rows=len(rows))
     await audit_db.log_action(
-        db, user["sub"], "export.entities", "topic", topic_id,
+        db,
+        user["sub"],
+        "export.entities",
+        "topic",
+        topic_id,
         {"format": format, "rows": len(rows)},
         request.client.host if request.client else "",
     )

@@ -10,11 +10,11 @@ pytest.mark.integration — requires running Docker Compose (postgres).
 Run with:
   uv run --package anveshak-tests pytest tests/integration/test_reporter_e2e.py -v -m integration
 """
+
 from __future__ import annotations
 
-import hashlib
 import uuid
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
@@ -32,18 +32,6 @@ def _random_embedding(seed: int, dim: int = 384) -> list[float]:
     return vec.tolist()
 
 
-def _make_report_content():
-    """Return a mock LLM ReportContent object."""
-    rc = MagicMock()
-    rc.executive_summary = "UAV activity detected near northern border sector."
-    rc.key_findings = ["Finding: drone spotted at 0300h", "Finding: similar to prior incident"]
-    rc.recommendations = ["Increase patrol frequency in sector"]
-    rc.source_citations = ["https://example.com/source1"]
-    rc.confidence_level = 0.75
-    rc.labels = {"classification": "OPEN", "domain": "report", "owner_org": "anveshak"}
-    return rc
-
-
 class TestReporterE2E:
     """Full generate_report pipeline against real DB, mocked LLM only."""
 
@@ -51,6 +39,7 @@ class TestReporterE2E:
         """Create topic → insert content → create report row → run generate_report → verify."""
         from anveshak.reporter.db import create_report_row, fetch_report
         from anveshak.reporter.worker import generate_report
+
         from tests.conftest import insert_content_item
 
         # --- Setup: topic + source + content items ---
@@ -59,12 +48,16 @@ class TestReporterE2E:
 
         emb = _random_embedding(seed=100)
         await insert_content_item(
-            db_pool, topic_id, source_id,
+            db_pool,
+            topic_id,
+            source_id,
             "UAV spotted near Line of Actual Control at 0300 hours on patrol route.",
             embedding=emb,
         )
         await insert_content_item(
-            db_pool, topic_id, source_id,
+            db_pool,
+            topic_id,
+            source_id,
             "Indian Army reports increased drone activity along northern border sectors.",
             embedding=_random_embedding(seed=101),
         )
@@ -88,7 +81,6 @@ class TestReporterE2E:
         assert report_before.get("generated_at") is None
 
         # --- Build worker context (real DB, mocked LLM) ---
-        rc = _make_report_content()
         settings = MagicMock()
         settings.rag_top_k = 10
         settings.rag_max_context_tokens = 4000
@@ -99,10 +91,14 @@ class TestReporterE2E:
 
         ctx = {"db": db_pool, "settings": settings}
 
-        with patch("anveshak.reporter.worker.call_ollama_with_retry", new_callable=AsyncMock) as mock_llm, \
-             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed, \
-             patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_bluf:
-            mock_llm.return_value = rc
+        with (
+            patch(
+                "anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock
+            ) as mock_embed,
+            patch(
+                "anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock
+            ) as mock_bluf,
+        ):
             mock_embed.return_value = emb  # use same embedding as query vector
             mock_bluf.return_value = None  # trigger fallback BLUF
 
@@ -122,6 +118,7 @@ class TestReporterE2E:
         """Running generate_report twice on same report_id is a no-op (idempotent)."""
         from anveshak.reporter.db import create_report_row, fetch_report
         from anveshak.reporter.worker import generate_report
+
         from tests.conftest import insert_content_item
 
         topic_id = await make_topic(name="Idempotency Test")
@@ -129,7 +126,9 @@ class TestReporterE2E:
 
         emb = _random_embedding(seed=200)
         await insert_content_item(
-            db_pool, topic_id, source_id,
+            db_pool,
+            topic_id,
+            source_id,
             "Test article for idempotency verification in reporter pipeline.",
             embedding=emb,
         )
@@ -146,7 +145,6 @@ class TestReporterE2E:
             credibility_min=30.0,
         )
 
-        rc = _make_report_content()
         settings = MagicMock()
         settings.rag_top_k = 10
         settings.rag_max_context_tokens = 4000
@@ -157,10 +155,14 @@ class TestReporterE2E:
 
         ctx = {"db": db_pool, "settings": settings}
 
-        with patch("anveshak.reporter.worker.call_ollama_with_retry", new_callable=AsyncMock) as mock_llm, \
-             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed, \
-             patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_bluf:
-            mock_llm.return_value = rc
+        with (
+            patch(
+                "anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock
+            ) as mock_embed,
+            patch(
+                "anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock
+            ) as mock_bluf,
+        ):
             mock_embed.return_value = emb
             mock_bluf.return_value = None  # trigger fallback BLUF
 
@@ -173,5 +175,5 @@ class TestReporterE2E:
             await generate_report(ctx, report_id)
             report_v2 = await fetch_report(db_pool, report_id)
 
-            # generated_at must not change (CLAUDE.md rule 4: reports are immutable)
+            # generated_at must not change (AGENTS.md rule 4: reports are immutable)
             assert report_v2["generated_at"] == generated_at_v1

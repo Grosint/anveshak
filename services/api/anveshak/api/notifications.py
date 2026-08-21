@@ -3,9 +3,8 @@
 Sends signal payloads to a configured webhook URL when signals are delivered.
 Non-blocking — webhook failures never prevent signal delivery via WebSocket.
 """
-from __future__ import annotations
 
-import json
+from __future__ import annotations
 
 import httpx
 import structlog

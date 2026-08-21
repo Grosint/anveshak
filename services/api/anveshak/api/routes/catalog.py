@@ -1,12 +1,13 @@
 """Catalog & discovery endpoints — curated source suggestions and discovered sources."""
+
 from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
 from typing import Any, Optional
 
-import asyncpg
 import structlog
+from anveshak.db import DBConnection
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..auth.rbac import require_role
@@ -32,7 +33,7 @@ SQL_GET_DISCOVERED = "SELECT * FROM discovered_sources WHERE id = $1 AND topic_i
 @router.get("/topics/{topic_id}/catalog-suggestions")
 async def get_catalog_suggestions(
     topic_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     """Suggest catalog sources matching the topic's keywords.
@@ -72,7 +73,7 @@ async def get_catalog_suggestions(
 async def approve_catalog_entry(
     topic_id: str,
     catalog_entry_id: str = Query(..., description="ID of the catalog entry to approve"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     """Approve a catalog entry — create source, link to topic, record approval.
@@ -129,7 +130,7 @@ async def approve_catalog_entry(
 
 @router.get("/catalog")
 async def list_catalog(
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("admin")),
 ) -> dict[str, Any]:
     """List all catalog entries (admin view)."""
@@ -145,8 +146,10 @@ async def list_catalog(
 @router.get("/topics/{topic_id}/discovered")
 async def list_discovered_sources(
     topic_id: str,
-    status: Optional[str] = Query(None, description="Filter by status: pending, approved, dismissed"),
-    db: asyncpg.Connection = Depends(get_db),
+    status: Optional[str] = Query(
+        None, description="Filter by status: pending, approved, dismissed"
+    ),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     """List discovered sources for a topic, optionally filtered by status."""
@@ -163,7 +166,7 @@ async def list_discovered_sources(
 async def approve_discovered_source(
     topic_id: str,
     discovered_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     """Approve a discovered source — create source, link to topic, update status."""
@@ -213,7 +216,7 @@ async def approve_discovered_source(
 async def dismiss_discovered_source(
     topic_id: str,
     discovered_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, Any]:
     """Dismiss a discovered source suggestion."""

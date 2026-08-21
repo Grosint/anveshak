@@ -8,6 +8,7 @@ Criteria:
   4.32: vision_results.deepfake_score is always float (never NULL after processing)
   4.34: same image URL scraped from two sources → one vision_results row (dedup)
 """
+
 import hashlib
 import uuid
 
@@ -28,7 +29,8 @@ async def test_media_asset_insert_dedup(db_pool, make_topic, make_source):
         # Insert content_item
         ci_id = str(uuid.uuid4())
         ci_hash = hashlib.sha256(f"content_{ci_id}".encode()).hexdigest()
-        await conn.execute("""
+        await conn.execute(
+            """
             INSERT INTO content_items (
                 id, topic_id, source_id, raw_text, clean_text, content_hash,
                 url, labels, org_id
@@ -36,24 +38,40 @@ async def test_media_asset_insert_dedup(db_pool, make_topic, make_source):
             VALUES ($1, $2, $3, 'test content', 'test content', $4, 'http://test.example.com',
                     '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb, $5)
             ON CONFLICT (content_hash) DO NOTHING
-        """, ci_id, topic_id, source_id, ci_hash, "org-integration-test")
+        """,
+            ci_id,
+            topic_id,
+            source_id,
+            ci_hash,
+            "org-integration-test",
+        )
 
         # Insert media_asset twice with same content_hash — second should be ignored
         ma_id_1 = str(uuid.uuid4())
         ma_id_2 = str(uuid.uuid4())
-        await conn.execute("""
+        await conn.execute(
+            """
             INSERT INTO media_assets (id, content_item_id, asset_type, storage_path, content_hash, labels)
             VALUES ($1, $2, 'image', '/tmp/test.jpg', $3,
                     '{"classification":"OPEN","domain":"vision","owner_org":"anveshak"}'::jsonb)
             ON CONFLICT (content_hash) DO NOTHING
-        """, ma_id_1, ci_id, content_hash)
+        """,
+            ma_id_1,
+            ci_id,
+            content_hash,
+        )
 
-        await conn.execute("""
+        await conn.execute(
+            """
             INSERT INTO media_assets (id, content_item_id, asset_type, storage_path, content_hash, labels)
             VALUES ($1, $2, 'image', '/tmp/test.jpg', $3,
                     '{"classification":"OPEN","domain":"vision","owner_org":"anveshak"}'::jsonb)
             ON CONFLICT (content_hash) DO NOTHING
-        """, ma_id_2, ci_id, content_hash)
+        """,
+            ma_id_2,
+            ci_id,
+            content_hash,
+        )
 
         # Verify exactly ONE row exists for this content_hash
         count = await conn.fetchval(
@@ -71,7 +89,7 @@ async def test_vision_results_deepfake_score_is_float(db_pool):
     """vision_results.deepfake_score stored as FLOAT, never NULL after processing.
 
     Criteria 4.32: deepfake_score is always float 0.0–1.0 after vision job runs.
-    CLAUDE.md rule 7: never bool, never None.
+    AGENTS.md rule 7: never bool, never None.
     """
     async with db_pool.acquire() as conn:
         # Check that all processed vision_results have non-NULL float scores

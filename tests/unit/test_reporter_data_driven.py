@@ -8,6 +8,7 @@ Tests cover:
 
 pytest.mark.unit — all DB calls mocked, never hits real postgres.
 """
+
 from __future__ import annotations
 
 import json
@@ -15,7 +16,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
-
 
 pytestmark = pytest.mark.unit
 
@@ -39,17 +39,45 @@ SAMPLE_SOURCES = [
 ]
 
 SAMPLE_CLUSTERS = [
-    {"id": "c1", "label": "UAV sightings near border", "item_count": 42, "independent_source_count": 3, "executive_summary": "Multiple UAV sightings reported."},
-    {"id": "c2", "label": "Military response", "item_count": 28, "independent_source_count": 2, "executive_summary": "Indian military deploys counter-drone systems."},
+    {
+        "id": "c1",
+        "label": "UAV sightings near border",
+        "item_count": 42,
+        "independent_source_count": 3,
+        "executive_summary": "Multiple UAV sightings reported.",
+    },
+    {
+        "id": "c2",
+        "label": "Military response",
+        "item_count": 28,
+        "independent_source_count": 2,
+        "executive_summary": "Indian military deploys counter-drone systems.",
+    },
 ]
 
 SAMPLE_SIGNALS = [
-    {"id": "s1", "description": "3 independent sources corroborate UAV cluster", "status": "new", "cluster_label": "UAV sightings near border", "created_at": "2026-04-10T10:00:00Z"},
+    {
+        "id": "s1",
+        "description": "3 independent sources corroborate UAV cluster",
+        "status": "new",
+        "cluster_label": "UAV sightings near border",
+        "created_at": "2026-04-10T10:00:00Z",
+    },
 ]
 
 SAMPLE_ENTITIES = [
-    {"entity_type": "GPE", "entity_text": "Lakshadweep", "mention_count": 12, "avg_confidence": 0.92},
-    {"entity_type": "ORG", "entity_text": "Indian Navy", "mention_count": 8, "avg_confidence": 0.88},
+    {
+        "entity_type": "GPE",
+        "entity_text": "Lakshadweep",
+        "mention_count": 12,
+        "avg_confidence": 0.92,
+    },
+    {
+        "entity_type": "ORG",
+        "entity_text": "Indian Navy",
+        "mention_count": 8,
+        "avg_confidence": 0.88,
+    },
 ]
 
 SAMPLE_SENTIMENT_TREND = [
@@ -109,6 +137,7 @@ VALID_BLUF_RESPONSE = {
 # Phase 1: fetch_report_data_bundle
 # ---------------------------------------------------------------------------
 
+
 class TestFetchReportDataBundle:
     """fetch_report_data_bundle returns dict with all expected keys."""
 
@@ -118,19 +147,66 @@ class TestFetchReportDataBundle:
 
         mock_pool = AsyncMock()
 
-        with patch("anveshak.reporter.db.fetch_report_topic_stats", new_callable=AsyncMock, return_value=SAMPLE_TOPIC_STATS), \
-             patch("anveshak.reporter.db.fetch_report_topic_sources", new_callable=AsyncMock, return_value=SAMPLE_SOURCES), \
-             patch("anveshak.reporter.db.fetch_report_topic_clusters", new_callable=AsyncMock, return_value=SAMPLE_CLUSTERS), \
-             patch("anveshak.reporter.db.fetch_report_signals", new_callable=AsyncMock, return_value=SAMPLE_SIGNALS), \
-             patch("anveshak.reporter.db.fetch_report_entities", new_callable=AsyncMock, return_value=SAMPLE_ENTITIES), \
-             patch("anveshak.reporter.db.fetch_report_sentiment_trend", new_callable=AsyncMock, return_value=SAMPLE_SENTIMENT_TREND), \
-             patch("anveshak.reporter.db.fetch_report_keywords", new_callable=AsyncMock, return_value=SAMPLE_KEYWORDS), \
-             patch("anveshak.reporter.db.fetch_report_evidence_items", new_callable=AsyncMock, return_value=SAMPLE_EVIDENCE_ITEMS), \
-             patch("anveshak.reporter.db.fetch_report_language_breakdown", new_callable=AsyncMock, return_value=SAMPLE_LANGUAGE_BREAKDOWN):
+        with (
+            patch(
+                "anveshak.reporter.db.fetch_report_topic_stats",
+                new_callable=AsyncMock,
+                return_value=SAMPLE_TOPIC_STATS,
+            ),
+            patch(
+                "anveshak.reporter.db.fetch_report_topic_sources",
+                new_callable=AsyncMock,
+                return_value=SAMPLE_SOURCES,
+            ),
+            patch(
+                "anveshak.reporter.db.fetch_report_topic_clusters",
+                new_callable=AsyncMock,
+                return_value=SAMPLE_CLUSTERS,
+            ),
+            patch(
+                "anveshak.reporter.db.fetch_report_signals",
+                new_callable=AsyncMock,
+                return_value=SAMPLE_SIGNALS,
+            ),
+            patch(
+                "anveshak.reporter.db.fetch_report_entities",
+                new_callable=AsyncMock,
+                return_value=SAMPLE_ENTITIES,
+            ),
+            patch(
+                "anveshak.reporter.db.fetch_report_sentiment_trend",
+                new_callable=AsyncMock,
+                return_value=SAMPLE_SENTIMENT_TREND,
+            ),
+            patch(
+                "anveshak.reporter.db.fetch_report_keywords",
+                new_callable=AsyncMock,
+                return_value=SAMPLE_KEYWORDS,
+            ),
+            patch(
+                "anveshak.reporter.db.fetch_report_evidence_items",
+                new_callable=AsyncMock,
+                return_value=SAMPLE_EVIDENCE_ITEMS,
+            ),
+            patch(
+                "anveshak.reporter.db.fetch_report_language_breakdown",
+                new_callable=AsyncMock,
+                return_value=SAMPLE_LANGUAGE_BREAKDOWN,
+            ),
+        ):
             result = await fetch_report_data_bundle(mock_pool, "topic-123")
 
-        expected_keys = {"topic_stats", "sources", "clusters", "signals", "entities",
-                         "sentiment_trend", "keywords", "evidence_items", "language_breakdown"}
+        expected_keys = {
+            "topic_stats",
+            "sources",
+            "clusters",
+            "signals",
+            "entities",
+            "sentiment_trend",
+            "keywords",
+            "evidence_items",
+            "language_breakdown",
+        }
         assert set(result.keys()) == expected_keys
 
     @pytest.mark.asyncio
@@ -139,15 +215,51 @@ class TestFetchReportDataBundle:
 
         mock_pool = AsyncMock()
 
-        with patch("anveshak.reporter.db.fetch_report_topic_stats", new_callable=AsyncMock, return_value=SAMPLE_TOPIC_STATS), \
-             patch("anveshak.reporter.db.fetch_report_topic_sources", new_callable=AsyncMock, return_value=[]), \
-             patch("anveshak.reporter.db.fetch_report_topic_clusters", new_callable=AsyncMock, return_value=[]), \
-             patch("anveshak.reporter.db.fetch_report_signals", new_callable=AsyncMock, return_value=[]), \
-             patch("anveshak.reporter.db.fetch_report_entities", new_callable=AsyncMock, return_value=[]), \
-             patch("anveshak.reporter.db.fetch_report_sentiment_trend", new_callable=AsyncMock, return_value=[]), \
-             patch("anveshak.reporter.db.fetch_report_keywords", new_callable=AsyncMock, return_value=[]), \
-             patch("anveshak.reporter.db.fetch_report_evidence_items", new_callable=AsyncMock, return_value=[]), \
-             patch("anveshak.reporter.db.fetch_report_language_breakdown", new_callable=AsyncMock, return_value=[]):
+        with (
+            patch(
+                "anveshak.reporter.db.fetch_report_topic_stats",
+                new_callable=AsyncMock,
+                return_value=SAMPLE_TOPIC_STATS,
+            ),
+            patch(
+                "anveshak.reporter.db.fetch_report_topic_sources",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch(
+                "anveshak.reporter.db.fetch_report_topic_clusters",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch(
+                "anveshak.reporter.db.fetch_report_signals", new_callable=AsyncMock, return_value=[]
+            ),
+            patch(
+                "anveshak.reporter.db.fetch_report_entities",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch(
+                "anveshak.reporter.db.fetch_report_sentiment_trend",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch(
+                "anveshak.reporter.db.fetch_report_keywords",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch(
+                "anveshak.reporter.db.fetch_report_evidence_items",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch(
+                "anveshak.reporter.db.fetch_report_language_breakdown",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+        ):
             result = await fetch_report_data_bundle(mock_pool, "topic-123")
 
         stats = result["topic_stats"]
@@ -158,6 +270,7 @@ class TestFetchReportDataBundle:
 # ---------------------------------------------------------------------------
 # Phase 2: BlufContent model
 # ---------------------------------------------------------------------------
+
 
 class TestBlufContentModel:
     """BlufContent Pydantic model validates minimal LLM BLUF output."""
@@ -177,7 +290,7 @@ class TestBlufContentModel:
             BlufContent(**bad)
 
     def test_missing_labels_raises(self):
-        """CLAUDE.md rule 2: labels is NEVER Optional."""
+        """AGENTS.md rule 2: labels is NEVER Optional."""
         from anveshak.reporter.llm import BlufContent
 
         bad = {k: v for k, v in VALID_BLUF_RESPONSE.items() if k != "labels"}
@@ -265,6 +378,7 @@ class TestCallOllamaForBluf:
 # Phase 2: render_bluf_prompt
 # ---------------------------------------------------------------------------
 
+
 class TestRenderBlufPrompt:
     """render_bluf_prompt produces a short, focused prompt."""
 
@@ -315,11 +429,13 @@ class TestRenderBlufPrompt:
 # Phase 3: _build_content_md_v2
 # ---------------------------------------------------------------------------
 
+
 class TestBuildContentMdV2:
     """_build_content_md_v2 builds data-driven markdown from SQL data."""
 
     def _make_bluf(self):
         from anveshak.reporter.llm import BlufContent
+
         return BlufContent(**VALID_BLUF_RESPONSE)
 
     def test_starts_with_v2_marker(self):
@@ -440,8 +556,12 @@ class TestBuildContentMdV2:
         from anveshak.reporter.worker import _build_content_md_v2
 
         identifiers = [
-            {"identifier_type": "PHONE", "identifier_value": "+91-9876543210",
-             "source_count": 3, "content_item_count": 7},
+            {
+                "identifier_type": "PHONE",
+                "identifier_value": "+91-9876543210",
+                "source_count": 3,
+                "content_item_count": 7,
+            },
         ]
         md = _build_content_md_v2(
             bluf=self._make_bluf(),
@@ -464,7 +584,7 @@ class TestBuildContentMdV2:
             report_type="intelligence_brief",
         )
         assert "148" in md  # content_count
-        assert "9" in md    # source_count
+        assert "9" in md  # source_count
 
     def test_contains_language_breakdown(self):
         from anveshak.reporter.worker import _build_content_md_v2
@@ -484,24 +604,38 @@ class TestBuildContentMdV2:
 # Fix 1: Evidence title fallback (no "None" titles)
 # ---------------------------------------------------------------------------
 
+
 class TestEvidenceTitleFallback:
     """Evidence cards should never show 'None' as title."""
 
     def _make_bluf(self):
         from anveshak.reporter.llm import BlufContent
+
         return BlufContent(**VALID_BLUF_RESPONSE)
 
     def test_evidence_card_uses_snippet_when_title_is_none(self):
         from anveshak.reporter.worker import _build_content_md_v2
 
-        bundle = {**SAMPLE_DATA_BUNDLE, "evidence_items": [
-            {"title": None, "url": "https://example.com", "source_name": "Test",
-             "platform": "web", "captured_at": "2026-06-20", "credibility_score_at_capture": 50.0,
-             "snippet": "This is a snippet about UAV activity near the border region"},
-        ]}
+        bundle = {
+            **SAMPLE_DATA_BUNDLE,
+            "evidence_items": [
+                {
+                    "title": None,
+                    "url": "https://example.com",
+                    "source_name": "Test",
+                    "platform": "web",
+                    "captured_at": "2026-06-20",
+                    "credibility_score_at_capture": 50.0,
+                    "snippet": "This is a snippet about UAV activity near the border region",
+                },
+            ],
+        }
         md = _build_content_md_v2(
-            bluf=self._make_bluf(), data_bundle=bundle,
-            identifiers=[], template_matches=[], report_type="research_summary",
+            bluf=self._make_bluf(),
+            data_bundle=bundle,
+            identifiers=[],
+            template_matches=[],
+            report_type="research_summary",
         )
         assert "None" not in md.split("Evidence")[1].split("##")[0]
         assert "snippet about UAV" in md
@@ -509,14 +643,26 @@ class TestEvidenceTitleFallback:
     def test_evidence_card_uses_snippet_when_title_is_empty(self):
         from anveshak.reporter.worker import _build_content_md_v2
 
-        bundle = {**SAMPLE_DATA_BUNDLE, "evidence_items": [
-            {"title": "", "url": "https://example.com", "source_name": "Test",
-             "platform": "web", "captured_at": "2026-06-20", "credibility_score_at_capture": 50.0,
-             "snippet": "Breaking news about border incident"},
-        ]}
+        bundle = {
+            **SAMPLE_DATA_BUNDLE,
+            "evidence_items": [
+                {
+                    "title": "",
+                    "url": "https://example.com",
+                    "source_name": "Test",
+                    "platform": "web",
+                    "captured_at": "2026-06-20",
+                    "credibility_score_at_capture": 50.0,
+                    "snippet": "Breaking news about border incident",
+                },
+            ],
+        }
         md = _build_content_md_v2(
-            bluf=self._make_bluf(), data_bundle=bundle,
-            identifiers=[], template_matches=[], report_type="research_summary",
+            bluf=self._make_bluf(),
+            data_bundle=bundle,
+            identifiers=[],
+            template_matches=[],
+            report_type="research_summary",
         )
         evidence_section = md.split("Evidence")[1]
         assert "Breaking news" in evidence_section
@@ -526,11 +672,13 @@ class TestEvidenceTitleFallback:
 # Fix 2: Dedup evidence items by URL
 # ---------------------------------------------------------------------------
 
+
 class TestEvidenceDedup:
     """SQL_REPORT_EVIDENCE_ITEMS should not return duplicate URLs."""
 
     def test_sql_has_distinct_on_url(self):
         from anveshak.reporter.db import SQL_REPORT_EVIDENCE_ITEMS
+
         sql_upper = SQL_REPORT_EVIDENCE_ITEMS.upper()
         assert "DISTINCT" in sql_upper
 
@@ -539,26 +687,31 @@ class TestEvidenceDedup:
 # Fix 3+7: Entity noise filtering
 # ---------------------------------------------------------------------------
 
+
 class TestEntityNoiseFilter:
     """Entities table should exclude CARDINAL, ORDINAL, DATE, etc."""
 
     def test_sql_excludes_cardinal(self):
         from anveshak.reporter.db import SQL_REPORT_ENTITIES
+
         assert "CARDINAL" in SQL_REPORT_ENTITIES
 
     def test_sql_excludes_ordinal(self):
         from anveshak.reporter.db import SQL_REPORT_ENTITIES
+
         assert "ORDINAL" in SQL_REPORT_ENTITIES
 
     def test_sql_excludes_date(self):
         """DATE entities like '1999', '2024' are noise in entity tables."""
         from anveshak.reporter.db import SQL_REPORT_ENTITIES
+
         # Should filter DATE but not in a way that breaks the query
         assert "'DATE'" in SQL_REPORT_ENTITIES or "DATE" in SQL_REPORT_ENTITIES
 
     def test_confidence_threshold_at_least_075(self):
         """Confidence >= 0.75 filters low-quality entity extractions."""
         from anveshak.reporter.db import SQL_REPORT_ENTITIES
+
         assert "0.75" in SQL_REPORT_ENTITIES or "0.8" in SQL_REPORT_ENTITIES
 
 
@@ -566,24 +719,37 @@ class TestEntityNoiseFilter:
 # Fix 4: Signal description not truncated too short
 # ---------------------------------------------------------------------------
 
+
 class TestSignalTruncation:
     """Signal descriptions should show at least 120 chars."""
 
     def _make_bluf(self):
         from anveshak.reporter.llm import BlufContent
+
         return BlufContent(**VALID_BLUF_RESPONSE)
 
     def test_long_signal_description_not_cut_at_60(self):
         from anveshak.reporter.worker import _build_content_md_v2
 
         long_desc = "Cross-platform disinformation amplification: identical inflammatory images shared across Telegram and Reddit within 2 hours"
-        bundle = {**SAMPLE_DATA_BUNDLE, "signals": [
-            {"id": "s1", "description": long_desc, "status": "new",
-             "cluster_label": "Disinfo", "created_at": "2026-06-20T10:00:00Z"},
-        ]}
+        bundle = {
+            **SAMPLE_DATA_BUNDLE,
+            "signals": [
+                {
+                    "id": "s1",
+                    "description": long_desc,
+                    "status": "new",
+                    "cluster_label": "Disinfo",
+                    "created_at": "2026-06-20T10:00:00Z",
+                },
+            ],
+        }
         md = _build_content_md_v2(
-            bluf=self._make_bluf(), data_bundle=bundle,
-            identifiers=[], template_matches=[], report_type="intelligence_brief",
+            bluf=self._make_bluf(),
+            data_bundle=bundle,
+            identifiers=[],
+            template_matches=[],
+            report_type="intelligence_brief",
         )
         # Should contain at least 100 chars of the description
         assert "identical inflammatory images" in md
@@ -592,6 +758,7 @@ class TestSignalTruncation:
 # ---------------------------------------------------------------------------
 # Fix 5: Timestamp formatting
 # ---------------------------------------------------------------------------
+
 
 class TestTimestampFormatting:
     """Generated timestamps should be human-readable, not raw UTC microseconds."""
@@ -607,8 +774,13 @@ class TestTimestampFormatting:
             "confidence_score": 0.7,
             "content_item_count": 10,
             "labels": {"classification": "OPEN"},
-            "topic_stats": {"name": "Test", "content_count": 10, "source_count": 3,
-                           "cluster_count": 1, "signal_count": 0},
+            "topic_stats": {
+                "name": "Test",
+                "content_count": 10,
+                "source_count": 3,
+                "cluster_count": 1,
+                "signal_count": 0,
+            },
             "sources": [],
         }
         html = render_pdf_html(report_data)

@@ -9,10 +9,10 @@ skipped by the noise filter.
 
 See: learned/threshold-and-setting-invariants.md
 """
+
 from __future__ import annotations
 
 import pytest
-
 from anveshak.analyst.settings import AnalystSettings
 
 
@@ -65,8 +65,7 @@ class TestCredibilitySettingInvariants:
         """
         s = AnalystSettings()
         assert 0.0 < s.credibility_noise_ratio_threshold <= 1.0, (
-            f"noise_ratio_threshold ({s.credibility_noise_ratio_threshold}) "
-            f"must be in (0.0, 1.0]"
+            f"noise_ratio_threshold ({s.credibility_noise_ratio_threshold}) must be in (0.0, 1.0]"
         )
 
     def test_sentiment_shift_threshold_positive(self):

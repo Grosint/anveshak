@@ -6,6 +6,7 @@ Bug 3: Audit trail must be accessible to analysts when filtered by resource_id.
 
 pytest.mark.unit — no external dependencies.
 """
+
 from __future__ import annotations
 
 import re
@@ -17,6 +18,7 @@ import pytest
 
 class _FakeRecord(dict):
     """Mimics asyncpg.Record: dict() conversion works, supports keys()/items()."""
+
     pass
 
 
@@ -28,54 +30,62 @@ def asyncpg_record(data: dict) -> _FakeRecord:
 # Bug 1: Content count missing from GET topic detail
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestGetTopicIncludesContentCount:
     """SQL_GET_TOPIC must compute content_count from both content paths."""
 
     def test_sql_get_topic_has_content_count(self):
         from anveshak.api.db.topics import SQL_GET_TOPIC
+
         sql_lower = SQL_GET_TOPIC.lower()
-        assert "content_count" in sql_lower, \
+        assert "content_count" in sql_lower, (
             "SQL_GET_TOPIC must include content_count computed column"
+        )
 
     def test_sql_get_topic_unions_both_content_paths(self):
         from anveshak.api.db.topics import SQL_GET_TOPIC
+
         sql_lower = SQL_GET_TOPIC.lower()
-        assert "content_items" in sql_lower, \
-            "SQL_GET_TOPIC must query content_items table"
-        assert "topic_content_items" in sql_lower, \
+        assert "content_items" in sql_lower, "SQL_GET_TOPIC must query content_items table"
+        assert "topic_content_items" in sql_lower, (
             "SQL_GET_TOPIC must query topic_content_items join table"
+        )
 
     def test_sql_get_topic_has_signal_count(self):
         from anveshak.api.db.topics import SQL_GET_TOPIC
+
         sql_lower = SQL_GET_TOPIC.lower()
-        assert "signal_count" in sql_lower, \
+        assert "signal_count" in sql_lower, (
             "SQL_GET_TOPIC must include signal_count computed column"
+        )
 
     @pytest.mark.asyncio
     async def test_get_topic_returns_content_count(self):
         """get_topic() result must include content_count key."""
         from anveshak.api.db.topics import get_topic
 
-        fake_row = asyncpg_record({
-            "id": "topic-1",
-            "name": "Test Topic",
-            "status": "active",
-            "content_count": 42,
-            "signal_count": 3,
-        })
+        fake_row = asyncpg_record(
+            {
+                "id": "topic-1",
+                "name": "Test Topic",
+                "status": "active",
+                "content_count": 42,
+                "signal_count": 3,
+            }
+        )
         conn = AsyncMock()
         conn.fetchrow = AsyncMock(return_value=fake_row)
 
         result = await get_topic(conn, "topic-1")
         assert result is not None
-        assert "content_count" in result, \
-            "get_topic() must return content_count"
+        assert "content_count" in result, "get_topic() must return content_count"
 
 
 # ---------------------------------------------------------------------------
 # Bug 2: Identifier cluster item INSERT column mismatch
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestIdentifierClusterItemInsert:
@@ -84,6 +94,7 @@ class TestIdentifierClusterItemInsert:
     def test_insert_does_not_reference_id_column(self):
         """Table has composite PK (identifier_cluster_id, content_item_id), no 'id' column."""
         from anveshak.analyst.scheduler import SQL_INSERT_IDENTIFIER_CLUSTER_ITEM
+
         # Extract column list from INSERT INTO ... (columns) VALUES
         match = re.search(
             r"INSERT\s+INTO\s+identifier_cluster_items\s*\(([^)]+)\)",
@@ -92,12 +103,14 @@ class TestIdentifierClusterItemInsert:
         )
         assert match, "SQL must be an INSERT INTO identifier_cluster_items"
         columns = [c.strip().lower() for c in match.group(1).split(",")]
-        assert "id" not in columns, \
+        assert "id" not in columns, (
             "identifier_cluster_items has no 'id' column — INSERT must not reference it"
+        )
 
     def test_insert_does_not_reference_labels_column(self):
         """Table has no 'labels' column."""
         from anveshak.analyst.scheduler import SQL_INSERT_IDENTIFIER_CLUSTER_ITEM
+
         match = re.search(
             r"INSERT\s+INTO\s+identifier_cluster_items\s*\(([^)]+)\)",
             SQL_INSERT_IDENTIFIER_CLUSTER_ITEM,
@@ -105,19 +118,23 @@ class TestIdentifierClusterItemInsert:
         )
         assert match
         columns = [c.strip().lower() for c in match.group(1).split(",")]
-        assert "labels" not in columns, \
+        assert "labels" not in columns, (
             "identifier_cluster_items has no 'labels' column — INSERT must not reference it"
+        )
 
     def test_insert_uses_three_params(self):
         """INSERT must use exactly 3 positional params ($1, $2, $3)."""
         from anveshak.analyst.scheduler import SQL_INSERT_IDENTIFIER_CLUSTER_ITEM
+
         params = re.findall(r"\$\d+", SQL_INSERT_IDENTIFIER_CLUSTER_ITEM)
-        assert params == ["$1", "$2", "$3"], \
+        assert params == ["$1", "$2", "$3"], (
             f"Expected 3 params ($1,$2,$3) for (identifier_cluster_id, content_item_id, source_id), got {params}"
+        )
 
     def test_insert_columns_match_schema(self):
         """INSERT must target exactly: identifier_cluster_id, content_item_id, source_id."""
         from anveshak.analyst.scheduler import SQL_INSERT_IDENTIFIER_CLUSTER_ITEM
+
         match = re.search(
             r"INSERT\s+INTO\s+identifier_cluster_items\s*\(([^)]+)\)",
             SQL_INSERT_IDENTIFIER_CLUSTER_ITEM,
@@ -126,8 +143,7 @@ class TestIdentifierClusterItemInsert:
         assert match
         columns = {c.strip().lower() for c in match.group(1).split(",")}
         expected = {"identifier_cluster_id", "content_item_id", "source_id"}
-        assert columns == expected, \
-            f"Columns {columns} don't match table schema {expected}"
+        assert columns == expected, f"Columns {columns} don't match table schema {expected}"
 
 
 @pytest.mark.unit
@@ -167,10 +183,12 @@ class TestIdentifierClusterCycleCallSite:
         ]
 
         conn = AsyncMock()
-        conn.fetch = AsyncMock(side_effect=[
-            [{"id": "topic-1"}],  # active topics
-            fake_entity_rows,     # unclustered identifiers
-        ])
+        conn.fetch = AsyncMock(
+            side_effect=[
+                [{"id": "topic-1"}],  # active topics
+                fake_entity_rows,  # unclustered identifiers
+            ]
+        )
         conn.fetchrow = AsyncMock(return_value={"id": "cluster-1"})
         conn.execute = AsyncMock()
 
@@ -188,12 +206,12 @@ class TestIdentifierClusterCycleCallSite:
 
         with patch("anveshak.analyst.scheduler.build_clusters", return_value=[fake_cluster]):
             from anveshak.analyst.scheduler import _run_identifier_cluster_cycle
+
             await _run_identifier_cluster_cycle(pool)
 
         # Find the execute call for INSERT INTO identifier_cluster_items
         insert_calls = [
-            c for c in conn.execute.call_args_list
-            if "identifier_cluster_items" in str(c)
+            c for c in conn.execute.call_args_list if "identifier_cluster_items" in str(c)
         ]
         assert len(insert_calls) >= 1, "Must INSERT into identifier_cluster_items"
         # Each INSERT call should have SQL + 3 params (not 4)
@@ -201,13 +219,15 @@ class TestIdentifierClusterCycleCallSite:
             args = call.args
             # args[0] = SQL string, args[1:] = params
             param_count = len(args) - 1
-            assert param_count == 3, \
+            assert param_count == 3, (
                 f"INSERT must pass 3 params (cluster_id, ci_id, source_id), got {param_count}"
+            )
 
 
 # ---------------------------------------------------------------------------
 # Bug 3: Audit trail inaccessible to analysts
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestAuditTrailByResourceId:
@@ -226,18 +246,22 @@ class TestAuditTrailByResourceId:
         # Must NOT fall through to SQL_GET_AUDIT_TRAIL_ALL
         call_args = conn.fetch.call_args
         sql = call_args.args[0].lower()
-        assert "resource_id" in sql, \
+        assert "resource_id" in sql, (
             "When resource_id is provided, SQL must filter by resource_id (not return all)"
+        )
 
     def test_sql_get_audit_trail_by_resource_id_exists(self):
         """A SQL constant for resource_id-only filtering must exist."""
         from anveshak.api.db import audit
-        assert hasattr(audit, "SQL_GET_AUDIT_TRAIL_BY_RESOURCE_ID"), \
+
+        assert hasattr(audit, "SQL_GET_AUDIT_TRAIL_BY_RESOURCE_ID"), (
             "audit.py must define SQL_GET_AUDIT_TRAIL_BY_RESOURCE_ID"
+        )
 
     def test_sql_get_audit_trail_by_resource_id_content(self):
         """SQL must filter by resource_id without requiring resource_type."""
         from anveshak.api.db.audit import SQL_GET_AUDIT_TRAIL_BY_RESOURCE_ID
+
         sql_lower = SQL_GET_AUDIT_TRAIL_BY_RESOURCE_ID.lower()
         assert "resource_id" in sql_lower
         assert "audit_trail" in sql_lower
@@ -250,7 +274,8 @@ class TestAuditTrailAnalystAccess:
     def test_audit_trail_route_accepts_analyst(self):
         """Route decorator must include 'analyst' in allowed roles."""
         import inspect
+
         from anveshak.api.routes import system
+
         source = inspect.getsource(system.get_audit_trail)
-        assert "analyst" in source, \
-            "audit-trail endpoint must allow analyst role"
+        assert "analyst" in source, "audit-trail endpoint must allow analyst role"

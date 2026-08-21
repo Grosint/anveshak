@@ -5,6 +5,7 @@ them without validating that they point to external hosts. Internal
 network IPs (Docker 172.28.x.x, localhost, metadata endpoints) must be
 blocked.
 """
+
 from __future__ import annotations
 
 import pytest

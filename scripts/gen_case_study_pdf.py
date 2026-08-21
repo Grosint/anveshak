@@ -4,7 +4,9 @@
 Uses basic regex-based markdown→HTML (no external markdown lib needed).
 Run inside report-worker container.
 """
+
 import re
+
 from weasyprint import HTML
 
 INPUT = "/tmp/case_study_iaf.md"
@@ -130,9 +132,9 @@ def md_to_html(md: str) -> str:
             in_ol = False
 
     def inline(text: str) -> str:
-        text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
-        text = re.sub(r'\*(.+?)\*', r'<em>\1</em>', text)
-        text = re.sub(r'`(.+?)`', r'<code>\1</code>', text)
+        text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+        text = re.sub(r"\*(.+?)\*", r"<em>\1</em>", text)
+        text = re.sub(r"`(.+?)`", r"<code>\1</code>", text)
         return text
 
     i = 0
@@ -152,7 +154,7 @@ def md_to_html(md: str) -> str:
             flush_bq()
 
         # Headings
-        m = re.match(r'^(#{1,4})\s+(.+)', line)
+        m = re.match(r"^(#{1,4})\s+(.+)", line)
         if m:
             flush_list()
             flush_ol()
@@ -162,7 +164,7 @@ def md_to_html(md: str) -> str:
             continue
 
         # HR
-        if re.match(r'^---+\s*$', line):
+        if re.match(r"^---+\s*$", line):
             flush_list()
             flush_ol()
             html_lines.append("<hr>")
@@ -179,11 +181,15 @@ def md_to_html(md: str) -> str:
                     in_table = True
                     html_lines.append("<table>")
                     # Check if next line is separator
-                    if i + 1 < len(lines) and re.match(r'^[\|\-\s:]+$', lines[i + 1]):
-                        html_lines.append("<tr>" + "".join(f"<th>{inline(c)}</th>" for c in cells) + "</tr>")
+                    if i + 1 < len(lines) and re.match(r"^[\|\-\s:]+$", lines[i + 1]):
+                        html_lines.append(
+                            "<tr>" + "".join(f"<th>{inline(c)}</th>" for c in cells) + "</tr>"
+                        )
                         i += 2  # skip separator
                         continue
-                html_lines.append("<tr>" + "".join(f"<td>{inline(c)}</td>" for c in cells) + "</tr>")
+                html_lines.append(
+                    "<tr>" + "".join(f"<td>{inline(c)}</td>" for c in cells) + "</tr>"
+                )
                 i += 1
                 continue
         elif in_table:
@@ -191,7 +197,7 @@ def md_to_html(md: str) -> str:
             in_table = False
 
         # Unordered list
-        m = re.match(r'^[-*]\s+(.+)', line)
+        m = re.match(r"^[-*]\s+(.+)", line)
         if m:
             flush_ol()
             if not in_list:
@@ -204,7 +210,7 @@ def md_to_html(md: str) -> str:
             flush_list()
 
         # Ordered list
-        m = re.match(r'^\d+\.\s+(.+)', line)
+        m = re.match(r"^\d+\.\s+(.+)", line)
         if m:
             flush_list()
             if not in_ol:

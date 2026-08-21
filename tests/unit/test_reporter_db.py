@@ -3,6 +3,7 @@
 pytest.mark.unit — mocks asyncpg pool/connection.
 Tests the 'UPDATE N' string parsing and WHERE generated_at IS NULL guard.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
@@ -33,6 +34,7 @@ class TestSetReportGenerated:
         conn.execute.return_value = "UPDATE 1"
 
         from anveshak.reporter.db import set_report_generated
+
         result = await set_report_generated(
             pool=pool,
             report_id="report-1",
@@ -56,6 +58,7 @@ class TestSetReportGenerated:
         conn.execute.return_value = "UPDATE 0"
 
         from anveshak.reporter.db import set_report_generated
+
         result = await set_report_generated(
             pool=pool,
             report_id="report-1",

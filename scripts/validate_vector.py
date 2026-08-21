@@ -9,15 +9,14 @@ Usage:
     make validate-vector
     python scripts/validate_vector.py
 """
+
 from __future__ import annotations
 
 import json
-import os
 import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-
 
 BASE = "http://localhost:8000"
 DEMO_USER = "demo@anveshak.local"
@@ -35,6 +34,7 @@ class Check:
 # ---------------------------------------------------------------------------
 # HTTP helpers (stdlib only — same pattern as validate_pipeline.py)
 # ---------------------------------------------------------------------------
+
 
 def http_get(url: str, headers: dict | None = None, timeout: int = 8) -> tuple[int, dict]:
     try:
@@ -54,7 +54,8 @@ def http_get(url: str, headers: dict | None = None, timeout: int = 8) -> tuple[i
 def http_post(url: str, data: dict, timeout: int = 8) -> tuple[int, dict]:
     body = json.dumps(data).encode()
     req = urllib.request.Request(
-        url, data=body,
+        url,
+        data=body,
         headers={"Content-Type": "application/json", "Accept": "application/json"},
     )
     try:
@@ -75,9 +76,13 @@ def _auth(token: str) -> dict:
 
 
 def login() -> tuple[Check, str | None]:
-    status, body = http_post(f"{BASE}/api/v1/auth/login", {
-        "email": DEMO_USER, "password": DEMO_PASS,
-    })
+    status, body = http_post(
+        f"{BASE}/api/v1/auth/login",
+        {
+            "email": DEMO_USER,
+            "password": DEMO_PASS,
+        },
+    )
     if status == 200 and "access_token" in body:
         return Check("Login", True, "authenticated"), body["access_token"]
     return Check("Login", False, f"HTTP {status}"), None
@@ -86,6 +91,7 @@ def login() -> tuple[Check, str | None]:
 # ---------------------------------------------------------------------------
 # Stage checks — all operate on the vector-health response
 # ---------------------------------------------------------------------------
+
 
 def check_migrations(m: dict) -> list[Check]:
     """Stage 1 — Verify all 5 migrations (002–006) are applied."""
@@ -100,11 +106,13 @@ def check_migrations(m: dict) -> list[Check]:
     migrations = m.get("migrations", {})
     for key, label in migration_names.items():
         applied = migrations.get(key, False)
-        checks.append(Check(
-            f"Migration {key[:3]}",
-            applied,
-            f"{label} — {'applied' if applied else 'NOT applied (run: make migrate)'}",
-        ))
+        checks.append(
+            Check(
+                f"Migration {key[:3]}",
+                applied,
+                f"{label} — {'applied' if applied else 'NOT applied (run: make migrate)'}",
+            )
+        )
     return checks
 
 
@@ -125,16 +133,22 @@ def check_near_duplicates(m: dict) -> list[Check]:
     """Stage 3 — Near-duplicate detection table and data."""
     checks = []
     table_exists = m.get("migrations", {}).get("002_near_duplicates", False)
-    checks.append(Check("Near-dup table", table_exists,
-                        "exists" if table_exists else "table missing"))
+    checks.append(
+        Check("Near-dup table", table_exists, "exists" if table_exists else "table missing")
+    )
 
     count = m.get("near_duplicates_count", 0)
     if count > 0:
         checks.append(Check("Near-dup pairs", True, f"{count} pairs detected"))
     else:
-        checks.append(Check("Near-dup pairs", True,
-                            "0 pairs — normal on fresh deploy or no paraphrased content",
-                            warning=True))
+        checks.append(
+            Check(
+                "Near-dup pairs",
+                True,
+                "0 pairs — normal on fresh deploy or no paraphrased content",
+                warning=True,
+            )
+        )
     return checks
 
 
@@ -142,27 +156,36 @@ def check_dedup_isc(m: dict) -> list[Check]:
     """Stage 4 — Dedup-to-ISC integrity."""
     near_dup = m.get("near_duplicates_count", 0)
     if near_dup > 0:
-        return [Check("Dedup→ISC integrity", True,
-                       f"{near_dup} near-duplicate pairs exist; ISC filtering active")]
-    return [Check("Dedup→ISC integrity", True,
-                  "no near-duplicates yet — ISC filtering will activate when pairs detected",
-                  warning=True)]
+        return [
+            Check(
+                "Dedup→ISC integrity",
+                True,
+                f"{near_dup} near-duplicate pairs exist; ISC filtering active",
+            )
+        ]
+    return [
+        Check(
+            "Dedup→ISC integrity",
+            True,
+            "no near-duplicates yet — ISC filtering will activate when pairs detected",
+            warning=True,
+        )
+    ]
 
 
 def check_temporal(m: dict) -> list[Check]:
     """Stage 5 — Temporal windowing and cluster archival."""
     checks = []
     col_exists = m.get("migrations", {}).get("004_cluster_temporal", False)
-    checks.append(Check("archived_at column", col_exists,
-                        "present" if col_exists else "missing"))
+    checks.append(Check("archived_at column", col_exists, "present" if col_exists else "missing"))
 
     archived = m.get("archived_clusters_count", 0)
     if archived > 0:
         checks.append(Check("Archived clusters", True, f"{archived} clusters archived"))
     else:
-        checks.append(Check("Archived clusters", True,
-                            "0 — normal if all clusters are recent",
-                            warning=True))
+        checks.append(
+            Check("Archived clusters", True, "0 — normal if all clusters are recent", warning=True)
+        )
     return checks
 
 
@@ -170,17 +193,19 @@ def check_label_staleness(m: dict) -> list[Check]:
     """Stage 6 — Label staleness tracking."""
     checks = []
     col_exists = m.get("migrations", {}).get("005_label_staleness", False)
-    checks.append(Check("Label tracking columns", col_exists,
-                        "present" if col_exists else "missing"))
+    checks.append(
+        Check("Label tracking columns", col_exists, "present" if col_exists else "missing")
+    )
 
     labeled = m.get("labeled_clusters_count", 0)
     if labeled > 0:
-        checks.append(Check("Labeled clusters", True,
-                            f"{labeled} clusters with tracked labels"))
+        checks.append(Check("Labeled clusters", True, f"{labeled} clusters with tracked labels"))
     else:
-        checks.append(Check("Labeled clusters", True,
-                            "0 — labelling cycle may not have run yet",
-                            warning=True))
+        checks.append(
+            Check(
+                "Labeled clusters", True, "0 — labelling cycle may not have run yet", warning=True
+            )
+        )
     return checks
 
 
@@ -188,17 +213,22 @@ def check_convergence(m: dict) -> list[Check]:
     """Stage 7 — Cross-topic convergence."""
     checks = []
     idx_exists = m.get("migrations", {}).get("006_cross_topic_signals", False)
-    checks.append(Check("Convergence index", idx_exists,
-                        "present" if idx_exists else "missing"))
+    checks.append(Check("Convergence index", idx_exists, "present" if idx_exists else "missing"))
 
     signals = m.get("convergence_signals_count", 0)
     if signals > 0:
-        checks.append(Check("Convergence signals", True,
-                            f"{signals} cross-topic convergence signals fired"))
+        checks.append(
+            Check("Convergence signals", True, f"{signals} cross-topic convergence signals fired")
+        )
     else:
-        checks.append(Check("Convergence signals", True,
-                            "0 — normal if topics don't share narratives yet",
-                            warning=True))
+        checks.append(
+            Check(
+                "Convergence signals",
+                True,
+                "0 — normal if topics don't share narratives yet",
+                warning=True,
+            )
+        )
     return checks
 
 
@@ -207,18 +237,25 @@ def check_backfill(m: dict) -> list[Check]:
     checks = []
     backfilled = m.get("backfilled_items_count", 0)
     if backfilled > 0:
-        checks.append(Check("Backfilled items", True,
-                            f"{backfilled} items backfilled across topics"))
+        checks.append(
+            Check("Backfilled items", True, f"{backfilled} items backfilled across topics")
+        )
     else:
-        checks.append(Check("Backfilled items", True,
-                            "0 — backfill loop may not have run yet or no cross-topic matches",
-                            warning=True))
+        checks.append(
+            Check(
+                "Backfilled items",
+                True,
+                "0 — backfill loop may not have run yet or no cross-topic matches",
+                warning=True,
+            )
+        )
     return checks
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> int:
     print("=" * 62)

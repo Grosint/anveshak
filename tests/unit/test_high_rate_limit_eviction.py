@@ -2,9 +2,8 @@
 
 _windows dict grows unbounded. Must cap at max_entries and evict oldest.
 """
-from __future__ import annotations
 
-import time
+from __future__ import annotations
 
 import pytest
 
@@ -12,7 +11,6 @@ pytestmark = pytest.mark.unit
 
 
 class TestRateLimiterEviction:
-
     def test_windows_has_max_entries(self):
         """Rate limiter must have a bounded store, not a plain dict."""
         from anveshak.api.middleware.rate_limit import _windows

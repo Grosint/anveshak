@@ -21,6 +21,7 @@ Supported source languages (currently active):
 Model: facebook/nllb-200-distilled-600M (~2.4GB, CPU-capable)
 GPU upgrade: facebook/nllb-200-1.3B or facebook/nllb-200-3.3B — see hardware.md
 """
+
 from __future__ import annotations
 
 import structlog
@@ -32,21 +33,21 @@ log = structlog.get_logger(__name__)
 # NLLB-200 language codes for supported source languages.
 # Keys are ISO 639-1 codes (from langdetect); values are NLLB flores-200 codes.
 _NLLB_SRC_CODES: dict[str, str] = {
-    "zh": "zho_Hans",   # Chinese Simplified
+    "zh": "zho_Hans",  # Chinese Simplified
     "zh-cn": "zho_Hans",
     "zh-tw": "zho_Hant",
-    "hi": "hin_Deva",   # Hindi
-    "ar": "arb_Arab",   # Arabic
-    "ur": "urd_Arab",   # Urdu
-    "ru": "rus_Cyrl",   # Russian
-    "bn": "ben_Beng",   # Bengali
-    "te": "tel_Telu",   # Telugu
-    "ta": "tam_Taml",   # Tamil
-    "or": "ory_Orya",   # Odia
-    "ml": "mal_Mlym",   # Malayalam
+    "hi": "hin_Deva",  # Hindi
+    "ar": "arb_Arab",  # Arabic
+    "ur": "urd_Arab",  # Urdu
+    "ru": "rus_Cyrl",  # Russian
+    "bn": "ben_Beng",  # Bengali
+    "te": "tel_Telu",  # Telugu
+    "ta": "tam_Taml",  # Tamil
+    "or": "ory_Orya",  # Odia
+    "ml": "mal_Mlym",  # Malayalam
 }
 
-_NLLB_TGT_CODE = "eng_Latn"   # English (Latin script) — always the target
+_NLLB_TGT_CODE = "eng_Latn"  # English (Latin script) — always the target
 
 # Module-level cache — model loaded once at first use (lazy).
 _pipeline = None
@@ -58,16 +59,25 @@ def _get_pipeline():
     if _pipeline is not None:
         return _pipeline
 
+    import torch
     from transformers import pipeline as hf_pipeline
+
+    # Bound torch to its configured thread budget BEFORE the model is built.
+    # Left unset, torch grabs os.cpu_count() threads per op and WorkerSettings
+    # runs several analyse jobs at once, so every core is oversubscribed and
+    # each translation gets slower the more of them are in flight.
+    torch.set_num_threads(settings.torch_num_threads)
+    torch.set_num_interop_threads(settings.torch_num_threads)
 
     log.info(
         "translation.loading_model",
         model=settings.translation_model,
+        torch_threads=settings.torch_num_threads,
     )
     _pipeline = hf_pipeline(
         "translation",
         model=settings.translation_model,
-        device=-1,                  # -1 = CPU; override via TRANSLATION_DEVICE in future
+        device=-1,  # -1 = CPU; override via TRANSLATION_DEVICE in future
         max_length=settings.translation_max_tokens,
     )
     log.info("translation.model_loaded", model=settings.translation_model)
@@ -101,7 +111,9 @@ def translate_to_english(text: str, src_lang: str) -> str | None:
         )
         return None
 
-    # Truncate to max chars to avoid OOM on very long articles.
+    # Truncate to max chars to avoid OOM on very long articles. This is a
+    # first-pass character budget only; it does NOT bound the token count, so
+    # the token clamp below is what actually protects the model.
     if len(text) > settings.translation_max_chars:
         text = text[: settings.translation_max_chars]
         log.debug(
@@ -112,10 +124,33 @@ def translate_to_english(text: str, src_lang: str) -> str | None:
 
     try:
         pipe = _get_pipeline()
+
+        # Clamp on TOKENS, not characters. Dense scripts (Devanagari, Arabic,
+        # CJK) tokenise to far more tokens per character than Latin, so a text
+        # inside the character budget can still overrun the model's position
+        # limit. Overrunning it does not raise: generation just never
+        # terminates and pins the CPU indefinitely.
+        tokenizer = pipe.tokenizer
+        tokenizer.src_lang = nllb_src
+        token_ids = tokenizer(text, add_special_tokens=False)["input_ids"]
+        if len(token_ids) > settings.translation_max_input_tokens:
+            text = tokenizer.decode(
+                token_ids[: settings.translation_max_input_tokens],
+                skip_special_tokens=True,
+            )
+            log.info(
+                "translation.tokens_truncated",
+                lang=src_lang,
+                src_tokens=len(token_ids),
+                max_input_tokens=settings.translation_max_input_tokens,
+            )
+
         result = pipe(
             text,
             src_lang=nllb_src,
             tgt_lang=_NLLB_TGT_CODE,
+            truncation=True,
+            max_length=settings.translation_max_tokens,
         )
         translated: str = result[0]["translation_text"]
         log.info(

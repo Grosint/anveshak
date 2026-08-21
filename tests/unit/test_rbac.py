@@ -10,10 +10,10 @@ Tests for:
 
 pytest.mark.unit — no external dependencies.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, UTC
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -23,6 +23,7 @@ pytestmark = pytest.mark.unit
 # ---------------------------------------------------------------------------
 # Helper: create a token with role + jti for testing
 # ---------------------------------------------------------------------------
+
 
 def _make_token(
     subject: str = "user-1",
@@ -43,6 +44,7 @@ def _make_token(
 # 1. JWT payload now includes role and jti
 # ===================================================================
 
+
 class TestJWTPayload:
     """JWT tokens must include role and jti (JWT ID) fields."""
 
@@ -57,9 +59,7 @@ class TestJWTPayload:
                 verify_token,
             )
 
-            token = create_access_token(
-                subject="user-1", username="admin_user", role="admin"
-            )
+            token = create_access_token(subject="user-1", username="admin_user", role="admin")
             payload = verify_token(token)
 
         assert payload["role"] == "admin"
@@ -120,6 +120,7 @@ class TestJWTPayload:
 # 2. require_role() dependency
 # ===================================================================
 
+
 class TestRequireRole:
     """require_role() must enforce role-based access control."""
 
@@ -137,6 +138,7 @@ class TestRequireRole:
     async def test_analyst_fails_admin_check(self):
         """Analyst user is rejected by require_role('admin')."""
         from fastapi import HTTPException
+
         from services.api.anveshak.api.auth.rbac import require_role
 
         dep = require_role("admin")
@@ -169,6 +171,7 @@ class TestRequireRole:
     async def test_viewer_fails_analyst_or_admin_check(self):
         """Viewer is rejected by require_role('analyst', 'admin')."""
         from fastapi import HTTPException
+
         from services.api.anveshak.api.auth.rbac import require_role
 
         dep = require_role("analyst", "admin")
@@ -191,6 +194,7 @@ class TestRequireRole:
     async def test_error_message_includes_role(self):
         """403 detail must say which roles were required."""
         from fastapi import HTTPException
+
         from services.api.anveshak.api.auth.rbac import require_role
 
         dep = require_role("admin")
@@ -203,6 +207,7 @@ class TestRequireRole:
 # ===================================================================
 # 3. Token revocation
 # ===================================================================
+
 
 class TestTokenRevocation:
     """Revoked tokens must be rejected by verify_token."""
@@ -218,9 +223,7 @@ class TestTokenRevocation:
 
         await revoke_token(mock_redis, jti, ttl_seconds)
 
-        mock_redis.setex.assert_awaited_once_with(
-            f"blocklist:{jti}", ttl_seconds, "1"
-        )
+        mock_redis.setex.assert_awaited_once_with(f"blocklist:{jti}", ttl_seconds, "1")
 
     @pytest.mark.asyncio
     async def test_is_token_revoked_true(self):
@@ -248,6 +251,7 @@ class TestTokenRevocation:
 # 4. Login includes role in token
 # ===================================================================
 
+
 class TestLoginWithRole:
     """Login endpoint must fetch role and include it in JWT."""
 
@@ -258,19 +262,24 @@ class TestLoginWithRole:
 
         hashed = pwd_context.hash("password")
 
-        with patch(
-            "services.api.anveshak.api.routes.auth.auth_db.get_user_by_username",
-            new=AsyncMock(return_value={
-                "id": "user-1",
-                "password_hash": hashed,
-                "role": "admin",
-            }),
-        ), patch("services.api.anveshak.api.auth.jwt.settings") as s:
+        with (
+            patch(
+                "services.api.anveshak.api.routes.auth.auth_db.get_user_by_username",
+                new=AsyncMock(
+                    return_value={
+                        "id": "user-1",
+                        "password_hash": hashed,
+                        "role": "admin",
+                    }
+                ),
+            ),
+            patch("services.api.anveshak.api.auth.jwt.settings") as s,
+        ):
             s.jwt_secret_key = "test-secret-for-rbac-tests"
             s.jwt_algorithm = "HS256"
             s.jwt_expire_minutes = 30
             from services.api.anveshak.api.auth.jwt import verify_token
-            from services.api.anveshak.api.routes.auth import login, LoginRequest
+            from services.api.anveshak.api.routes.auth import LoginRequest, login
 
             result = await login(LoginRequest(username="admin", password="password"), db=mock_conn)
             payload = verify_token(result["access_token"])
@@ -281,6 +290,7 @@ class TestLoginWithRole:
 # ===================================================================
 # 5. Logout endpoint
 # ===================================================================
+
 
 class TestLogout:
     """POST /auth/logout must revoke the current token."""
@@ -316,6 +326,7 @@ class TestLogout:
 # 6. GET /auth/me
 # ===================================================================
 
+
 class TestAuthMe:
     """GET /auth/me must return current user info."""
 
@@ -335,6 +346,7 @@ class TestAuthMe:
 # 7. Auth DB fetches role
 # ===================================================================
 
+
 class TestAuthDBRole:
     """get_user_by_username must return role field for JWT embedding."""
 
@@ -350,21 +362,21 @@ class TestAuthDBRole:
 # 8. CORS hardening
 # ===================================================================
 
+
 class TestCORSHardening:
     """CORS must not use allow_methods=["*"]."""
 
     def test_cors_explicit_methods(self):
         """CORS middleware must use explicit method list, not wildcard."""
-        import ast
-        import inspect
         from pathlib import Path
 
         main_path = Path("services/api/anveshak/api/main.py")
         source = main_path.read_text()
 
         # Check that allow_methods does NOT contain "*"
-        assert 'allow_methods=["*"]' not in source, \
+        assert 'allow_methods=["*"]' not in source, (
             "CORS allow_methods must not be wildcard — use explicit method list"
+        )
 
     def test_cors_origins_from_settings(self):
         """CORS allow_origins should reference settings, not be hardcoded."""
@@ -374,15 +386,17 @@ class TestCORSHardening:
         source = main_path.read_text()
 
         # Should reference settings for origins
-        assert "settings" in source.split("allow_origins")[1].split("\n")[0] or \
-               "API_ALLOWED_ORIGINS" in source or \
-               "allowed_origins" in source, \
-            "CORS origins should be configurable via settings"
+        assert (
+            "settings" in source.split("allow_origins")[1].split("\n")[0]
+            or "API_ALLOWED_ORIGINS" in source
+            or "allowed_origins" in source
+        ), "CORS origins should be configurable via settings"
 
 
 # ===================================================================
 # 9. JWT startup guard
 # ===================================================================
+
 
 class TestJWTStartupGuard:
     """API must refuse to start if JWT secret is the default."""

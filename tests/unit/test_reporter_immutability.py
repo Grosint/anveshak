@@ -1,24 +1,35 @@
 """Unit tests for reporter worker — report generation job immutability.
 
 pytest.mark.unit — mocks DB, Ollama, and embedding model.
-CLAUDE.md rule 4: generated_at is set ONCE via WHERE generated_at IS NULL guard.
+AGENTS.md rule 4: generated_at is set ONCE via WHERE generated_at IS NULL guard.
 """
+
 from __future__ import annotations
 
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 
 pytestmark = pytest.mark.unit
 
 
 def _data_bundle():
     return {
-        "topic_stats": {"name": "Test", "content_count": 5, "source_count": 2, "cluster_count": 1, "signal_count": 0},
-        "sources": [], "clusters": [], "signals": [], "entities": [],
-        "sentiment_trend": [], "keywords": [], "evidence_items": [], "language_breakdown": [],
+        "topic_stats": {
+            "name": "Test",
+            "content_count": 5,
+            "source_count": 2,
+            "cluster_count": 1,
+            "signal_count": 0,
+        },
+        "sources": [],
+        "clusters": [],
+        "signals": [],
+        "entities": [],
+        "sentiment_trend": [],
+        "keywords": [],
+        "evidence_items": [],
+        "language_breakdown": [],
     }
 
 
@@ -58,8 +69,8 @@ class TestGenerateReportIdempotency:
     @pytest.mark.asyncio
     async def test_second_call_is_noop_when_already_generated(self):
         """If set_report_generated returns False, job silently exits."""
-        from anveshak.reporter.worker import generate_report
         from anveshak.reporter.llm import BlufContent
+        from anveshak.reporter.worker import generate_report
 
         ctx = _make_ctx()
         mock_topic = {
@@ -89,8 +100,14 @@ class TestGenerateReportIdempotency:
 
         with (
             patch("anveshak.reporter.worker.db") as mock_db_mod,
-            patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_llm,
-            patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock, return_value=[0.1] * 384),
+            patch(
+                "anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock
+            ) as mock_llm,
+            patch(
+                "anveshak.reporter.worker.generate_query_embedding",
+                new_callable=AsyncMock,
+                return_value=[0.1] * 384,
+            ),
             patch("anveshak.reporter.worker.render_bluf_prompt", return_value="bluf prompt"),
         ):
             mock_db_mod.fetch_report = AsyncMock(return_value=mock_report)
@@ -142,7 +159,11 @@ class TestGenerateReportIdempotency:
 
         with (
             patch("anveshak.reporter.worker.db") as mock_db_mod,
-            patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock, return_value=[0.1] * 384),
+            patch(
+                "anveshak.reporter.worker.generate_query_embedding",
+                new_callable=AsyncMock,
+                return_value=[0.1] * 384,
+            ),
         ):
             mock_db_mod.fetch_report = AsyncMock(return_value=mock_report)
             mock_db_mod.fetch_report_data_bundle = AsyncMock(return_value=_data_bundle())
@@ -194,12 +215,21 @@ class TestGenerateReportIdempotency:
 
         with (
             patch("anveshak.reporter.worker.db") as mock_db_mod,
-            patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_llm,
-            patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock, return_value=[0.1] * 384),
+            patch(
+                "anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock
+            ) as mock_llm,
+            patch(
+                "anveshak.reporter.worker.generate_query_embedding",
+                new_callable=AsyncMock,
+                return_value=[0.1] * 384,
+            ),
             patch("anveshak.reporter.worker.render_bluf_prompt", return_value="bluf prompt"),
             patch("anveshak.reporter.worker.geocode_locations", return_value=[]),
             patch("anveshak.reporter.worker.extract_locations_from_text", return_value=[]),
-            patch("anveshak.reporter.worker.build_geojson", return_value={"type": "FeatureCollection", "features": []}),
+            patch(
+                "anveshak.reporter.worker.build_geojson",
+                return_value={"type": "FeatureCollection", "features": []},
+            ),
         ):
             mock_db_mod.fetch_report = AsyncMock(return_value=mock_report)
             mock_db_mod.fetch_report_data_bundle = AsyncMock(return_value=_data_bundle())
@@ -222,8 +252,8 @@ class TestGenerateReportIdempotency:
     @pytest.mark.asyncio
     async def test_successful_generation_stores_report(self):
         """Happy path: valid LLM output -> set_report_generated called once."""
-        from anveshak.reporter.worker import generate_report
         from anveshak.reporter.llm import BlufContent
+        from anveshak.reporter.worker import generate_report
 
         ctx = _make_ctx()
         mock_topic = {
@@ -253,18 +283,29 @@ class TestGenerateReportIdempotency:
 
         with (
             patch("anveshak.reporter.worker.db") as mock_db_mod,
-            patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_llm,
-            patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock, return_value=[0.1] * 384),
+            patch(
+                "anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock
+            ) as mock_llm,
+            patch(
+                "anveshak.reporter.worker.generate_query_embedding",
+                new_callable=AsyncMock,
+                return_value=[0.1] * 384,
+            ),
             patch("anveshak.reporter.worker.render_bluf_prompt", return_value="bluf prompt"),
             patch("anveshak.reporter.worker.geocode_locations", return_value={}),
             patch("anveshak.reporter.worker.extract_locations_from_text", return_value=[]),
-            patch("anveshak.reporter.worker.build_geojson", return_value={"type": "FeatureCollection", "features": []}),
+            patch(
+                "anveshak.reporter.worker.build_geojson",
+                return_value={"type": "FeatureCollection", "features": []},
+            ),
         ):
             mock_db_mod.fetch_report = AsyncMock(return_value=mock_report)
             mock_db_mod.fetch_report_data_bundle = AsyncMock(return_value=_data_bundle())
             mock_db_mod.fetch_topic = AsyncMock(return_value=mock_topic)
             mock_db_mod.fetch_rag_chunks = AsyncMock(return_value=mock_chunks)
-            mock_db_mod.fetch_sources_for_snapshot = AsyncMock(return_value={"src-1": {"name": "Reuters", "credibility_score": 80.0}})
+            mock_db_mod.fetch_sources_for_snapshot = AsyncMock(
+                return_value={"src-1": {"name": "Reuters", "credibility_score": 80.0}}
+            )
             mock_db_mod.fetch_topic_location_entities = AsyncMock(return_value=[])
             mock_db_mod.fetch_topic_identifiers = AsyncMock(return_value=[])
             mock_db_mod.fetch_topic_template_matches = AsyncMock(return_value=[])

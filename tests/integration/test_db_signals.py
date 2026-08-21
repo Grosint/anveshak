@@ -8,13 +8,13 @@ zero cleanup needed.
 
 Requires: make up (PostgreSQL running)
 """
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 import pytest
-
 from anveshak.api.db.signals import (
     acknowledge_signal,
     dismiss_signal,
@@ -29,6 +29,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 async def _setup_signal(conn, topic_id: str, cluster_id: str, signal_id: str) -> None:
     """Insert a topic, cluster, and signal for testing."""
@@ -46,7 +47,10 @@ async def _setup_signal(conn, topic_id: str, cluster_id: str, signal_id: str) ->
         VALUES ($1, $2, '{}', 2, NOW(), NOW(), $3::jsonb, $4)
         ON CONFLICT (id) DO NOTHING
         """,
-        topic_id, f"Signal Test {topic_id[:8]}", LABELS_JSON, "org-integration-test",
+        topic_id,
+        f"Signal Test {topic_id[:8]}",
+        LABELS_JSON,
+        "org-integration-test",
     )
     await conn.execute(
         """
@@ -56,7 +60,9 @@ async def _setup_signal(conn, topic_id: str, cluster_id: str, signal_id: str) ->
         VALUES ($1, $2, 'Test Cluster', 5, 3, NOW(), NOW(), $3::jsonb)
         ON CONFLICT (id) DO NOTHING
         """,
-        cluster_id, topic_id, LABELS_JSON,
+        cluster_id,
+        topic_id,
+        LABELS_JSON,
     )
     await conn.execute(
         """
@@ -67,13 +73,17 @@ async def _setup_signal(conn, topic_id: str, cluster_id: str, signal_id: str) ->
                 'Test signal for integration testing', '{}',
                 'new', NOW(), NOW(), $4::jsonb)
         """,
-        signal_id, topic_id, cluster_id, LABELS_JSON,
+        signal_id,
+        topic_id,
+        cluster_id,
+        LABELS_JSON,
     )
 
 
 # ---------------------------------------------------------------------------
 # Tests — all use db_conn (transaction rollback, zero cleanup)
 # ---------------------------------------------------------------------------
+
 
 async def test_list_signals_returns_enriched_data(db_conn):
     """list_signals should return signal with cluster label and topic name from JOINs."""
@@ -82,8 +92,10 @@ async def test_list_signals_returns_enriched_data(db_conn):
     signal_id = str(uuid.uuid4())
 
     await _setup_signal(db_conn, topic_id, cluster_id, signal_id)
-    result = await list_signals(db_conn, "new")
+    # list_signals is paginated: it returns (rows, total), not a bare list.
+    result, total = await list_signals(db_conn, "new")
 
+    assert total >= 1
     matching = [s for s in result if s["id"] == signal_id]
     assert len(matching) == 1, f"Signal {signal_id} not found in list_signals results"
     sig = matching[0]
@@ -130,6 +142,7 @@ async def test_dismiss_signal_transitions_status(db_conn):
 
 
 async def test_list_signals_empty_when_no_matching_status(db_conn):
-    """list_signals with status that has no matches → empty list."""
-    result = await list_signals(db_conn, "nonexistent_status")
+    """list_signals with status that has no matches → empty page, zero total."""
+    result, total = await list_signals(db_conn, "nonexistent_status")
     assert result == []
+    assert total == 0

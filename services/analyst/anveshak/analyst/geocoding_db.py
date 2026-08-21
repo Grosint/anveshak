@@ -2,9 +2,9 @@
 
 Module-level SQL constants + async functions per project conventions.
 """
+
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import asyncpg
@@ -57,6 +57,7 @@ SQL_BATCH_LOOKUP_GEOCODED_LOCATIONS = """
 # ---------------------------------------------------------------------------
 # Async DB functions
 # ---------------------------------------------------------------------------
+
 
 async def lookup_geocoded_location(
     pool: asyncpg.Pool,
@@ -139,7 +140,4 @@ async def batch_lookup_geocoded_locations(
             SQL_BATCH_LOOKUP_GEOCODED_LOCATIONS,
             entities,
         )
-        return {
-            f"{r['entity_text_normalized']}:{r['entity_type']}": dict(r)
-            for r in rows
-        }
+        return {f"{r['entity_text_normalized']}:{r['entity_type']}": dict(r) for r in rows}

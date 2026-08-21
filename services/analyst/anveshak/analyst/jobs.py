@@ -2,10 +2,12 @@
 
 WorkerSettings is the entry point for `arq services.analyst.jobs.WorkerSettings`.
 """
+
 from __future__ import annotations
 
+import asyncio
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 import arq
 import asyncpg
@@ -14,29 +16,38 @@ from arq.connections import RedisSettings
 
 from .backfill import backfill_topic as _backfill_topic
 from .clustering import run_clustering as _run_clustering
-from .credibility import run_credibility_update, run_cross_verification_update, run_contradiction_update
+from .content_quality import is_quality_content
+from .credibility import (
+    run_contradiction_update,
+    run_credibility_update,
+    run_cross_verification_update,
+)
 from .embeddings import encode_text, load_encoder
+from .entity_minhash import compute_entity_minhash
+from .geocoding import geocode_and_store
+from .geocoding_backfill import backfill_geocoding
+from .identifiers import extract_identifiers
+from .keyword_alerts import check_keyword_alerts
+from .keywords import extract_keywords
 from .labeller import generate_label_for_cluster
+from .llm_discovery import suggest_source_types_job
 from .metrics import (
-    analyst_nlp_jobs_total, analyst_nlp_duration_seconds,
-    analyst_clusters_created_total, analyst_relevance_score, arq_jobs_failed_total,
-    analyst_embedding_completed_total, analyst_content_skipped_quality_total,
-    analyst_identifiers_extracted_total, analyst_template_matches_total,
+    analyst_clusters_created_total,
+    analyst_content_skipped_quality_total,
+    analyst_embedding_completed_total,
+    analyst_identifiers_extracted_total,
+    analyst_nlp_duration_seconds,
+    analyst_nlp_jobs_total,
+    analyst_relevance_score,
+    analyst_template_matches_total,
+    arq_jobs_failed_total,
 )
 from .nlp import detect_language, is_model_loaded, load_models, parse_entities
-from .settings import settings
-from .keywords import extract_keywords
+from .relevance import build_topic_query_embedding, compute_topic_relevance
 from .sentiment import analyse_sentiment
+from .settings import settings
+from .templates import BUILTIN_TEMPLATES, ScamTemplate, match_templates
 from .translation import needs_translation, translate_to_english
-from .content_quality import is_quality_content
-from .relevance import compute_topic_relevance, build_topic_query_embedding
-from .entity_minhash import compute_entity_minhash
-from .identifiers import extract_identifiers
-from .templates import match_templates, ScamTemplate, BUILTIN_TEMPLATES
-from .llm_discovery import suggest_source_types_job
-from .keyword_alerts import check_keyword_alerts
-from .geocoding import geocode_and_store, LOCATION_ENTITY_TYPES
-from .geocoding_backfill import backfill_geocoding
 
 log = structlog.get_logger(__name__)
 
@@ -97,6 +108,7 @@ _LABELS_JSON = '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"
 # Template loading
 # ---------------------------------------------------------------------------
 
+
 async def load_templates_for_topic(
     conn,
     topic_id: str,
@@ -117,17 +129,21 @@ async def load_templates_for_topic(
 
     templates = []
     for r in source_rows:
-        templates.append(ScamTemplate(
-            name=r["name"],
-            display=r["display"],
-            category=r["category"],
-            keywords=list(r["keywords"] or []),
-            min_keyword_hits=r["min_keyword_hits"],
-            expected_identifiers=list(r["expected_identifiers"] or []),
-            severity=r["severity"],
-            reference_embedding=list(r["reference_embedding"]) if r["reference_embedding"] else None,
-            legal_sections=list(r["legal_sections"] or []),
-        ))
+        templates.append(
+            ScamTemplate(
+                name=r["name"],
+                display=r["display"],
+                category=r["category"],
+                keywords=list(r["keywords"] or []),
+                min_keyword_hits=r["min_keyword_hits"],
+                expected_identifiers=list(r["expected_identifiers"] or []),
+                severity=r["severity"],
+                reference_embedding=(
+                    list(r["reference_embedding"]) if r["reference_embedding"] else None
+                ),
+                legal_sections=list(r["legal_sections"] or []),
+            )
+        )
 
     return templates if templates else list(BUILTIN_TEMPLATES)
 
@@ -135,6 +151,7 @@ async def load_templates_for_topic(
 # ---------------------------------------------------------------------------
 # ARQ job
 # ---------------------------------------------------------------------------
+
 
 async def analyse_content(ctx: dict, content_item_id: str) -> None:
     """NLP pipeline: langdetect → translate → spaCy NER → sentence embedding → DB.
@@ -151,6 +168,7 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
     Criteria 1.11–1.16.
     """
     import time as _time
+
     _t0 = _time.monotonic()
 
     db_pool: asyncpg.Pool = ctx["db_pool"]
@@ -187,7 +205,11 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
         translation_model_used: str | None = None
 
         if settings.translation_enabled and needs_translation(lang):
-            translated_text = translate_to_english(clean_text, lang)
+            # translate_to_english is blocking torch inference. Calling it
+            # directly freezes the worker's event loop, which also disables
+            # ARQ's job_timeout (asyncio.wait_for needs the loop to tick), so
+            # a slow translation hangs the whole worker instead of timing out.
+            translated_text = await asyncio.to_thread(translate_to_english, clean_text, lang)
             if translated_text:
                 translation_model_used = settings.translation_model
                 log.info(
@@ -229,7 +251,8 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
 
         # --- Step 4a: Topic relevance score ---
         topic_query_emb = build_topic_query_embedding(
-            row["topic_name"], list(row["topic_keywords"] or []),
+            row["topic_name"],
+            list(row["topic_keywords"] or []),
         )
         relevance_score = compute_topic_relevance(embedding, topic_query_emb)
         analyst_relevance_score.observe(relevance_score)
@@ -239,6 +262,7 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
         kw_results = extract_keywords(work_text, language="en", max_keywords=10)
 
         import json
+
         labels_dict = {
             "classification": "OPEN",
             "domain": "osint",
@@ -279,12 +303,16 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
             # Load templates using this connection (avoids nested pool.acquire — W2)
             if settings.template_matching_enabled and settings.identifier_extraction_enabled:
                 active_templates = await load_templates_for_topic(
-                    conn, row["topic_id"],
+                    conn,
+                    row["topic_id"],
                 )
                 content_kw_set = {kw.keyword for kw in kw_results}
                 id_type_set = {m.identifier_type for m in identifier_matches}
                 template_match = match_templates(
-                    content_kw_set, id_type_set, embedding, active_templates,
+                    content_kw_set,
+                    id_type_set,
+                    embedding,
+                    active_templates,
                 )
 
             if template_match:
@@ -304,8 +332,15 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
             async with conn.transaction():
                 await conn.execute(
                     SQL_UPDATE_CONTENT_NLP,
-                    embedding_str, lang, translated_text, translation_model_used,
-                    labels_json, now, relevance_score, content_item_id, minhash,
+                    embedding_str,
+                    lang,
+                    translated_text,
+                    translation_model_used,
+                    labels_json,
+                    now,
+                    relevance_score,
+                    content_item_id,
+                    minhash,
                 )
                 for ent in entities:
                     await conn.execute(
@@ -373,6 +408,7 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
 # Phase 2 ARQ jobs
 # ---------------------------------------------------------------------------
 
+
 async def run_clustering(ctx: dict, topic_id: str) -> None:
     """Leiden clustering for a topic (criteria 2.1–2.5).
 
@@ -384,10 +420,12 @@ async def run_clustering(ctx: dict, topic_id: str) -> None:
     cluster_ids = await _run_clustering(topic_id, db_pool)
 
     from arq import create_pool
+
     redis = await create_pool(WorkerSettings.redis_settings)
 
     # Enqueue label generation only for stale/new clusters (criteria 2.6, P3)
     from .labeller import check_label_staleness
+
     for cluster_id in cluster_ids:
         if await check_label_staleness(cluster_id, db_pool):
             await redis.enqueue_job("generate_cluster_label", cluster_id, _queue_name="arq:analyst")
@@ -430,6 +468,7 @@ async def backfill_topic_job(ctx: dict, topic_id: str) -> None:
 # Phase 7 ARQ jobs — M1 credibility hardening
 # ---------------------------------------------------------------------------
 
+
 async def run_cross_verification(ctx: dict, topic_id: str) -> None:
     """Boost credibility of high-credibility sources confirmed by multi-platform clusters (7.1).
 
@@ -463,11 +502,9 @@ async def backfill_all_topics(ctx: dict) -> None:
         try:
             inserted = await _backfill_topic(row["id"], db_pool)
             if inserted:
-                log.info("jobs.backfill_all.topic_done",
-                         topic_id=row["id"], inserted=inserted)
+                log.info("jobs.backfill_all.topic_done", topic_id=row["id"], inserted=inserted)
         except Exception as exc:
-            log.warning("jobs.backfill_all.topic_failed",
-                        topic_id=row["id"], error=str(exc))
+            log.warning("jobs.backfill_all.topic_failed", topic_id=row["id"], error=str(exc))
 
 
 # ---------------------------------------------------------------------------
@@ -519,15 +556,20 @@ async def backfill_relevance_scores(ctx: dict) -> None:
                 tid = row["topic_id"]
                 if tid not in topic_cache:
                     topic_cache[tid] = build_topic_query_embedding(
-                        row["topic_name"], list(row["topic_keywords"] or []),
+                        row["topic_name"],
+                        list(row["topic_keywords"] or []),
                     )
 
                 from .clustering import _parse_pgvector
+
                 content_vec = _parse_pgvector(row["embedding_text"]).tolist()
                 score = compute_topic_relevance(content_vec, topic_cache[tid])
 
                 await conn.execute(
-                    SQL_UPDATE_RELEVANCE_SCORE, score, now, row["id"],
+                    SQL_UPDATE_RELEVANCE_SCORE,
+                    score,
+                    now,
+                    row["id"],
                 )
                 total_scored += 1
 
@@ -536,6 +578,7 @@ async def backfill_relevance_scores(ctx: dict) -> None:
     # If there are more items, re-enqueue self
     if total_scored >= batch_size:
         from arq import create_pool
+
         redis = await create_pool(WorkerSettings.redis_settings)
         await redis.enqueue_job("backfill_relevance_scores", _queue_name="arq:analyst")
         log.info("backfill_relevance.re_enqueued", reason="more items remaining")
@@ -545,8 +588,10 @@ async def backfill_relevance_scores(ctx: dict) -> None:
 # ARQ worker lifecycle
 # ---------------------------------------------------------------------------
 
+
 async def on_startup(ctx: dict) -> None:
     from anveshak.db import create_db_pool
+
     ctx["db_pool"] = await create_db_pool(settings.postgres_url)
     # criteria 1.17, 1.18: models loaded ONCE at startup
     load_models()
@@ -570,7 +615,7 @@ async def on_job_result(ctx: dict, result) -> None:  # type: ignore[type-arg]
 class WorkerSettings:
     """Entry point: arq services.analyst.jobs.WorkerSettings"""
 
-    queue_name = "arq:analyst"   # Isolated queue — avoids cross-worker job theft
+    queue_name = "arq:analyst"  # Isolated queue — avoids cross-worker job theft
 
     functions = [
         # 8C.1 — NLP: transient DB/embedding errors; ON CONFLICT DO NOTHING makes it safe to retry
@@ -588,8 +633,8 @@ class WorkerSettings:
         arq.func(backfill_geocoding, max_tries=2),
     ]
     cron_jobs = [
-        arq.cron(run_contradiction_scoring, hour={2}),       # 7.2 — daily at 02:00 UTC
-        arq.cron(update_source_credibility, hour={3}),       # 2.21 — daily at 03:00 UTC
+        arq.cron(run_contradiction_scoring, hour={2}),  # 7.2 — daily at 02:00 UTC
+        arq.cron(update_source_credibility, hour={3}),  # 2.21 — daily at 03:00 UTC
         arq.cron(backfill_all_topics, hour={0, 6, 12, 18}),  # 2.9 — every 6 hours
     ]
     on_startup = on_startup
@@ -597,5 +642,9 @@ class WorkerSettings:
     on_job_result = on_job_result
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
     max_jobs = 4
-    job_timeout = 300    # increased from 180s — translation adds ~30s per article on CPU
-    keep_result = 3600   # 8C.6 — keep results 1h for UI polling
+    job_timeout = 300  # increased from 180s — translation adds ~30s per article on CPU
+    # ARQ's default is 3600s, so a wedged worker stays "healthy" for an hour.
+    # The container healthcheck reads this key's presence, so the interval is
+    # also the detection window for a frozen event loop.
+    health_check_interval = 30
+    keep_result = 3600  # 8C.6 — keep results 1h for UI polling

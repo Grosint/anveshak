@@ -13,6 +13,7 @@ Revision ID: 001
 Revises:
 Create Date: 2026-06-25 00:00:00.000000
 """
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -144,10 +145,11 @@ def upgrade() -> None:
         )
     """)
     op.execute(
-        "CREATE UNIQUE INDEX idx_source_catalog_handle "
-        "ON source_catalog(platform, url_or_handle)"
+        "CREATE UNIQUE INDEX idx_source_catalog_handle ON source_catalog(platform, url_or_handle)"
     )
-    op.execute("CREATE INDEX idx_source_catalog_domain_tags ON source_catalog USING gin(domain_tags)")
+    op.execute(
+        "CREATE INDEX idx_source_catalog_domain_tags ON source_catalog USING gin(domain_tags)"
+    )
     op.execute("CREATE INDEX idx_source_catalog_rank ON source_catalog(recommendation_rank)")
 
     # -- scam_templates
@@ -242,8 +244,7 @@ def upgrade() -> None:
     op.execute("CREATE INDEX idx_content_items_source ON content_items(source_id)")
     op.execute("CREATE INDEX idx_content_items_captured ON content_items(captured_at DESC)")
     op.execute(
-        "CREATE INDEX idx_content_items_topic_captured "
-        "ON content_items(topic_id, captured_at DESC)"
+        "CREATE INDEX idx_content_items_topic_captured ON content_items(topic_id, captured_at DESC)"
     )
     op.execute(
         "CREATE INDEX idx_content_items_cluster ON content_items(narrative_cluster_id) "
@@ -288,8 +289,7 @@ def upgrade() -> None:
     op.execute("CREATE INDEX idx_signals_status ON signals(status)")
     op.execute("CREATE INDEX idx_signals_created ON signals(created_at DESC)")
     op.execute(
-        "CREATE INDEX idx_signals_undelivered ON signals(created_at) "
-        "WHERE delivered_at IS NULL"
+        "CREATE INDEX idx_signals_undelivered ON signals(created_at) WHERE delivered_at IS NULL"
     )
     op.execute(
         "CREATE INDEX idx_signals_cross_topic ON signals(signal_type) "
@@ -417,7 +417,9 @@ def upgrade() -> None:
         )
     """)
     op.execute("CREATE INDEX idx_entities_content_item ON extracted_entities(content_item_id)")
-    op.execute("CREATE INDEX idx_entities_type_text ON extracted_entities(entity_type, entity_text)")
+    op.execute(
+        "CREATE INDEX idx_entities_type_text ON extracted_entities(entity_type, entity_text)"
+    )
     op.execute(
         "CREATE INDEX idx_entities_text_trgm ON extracted_entities "
         "USING gin(entity_text gin_trgm_ops)"
@@ -447,7 +449,9 @@ def upgrade() -> None:
         )
     """)
     op.execute("CREATE INDEX idx_credibility_audit_source ON credibility_audit_log(source_id)")
-    op.execute("CREATE INDEX idx_credibility_audit_created ON credibility_audit_log(created_at DESC)")
+    op.execute(
+        "CREATE INDEX idx_credibility_audit_created ON credibility_audit_log(created_at DESC)"
+    )
     op.execute("CREATE INDEX idx_credibility_audit_org ON credibility_audit_log(org_id)")
 
     # -- report_source_warnings (FK → reports, sources)
@@ -506,8 +510,7 @@ def upgrade() -> None:
     op.execute("CREATE INDEX idx_jobs_status_type ON analysis_jobs(status, job_type)")
     op.execute("CREATE INDEX idx_jobs_topic ON analysis_jobs(topic_id)")
     op.execute(
-        "CREATE INDEX idx_jobs_arq_id ON analysis_jobs(arq_job_id) "
-        "WHERE arq_job_id IS NOT NULL"
+        "CREATE INDEX idx_jobs_arq_id ON analysis_jobs(arq_job_id) WHERE arq_job_id IS NOT NULL"
     )
 
     # -- discovered_sources (FK → topics, sources)
@@ -793,8 +796,7 @@ def upgrade() -> None:
         "ON tracker_content_items(tracker_id, attached_at DESC)"
     )
     op.execute(
-        "CREATE INDEX idx_tracker_content_status "
-        "ON tracker_content_items(tracker_id, status)"
+        "CREATE INDEX idx_tracker_content_status ON tracker_content_items(tracker_id, status)"
     )
 
     op.execute("""
@@ -818,8 +820,7 @@ def upgrade() -> None:
         )
     """)
     op.execute(
-        "CREATE INDEX idx_tracker_notes_tracker "
-        "ON tracker_notes(tracker_id, created_at DESC)"
+        "CREATE INDEX idx_tracker_notes_tracker ON tracker_notes(tracker_id, created_at DESC)"
     )
 
     op.execute("""
@@ -843,8 +844,7 @@ def upgrade() -> None:
         )
     """)
     op.execute(
-        "CREATE INDEX idx_tracker_audit_tracker "
-        "ON tracker_audit_log(tracker_id, created_at DESC)"
+        "CREATE INDEX idx_tracker_audit_tracker ON tracker_audit_log(tracker_id, created_at DESC)"
     )
 
     # ==================================================================
@@ -903,29 +903,206 @@ def upgrade() -> None:
     op.execute("GRANT ALL ON ALL TABLES IN SCHEMA public TO anveshak_worker")
     op.execute("GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anveshak_worker")
 
+    # ==================================================================
+    # Seed data: built-in scam templates
+    # ==================================================================
+    # These 11 templates are the built-in library Engine C matches content
+    # against. They were seeded by migration 009 and amended by 013, both now
+    # archived, so the squashed baseline created scam_templates empty. A fresh
+    # deployment then matched nothing at all, with no error: the template
+    # signal query inner-joins scam_templates, so an empty table silently
+    # yields zero signals. Kept verbatim from 009 + 013 so the final state
+    # matches an already-migrated database exactly.
+    op.execute("""
+        INSERT INTO scam_templates
+            (id, org_id, name, display, category, keywords, min_keyword_hits,
+             expected_identifiers, severity, legal_sections, is_builtin, is_active, labels)
+        VALUES
+            ('tpl-investment-fraud', NULL, 'investment_fraud',
+             'Investment Fraud', 'fraud',
+             ARRAY['guaranteed returns', 'double your money', 'investment opportunity',
+                   'high returns', 'risk free', 'fixed income', 'monthly returns',
+                   'trading platform', 'forex', 'binary options'],
+             3, ARRAY['UPI', 'CRYPTO_BTC', 'CRYPTO_ETH', 'PHONE_IN', 'BANK_ACCOUNT'],
+             'CRITICAL',
+             ARRAY['IPC 420', 'SEBI (PFUTP) Regulations', 'PMLA Section 3'],
+             TRUE, TRUE,
+             '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb),
+
+            ('tpl-mule-recruitment', NULL, 'mule_recruitment',
+             'Mule Account Recruitment', 'fraud',
+             ARRAY['bank account', 'commission', 'per transaction', 'easy money',
+                   'rent your account', 'lend account', 'account for sale',
+                   'daily income', 'no risk', 'passive income'],
+             3, ARRAY['PHONE_IN', 'UPI', 'TELEGRAM_HANDLE', 'BANK_ACCOUNT'],
+             'CRITICAL',
+             ARRAY['PMLA Section 3', 'PMLA Section 4', 'IPC 420', 'IT Act 66D'],
+             TRUE, TRUE,
+             '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb),
+
+            ('tpl-maas', NULL, 'maas',
+             'Mule-as-a-Service', 'fraud',
+             ARRAY['mule service', 'account provider', 'clean account', 'fresh account',
+                   'bulk accounts', 'verified account', 'KYC done', 'ready to use',
+                   'account supply', 'wholesale accounts'],
+             3, ARRAY['PHONE_IN', 'UPI', 'TELEGRAM_HANDLE', 'BANK_ACCOUNT'],
+             'CRITICAL',
+             ARRAY['PMLA Section 3', 'PMLA Section 4', 'IT Act 66D'],
+             TRUE, TRUE,
+             '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb),
+
+            ('tpl-digital-arrest', NULL, 'digital_arrest',
+             'Digital Arrest Scam', 'fraud',
+             ARRAY['police', 'arrest warrant', 'CBI', 'narcotics', 'money laundering',
+                   'Aadhaar linked', 'court order', 'video call verification',
+                   'stay on the line', 'do not tell anyone'],
+             3, ARRAY['PHONE_IN', 'UPI', 'BANK_ACCOUNT'],
+             'HIGH',
+             ARRAY['IPC 419', 'IPC 420', 'IT Act 66C', 'IT Act 66D'],
+             TRUE, TRUE,
+             '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb),
+
+            ('tpl-job-fraud', NULL, 'job_fraud',
+             'Job Fraud', 'fraud',
+             ARRAY['work from home', 'data entry job', 'part time job', 'registration fee',
+                   'guaranteed placement', 'earn daily', 'typing job',
+                   'no experience needed', 'immediate joining', 'refundable deposit'],
+             3, ARRAY['PHONE_IN', 'UPI', 'EMAIL', 'TELEGRAM_HANDLE'],
+             'HIGH',
+             ARRAY['IPC 420', 'IT Act 66D'],
+             TRUE, TRUE,
+             '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb),
+
+            ('tpl-pump-and-dump', NULL, 'pump_and_dump',
+             'Pump and Dump', 'fraud',
+             ARRAY['multibagger', 'target price', 'buy now', 'insider tip',
+                   'guaranteed profit', 'small cap gem', 'operator stock',
+                   'breaking out', 'SEBI registered', 'free tips'],
+             3, ARRAY['PHONE_IN', 'TELEGRAM_HANDLE', 'SEBI_REG'],
+             'CRITICAL',
+             ARRAY['SEBI (PFUTP) Regulations 2003', 'SEBI Act Section 12A',
+                   'IPC 420', 'Companies Act Section 447'],
+             TRUE, TRUE,
+             '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb),
+
+            ('tpl-fake-research-report', NULL, 'fake_research_report',
+             'Fake Research Report', 'fraud',
+             ARRAY['research report', 'analyst recommendation', 'strong buy',
+                   'price target', 'institutional pick', 'confidential report',
+                   'leaked report', 'brokerage recommendation', 'fundamental analysis'],
+             3, ARRAY['TELEGRAM_HANDLE', 'EMAIL', 'PHONE_IN'],
+             'HIGH',
+             ARRAY['SEBI (Research Analysts) Regulations 2014',
+                   'SEBI (PFUTP) Regulations 2003', 'IPC 468'],
+             TRUE, TRUE,
+             '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb),
+
+            ('tpl-drug-sale', NULL, 'drug_sale',
+             'Drug Sale', 'narco',
+             ARRAY['stuff', 'maal', 'product available', 'best quality',
+                   'delivery available', 'discreet shipping', 'bulk order',
+                   'sample available', 'wickr', 'drop location'],
+             3, ARRAY['PHONE_IN', 'TELEGRAM_HANDLE', 'CRYPTO_BTC', 'CRYPTO_TRC20'],
+             'HIGH',
+             ARRAY['NDPS Act Section 20', 'NDPS Act Section 22',
+                   'NDPS Act Section 25', 'NDPS Act Section 29'],
+             TRUE, TRUE,
+             '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb),
+
+            ('tpl-drug-delivery-recruitment', NULL, 'drug_delivery_recruitment',
+             'Drug Delivery Recruitment', 'narco',
+             ARRAY['delivery boy', 'courier needed', 'parcel delivery', 'good pay',
+                   'no questions asked', 'cash on delivery', 'pickup and drop',
+                   'night shift', 'own vehicle', 'local delivery'],
+             3, ARRAY['PHONE_IN', 'TELEGRAM_HANDLE'],
+             'HIGH',
+             ARRAY['NDPS Act Section 25', 'NDPS Act Section 27A',
+                   'NDPS Act Section 29'],
+             TRUE, TRUE,
+             '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb),
+
+            ('tpl-fake-sim-sale', NULL, 'fake_sim_sale',
+             'Fake SIM Card Sale', 'fraud',
+             ARRAY['SIM card', 'pre-activated', 'no KYC', 'anonymous SIM',
+                   'bulk SIM', 'ready to use SIM', 'Jio SIM', 'Airtel SIM',
+                   'document not required', 'instant activation'],
+             3, ARRAY['PHONE_IN', 'TELEGRAM_HANDLE', 'UPI'],
+             'MEDIUM',
+             ARRAY['Indian Telegraph Act Section 20', 'IT Act 66C',
+                   'IPC 420', 'IPC 468'],
+             TRUE, TRUE,
+             '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb),
+
+            ('tpl-crypto-cashout', NULL, 'crypto_cashout',
+             'Crypto Cashout Service', 'fraud',
+             ARRAY['crypto to cash', 'USDT to INR', 'BTC to bank', 'cash out',
+                   'no KYC exchange', 'P2P transfer', 'instant withdrawal',
+                   'best rate', 'OTC deal', 'hawala crypto'],
+             3, ARRAY['CRYPTO_BTC', 'CRYPTO_ETH', 'CRYPTO_TRC20', 'UPI',
+                      'BANK_ACCOUNT', 'PHONE_IN'],
+             'HIGH',
+             ARRAY['PMLA Section 3', 'FEMA Section 3', 'IT Act 66D'],
+             TRUE, TRUE,
+             '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb)
+
+        ON CONFLICT (id) DO NOTHING
+    """)
+
+    # From archived migration 013: international phone numbers became a
+    # relevant identifier for these four templates.
+    op.execute("""
+        UPDATE scam_templates
+        SET expected_identifiers = array_append(expected_identifiers, 'PHONE_INTL')
+        WHERE name IN ('mule_recruitment', 'maas', 'drug_sale', 'crypto_cashout')
+          AND NOT ('PHONE_INTL' = ANY(expected_identifiers))
+    """)
+
 
 def downgrade() -> None:
     # Drop all tables in reverse dependency order
     join_tables = [
-        "tracker_audit_log", "tracker_signals", "tracker_notes",
-        "tracker_content_exclusions", "tracker_content_items",
-        "keyword_alert_triggers", "identifier_cluster_items",
-        "catalog_approvals", "org_sources", "topic_templates",
-        "topic_content_items", "topic_sources",
+        "tracker_audit_log",
+        "tracker_signals",
+        "tracker_notes",
+        "tracker_content_exclusions",
+        "tracker_content_items",
+        "keyword_alert_triggers",
+        "identifier_cluster_items",
+        "catalog_approvals",
+        "org_sources",
+        "topic_templates",
+        "topic_content_items",
+        "topic_sources",
     ]
     child_tables = [
-        "source_assessments", "content_archives", "failed_jobs",
-        "audit_trail", "token_blocklist", "near_duplicates",
-        "report_source_warnings", "discovered_sources",
-        "keyword_alert_rules", "identifier_clusters",
-        "extracted_entities", "vision_results", "media_assets",
-        "analysis_jobs", "credibility_audit_log",
+        "source_assessments",
+        "content_archives",
+        "failed_jobs",
+        "audit_trail",
+        "token_blocklist",
+        "near_duplicates",
+        "report_source_warnings",
+        "discovered_sources",
+        "keyword_alert_rules",
+        "identifier_clusters",
+        "extracted_entities",
+        "vision_results",
+        "media_assets",
+        "analysis_jobs",
+        "credibility_audit_log",
     ]
     core_tables = [
-        "reports", "trackers", "signals",
-        "content_items", "narrative_clusters",
-        "scam_templates", "source_catalog", "sources",
-        "topics", "users", "organizations",
+        "reports",
+        "trackers",
+        "signals",
+        "content_items",
+        "narrative_clusters",
+        "scam_templates",
+        "source_catalog",
+        "sources",
+        "topics",
+        "users",
+        "organizations",
     ]
 
     # Drop RLS policies first

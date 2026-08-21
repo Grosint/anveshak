@@ -4,11 +4,11 @@ Every service worker MUST define an explicit queue_name.
 Every enqueue_job() call MUST use _queue_name matching the target worker.
 No service should rely on ARQ's default queue name.
 """
+
 from __future__ import annotations
 
 import ast
 import importlib
-import inspect
 import re
 from pathlib import Path
 
@@ -31,17 +31,21 @@ EXPECTED_QUEUES = {
 # Test: Every WorkerSettings has explicit queue_name
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestWorkerQueueNames:
     """Every ARQ WorkerSettings class must define an explicit queue_name."""
 
-    @pytest.mark.parametrize("service,expected_queue", [
-        ("analyst", "arq:analyst"),
-        ("scraper", "arq:scraper"),
-        ("reporter", "arq:reporter"),
-        ("vision", "arq:vision"),
-        ("social", "arq:social"),
-    ])
+    @pytest.mark.parametrize(
+        "service,expected_queue",
+        [
+            ("analyst", "arq:analyst"),
+            ("scraper", "arq:scraper"),
+            ("reporter", "arq:reporter"),
+            ("vision", "arq:vision"),
+            ("social", "arq:social"),
+        ],
+    )
     def test_worker_settings_has_explicit_queue_name(self, service, expected_queue):
         """WorkerSettings.queue_name must be explicitly set to the expected value."""
         # Map service to its WorkerSettings module
@@ -54,12 +58,9 @@ class TestWorkerQueueNames:
         }
         mod = importlib.import_module(module_map[service])
         ws = getattr(mod, "WorkerSettings")
-        assert hasattr(ws, "queue_name"), (
-            f"{service} WorkerSettings missing queue_name attribute"
-        )
+        assert hasattr(ws, "queue_name"), f"{service} WorkerSettings missing queue_name attribute"
         assert ws.queue_name == expected_queue, (
-            f"{service} WorkerSettings.queue_name = {ws.queue_name!r}, "
-            f"expected {expected_queue!r}"
+            f"{service} WorkerSettings.queue_name = {ws.queue_name!r}, expected {expected_queue!r}"
         )
 
 
@@ -95,14 +96,14 @@ class TestNoDefaultQueueUsage:
                     violations.append(f"{rel}:{i}: {line.strip()}")
 
         assert not violations, (
-            f"Found _queue_name using default queue '{_DEFAULT_QUEUE}':\n"
-            + "\n".join(violations)
+            f"Found _queue_name using default queue '{_DEFAULT_QUEUE}':\n" + "\n".join(violations)
         )
 
 
 # ---------------------------------------------------------------------------
 # Test: Social scheduler enqueues to arq:social
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestSocialSchedulerQueue:
@@ -111,16 +112,32 @@ class TestSocialSchedulerQueue:
     def test_enqueue_topic_polls_uses_social_queue(self):
         """main.py enqueue_job('poll_social_topic') must use _queue_name='arq:social'."""
         main_path = _SERVICES_DIR / "social" / "anveshak" / "social" / "main.py"
-        content = main_path.read_text()
+        tree = ast.parse(main_path.read_text())
 
-        # Find lines with enqueue_job("poll_social_topic"
+        # AST rather than line scanning: `ruff format` wraps this call, so
+        # `enqueue_job(` and the job name no longer share a line.
         poll_enqueues = [
-            line.strip() for line in content.splitlines()
-            if "enqueue_job" in line and "poll_social_topic" in line
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "enqueue_job"
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and node.args[0].value == "poll_social_topic"
         ]
         assert poll_enqueues, "No enqueue_job('poll_social_topic') found in social/main.py"
 
-        for line in poll_enqueues:
-            assert '_queue_name="arq:social"' in line or "_queue_name='arq:social'" in line, (
-                f"poll_social_topic enqueue missing _queue_name='arq:social': {line}"
+        for call in poll_enqueues:
+            queue = next(
+                (
+                    kw.value.value
+                    for kw in call.keywords
+                    if kw.arg == "_queue_name" and isinstance(kw.value, ast.Constant)
+                ),
+                None,
+            )
+            assert queue == "arq:social", (
+                f"poll_social_topic enqueue at line {call.lineno} must set "
+                f"_queue_name='arq:social', got {queue!r}"
             )

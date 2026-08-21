@@ -12,6 +12,7 @@ Usage (from host):
     docker exec -e POSTGRES_URL=postgresql://anveshak:...@postgres:5432/anveshak_test \
         anveshak-analyse-worker-1 python /tmp/test_multilingual_pipeline.py
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -21,7 +22,7 @@ import os
 import sys
 import time
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any
 
 # Suppress log noise so JSON on stdout is clean
@@ -83,7 +84,13 @@ NARRATIVE_B = {
             "Anti-submarine warfare drills were the primary focus of this year's exercise."
         ),
         "lang": "en",
-        "expected_entities": ["Indian Navy", "Malabar", "United States", "Japan", "INS Vikramaditya"],
+        "expected_entities": [
+            "Indian Navy",
+            "Malabar",
+            "United States",
+            "Japan",
+            "INS Vikramaditya",
+        ],
     },
     "ru": {
         "text": (
@@ -154,6 +161,7 @@ TEST_SOURCE_ID = "test-multilingual-pipeline-source"
 
 def _compute_hash(text: str) -> str:
     import hashlib
+
     normalised = " ".join(text.lower().split())
     return hashlib.sha256(normalised.encode("utf-8")).hexdigest()
 
@@ -161,10 +169,17 @@ def _compute_hash(text: str) -> str:
 async def _setup(pool):
     async with pool.acquire() as conn:
         await conn.execute(SQL_ENSURE_ORG)
-        await conn.execute(SQL_ENSURE_TOPIC, TEST_TOPIC_ID, "Multilingual Pipeline Test",
-                           ["multilingual", "test"])
-        await conn.execute(SQL_ENSURE_SOURCE, TEST_SOURCE_ID, "multilingual-test-source",
-                           "https://example.com/ml-test", "web", 50.0)
+        await conn.execute(
+            SQL_ENSURE_TOPIC, TEST_TOPIC_ID, "Multilingual Pipeline Test", ["multilingual", "test"]
+        )
+        await conn.execute(
+            SQL_ENSURE_SOURCE,
+            TEST_SOURCE_ID,
+            "multilingual-test-source",
+            "https://example.com/ml-test",
+            "web",
+            50.0,
+        )
         await conn.execute(SQL_LINK_TOPIC_SOURCE, TEST_TOPIC_ID, TEST_SOURCE_ID)
 
 
@@ -176,9 +191,22 @@ async def _insert_item(pool, text: str, lang: str, url: str) -> str:
     async with pool.acquire() as conn:
         await conn.fetchrow(
             SQL_INSERT,
-            item_id, TEST_TOPIC_ID, TEST_SOURCE_ID,
-            text, text, lang, content_hash, url, now, 50.0,
-            now, now, labels, "good", content_hash, "Test",
+            item_id,
+            TEST_TOPIC_ID,
+            TEST_SOURCE_ID,
+            text,
+            text,
+            lang,
+            content_hash,
+            url,
+            now,
+            50.0,
+            now,
+            now,
+            labels,
+            "good",
+            content_hash,
+            "Test",
         )
     return item_id
 
@@ -194,7 +222,9 @@ async def _cleanup(pool, item_ids: list[str]):
         await conn.execute("DELETE FROM sources WHERE id = $1", TEST_SOURCE_ID)
 
 
-def _fuzzy_match(text: str, keywords: list[str], min_matches: int) -> tuple[bool, list[str], list[str]]:
+def _fuzzy_match(
+    text: str, keywords: list[str], min_matches: int
+) -> tuple[bool, list[str], list[str]]:
     """Check if at least min_matches keywords appear in text (case-insensitive)."""
     text_lower = text.lower()
     found = [kw for kw in keywords if kw.lower() in text_lower]
@@ -205,6 +235,7 @@ def _fuzzy_match(text: str, keywords: list[str], min_matches: int) -> tuple[bool
 # ---------------------------------------------------------------------------
 # Test 1–4: NLLB Translation quality
 # ---------------------------------------------------------------------------
+
 
 async def test_translation_chinese(pool) -> tuple[dict, str | None]:
     """Chinese → English: key military terms preserved."""
@@ -217,11 +248,19 @@ async def test_translation_chinese(pool) -> tuple[dict, str | None]:
         elapsed = time.monotonic() - t0
 
         if translated is None:
-            return _result("translation_zh", False, "translate_to_english returned None", elapsed), None
+            return _result(
+                "translation_zh", False, "translate_to_english returned None", elapsed
+            ), None
 
         ok, found, missing = _fuzzy_match(translated, item["translation_keywords"], 3)
-        detail = f"found={found}" if ok else f"only {len(found)}/{len(item['translation_keywords'])} keywords: found={found}, missing={missing}"
-        return _result("translation_zh", ok, f"{detail} | output: {translated[:150]}", elapsed), None
+        detail = (
+            f"found={found}"
+            if ok
+            else f"only {len(found)}/{len(item['translation_keywords'])} keywords: found={found}, missing={missing}"
+        )
+        return _result(
+            "translation_zh", ok, f"{detail} | output: {translated[:150]}", elapsed
+        ), None
     except Exception as exc:
         return _result("translation_zh", False, str(exc)[:200], time.monotonic() - t0), None
 
@@ -237,11 +276,19 @@ async def test_translation_russian(pool) -> tuple[dict, str | None]:
         elapsed = time.monotonic() - t0
 
         if translated is None:
-            return _result("translation_ru", False, "translate_to_english returned None", elapsed), None
+            return _result(
+                "translation_ru", False, "translate_to_english returned None", elapsed
+            ), None
 
         ok, found, missing = _fuzzy_match(translated, item["translation_keywords"], 3)
-        detail = f"found={found}" if ok else f"only {len(found)}/{len(item['translation_keywords'])} keywords: found={found}, missing={missing}"
-        return _result("translation_ru", ok, f"{detail} | output: {translated[:150]}", elapsed), None
+        detail = (
+            f"found={found}"
+            if ok
+            else f"only {len(found)}/{len(item['translation_keywords'])} keywords: found={found}, missing={missing}"
+        )
+        return _result(
+            "translation_ru", ok, f"{detail} | output: {translated[:150]}", elapsed
+        ), None
     except Exception as exc:
         return _result("translation_ru", False, str(exc)[:200], time.monotonic() - t0), None
 
@@ -257,11 +304,19 @@ async def test_translation_hindi(pool) -> tuple[dict, str | None]:
         elapsed = time.monotonic() - t0
 
         if translated is None:
-            return _result("translation_hi", False, "translate_to_english returned None", elapsed), None
+            return _result(
+                "translation_hi", False, "translate_to_english returned None", elapsed
+            ), None
 
         ok, found, missing = _fuzzy_match(translated, item["translation_keywords"], 3)
-        detail = f"found={found}" if ok else f"only {len(found)}/{len(item['translation_keywords'])} keywords: found={found}, missing={missing}"
-        return _result("translation_hi", ok, f"{detail} | output: {translated[:150]}", elapsed), None
+        detail = (
+            f"found={found}"
+            if ok
+            else f"only {len(found)}/{len(item['translation_keywords'])} keywords: found={found}, missing={missing}"
+        )
+        return _result(
+            "translation_hi", ok, f"{detail} | output: {translated[:150]}", elapsed
+        ), None
     except Exception as exc:
         return _result("translation_hi", False, str(exc)[:200], time.monotonic() - t0), None
 
@@ -277,11 +332,19 @@ async def test_translation_bengali(pool) -> tuple[dict, str | None]:
         elapsed = time.monotonic() - t0
 
         if translated is None:
-            return _result("translation_bn", False, "translate_to_english returned None", elapsed), None
+            return _result(
+                "translation_bn", False, "translate_to_english returned None", elapsed
+            ), None
 
         ok, found, missing = _fuzzy_match(translated, item["translation_keywords"], 3)
-        detail = f"found={found}" if ok else f"only {len(found)}/{len(item['translation_keywords'])} keywords: found={found}, missing={missing}"
-        return _result("translation_bn", ok, f"{detail} | output: {translated[:150]}", elapsed), None
+        detail = (
+            f"found={found}"
+            if ok
+            else f"only {len(found)}/{len(item['translation_keywords'])} keywords: found={found}, missing={missing}"
+        )
+        return _result(
+            "translation_bn", ok, f"{detail} | output: {translated[:150]}", elapsed
+        ), None
     except Exception as exc:
         return _result("translation_bn", False, str(exc)[:200], time.monotonic() - t0), None
 
@@ -289,6 +352,7 @@ async def test_translation_bengali(pool) -> tuple[dict, str | None]:
 # ---------------------------------------------------------------------------
 # Test 5: NER on translated text — entities survive the translation chain
 # ---------------------------------------------------------------------------
+
 
 async def test_ner_on_translated(pool) -> tuple[dict, list[str]]:
     """Full analyse_content on Chinese + Russian text → NER extracts key entities."""
@@ -298,10 +362,12 @@ async def test_ner_on_translated(pool) -> tuple[dict, list[str]]:
     t0 = time.monotonic()
     try:
         # Insert Chinese UAV article and Russian naval article
-        zh_id = await _insert_item(pool, NARRATIVE_A["zh"]["text"], "zh",
-                                   f"https://example.com/zh-ner-{uuid.uuid4()}")
-        ru_id = await _insert_item(pool, NARRATIVE_B["ru"]["text"], "ru",
-                                   f"https://example.com/ru-ner-{uuid.uuid4()}")
+        zh_id = await _insert_item(
+            pool, NARRATIVE_A["zh"]["text"], "zh", f"https://example.com/zh-ner-{uuid.uuid4()}"
+        )
+        ru_id = await _insert_item(
+            pool, NARRATIVE_B["ru"]["text"], "ru", f"https://example.com/ru-ner-{uuid.uuid4()}"
+        )
         item_ids = [zh_id, ru_id]
 
         # Run full pipeline (detect lang → translate → NER → embed)
@@ -361,16 +427,19 @@ async def test_ner_on_translated(pool) -> tuple[dict, list[str]]:
 # Test 6: YAKE keywords on translated text
 # ---------------------------------------------------------------------------
 
+
 async def test_yake_on_translated(pool) -> tuple[dict, str | None]:
     """YAKE extracts military-relevant keywords from NLLB-translated Chinese text."""
-    from anveshak.analyst.translation import translate_to_english
     from anveshak.analyst.keywords import extract_keywords
+    from anveshak.analyst.translation import translate_to_english
 
     t0 = time.monotonic()
     try:
         translated = translate_to_english(NARRATIVE_A["zh"]["text"], "zh")
         if translated is None:
-            return _result("yake_on_translated", False, "translation returned None", time.monotonic() - t0), None
+            return _result(
+                "yake_on_translated", False, "translation returned None", time.monotonic() - t0
+            ), None
 
         keywords = extract_keywords(translated, language="en", max_keywords=10)
         elapsed = time.monotonic() - t0
@@ -392,6 +461,7 @@ async def test_yake_on_translated(pool) -> tuple[dict, str | None]:
 # Test 7: Cross-language clustering — same narrative clusters together
 # ---------------------------------------------------------------------------
 
+
 async def test_cross_language_clustering(pool) -> tuple[dict, list[str]]:
     """Items from same narrative in different languages cluster together after translation.
 
@@ -410,16 +480,18 @@ async def test_cross_language_clustering(pool) -> tuple[dict, list[str]]:
         narrative_a_ids = []
         for lang_key, item in NARRATIVE_A.items():
             text = item["text"] + f" [{cluster_tag}-a-{lang_key}]"
-            iid = await _insert_item(pool, text, item["lang"],
-                                     f"https://example.com/clust-a-{lang_key}-{uuid.uuid4()}")
+            iid = await _insert_item(
+                pool, text, item["lang"], f"https://example.com/clust-a-{lang_key}-{uuid.uuid4()}"
+            )
             narrative_a_ids.append(iid)
             item_ids.append(iid)
 
         narrative_b_ids = []
         for lang_key, item in NARRATIVE_B.items():
             text = item["text"] + f" [{cluster_tag}-b-{lang_key}]"
-            iid = await _insert_item(pool, text, item["lang"],
-                                     f"https://example.com/clust-b-{lang_key}-{uuid.uuid4()}")
+            iid = await _insert_item(
+                pool, text, item["lang"], f"https://example.com/clust-b-{lang_key}-{uuid.uuid4()}"
+            )
             narrative_b_ids.append(iid)
             item_ids.append(iid)
 
@@ -440,12 +512,16 @@ async def test_cross_language_clustering(pool) -> tuple[dict, list[str]]:
         if len(rows) < 6:
             embedded_ids = [r["id"] for r in rows]
             missing = [iid for iid in item_ids if iid not in embedded_ids]
-            return _result("cross_lang_clustering", False,
-                           f"only {len(rows)}/6 items have embeddings, missing: {missing[:3]}",
-                           elapsed), item_ids
+            return _result(
+                "cross_lang_clustering",
+                False,
+                f"only {len(rows)}/6 items have embeddings, missing: {missing[:3]}",
+                elapsed,
+            ), item_ids
 
         # Build id→vector map
         import struct
+
         vectors = {}
         for row in rows:
             raw = row["embedding"]
@@ -512,25 +588,33 @@ async def test_cross_language_clustering(pool) -> tuple[dict, list[str]]:
 
     except Exception as exc:
         import traceback
-        return _result("cross_lang_clustering", False,
-                       f"{exc}\n{traceback.format_exc()[-300:]}", time.monotonic() - t0), item_ids
+
+        return _result(
+            "cross_lang_clustering",
+            False,
+            f"{exc}\n{traceback.format_exc()[-300:]}",
+            time.monotonic() - t0,
+        ), item_ids
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
+
 async def main():
     import asyncpg
+    from anveshak.analyst.embeddings import load_encoder
 
     # Load models at startup (same as production worker)
     from anveshak.analyst.nlp import load_models
-    from anveshak.analyst.embeddings import load_encoder
+
     load_models()
     load_encoder()
 
-    postgres_url = os.environ.get("POSTGRES_URL",
-                                   "postgresql://anveshak:anveshak@postgres:5432/anveshak")
+    postgres_url = os.environ.get(
+        "POSTGRES_URL", "postgresql://anveshak:anveshak@postgres:5432/anveshak"
+    )
     pool = await asyncpg.create_pool(postgres_url, min_size=1, max_size=3)
 
     await _setup(pool)
@@ -539,8 +623,12 @@ async def main():
     all_item_ids = []
 
     # Translation tests (no DB writes, just model inference)
-    for test_fn in [test_translation_chinese, test_translation_russian,
-                    test_translation_hindi, test_translation_bengali]:
+    for test_fn in [
+        test_translation_chinese,
+        test_translation_russian,
+        test_translation_hindi,
+        test_translation_bengali,
+    ]:
         result, item_id = await test_fn(pool)
         results.append(result)
         sys.__stdout__.write(f"  {result['status']}  {result['test']} ({result['elapsed_s']}s)\n")

@@ -6,6 +6,7 @@ Tests:
   - Health check trips 'healthy' → 'down' after 3+ consecutive failures
   - Prometheus metrics fire on trip/recovery
 """
+
 from __future__ import annotations
 
 import pytest
@@ -17,8 +18,8 @@ pytestmark = pytest.mark.unit
 # SQL filter — down sources excluded
 # ---------------------------------------------------------------------------
 
-class TestCircuitBreakerSQLFilter:
 
+class TestCircuitBreakerSQLFilter:
     def test_web_sources_query_excludes_down(self):
         from anveshak.scraper.jobs import SQL_GET_WEB_SOURCES
 
@@ -34,8 +35,8 @@ class TestCircuitBreakerSQLFilter:
 # Health status transitions
 # ---------------------------------------------------------------------------
 
-class TestHealthStatusTransitions:
 
+class TestHealthStatusTransitions:
     def test_healthy_result_resets_failures(self):
         from anveshak.scraper.health import HealthResult, _next_status
 
@@ -102,11 +103,12 @@ class TestHealthStatusTransitions:
 # Health check functions
 # ---------------------------------------------------------------------------
 
-class TestWebHealthCheck:
 
+class TestWebHealthCheck:
     @pytest.mark.asyncio
     async def test_empty_content_returns_degraded_hard(self):
         from unittest.mock import AsyncMock, patch
+
         from anveshak.scraper.health import check_web_health
 
         with patch("anveshak.scraper.health.fetch_url", new_callable=AsyncMock) as mock_fetch:
@@ -120,6 +122,7 @@ class TestWebHealthCheck:
     @pytest.mark.asyncio
     async def test_short_content_returns_degraded_soft(self):
         from unittest.mock import AsyncMock, patch
+
         from anveshak.scraper.health import check_web_health
 
         with patch("anveshak.scraper.health.fetch_url", new_callable=AsyncMock) as mock_fetch:
@@ -133,6 +136,7 @@ class TestWebHealthCheck:
     @pytest.mark.asyncio
     async def test_paywall_content_returns_degraded(self):
         from unittest.mock import AsyncMock, patch
+
         from anveshak.scraper.health import check_web_health
 
         with patch("anveshak.scraper.health.fetch_url", new_callable=AsyncMock) as mock_fetch:
@@ -146,6 +150,7 @@ class TestWebHealthCheck:
     @pytest.mark.asyncio
     async def test_good_content_returns_healthy(self):
         from unittest.mock import AsyncMock, patch
+
         from anveshak.scraper.health import check_web_health
 
         with patch("anveshak.scraper.health.fetch_url", new_callable=AsyncMock) as mock_fetch:
@@ -160,8 +165,8 @@ class TestWebHealthCheck:
 # Metrics exist
 # ---------------------------------------------------------------------------
 
-class TestCircuitBreakerMetrics:
 
+class TestCircuitBreakerMetrics:
     def test_circuit_breaker_metric_exists(self):
         from anveshak.scraper.metrics import scraper_circuit_breaker_total
 

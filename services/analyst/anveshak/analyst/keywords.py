@@ -5,6 +5,7 @@ No GPU needed. No hardware.md entry required.
 
 Extracts key phrases ranked by relevance score (lower = more relevant).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -52,7 +53,4 @@ def extract_keywords(
 
     raw_keywords = extractor.extract_keywords(text)
 
-    return [
-        KeywordResult(keyword=kw, score=round(score, 6))
-        for kw, score in raw_keywords
-    ]
+    return [KeywordResult(keyword=kw, score=round(score, 6)) for kw, score in raw_keywords]

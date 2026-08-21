@@ -1,11 +1,12 @@
 """Organization repository — CRUD for the organizations table."""
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any, Optional
 
-import asyncpg
+from anveshak.db import DBConnection
 
 # ---------------------------------------------------------------------------
 # SQL constants
@@ -39,25 +40,31 @@ SQL_UPDATE_ORG = """
 # Repository functions
 # ---------------------------------------------------------------------------
 
+
 async def create_organization(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     name: str,
     slug: str,
 ) -> str:
     """Create a new organization. Returns org ID."""
     org_id = str(uuid.uuid4())
     now = datetime.now(UTC)
-    return await conn.fetchval(SQL_CREATE_ORG, org_id, name, slug, now, now)
+    created = await conn.fetchval(SQL_CREATE_ORG, org_id, name, slug, now, now)
+    if created is None:
+        # INSERT ... RETURNING id with no ON CONFLICT: unreachable, asyncpg raises
+        # on failure rather than returning None.
+        raise RuntimeError(f"organization insert returned no id: {org_id}")
+    return str(created)
 
 
-async def list_organizations(conn: asyncpg.Connection) -> list[dict[str, Any]]:
+async def list_organizations(conn: DBConnection) -> list[dict[str, Any]]:
     """Return all organizations."""
     rows = await conn.fetch(SQL_LIST_ORGS)
     return [dict(r) for r in rows]
 
 
 async def get_organization(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     org_id: str,
 ) -> dict[str, Any] | None:
     """Return a single organization or None."""
@@ -66,7 +73,7 @@ async def get_organization(
 
 
 async def update_organization(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     org_id: str,
     name: Optional[str] = None,
     is_active: Optional[bool] = None,

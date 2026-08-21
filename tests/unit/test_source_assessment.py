@@ -3,9 +3,9 @@
 TDD RED phase: these tests define the contract before implementation.
 pytest.mark.unit — mocks DB, no external dependencies.
 """
+
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -160,10 +160,21 @@ class TestAssessmentDB:
         # MagicMock that supports dict() conversion via items().
         mock_row = MagicMock()
         mock_row.items.return_value = [
-            ("id", "a1"), ("topic_id", "t1"), ("source_id", "s1"),
-            ("org_id", "org1"), ("stats", "{}"), ("generated_at", None),
+            ("id", "a1"),
+            ("topic_id", "t1"),
+            ("source_id", "s1"),
+            ("org_id", "org1"),
+            ("stats", "{}"),
+            ("generated_at", None),
         ]
-        mock_row.keys.return_value = ["id", "topic_id", "source_id", "org_id", "stats", "generated_at"]
+        mock_row.keys.return_value = [
+            "id",
+            "topic_id",
+            "source_id",
+            "org_id",
+            "stats",
+            "generated_at",
+        ]
         conn = AsyncMock()
         conn.fetchrow = AsyncMock(return_value=mock_row)
 
@@ -243,22 +254,25 @@ class TestAssessmentRoutes:
             mock_sources.verify_source_access = AsyncMock()
             mock_sources.topic_source_exists = AsyncMock(return_value=True)
             mock_assess_db.count_source_content = AsyncMock(return_value=10)
-            mock_assess_db.compute_source_stats = AsyncMock(return_value={
-                "total_posts": 10,
-                "engagement": {"likes": 0, "comments": 0, "shares": 0, "views": 0},
-                "language_breakdown": [],
-                "volume_timeline": [],
-                "top_entities": [],
-                "identifier_overlap": [],
-                "cluster_participation": [],
-                "sentiment_distribution": {"negative": 0, "neutral": 0, "positive": 0},
-                "credibility_trajectory": [],
-            })
+            mock_assess_db.compute_source_stats = AsyncMock(
+                return_value={
+                    "total_posts": 10,
+                    "engagement": {"likes": 0, "comments": 0, "shares": 0, "views": 0},
+                    "language_breakdown": [],
+                    "volume_timeline": [],
+                    "top_entities": [],
+                    "identifier_overlap": [],
+                    "cluster_participation": [],
+                    "sentiment_distribution": {"negative": 0, "neutral": 0, "positive": 0},
+                    "credibility_trajectory": [],
+                }
+            )
             mock_assess_db.insert_assessment = AsyncMock()
             mock_assess_db.get_source_snapshot = AsyncMock(return_value={})
             mock_audit.log_action = AsyncMock()
 
             from anveshak.api.routes.assessments import CreateAssessmentRequest
+
             req = CreateAssessmentRequest()
 
             await create_assessment(
@@ -276,7 +290,7 @@ class TestAssessmentRoutes:
     @pytest.mark.asyncio
     async def test_create_assessment_rejects_insufficient_data(self):
         """POST /assessment with < 5 content items returns 400."""
-        from anveshak.api.routes.assessments import create_assessment, CreateAssessmentRequest
+        from anveshak.api.routes.assessments import CreateAssessmentRequest, create_assessment
         from fastapi import HTTPException
 
         mock_db = AsyncMock()
@@ -311,7 +325,7 @@ class TestAssessmentRoutes:
     @pytest.mark.asyncio
     async def test_create_assessment_rejects_unlinked_source(self):
         """POST /assessment for source not linked to topic returns 400."""
-        from anveshak.api.routes.assessments import create_assessment, CreateAssessmentRequest
+        from anveshak.api.routes.assessments import CreateAssessmentRequest, create_assessment
         from fastapi import HTTPException
 
         mock_db = AsyncMock()

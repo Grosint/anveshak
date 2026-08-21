@@ -7,31 +7,44 @@ Cron jobs:
   check_scheduled_reports — every 15 min. Evaluate cron expressions on topics.
   check_source_warnings   — every 6 h. Detect credibility downgrades on cited sources.
 
-CLAUDE.md rules enforced:
+AGENTS.md rules enforced:
   Rule 4 : generated_at set ONCE via WHERE generated_at IS NULL.
   Rule 5 : All LLM calls are async background jobs (this module).
   Rule 9 : LLM output validated through Pydantic before storage.
 """
+
 from __future__ import annotations
 
 import json
-from datetime import datetime, UTC, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import arq
 import structlog
+from anveshak.logging import configure_logging
+from anveshak.models import Labels
 from arq.connections import RedisSettings
 from croniter import croniter
-from anveshak.logging import configure_logging
 
 configure_logging("reporter")
 
 from . import db as db
 from .geocoder import build_geojson, extract_locations_from_text, geocode_locations
-from .llm import BlufContent, call_ollama_with_retry, call_ollama_for_assessment, call_ollama_for_bluf
-from .metrics import reporter_jobs_total, reporter_job_duration_seconds, reporter_ollama_errors_total, arq_jobs_failed_total
-from .prompt_templates import render_prompt, render_assessment_prompt, render_bluf_prompt
-from .rag import assemble_context, assemble_identifier_context, build_recommended_actions, generate_query_embedding
+from .llm import (
+    BlufContent,
+    call_ollama_for_assessment,
+    call_ollama_for_bluf,
+)
+from .metrics import (
+    arq_jobs_failed_total,
+    reporter_job_duration_seconds,
+    reporter_jobs_total,
+)
+from .prompt_templates import render_assessment_prompt, render_bluf_prompt
+from .rag import (
+    build_recommended_actions,
+    generate_query_embedding,
+)
 from .settings import settings as _default_settings
 
 log = structlog.get_logger(__name__)
@@ -41,9 +54,11 @@ log = structlog.get_logger(__name__)
 # Startup / shutdown
 # ---------------------------------------------------------------------------
 
+
 async def startup(ctx: dict) -> None:
     """Create DB pool, start Prometheus metrics server, attach settings to ARQ context."""
     from prometheus_client import start_http_server
+
     from .metrics import REGISTRY as REPORTER_REGISTRY
 
     start_http_server(_default_settings.metrics_port, registry=REPORTER_REGISTRY)
@@ -66,6 +81,7 @@ async def shutdown(ctx: dict) -> None:
 # generate_report — main ARQ job
 # ---------------------------------------------------------------------------
 
+
 async def generate_report(ctx: dict, report_id: str) -> None:
     """RAG → LLM → geocode → store.
 
@@ -73,6 +89,7 @@ async def generate_report(ctx: dict, report_id: str) -> None:
     dispatch results in a no-op (set_report_generated returns False).
     """
     import time as _time
+
     _t0 = _time.monotonic()
 
     pool = ctx["db"]
@@ -109,22 +126,35 @@ async def generate_report(ctx: dict, report_id: str) -> None:
     tracker_id = report.get("tracker_id")
     if tracker_id:
         chunks = await db.fetch_tracker_rag_chunks(
-            pool, tracker_id, query_embedding, credibility_min, s.rag_top_k,
+            pool,
+            tracker_id,
+            query_embedding,
+            credibility_min,
+            s.rag_top_k,
         )
         log.info("reporter.tracker_scoped_rag", tracker_id=tracker_id, chunks=len(chunks))
     else:
-        relevance_threshold = float(topic["topic_relevance_threshold"]) if topic.get("topic_relevance_threshold") is not None else s.topic_relevance_threshold
+        relevance_threshold = (
+            float(topic["topic_relevance_threshold"])
+            if topic.get("topic_relevance_threshold") is not None
+            else s.topic_relevance_threshold
+        )
         chunks = await db.fetch_rag_chunks(
-            pool, topic_id, query_embedding, credibility_min, s.rag_top_k,
+            pool,
+            topic_id,
+            query_embedding,
+            credibility_min,
+            s.rag_top_k,
             relevance_threshold=relevance_threshold,
         )
 
     if not chunks:
         log.warning("reporter.no_rag_chunks", report_id=report_id, topic_id=topic_id)
         await db.set_report_failed(
-            pool, report_id,
+            pool,
+            report_id,
             "No scraped content available for this topic yet. "
-            "Add sources to the topic and run a scrape job first, then generate the report."
+            "Add sources to the topic and run a scrape job first, then generate the report.",
         )
         return
 
@@ -146,10 +176,12 @@ async def generate_report(ctx: dict, report_id: str) -> None:
         f"{stats.get('cluster_count', 0)} clusters, "
         f"{stats.get('signal_count', 0)} signals"
     )
-    cluster_summary = ", ".join(
-        f"{c.get('label', 'Unnamed')} ({c.get('item_count', 0)} items)"
-        for c in clusters[:5]
-    ) or "No clusters formed yet."
+    cluster_summary = (
+        ", ".join(
+            f"{c.get('label', 'Unnamed')} ({c.get('item_count', 0)} items)" for c in clusters[:5]
+        )
+        or "No clusters formed yet."
+    )
     bluf_prompt = render_bluf_prompt(topic_name, stats_summary, cluster_summary)
     bluf = await call_ollama_for_bluf(bluf_prompt, s, max_retries=s.ollama_retry_max)
 
@@ -157,11 +189,11 @@ async def generate_report(ctx: dict, report_id: str) -> None:
         # Fallback: generate a template-driven BLUF (no LLM needed)
         bluf = BlufContent(
             bluf=f"Monitoring of '{topic_name}' collected {stats.get('content_count', 0)} items "
-                 f"from {stats.get('source_count', 0)} sources, forming "
-                 f"{stats.get('cluster_count', 0)} narrative clusters with "
-                 f"{stats.get('signal_count', 0)} active signals.",
+            f"from {stats.get('source_count', 0)} sources, forming "
+            f"{stats.get('cluster_count', 0)} narrative clusters with "
+            f"{stats.get('signal_count', 0)} active signals.",
             confidence_level=0.0,
-            labels={"classification": "OPEN", "domain": "report", "owner_org": "anveshak"},
+            labels=Labels(classification="OPEN", domain="report", owner_org="anveshak"),
         )
         log.info("reporter.bluf_fallback_used", report_id=report_id)
 
@@ -206,6 +238,7 @@ async def generate_report(ctx: dict, report_id: str) -> None:
         # --- 11. Generate PDF eagerly (so API can serve it immediately) ---
         try:
             from .pdf import generate_pdf
+
             pdf_data = {
                 "id": report_id,
                 "report_type": report_type,
@@ -223,7 +256,8 @@ async def generate_report(ctx: dict, report_id: str) -> None:
             async with pool.acquire() as conn:
                 await conn.execute(
                     "UPDATE reports SET pdf_path = $1, updated_at = NOW() WHERE id = $2",
-                    pdf_path, report_id,
+                    pdf_path,
+                    report_id,
                 )
             log.info("reporter.pdf_generated", report_id=report_id, path=pdf_path)
         except Exception as exc:
@@ -283,7 +317,9 @@ def _build_content_md(
             confidence = float(match.get("confidence", 0) or 0)
             count = match.get("match_count", 0)
             legal = match.get("legal_sections") or []
-            lines.append(f"**{display}** — Severity: {severity}, Confidence: {confidence:.0%}, Matches: {count}")
+            lines.append(
+                f"**{display}** — Severity: {severity}, Confidence: {confidence:.0%}, Matches: {count}"
+            )
             if legal and isinstance(legal, list):
                 lines.append(f"  Legal provisions: {', '.join(legal)}")
             lines.append("")
@@ -302,7 +338,9 @@ def _build_content_md(
     # Legal sections (when include_legal_mapping was True in prompt)
     if rc.legal_sections:
         lines.append("\n## Applicable Legal Provisions\n")
-        lines.append("*AI-generated mappings — require verification by a qualified legal officer.*\n")
+        lines.append(
+            "*AI-generated mappings — require verification by a qualified legal officer.*\n"
+        )
         for mapping in rc.legal_sections:
             finding = mapping.get("finding", "")
             lines.append(f"**Finding:** {finding}\n")
@@ -337,6 +375,7 @@ def _build_content_md(
 # _build_content_md_v2 — data-driven markdown (v2 reports)
 # ---------------------------------------------------------------------------
 
+
 def _build_content_md_v2(
     bluf: BlufContent,
     data_bundle: dict[str, Any],
@@ -368,10 +407,12 @@ def _build_content_md_v2(
 
     # --- BLUF ---
     lines.append("## Bottom Line Up Front\n")
-    lines.append(f"**{stats.get('content_count', 0)}** items | "
-                 f"**{stats.get('source_count', 0)}** sources | "
-                 f"**{stats.get('cluster_count', 0)}** clusters | "
-                 f"**{stats.get('signal_count', 0)}** signals\n")
+    lines.append(
+        f"**{stats.get('content_count', 0)}** items | "
+        f"**{stats.get('source_count', 0)}** sources | "
+        f"**{stats.get('cluster_count', 0)}** clusters | "
+        f"**{stats.get('signal_count', 0)}** signals\n"
+    )
     lines.append(f"{bluf.bluf}\n")
     lines.append(f"*Confidence: {bluf.confidence_level:.0%}*\n")
 
@@ -385,8 +426,10 @@ def _build_content_md_v2(
         lines.append("| Source | Platform | Credibility | Items |")
         lines.append("|--------|----------|-------------|-------|")
         for src in display_sources:
-            lines.append(f"| {src.get('name', '')} | {src.get('platform', '')} | "
-                         f"{src.get('credibility_score', 0):.0f} | {src.get('item_count', 0)} |")
+            lines.append(
+                f"| {src.get('name', '')} | {src.get('platform', '')} | "
+                f"{src.get('credibility_score', 0):.0f} | {src.get('item_count', 0)} |"
+            )
         lines.append("")
 
     # Narrative Clusters
@@ -396,8 +439,10 @@ def _build_content_md_v2(
         lines.append("|---------|-------|--------------------:|---------|")
         for cl in clusters:
             summary = (cl.get("executive_summary") or "")[:80]
-            lines.append(f"| {cl.get('label', '')} | {cl.get('item_count', 0)} | "
-                         f"{cl.get('independent_source_count', 0)} | {summary} |")
+            lines.append(
+                f"| {cl.get('label', '')} | {cl.get('item_count', 0)} | "
+                f"{cl.get('independent_source_count', 0)} | {summary} |"
+            )
         lines.append("")
 
     # Top Entities
@@ -407,14 +452,18 @@ def _build_content_md_v2(
         lines.append("| Entity | Type | Mentions |")
         lines.append("|--------|------|----------|")
         for ent in display_entities:
-            lines.append(f"| {ent.get('entity_text', '')} | {ent.get('entity_type', '')} | "
-                         f"{ent.get('mention_count', 0)} |")
+            lines.append(
+                f"| {ent.get('entity_text', '')} | {ent.get('entity_type', '')} | "
+                f"{ent.get('mention_count', 0)} |"
+            )
         lines.append("")
 
     # Trending Keywords
     if keywords:
         lines.append("### Trending Keywords\n")
-        kw_display = ", ".join(f"**{kw.get('keyword', '')}** ({kw.get('frequency', 0)})" for kw in keywords[:15])
+        kw_display = ", ".join(
+            f"**{kw.get('keyword', '')}** ({kw.get('frequency', 0)})" for kw in keywords[:15]
+        )
         lines.append(kw_display + "\n")
 
     # Language Breakdown
@@ -442,8 +491,10 @@ def _build_content_md_v2(
                 lines.append("|--------|---------|--------|------|")
                 for sig in display_signals[:20]:
                     desc = (sig.get("description") or "")[:120]
-                    lines.append(f"| {desc} | {sig.get('cluster_label', '')} | "
-                                 f"{sig.get('status', '')} | {str(sig.get('created_at', ''))[:10]} |")
+                    lines.append(
+                        f"| {desc} | {sig.get('cluster_label', '')} | "
+                        f"{sig.get('status', '')} | {str(sig.get('created_at', ''))[:10]} |"
+                    )
                 lines.append("")
 
         # Identifiers
@@ -452,10 +503,12 @@ def _build_content_md_v2(
             lines.append("| Type | Value | Sources | Items |")
             lines.append("|------|-------|---------|-------|")
             for ident in identifiers:
-                lines.append(f"| {ident.get('identifier_type', '')} | "
-                             f"{ident.get('identifier_value', '')} | "
-                             f"{ident.get('source_count', 0)} | "
-                             f"{ident.get('content_item_count', 0)} |")
+                lines.append(
+                    f"| {ident.get('identifier_type', '')} | "
+                    f"{ident.get('identifier_value', '')} | "
+                    f"{ident.get('source_count', 0)} | "
+                    f"{ident.get('content_item_count', 0)} |"
+                )
             lines.append("")
 
         # Template Matches
@@ -466,8 +519,10 @@ def _build_content_md_v2(
                 severity = match.get("severity", "")
                 confidence = float(match.get("confidence", 0) or 0)
                 count = match.get("match_count", 0)
-                lines.append(f"**{display}** — Severity: {severity}, "
-                             f"Confidence: {confidence:.0%}, Matches: {count}")
+                lines.append(
+                    f"**{display}** — Severity: {severity}, "
+                    f"Confidence: {confidence:.0%}, Matches: {count}"
+                )
             lines.append("")
 
             # Recommended Actions (derived from template matches)
@@ -484,7 +539,9 @@ def _build_content_md_v2(
         for item in evidence_items[:30]:
             title = item.get("title") or item.get("snippet", "")[:50] or "Untitled"
             lines.append(f"### {title}\n")
-            lines.append(f"- **Source:** {item.get('source_name', 'Unknown')} ({item.get('platform', '')})")
+            lines.append(
+                f"- **Source:** {item.get('source_name', 'Unknown')} ({item.get('platform', '')})"
+            )
             lines.append(f"- **URL:** {item.get('url', 'N/A')}")
             lines.append(f"- **Date:** {str(item.get('captured_at', ''))[:10]}")
             lines.append(f"- **Credibility:** {item.get('credibility_score_at_capture', 0):.0f}")
@@ -495,14 +552,22 @@ def _build_content_md_v2(
     # --- Part IV: Methodology (research_summary only) ---
     if is_full:
         lines.append("---\n## Part IV: Methodology\n")
-        lines.append("**Data acquisition:** Automated open-source collection via Anveshak platform.\n")
-        lines.append(f"**Analysis period:** {stats.get('content_count', 0)} items from "
-                     f"{stats.get('source_count', 0)} sources.\n")
-        lines.append("**Limitations:** This report is a point-in-time snapshot. "
-                     "Source credibility scores may have changed since generation. "
-                     "LLM-generated summaries require analyst verification.\n")
-        lines.append("**Confidence calibration:** Confidence level reflects the fraction "
-                     "of narrative clusters corroborated by 2+ independent sources.\n")
+        lines.append(
+            "**Data acquisition:** Automated open-source collection via Anveshak platform.\n"
+        )
+        lines.append(
+            f"**Analysis period:** {stats.get('content_count', 0)} items from "
+            f"{stats.get('source_count', 0)} sources.\n"
+        )
+        lines.append(
+            "**Limitations:** This report is a point-in-time snapshot. "
+            "Source credibility scores may have changed since generation. "
+            "LLM-generated summaries require analyst verification.\n"
+        )
+        lines.append(
+            "**Confidence calibration:** Confidence level reflects the fraction "
+            "of narrative clusters corroborated by 2+ independent sources.\n"
+        )
 
     return "\n".join(lines)
 
@@ -511,6 +576,7 @@ def _build_content_md_v2(
 # check_scheduled_reports — cron every 15 min
 # ---------------------------------------------------------------------------
 
+
 async def check_scheduled_reports(ctx: dict) -> None:
     """Evaluate scheduled_report_cron on each active topic.
 
@@ -518,7 +584,6 @@ async def check_scheduled_reports(ctx: dict) -> None:
     last report was generated for that topic.
     """
     pool = ctx["db"]
-    s = ctx["settings"]
 
     now = datetime.now(UTC)
     async with pool.acquire() as conn:
@@ -550,6 +615,7 @@ async def check_scheduled_reports(ctx: dict) -> None:
         if next_fire <= now:
             # Create report row and enqueue job
             import uuid
+
             from . import db as dbmod
 
             report_id = str(uuid.uuid4())
@@ -581,12 +647,13 @@ async def check_scheduled_reports(ctx: dict) -> None:
 # check_source_warnings — cron every 6 h
 # ---------------------------------------------------------------------------
 
+
 async def check_source_warnings(ctx: dict) -> None:
     """Detect credibility downgrades on sources cited in recent reports.
 
     Compares current source credibility_score against source_snapshot saved
     at report generation time. Inserts a report_source_warnings row if downgraded.
-    CLAUDE.md rule 8: credibility changes are audit-logged.
+    AGENTS.md rule 8: credibility changes are audit-logged.
     """
     pool = ctx["db"]
     s = ctx["settings"]
@@ -628,6 +695,7 @@ async def check_source_warnings(ctx: dict) -> None:
 # ARQ job: generate_source_assessment — Phase 2
 # ---------------------------------------------------------------------------
 
+
 async def generate_source_assessment(ctx: dict, assessment_id: str) -> None:
     """Generate an LLM-powered source assessment brief with per-claim citations.
 
@@ -658,11 +726,11 @@ async def generate_source_assessment(ctx: dict, assessment_id: str) -> None:
         return
 
     # 3. Load source content (most recent, up to 30 items)
-    chunks = await db.fetch_source_content_for_brief(
-        pool, topic_id, source_id, limit=30
-    )
+    chunks = await db.fetch_source_content_for_brief(pool, topic_id, source_id, limit=30)
     if not chunks:
-        await db.set_assessment_failed(pool, assessment_id, "No content items found for this source")
+        await db.set_assessment_failed(
+            pool, assessment_id, "No content items found for this source"
+        )
         return
 
     # 4. Assemble content context with content_item_ids for citation
@@ -677,13 +745,14 @@ async def generate_source_assessment(ctx: dict, assessment_id: str) -> None:
     stats_raw = assessment.get("stats")
     if stats_raw:
         import json as _json
+
         stats_data = _json.loads(stats_raw) if isinstance(stats_raw, str) else stats_raw
         stats_summary = (
             f"Total posts: {stats_data.get('total_posts', 'N/A')}\n"
             f"Avg posts/day: {stats_data.get('avg_posts_per_day', 'N/A')}\n"
             f"Engagement: {stats_data.get('engagement', {})}\n"
             f"Sentiment: {stats_data.get('sentiment_distribution', {})}\n"
-            f"Languages: {[l.get('language') for l in stats_data.get('language_breakdown', [])]}\n"
+            f"Languages: {[lang.get('language') for lang in stats_data.get('language_breakdown', [])]}\n"
             f"Clusters: {len(stats_data.get('cluster_participation', []))}\n"
             f"Identifiers overlapping other sources: {len(stats_data.get('identifier_overlap', []))}"
         )
@@ -693,6 +762,7 @@ async def generate_source_assessment(ctx: dict, assessment_id: str) -> None:
     meta_raw = assessment.get("platform_metadata")
     if meta_raw:
         import json as _json
+
         meta = _json.loads(meta_raw) if isinstance(meta_raw, str) else meta_raw
         if meta:
             platform_meta_str = "\n".join(f"{k}: {v}" for k, v in meta.items() if v is not None)
@@ -722,7 +792,9 @@ async def generate_source_assessment(ctx: dict, assessment_id: str) -> None:
     )
 
     if brief is None:
-        await db.set_assessment_failed(pool, assessment_id, "LLM failed to generate valid assessment brief")
+        await db.set_assessment_failed(
+            pool, assessment_id, "LLM failed to generate valid assessment brief"
+        )
         return
 
     # 10. Validate citations — strip any content_item_ids not in our chunks
@@ -774,6 +846,7 @@ async def generate_source_assessment(ctx: dict, assessment_id: str) -> None:
 # ARQ WorkerSettings
 # ---------------------------------------------------------------------------
 
+
 async def on_job_result(ctx: dict, result) -> None:  # type: ignore[type-arg]
     """8A.19 — increment failure counter when an ARQ job exhausts all retries."""
     if getattr(result, "success", True) is False:
@@ -798,5 +871,5 @@ class WorkerSettings:
     on_startup = startup
     on_shutdown = shutdown
     on_job_result = on_job_result
-    job_timeout = 600    # 8C.4 — Ollama report generation ceiling (600s for CPU inference)
-    keep_result = 3600   # 8C.6 — keep results 1h for UI polling
+    job_timeout = 600  # 8C.4 — Ollama report generation ceiling (600s for CPU inference)
+    keep_result = 3600  # 8C.6 — keep results 1h for UI polling

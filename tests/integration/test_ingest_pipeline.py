@@ -6,16 +6,17 @@ pytest.mark.integration — requires running Docker Compose services:
 Run with:
   uv run --package anveshak-tests pytest tests/integration/ -v -m integration
 """
+
 from __future__ import annotations
 
 import pytest
 
 from tests.conftest import insert_content_item
 
-
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 @pytest.mark.asyncio
@@ -43,7 +44,6 @@ async def test_content_hash_deduplication(db_pool, make_topic, make_source):
         )
 
     assert count == 1, "Duplicate content_hash must produce exactly one row"
-
 
 
 # NOTE: test_analyst_sets_embedding, test_extracted_entities_exist, and

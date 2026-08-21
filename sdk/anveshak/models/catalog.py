@@ -1,4 +1,5 @@
 """Source discovery models — catalog, discovered sources, LLM suggestions."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -66,7 +67,7 @@ class DiscoveredSource(AuditedModel):
 class SourceSuggestion(BaseModel):
     """LLM-generated source type recommendation (Level 4).
 
-    Validated via Pydantic before storage (CLAUDE.md rule 9).
+    Validated via Pydantic before storage (AGENTS.md rule 9).
     Provides guidance, not specific URLs — analyst acts manually.
     """
 

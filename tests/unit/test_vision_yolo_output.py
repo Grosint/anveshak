@@ -4,9 +4,10 @@ Criteria 4.9: returns list of {label, confidence, bbox} dicts.
 Criteria 4.10: stored as JSONB (must be JSON-serialisable).
 Criteria 4.11: high_interest_labels extracts defence-relevant detections.
 """
+
 import json
+
 import pytest
-from unittest.mock import MagicMock, patch
 
 
 class TestYOLODetectorOutputSchema:
@@ -24,7 +25,7 @@ class TestYOLODetectorOutputSchema:
     @pytest.mark.unit
     def test_yolo_to_jsonb_is_serialisable(self):
         """to_jsonb() output must be JSON-serialisable (stored in JSONB column)."""
-        from anveshak.vision.detectors.yolo_detector import YOLODetector, YOLODetection
+        from anveshak.vision.detectors.yolo_detector import YOLODetection, YOLODetector
 
         yolo = YOLODetector()
         detections = [
@@ -43,7 +44,7 @@ class TestYOLODetectorOutputSchema:
     @pytest.mark.unit
     def test_high_interest_labels_filters_correctly(self):
         """high_interest_labels() returns only defence-relevant YOLO detections."""
-        from anveshak.vision.detectors.yolo_detector import YOLODetector, YOLODetection
+        from anveshak.vision.detectors.yolo_detector import YOLODetection, YOLODetector
 
         yolo = YOLODetector()
         detections = [

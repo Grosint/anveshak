@@ -3,9 +3,10 @@
 SessionExpiredError during _iter_channel must be caught and logged,
 not crash the entire collect() loop.
 """
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -13,12 +14,11 @@ pytestmark = pytest.mark.unit
 
 
 class TestTelegramSessionExpiry:
-
     @pytest.mark.asyncio
     async def test_session_expired_during_iteration_is_caught(self):
         """SessionExpiredError mid-channel must not propagate — log and continue."""
-        from telethon.errors import SessionExpiredError
         from anveshak.social.adapters.telegram import TelegramAdapter
+        from telethon.errors import SessionExpiredError
 
         adapter = TelegramAdapter.__new__(TelegramAdapter)
         adapter._client = MagicMock()
@@ -40,8 +40,8 @@ class TestTelegramSessionExpiry:
     @pytest.mark.asyncio
     async def test_session_expired_sets_needs_reauth_flag(self):
         """After SessionExpiredError, adapter should flag need for re-authentication."""
-        from telethon.errors import SessionExpiredError
         from anveshak.social.adapters.telegram import TelegramAdapter
+        from telethon.errors import SessionExpiredError
 
         adapter = TelegramAdapter.__new__(TelegramAdapter)
         adapter._client = MagicMock()

@@ -13,11 +13,11 @@ Tests:
   R3: Cross-org content_items filtered correctly
   R4: Signals inherit org boundary through topic_id → topics.org_id
 """
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, UTC
-import json
+from datetime import UTC, datetime
 
 import pytest
 
@@ -47,8 +47,12 @@ async def two_orgs(db_pool):
                 VALUES ($1, $2, $3, $4, $5, $6)
                 ON CONFLICT (id) DO NOTHING
                 """,
-                org_id, f"Test Org {org_id[-8:]}", org_id[-8:],
-                now, now, LABELS_JSON,
+                org_id,
+                f"Test Org {org_id[-8:]}",
+                org_id[-8:],
+                now,
+                now,
+                LABELS_JSON,
             )
 
         topic_a = str(uuid.uuid4())
@@ -63,7 +67,13 @@ async def two_orgs(db_pool):
                                     org_id, created_at, updated_at, labels)
                 VALUES ($1, $2, $3, 3, 'active', $4, $5, $6, $7)
                 """,
-                topic_id, name, ["test"], org_id, now, now, LABELS_JSON,
+                topic_id,
+                name,
+                ["test"],
+                org_id,
+                now,
+                now,
+                LABELS_JSON,
             )
 
     yield {"org_a": ORG_A, "org_b": ORG_B, "topic_a": topic_a, "topic_b": topic_b}
@@ -82,6 +92,7 @@ async def two_orgs(db_pool):
 # R1: SET LOCAL app.current_org filters topics by org
 # ---------------------------------------------------------------------------
 
+
 async def test_rls_filters_topics_by_org(db_pool, two_orgs):
     """With app.current_org set, only that org's topics should be visible.
 
@@ -93,9 +104,7 @@ async def test_rls_filters_topics_by_org(db_pool, two_orgs):
         async with conn.transaction():
             await conn.execute(f"SET LOCAL app.current_org = '{two_orgs['org_a']}'")
 
-            rows = await conn.fetch(
-                f"SELECT id, name, org_id FROM topics WHERE {RLS_FILTER}"
-            )
+            rows = await conn.fetch(f"SELECT id, name, org_id FROM topics WHERE {RLS_FILTER}")
 
             # Should include org_a, exclude org_b
             topic_ids = {r["id"] for r in rows}
@@ -114,15 +123,14 @@ async def test_rls_filters_topics_by_org(db_pool, two_orgs):
 # R2: Empty app.current_org sees all orgs (superadmin)
 # ---------------------------------------------------------------------------
 
+
 async def test_rls_empty_org_sees_all(db_pool, two_orgs):
     """Empty app.current_org should see topics from ALL orgs (superadmin mode)."""
     async with db_pool.acquire() as conn:
         async with conn.transaction():
             await conn.execute("SET LOCAL app.current_org = ''")
 
-            rows = await conn.fetch(
-                f"SELECT id, org_id FROM topics WHERE {RLS_FILTER}"
-            )
+            rows = await conn.fetch(f"SELECT id, org_id FROM topics WHERE {RLS_FILTER}")
             topic_ids = {r["id"] for r in rows}
 
             assert two_orgs["topic_a"] in topic_ids, "Org A topic should be visible"
@@ -132,6 +140,7 @@ async def test_rls_empty_org_sees_all(db_pool, two_orgs):
 # ---------------------------------------------------------------------------
 # R3: Cross-org content_items filtered
 # ---------------------------------------------------------------------------
+
 
 async def test_rls_filters_content_items_by_org(db_pool, two_orgs):
     """Content items must be filtered by org_id through RLS policy."""
@@ -149,8 +158,13 @@ async def test_rls_filters_content_items_by_org(db_pool, two_orgs):
                     credibility_score, org_id, created_at, updated_at, labels)
                 VALUES ($1, $2, $3, 'web', 50.0, $4, $5, $6, $7)
                 """,
-                src_id, f"Src-{org_id[-4:]}", f"https://{src_id[:8]}.example.com",
-                org_id, now, now, LABELS_JSON,
+                src_id,
+                f"Src-{org_id[-4:]}",
+                f"https://{src_id[:8]}.example.com",
+                org_id,
+                now,
+                now,
+                LABELS_JSON,
             )
 
         # Insert content for each org
@@ -170,17 +184,24 @@ async def test_rls_filters_content_items_by_org(db_pool, two_orgs):
                 ) VALUES ($1,$2,$3,$4,$5,'en',$6,$7,$8,50.0,$9,$10,$11,$12)
                 ON CONFLICT(content_hash) DO NOTHING
                 """,
-                item_id, topic_id, src_id, text, text, ch,
-                f"https://example.com/{item_id[:8]}", now,
-                org_id, now, now, LABELS_JSON,
+                item_id,
+                topic_id,
+                src_id,
+                text,
+                text,
+                ch,
+                f"https://example.com/{item_id[:8]}",
+                now,
+                org_id,
+                now,
+                now,
+                LABELS_JSON,
             )
 
         # Apply RLS filter for org_a (inside transaction for SET LOCAL)
         async with conn.transaction():
             await conn.execute(f"SET LOCAL app.current_org = '{two_orgs['org_a']}'")
-            rows = await conn.fetch(
-                f"SELECT id, org_id FROM content_items WHERE {RLS_FILTER}"
-            )
+            rows = await conn.fetch(f"SELECT id, org_id FROM content_items WHERE {RLS_FILTER}")
             item_ids = {r["id"] for r in rows}
 
             assert item_a in item_ids, "Org A content should be visible"
@@ -194,6 +215,7 @@ async def test_rls_filters_content_items_by_org(db_pool, two_orgs):
 # ---------------------------------------------------------------------------
 # R4: Signal org boundary through topic join
 # ---------------------------------------------------------------------------
+
 
 async def test_signal_org_boundary_through_topic(db_pool, two_orgs):
     """Signals don't have org_id directly — org boundary is via topic_id → topics.org_id.
@@ -216,7 +238,10 @@ async def test_signal_org_boundary_through_topic(db_pool, two_orgs):
                 ) VALUES ($1, $2, 'test', 'Test signal', '{}'::jsonb,
                           'new', $3, $3, $4)
                 """,
-                sig_id, topic_id, now, LABELS_JSON,
+                sig_id,
+                topic_id,
+                now,
+                LABELS_JSON,
             )
 
         # Query signals with org filter on topics join (inside transaction)
@@ -227,7 +252,7 @@ async def test_signal_org_boundary_through_topic(db_pool, two_orgs):
                 SELECT s.id, s.topic_id, t.org_id
                 FROM signals s
                 JOIN topics t ON s.topic_id = t.id
-                WHERE {RLS_FILTER.replace('org_id', 't.org_id')}
+                WHERE {RLS_FILTER.replace("org_id", "t.org_id")}
                 """
             )
             sig_ids = {r["id"] for r in rows}

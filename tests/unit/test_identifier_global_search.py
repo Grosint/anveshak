@@ -4,13 +4,13 @@ Endpoints:
   GET /api/v1/identifiers/search-global — cross-topic identifier search
   GET /api/v1/identifiers/convergence   — identifiers appearing in 2+ topics
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
 import pytest
-
 from anveshak.api.db.identifiers import (
     SQL_IDENTIFIER_CONVERGENCE,
     SQL_SEARCH_IDENTIFIERS_GLOBAL,
@@ -19,7 +19,6 @@ from anveshak.api.db.identifiers import (
     search_identifiers_global,
 )
 from anveshak.api.routes.identifiers import router
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -54,6 +53,7 @@ def _fake_global_result(
 # ===========================================================================
 # 1. SQL constants exist and are well-formed
 # ===========================================================================
+
 
 class TestGlobalSearchSQL:
     """Verify SQL constants for global identifier search."""
@@ -92,6 +92,7 @@ class TestGlobalSearchSQL:
 # 2. DB function: search_identifiers_global
 # ===========================================================================
 
+
 class TestSearchIdentifiersGlobal:
     """DB function: cross-topic identifier search, org-scoped."""
 
@@ -101,7 +102,9 @@ class TestSearchIdentifiersGlobal:
         conn.fetch.return_value = [_fake_global_result()]
 
         result = await search_identifiers_global(
-            conn, q="9876543210", org_id=ORG_ID,
+            conn,
+            q="9876543210",
+            org_id=ORG_ID,
         )
         assert len(result) == 1
         assert result[0]["identifier_value"] == "9876543210"
@@ -114,7 +117,9 @@ class TestSearchIdentifiersGlobal:
         ]
 
         result = await search_identifiers_global(
-            conn, q="987654", org_id=ORG_ID,
+            conn,
+            q="987654",
+            org_id=ORG_ID,
         )
         assert result[0]["topic_name"] == "Cyber Fraud Ring X"
 
@@ -126,7 +131,9 @@ class TestSearchIdentifiersGlobal:
         ]
 
         result = await search_identifiers_global(
-            conn, q="987654", org_id=ORG_ID,
+            conn,
+            q="987654",
+            org_id=ORG_ID,
         )
         assert result[0]["topic_id"] == TOPIC_A
 
@@ -146,7 +153,10 @@ class TestSearchIdentifiersGlobal:
         conn.fetch.return_value = [_fake_global_result()]
 
         await search_identifiers_global(
-            conn, q="987", org_id=ORG_ID, identifier_type="PHONE_IN",
+            conn,
+            q="987",
+            org_id=ORG_ID,
+            identifier_type="PHONE_IN",
         )
         sql = conn.fetch.call_args[0][0]
         assert "identifier_type" in sql
@@ -157,7 +167,10 @@ class TestSearchIdentifiersGlobal:
         conn.fetch.return_value = []
 
         await search_identifiers_global(
-            conn, q="test", org_id=ORG_ID, limit=10,
+            conn,
+            q="test",
+            org_id=ORG_ID,
+            limit=10,
         )
         args = conn.fetch.call_args[0]
         assert 10 in args
@@ -171,7 +184,9 @@ class TestSearchIdentifiersGlobal:
         ]
 
         result = await search_identifiers_global(
-            conn, q="9876543210", org_id=ORG_ID,
+            conn,
+            q="9876543210",
+            org_id=ORG_ID,
         )
         assert len(result) == 2
         topic_ids = {r["topic_id"] for r in result}
@@ -183,7 +198,9 @@ class TestSearchIdentifiersGlobal:
         conn.fetch.return_value = []
 
         result = await search_identifiers_global(
-            conn, q="nonexistent", org_id=ORG_ID,
+            conn,
+            q="nonexistent",
+            org_id=ORG_ID,
         )
         assert result == []
 
@@ -191,6 +208,7 @@ class TestSearchIdentifiersGlobal:
 # ===========================================================================
 # 3. Route registration
 # ===========================================================================
+
 
 class TestGlobalSearchRoute:
     """Verify the search-global route is registered."""
@@ -211,6 +229,7 @@ class TestGlobalSearchRoute:
 # ===========================================================================
 # 4. Convergence — SQL constants
 # ===========================================================================
+
 
 def _fake_convergence_result(
     *,
@@ -265,6 +284,7 @@ class TestConvergenceSQL:
 # ===========================================================================
 # 5. Convergence — DB function
 # ===========================================================================
+
 
 class TestGetIdentifierConvergence:
     """DB function: identifiers appearing in 2+ topics, org-scoped."""
@@ -321,6 +341,7 @@ class TestGetIdentifierConvergence:
 # ===========================================================================
 # 6. Convergence — Route registration
 # ===========================================================================
+
 
 class TestConvergenceRoute:
     """Verify the convergence route is registered."""

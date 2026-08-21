@@ -8,18 +8,23 @@ Verifies that:
 
 Requires: make up + make create-test-db + make migrate-test
 """
+
 from __future__ import annotations
 
 import pytest
 
 from tests.conftest import POSTGRES_URL
 
-pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
+# asyncio_mode = "auto" (pyproject.toml) marks the async tests here on its
+# own. Applying pytest.mark.asyncio at module level instead warns on the
+# sync tests in this file.
+pytestmark = [pytest.mark.integration]
 
 
 # ---------------------------------------------------------------------------
 # 1. Conftest defaults to anveshak_test
 # ---------------------------------------------------------------------------
+
 
 def test_postgres_url_points_to_test_database():
     """POSTGRES_URL in conftest must default to anveshak_test, never production."""
@@ -45,10 +50,7 @@ async def test_test_db_has_required_extensions(db_pool):
         )
     installed = {r["extname"] for r in rows}
     missing = set(REQUIRED_EXTENSIONS) - installed
-    assert not missing, (
-        f"Test database is missing extensions: {missing}. "
-        "Run: make create-test-db"
-    )
+    assert not missing, f"Test database is missing extensions: {missing}. Run: make create-test-db"
 
 
 # ---------------------------------------------------------------------------
@@ -56,9 +58,16 @@ async def test_test_db_has_required_extensions(db_pool):
 # ---------------------------------------------------------------------------
 
 REQUIRED_TABLES = [
-    "topics", "sources", "content_items", "narrative_clusters",
-    "signals", "reports", "media_assets", "vision_results",
-    "credibility_audit_log", "topic_sources",
+    "topics",
+    "sources",
+    "content_items",
+    "narrative_clusters",
+    "signals",
+    "reports",
+    "media_assets",
+    "vision_results",
+    "credibility_audit_log",
+    "topic_sources",
 ]
 
 
@@ -72,15 +81,13 @@ async def test_test_db_has_schema(db_pool):
         )
     found = {r["table_name"] for r in rows}
     missing = set(REQUIRED_TABLES) - found
-    assert not missing, (
-        f"Test database is missing tables: {missing}. "
-        "Run: make migrate-test"
-    )
+    assert not missing, f"Test database is missing tables: {missing}. Run: make migrate-test"
 
 
 # ---------------------------------------------------------------------------
 # 4. Test database is isolated from production data
 # ---------------------------------------------------------------------------
+
 
 async def test_test_db_does_not_contain_demo_data(db_pool):
     """anveshak_test should not contain the seed demo data (that lives in production)."""

@@ -6,11 +6,12 @@ Provides:
   - Factory fixtures: make_topic, make_source, insert_content_item
   - Constants: POSTGRES_URL, REDIS_URL, LABELS_JSON
 """
+
 from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 import pytest
 
@@ -29,6 +30,7 @@ LABELS_JSON = '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}
 # ---------------------------------------------------------------------------
 # Database pool (function-scoped to avoid event-loop conflicts)
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 async def db_pool():
@@ -52,6 +54,7 @@ async def db_pool():
 # Transaction-rollback isolation (per-test)
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 async def db_conn(db_pool):
     """Per-test connection with transaction rollback.
@@ -71,11 +74,13 @@ async def db_conn(db_pool):
 # Redis (function-scoped)
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 async def redis_conn():
     """Per-test Redis connection."""
     try:
         import redis.asyncio as aioredis
+
         conn = aioredis.from_url(REDIS_URL, decode_responses=True)
         await conn.ping()
     except Exception:
@@ -101,7 +106,8 @@ async def ensure_org(db_pool):
             VALUES ($1, 'Integration Test Org', 'integration-test', NOW(), NOW(), $2)
             ON CONFLICT (id) DO NOTHING
             """,
-            TEST_ORG_ID, LABELS_JSON,
+            TEST_ORG_ID,
+            LABELS_JSON,
         )
     return TEST_ORG_ID
 
@@ -131,8 +137,15 @@ async def make_topic(db_pool, ensure_org):
                                     org_id, created_at, updated_at, labels)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 """,
-                topic_id, name, keywords or ["test", "integration"],
-                signal_threshold, status, org_id, now, now, LABELS_JSON,
+                topic_id,
+                name,
+                keywords or ["test", "integration"],
+                signal_threshold,
+                status,
+                org_id,
+                now,
+                now,
+                LABELS_JSON,
             )
         created.append(topic_id)
         return topic_id
@@ -146,37 +159,51 @@ async def make_topic(db_pool, ensure_org):
             await conn.execute(
                 "DELETE FROM vision_results WHERE media_asset_id IN "
                 "(SELECT id FROM media_assets WHERE content_item_id IN "
-                "(SELECT id FROM content_items WHERE topic_id=$1))", tid)
+                "(SELECT id FROM content_items WHERE topic_id=$1))",
+                tid,
+            )
             await conn.execute(
                 "DELETE FROM media_assets WHERE content_item_id IN "
-                "(SELECT id FROM content_items WHERE topic_id=$1)", tid)
+                "(SELECT id FROM content_items WHERE topic_id=$1)",
+                tid,
+            )
             # extracted_entities → content_items
             await conn.execute(
                 "DELETE FROM extracted_entities WHERE content_item_id IN "
-                "(SELECT id FROM content_items WHERE topic_id=$1)", tid)
+                "(SELECT id FROM content_items WHERE topic_id=$1)",
+                tid,
+            )
             # report_source_warnings → reports
             await conn.execute(
                 "DELETE FROM report_source_warnings WHERE report_id IN "
-                "(SELECT id FROM reports WHERE topic_id=$1)", tid)
+                "(SELECT id FROM reports WHERE topic_id=$1)",
+                tid,
+            )
             await conn.execute("DELETE FROM reports WHERE topic_id=$1", tid)
             # near_duplicates → content_items
             await conn.execute(
                 "DELETE FROM near_duplicates WHERE content_item_a_id IN "
                 "(SELECT id FROM content_items WHERE topic_id=$1) "
                 "OR content_item_b_id IN "
-                "(SELECT id FROM content_items WHERE topic_id=$1)", tid)
+                "(SELECT id FROM content_items WHERE topic_id=$1)",
+                tid,
+            )
             await conn.execute("DELETE FROM signals WHERE topic_id=$1", tid)
             # Engine C: identifier_cluster_items → identifier_clusters
             await conn.execute(
                 "DELETE FROM identifier_cluster_items WHERE identifier_cluster_id IN "
-                "(SELECT id FROM identifier_clusters WHERE topic_id=$1)", tid)
+                "(SELECT id FROM identifier_clusters WHERE topic_id=$1)",
+                tid,
+            )
             await conn.execute("DELETE FROM identifier_clusters WHERE topic_id=$1", tid)
             # Engine C: topic_templates
             await conn.execute("DELETE FROM topic_templates WHERE topic_id=$1", tid)
             # nullify cluster FK before deleting clusters
             await conn.execute(
                 "UPDATE content_items SET narrative_cluster_id = NULL "
-                "WHERE topic_id=$1 AND narrative_cluster_id IS NOT NULL", tid)
+                "WHERE topic_id=$1 AND narrative_cluster_id IS NOT NULL",
+                tid,
+            )
             await conn.execute("DELETE FROM narrative_clusters WHERE topic_id=$1", tid)
             await conn.execute("DELETE FROM topic_content_items WHERE topic_id=$1", tid)
             await conn.execute("DELETE FROM content_items WHERE topic_id=$1", tid)
@@ -214,8 +241,15 @@ async def make_source(db_pool, ensure_org):
                     org_id, created_at, updated_at, labels
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 """,
-                source_id, name, handle, platform, credibility_score,
-                org_id, now, now, LABELS_JSON,
+                source_id,
+                name,
+                handle,
+                platform,
+                credibility_score,
+                org_id,
+                now,
+                now,
+                LABELS_JSON,
             )
         created.append(source_id)
         return source_id
@@ -232,6 +266,7 @@ async def make_source(db_pool, ensure_org):
 # ---------------------------------------------------------------------------
 # Content item helper
 # ---------------------------------------------------------------------------
+
 
 async def insert_content_item(
     pool,
@@ -278,8 +313,20 @@ async def insert_content_item(
 
         await conn.execute(
             sql,
-            item_id, topic_id, source_id, text, text, language,
-            content_hash, url, now, 75.0,
-            cluster_id, org_id, now, now, LABELS_JSON,
+            item_id,
+            topic_id,
+            source_id,
+            text,
+            text,
+            language,
+            content_hash,
+            url,
+            now,
+            75.0,
+            cluster_id,
+            org_id,
+            now,
+            now,
+            LABELS_JSON,
         )
     return item_id

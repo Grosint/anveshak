@@ -3,20 +3,19 @@
 pytest.mark.unit — no external dependencies, no DB, no network.
 Tests cover the pure helper and the similarity filtering logic with a mocked pool.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 import pytest
-
 from anveshak.analyst.backfill import _build_query_text, backfill_topic
-
 
 # ---------------------------------------------------------------------------
 # _build_query_text — pure function
 # ---------------------------------------------------------------------------
+
 
 class TestBuildQueryText:
     def test_combines_name_and_keywords(self):
@@ -43,6 +42,7 @@ class TestBuildQueryText:
 # ---------------------------------------------------------------------------
 # backfill_topic — async, mocked pool
 # ---------------------------------------------------------------------------
+
 
 class TestBackfillTopic:
     """Criterion 2.9: pgvector cosine search assigns relevant items to topic."""

@@ -7,19 +7,19 @@ _compute_blended_similarity. DB-dependent functions use mock pools.
 Embedding realism: all test vectors are L2-normalized using seeded RNG
 per learned/test-embedding-realism.md.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 import pytest
-
 from anveshak.analyst.clustering import (
-    EmbeddingRow,
     ClusterCentroid,
+    EmbeddingRow,
+    _compute_blended_similarity,
     assign_to_nearest_cluster,
     compute_centroid,
-    _compute_blended_similarity,
 )
 
 # ---------------------------------------------------------------------------
@@ -73,9 +73,9 @@ def _make_centroid(
 # assign_to_nearest_cluster
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestAssignToNearestCluster:
-
     def test_above_threshold_assigned(self):
         """Item similar to centroid (>= threshold) is assigned."""
         base = _random_unit_vector()
@@ -83,7 +83,9 @@ class TestAssignToNearestCluster:
         centroid = _make_centroid("cluster-a", base)
 
         assigned, unassigned = assign_to_nearest_cluster(
-            [item], [centroid], threshold=0.90,
+            [item],
+            [centroid],
+            threshold=0.90,
         )
 
         assert "cluster-a" in assigned
@@ -100,7 +102,9 @@ class TestAssignToNearestCluster:
         centroid = _make_centroid("cluster-a", centroid_vec)
 
         assigned, unassigned = assign_to_nearest_cluster(
-            [item], [centroid], threshold=0.99,  # unreachably high
+            [item],
+            [centroid],
+            threshold=0.99,  # unreachably high
         )
 
         assert assigned == {}
@@ -119,7 +123,9 @@ class TestAssignToNearestCluster:
 
         # Put the worse match first to test it doesn't short-circuit
         assigned, unassigned = assign_to_nearest_cluster(
-            [item], [centroid_a, centroid_b], threshold=0.50,
+            [item],
+            [centroid_a, centroid_b],
+            threshold=0.50,
         )
 
         # Should be assigned to cluster-b (closer)
@@ -132,9 +138,9 @@ class TestAssignToNearestCluster:
 # compute_centroid
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestComputeCentroid:
-
     def test_output_is_l2_normalized(self):
         """Centroid must be a unit vector (L2 norm = 1.0)."""
         vecs = [_random_unit_vector() for _ in range(5)]
@@ -156,9 +162,9 @@ class TestComputeCentroid:
 # _compute_blended_similarity
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestComputeBlendedSimilarity:
-
     def test_cosine_only_when_no_minhash(self):
         """All entity_minhash=None -- falls back to pure cosine similarity."""
         base = _random_unit_vector()
@@ -174,7 +180,9 @@ class TestComputeBlendedSimilarity:
         assert sim_matrix.shape == (3, 3)
         # Diagonal should be ~1.0 (self-similarity)
         for i in range(3):
-            assert sim_matrix[i, i] > 0.99, f"Self-similarity should be ~1.0, got {sim_matrix[i, i]}"
+            assert sim_matrix[i, i] > 0.99, (
+                f"Self-similarity should be ~1.0, got {sim_matrix[i, i]}"
+            )
         # Off-diagonal should be high (tight cluster from same base)
         assert sim_matrix[0, 1] > 0.80, "Tight cluster items should have high cosine"
 
@@ -217,7 +225,9 @@ class TestComputeBlendedSimilarity:
         np.clip(cosine, -1.0, 1.0, out=cosine)
 
         np.testing.assert_allclose(
-            blended, cosine, atol=1e-10,
+            blended,
+            cosine,
+            atol=1e-10,
             err_msg="With <2 minhashes, blended should equal pure cosine",
         )
 
@@ -231,7 +241,6 @@ _CLUST_MOD = "anveshak.analyst.clustering"
 
 @pytest.mark.unit
 class TestRunClustering:
-
     @pytest.mark.asyncio
     async def test_empty_items_returns_empty(self):
         """No unclustered items -- returns empty list immediately."""
@@ -248,6 +257,7 @@ class TestRunClustering:
             patch(f"{_CLUST_MOD}.load_cluster_centroids") as mock_centroids,
         ):
             from anveshak.analyst.clustering import run_clustering
+
             result = await run_clustering("topic-1", pool)
 
         assert result == []
@@ -287,6 +297,7 @@ class TestRunClustering:
             mock_assign.return_value = ({"cluster-existing": new_items}, [])
 
             from anveshak.analyst.clustering import run_clustering
+
             result = await run_clustering("topic-1", pool)
 
         # Incremental path taken
@@ -316,9 +327,12 @@ class TestRunClustering:
             patch(f"{_CLUST_MOD}.load_unclustered_embeddings", return_value=new_items),
             patch(f"{_CLUST_MOD}.load_cluster_centroids", return_value=[]),  # no existing
             patch(f"{_CLUST_MOD}.assign_to_nearest_cluster") as mock_assign,
-            patch(f"{_CLUST_MOD}._leiden_and_persist", return_value=["new-cluster-1"]) as mock_leiden,
+            patch(
+                f"{_CLUST_MOD}._leiden_and_persist", return_value=["new-cluster-1"]
+            ) as mock_leiden,
         ):
             from anveshak.analyst.clustering import run_clustering
+
             result = await run_clustering("topic-1", pool)
 
         # Fresh path: Leiden called, incremental assignment NOT called

@@ -11,9 +11,10 @@ Tests cover:
 
 pytest.mark.unit — mocks all DB calls, no external dependencies.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -24,6 +25,7 @@ pytestmark = pytest.mark.unit
 # ---------------------------------------------------------------------------
 # Test data factories
 # ---------------------------------------------------------------------------
+
 
 def _make_identifiers():
     """Sample identifier_clusters rows."""
@@ -111,15 +113,28 @@ def _make_report_content():
 
 def _data_bundle():
     return {
-        "topic_stats": {"name": "Test", "content_count": 5, "source_count": 2, "cluster_count": 1, "signal_count": 0},
-        "sources": [], "clusters": [], "signals": [], "entities": [],
-        "sentiment_trend": [], "keywords": [], "evidence_items": [], "language_breakdown": [],
+        "topic_stats": {
+            "name": "Test",
+            "content_count": 5,
+            "source_count": 2,
+            "cluster_count": 1,
+            "signal_count": 0,
+        },
+        "sources": [],
+        "clusters": [],
+        "signals": [],
+        "entities": [],
+        "sentiment_trend": [],
+        "keywords": [],
+        "evidence_items": [],
+        "language_breakdown": [],
     }
 
 
 # ---------------------------------------------------------------------------
 # DB function tests
 # ---------------------------------------------------------------------------
+
 
 class TestFetchTopicIdentifiers:
     """fetch_topic_identifiers returns top identifiers from identifier_clusters."""
@@ -130,14 +145,15 @@ class TestFetchTopicIdentifiers:
 
         mock_pool = MagicMock()
         mock_conn = AsyncMock()
-        mock_conn.fetch = AsyncMock(return_value=[
-            dict(r) if isinstance(r, dict) else r
-            for r in _make_identifiers()
-        ])
-        mock_pool.acquire = MagicMock(return_value=AsyncMock(
-            __aenter__=AsyncMock(return_value=mock_conn),
-            __aexit__=AsyncMock(return_value=False),
-        ))
+        mock_conn.fetch = AsyncMock(
+            return_value=[dict(r) if isinstance(r, dict) else r for r in _make_identifiers()]
+        )
+        mock_pool.acquire = MagicMock(
+            return_value=AsyncMock(
+                __aenter__=AsyncMock(return_value=mock_conn),
+                __aexit__=AsyncMock(return_value=False),
+            )
+        )
 
         result = await fetch_topic_identifiers(mock_pool, "topic-1")
         assert len(result) == 3
@@ -151,10 +167,12 @@ class TestFetchTopicIdentifiers:
         mock_pool = MagicMock()
         mock_conn = AsyncMock()
         mock_conn.fetch = AsyncMock(return_value=[])
-        mock_pool.acquire = MagicMock(return_value=AsyncMock(
-            __aenter__=AsyncMock(return_value=mock_conn),
-            __aexit__=AsyncMock(return_value=False),
-        ))
+        mock_pool.acquire = MagicMock(
+            return_value=AsyncMock(
+                __aenter__=AsyncMock(return_value=mock_conn),
+                __aexit__=AsyncMock(return_value=False),
+            )
+        )
 
         result = await fetch_topic_identifiers(mock_pool, "topic-empty")
         assert result == []
@@ -166,10 +184,12 @@ class TestFetchTopicIdentifiers:
         mock_pool = MagicMock()
         mock_conn = AsyncMock()
         mock_conn.fetch = AsyncMock(return_value=[])
-        mock_pool.acquire = MagicMock(return_value=AsyncMock(
-            __aenter__=AsyncMock(return_value=mock_conn),
-            __aexit__=AsyncMock(return_value=False),
-        ))
+        mock_pool.acquire = MagicMock(
+            return_value=AsyncMock(
+                __aenter__=AsyncMock(return_value=mock_conn),
+                __aexit__=AsyncMock(return_value=False),
+            )
+        )
 
         await fetch_topic_identifiers(mock_pool, "topic-1", limit=50)
         # Check that the limit was passed to SQL query
@@ -186,14 +206,15 @@ class TestFetchTopicTemplateMatches:
 
         mock_pool = MagicMock()
         mock_conn = AsyncMock()
-        mock_conn.fetch = AsyncMock(return_value=[
-            dict(r) if isinstance(r, dict) else r
-            for r in _make_template_matches()
-        ])
-        mock_pool.acquire = MagicMock(return_value=AsyncMock(
-            __aenter__=AsyncMock(return_value=mock_conn),
-            __aexit__=AsyncMock(return_value=False),
-        ))
+        mock_conn.fetch = AsyncMock(
+            return_value=[dict(r) if isinstance(r, dict) else r for r in _make_template_matches()]
+        )
+        mock_pool.acquire = MagicMock(
+            return_value=AsyncMock(
+                __aenter__=AsyncMock(return_value=mock_conn),
+                __aexit__=AsyncMock(return_value=False),
+            )
+        )
 
         result = await fetch_topic_template_matches(mock_pool, "topic-1")
         assert len(result) == 2
@@ -207,10 +228,12 @@ class TestFetchTopicTemplateMatches:
         mock_pool = MagicMock()
         mock_conn = AsyncMock()
         mock_conn.fetch = AsyncMock(return_value=[])
-        mock_pool.acquire = MagicMock(return_value=AsyncMock(
-            __aenter__=AsyncMock(return_value=mock_conn),
-            __aexit__=AsyncMock(return_value=False),
-        ))
+        mock_pool.acquire = MagicMock(
+            return_value=AsyncMock(
+                __aenter__=AsyncMock(return_value=mock_conn),
+                __aexit__=AsyncMock(return_value=False),
+            )
+        )
 
         result = await fetch_topic_template_matches(mock_pool, "topic-1")
         assert result == []
@@ -219,6 +242,7 @@ class TestFetchTopicTemplateMatches:
 # ---------------------------------------------------------------------------
 # Identifier context assembly tests
 # ---------------------------------------------------------------------------
+
 
 class TestAssembleIdentifierContext:
     """assemble_identifier_context formats identifier data for LLM prompt."""
@@ -264,6 +288,7 @@ class TestAssembleIdentifierContext:
 # Recommended actions tests
 # ---------------------------------------------------------------------------
 
+
 class TestBuildRecommendedActions:
     """build_recommended_actions generates actions based on template matches."""
 
@@ -304,6 +329,7 @@ class TestBuildRecommendedActions:
 # ---------------------------------------------------------------------------
 # _build_content_md with identifiers
 # ---------------------------------------------------------------------------
+
 
 class TestBuildContentMdIdentifiers:
     """_build_content_md includes identifier sections when data provided."""
@@ -415,6 +441,7 @@ class TestBuildContentMdIdentifiers:
 # Prompt with identifier context
 # ---------------------------------------------------------------------------
 
+
 class TestRenderPromptWithIdentifiers:
     """render_prompt includes identifier context when provided."""
 
@@ -427,7 +454,10 @@ class TestRenderPromptWithIdentifiers:
             "UPI IDs: scammer@paytm (3 sources)\n"
         )
         prompt = render_prompt(
-            "intelligence_brief", "Cyber Fraud", ["mule", "fraud"], "content context",
+            "intelligence_brief",
+            "Cyber Fraud",
+            ["mule", "fraud"],
+            "content context",
             identifier_context=identifier_context,
         )
         assert "IDENTIFIED INDICATORS" in prompt
@@ -438,7 +468,10 @@ class TestRenderPromptWithIdentifiers:
         from anveshak.reporter.prompt_templates import render_prompt
 
         prompt = render_prompt(
-            "intelligence_brief", "T", [], "c",
+            "intelligence_brief",
+            "T",
+            [],
+            "c",
         )
         assert "IDENTIFIED INDICATORS" not in prompt
 
@@ -446,7 +479,10 @@ class TestRenderPromptWithIdentifiers:
         from anveshak.reporter.prompt_templates import render_prompt
 
         prompt = render_prompt(
-            "intelligence_brief", "T", [], "c",
+            "intelligence_brief",
+            "T",
+            [],
+            "c",
             identifier_context="",
         )
         assert "IDENTIFIED INDICATORS" not in prompt
@@ -455,6 +491,7 @@ class TestRenderPromptWithIdentifiers:
 # ---------------------------------------------------------------------------
 # PDF with identifier sections
 # ---------------------------------------------------------------------------
+
 
 class TestPdfIdentifierSections:
     """PDF HTML template includes identifier sections when data provided."""
@@ -545,6 +582,7 @@ class TestPdfIdentifierSections:
 # Worker integration — generate_report fetches identifiers
 # ---------------------------------------------------------------------------
 
+
 class TestGenerateReportWithIdentifiers:
     """generate_report fetches and includes identifier data."""
 
@@ -554,22 +592,38 @@ class TestGenerateReportWithIdentifiers:
         from anveshak.reporter.llm import BlufContent
 
         ctx = _make_ctx()
-        chunks = [{"id": "c1", "source_id": "src-1", "clean_text": "fraud text", "url": "https://ex.com"}]
+        chunks = [
+            {"id": "c1", "source_id": "src-1", "clean_text": "fraud text", "url": "https://ex.com"}
+        ]
 
-        with patch("anveshak.reporter.worker.db") as mock_db, \
-             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed, \
-             patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_llm, \
-             patch("anveshak.reporter.worker.render_bluf_prompt", return_value="bluf prompt"), \
-             patch("anveshak.reporter.worker.geocode_locations") as mock_geo, \
-             patch("anveshak.reporter.worker.build_geojson") as mock_geojson, \
-             patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract:
-            mock_db.fetch_report = AsyncMock(return_value={
-                "id": "report-1", "topic_id": "topic-1",
-                "report_type": "intelligence_brief", "credibility_min_filter": 30.0,
-            })
-            mock_db.fetch_topic = AsyncMock(return_value={
-                "id": "topic-1", "name": "Cyber Fraud", "keywords": ["fraud"],
-            })
+        with (
+            patch("anveshak.reporter.worker.db") as mock_db,
+            patch(
+                "anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock
+            ) as mock_embed,
+            patch(
+                "anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock
+            ) as mock_llm,
+            patch("anveshak.reporter.worker.render_bluf_prompt", return_value="bluf prompt"),
+            patch("anveshak.reporter.worker.geocode_locations") as mock_geo,
+            patch("anveshak.reporter.worker.build_geojson") as mock_geojson,
+            patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract,
+        ):
+            mock_db.fetch_report = AsyncMock(
+                return_value={
+                    "id": "report-1",
+                    "topic_id": "topic-1",
+                    "report_type": "intelligence_brief",
+                    "credibility_min_filter": 30.0,
+                }
+            )
+            mock_db.fetch_topic = AsyncMock(
+                return_value={
+                    "id": "topic-1",
+                    "name": "Cyber Fraud",
+                    "keywords": ["fraud"],
+                }
+            )
             mock_db.fetch_report_data_bundle = AsyncMock(return_value=_data_bundle())
             mock_db.fetch_rag_chunks = AsyncMock(return_value=chunks)
             mock_db.fetch_sources_for_snapshot = AsyncMock(return_value={})
@@ -581,7 +635,8 @@ class TestGenerateReportWithIdentifiers:
             mock_db.update_job_status = AsyncMock()
             mock_embed.return_value = [0.1] * 384
             mock_llm.return_value = BlufContent(
-                bluf="Test.", confidence_level=0.8,
+                bluf="Test.",
+                confidence_level=0.8,
                 labels={"classification": "OPEN", "domain": "report", "owner_org": "anveshak"},
             )
             mock_geo.return_value = []
@@ -589,6 +644,7 @@ class TestGenerateReportWithIdentifiers:
             mock_extract.return_value = []
 
             from anveshak.reporter.worker import generate_report
+
             await generate_report(ctx, "report-1")
 
             # DB functions called
@@ -609,20 +665,34 @@ class TestGenerateReportWithIdentifiers:
         ctx = _make_ctx()
         chunks = [{"id": "c1", "source_id": "src-1", "clean_text": "text", "url": "https://ex.com"}]
 
-        with patch("anveshak.reporter.worker.db") as mock_db, \
-             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed, \
-             patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_llm, \
-             patch("anveshak.reporter.worker.render_bluf_prompt", return_value="bluf prompt"), \
-             patch("anveshak.reporter.worker.geocode_locations") as mock_geo, \
-             patch("anveshak.reporter.worker.build_geojson") as mock_geojson, \
-             patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract:
-            mock_db.fetch_report = AsyncMock(return_value={
-                "id": "report-1", "topic_id": "topic-1",
-                "report_type": "intelligence_brief", "credibility_min_filter": 30.0,
-            })
-            mock_db.fetch_topic = AsyncMock(return_value={
-                "id": "topic-1", "name": "Clean Topic", "keywords": ["safe"],
-            })
+        with (
+            patch("anveshak.reporter.worker.db") as mock_db,
+            patch(
+                "anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock
+            ) as mock_embed,
+            patch(
+                "anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock
+            ) as mock_llm,
+            patch("anveshak.reporter.worker.render_bluf_prompt", return_value="bluf prompt"),
+            patch("anveshak.reporter.worker.geocode_locations") as mock_geo,
+            patch("anveshak.reporter.worker.build_geojson") as mock_geojson,
+            patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract,
+        ):
+            mock_db.fetch_report = AsyncMock(
+                return_value={
+                    "id": "report-1",
+                    "topic_id": "topic-1",
+                    "report_type": "intelligence_brief",
+                    "credibility_min_filter": 30.0,
+                }
+            )
+            mock_db.fetch_topic = AsyncMock(
+                return_value={
+                    "id": "topic-1",
+                    "name": "Clean Topic",
+                    "keywords": ["safe"],
+                }
+            )
             mock_db.fetch_report_data_bundle = AsyncMock(return_value=_data_bundle())
             mock_db.fetch_rag_chunks = AsyncMock(return_value=chunks)
             mock_db.fetch_sources_for_snapshot = AsyncMock(return_value={})
@@ -634,7 +704,8 @@ class TestGenerateReportWithIdentifiers:
             mock_db.update_job_status = AsyncMock()
             mock_embed.return_value = [0.1] * 384
             mock_llm.return_value = BlufContent(
-                bluf="Test.", confidence_level=0.8,
+                bluf="Test.",
+                confidence_level=0.8,
                 labels={"classification": "OPEN", "domain": "report", "owner_org": "anveshak"},
             )
             mock_geo.return_value = []
@@ -642,6 +713,7 @@ class TestGenerateReportWithIdentifiers:
             mock_extract.return_value = []
 
             from anveshak.reporter.worker import generate_report
+
             await generate_report(ctx, "report-1")
 
             # Should succeed without identifier sections

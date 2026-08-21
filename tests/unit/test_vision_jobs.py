@@ -2,12 +2,11 @@
 
 pytest.mark.unit — mocks all DB, ML models, and file I/O.
 Tests real business logic: routing to face/no-face detector, video analysis,
-None-on-error (CLAUDE.md rule 7), media cleanup.
+None-on-error (AGENTS.md rule 7), media cleanup.
 """
+
 from __future__ import annotations
 
-import asyncio
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -18,6 +17,7 @@ pytestmark = pytest.mark.unit
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_ctx():
     """Build a fake ARQ context with mocked DB pool."""
@@ -48,8 +48,8 @@ def _make_asset_row(
 # run_vision_analysis tests
 # ---------------------------------------------------------------------------
 
-class TestRunVisionAnalysis:
 
+class TestRunVisionAnalysis:
     @pytest.mark.asyncio
     async def test_asset_not_found(self):
         """Asset doesn't exist -> returns error dict."""
@@ -59,6 +59,7 @@ class TestRunVisionAnalysis:
             mock_get.return_value = None
 
             from anveshak.vision.jobs import run_vision_analysis
+
             result = await run_vision_analysis(ctx, "nonexistent-id")
 
         assert result["error"] == "media_asset_not_found"
@@ -69,12 +70,15 @@ class TestRunVisionAnalysis:
         ctx, db_pool, conn = _make_ctx()
         asset = _make_asset_row()
 
-        with patch("anveshak.vision.jobs.get_media_asset", new_callable=AsyncMock) as mock_get, \
-             patch("anveshak.vision.jobs.read_media_bytes") as mock_read:
+        with (
+            patch("anveshak.vision.jobs.get_media_asset", new_callable=AsyncMock) as mock_get,
+            patch("anveshak.vision.jobs.read_media_bytes") as mock_read,
+        ):
             mock_get.return_value = asset
             mock_read.side_effect = FileNotFoundError("No such file")
 
             from anveshak.vision.jobs import run_vision_analysis
+
             result = await run_vision_analysis(ctx, "asset-1")
 
         assert result["error"] == "file_not_found"
@@ -86,12 +90,15 @@ class TestRunVisionAnalysis:
         face_detector.has_faces = MagicMock(return_value=True)
         face_detector.score = MagicMock(return_value=0.7)
 
-        with patch("anveshak.vision.jobs._get_deepfake_image_detector", return_value=face_detector), \
-             patch("anveshak.vision.jobs.settings") as mock_settings:
+        with (
+            patch("anveshak.vision.jobs._get_deepfake_image_detector", return_value=face_detector),
+            patch("anveshak.vision.jobs.settings") as mock_settings,
+        ):
             mock_settings.vision_deepfake_image_model = "facetorch"
             mock_settings.vision_deepfake_video_model = "dire"
 
             from anveshak.vision.jobs import _analyse_image
+
             score, model_name = await _analyse_image(b"fake-image-bytes", "asset-1")
 
         assert score == 0.7
@@ -107,13 +114,16 @@ class TestRunVisionAnalysis:
         video_detector = MagicMock()
         video_detector.score = MagicMock(return_value=0.3)
 
-        with patch("anveshak.vision.jobs._get_deepfake_image_detector", return_value=face_detector), \
-             patch("anveshak.vision.jobs._get_deepfake_video_detector", return_value=video_detector), \
-             patch("anveshak.vision.jobs.settings") as mock_settings:
+        with (
+            patch("anveshak.vision.jobs._get_deepfake_image_detector", return_value=face_detector),
+            patch("anveshak.vision.jobs._get_deepfake_video_detector", return_value=video_detector),
+            patch("anveshak.vision.jobs.settings") as mock_settings,
+        ):
             mock_settings.vision_deepfake_image_model = "facetorch"
             mock_settings.vision_deepfake_video_model = "dire"
 
             from anveshak.vision.jobs import _analyse_image
+
             score, model_name = await _analyse_image(b"fake-image-bytes", "asset-1")
 
         assert score == 0.3
@@ -126,11 +136,14 @@ class TestRunVisionAnalysis:
         face_detector = MagicMock()
         face_detector.has_faces = MagicMock(side_effect=RuntimeError("ONNX crash"))
 
-        with patch("anveshak.vision.jobs._get_deepfake_image_detector", return_value=face_detector), \
-             patch("anveshak.vision.jobs.settings") as mock_settings:
+        with (
+            patch("anveshak.vision.jobs._get_deepfake_image_detector", return_value=face_detector),
+            patch("anveshak.vision.jobs.settings") as mock_settings,
+        ):
             mock_settings.vision_deepfake_image_model = "facetorch"
 
             from anveshak.vision.jobs import _analyse_image
+
             score, model_name = await _analyse_image(b"fake-image-bytes", "asset-1")
 
         assert score is None
@@ -142,11 +155,14 @@ class TestRunVisionAnalysis:
         video_detector = MagicMock()
         video_detector.score = MagicMock(side_effect=[0.2, 0.8, 0.4])
 
-        with patch("anveshak.vision.jobs._get_deepfake_video_detector", return_value=video_detector), \
-             patch("anveshak.vision.jobs.settings") as mock_settings:
+        with (
+            patch("anveshak.vision.jobs._get_deepfake_video_detector", return_value=video_detector),
+            patch("anveshak.vision.jobs.settings") as mock_settings,
+        ):
             mock_settings.vision_deepfake_video_model = "dire"
 
             from anveshak.vision.jobs import _deepfake_video_frames
+
             score, model_name = await _deepfake_video_frames(
                 [b"frame1", b"frame2", b"frame3"], "asset-1"
             )
@@ -160,8 +176,8 @@ class TestRunVisionAnalysis:
 # cleanup_expired_media tests
 # ---------------------------------------------------------------------------
 
-class TestCleanupExpiredMedia:
 
+class TestCleanupExpiredMedia:
     @pytest.mark.asyncio
     async def test_disabled_when_retention_zero(self):
         """MEDIA_RETENTION_DAYS=0 -> skipped."""
@@ -171,6 +187,7 @@ class TestCleanupExpiredMedia:
             mock_settings.media_retention_days = 0
 
             from anveshak.vision.jobs import cleanup_expired_media
+
             result = await cleanup_expired_media(ctx)
 
         assert result["skipped"] == "retention_disabled"
@@ -181,14 +198,21 @@ class TestCleanupExpiredMedia:
         ctx, db_pool, conn = _make_ctx()
         expired_rows = [{"id": "asset-1", "storage_path": "/tmp/test_media_file.jpg"}]
 
-        with patch("anveshak.vision.jobs.settings") as mock_settings, \
-             patch("anveshak.vision.jobs.get_expired_media_assets", new_callable=AsyncMock) as mock_get, \
-             patch("anveshak.vision.jobs.clear_media_storage_path", new_callable=AsyncMock) as mock_clear, \
-             patch("pathlib.Path.unlink") as mock_unlink:
+        with (
+            patch("anveshak.vision.jobs.settings") as mock_settings,
+            patch(
+                "anveshak.vision.jobs.get_expired_media_assets", new_callable=AsyncMock
+            ) as mock_get,
+            patch(
+                "anveshak.vision.jobs.clear_media_storage_path", new_callable=AsyncMock
+            ) as mock_clear,
+            patch("pathlib.Path.unlink") as mock_unlink,
+        ):
             mock_settings.media_retention_days = 30
             mock_get.return_value = expired_rows
 
             from anveshak.vision.jobs import cleanup_expired_media
+
             result = await cleanup_expired_media(ctx)
 
         assert result["deleted"] == 1
@@ -219,20 +243,26 @@ class TestVideoSkipsExifOnly:
         yolo.to_jsonb = MagicMock(return_value=[])
         yolo.high_interest_labels = MagicMock(return_value=[])
 
-        with patch(f"{_VISION_JOBS}.get_media_asset", new_callable=AsyncMock) as mock_get_asset, \
-             patch(f"{_VISION_JOBS}.read_media_bytes") as mock_read, \
-             patch(f"{_VISION_JOBS}.is_video_path") as mock_is_video, \
-             patch(f"{_VISION_JOBS}.extract_keyframes", new_callable=AsyncMock) as mock_extract, \
-             patch(f"{_VISION_JOBS}.extract_exif") as mock_exif, \
-             patch(f"{_VISION_JOBS}.compute_phash") as mock_phash, \
-             patch(f"{_VISION_JOBS}.update_media_asset_exif_phash", new_callable=AsyncMock), \
-             patch(f"{_VISION_JOBS}._get_yolo", return_value=yolo), \
-             patch(f"{_VISION_JOBS}._deepfake_video_frames", new_callable=AsyncMock) as mock_deepfake, \
-             patch(f"{_VISION_JOBS}.get_topic_clip_categories", new_callable=AsyncMock) as mock_clip_cats, \
-             patch(f"{_VISION_JOBS}.insert_vision_result", new_callable=AsyncMock), \
-             patch(f"{_VISION_JOBS}.tag_content_item", new_callable=AsyncMock), \
-             patch(f"{_VISION_JOBS}.vision_analyses_total") as mock_metric, \
-             patch(f"{_VISION_JOBS}.vision_deepfake_score") as mock_df_metric:
+        with (
+            patch(f"{_VISION_JOBS}.get_media_asset", new_callable=AsyncMock) as mock_get_asset,
+            patch(f"{_VISION_JOBS}.read_media_bytes") as mock_read,
+            patch(f"{_VISION_JOBS}.is_video_path") as mock_is_video,
+            patch(f"{_VISION_JOBS}.extract_keyframes", new_callable=AsyncMock) as mock_extract,
+            patch(f"{_VISION_JOBS}.extract_exif") as mock_exif,
+            patch(f"{_VISION_JOBS}.compute_phash") as mock_phash,
+            patch(f"{_VISION_JOBS}.update_media_asset_exif_phash", new_callable=AsyncMock),
+            patch(f"{_VISION_JOBS}._get_yolo", return_value=yolo),
+            patch(
+                f"{_VISION_JOBS}._deepfake_video_frames", new_callable=AsyncMock
+            ) as mock_deepfake,
+            patch(
+                f"{_VISION_JOBS}.get_topic_clip_categories", new_callable=AsyncMock
+            ) as mock_clip_cats,
+            patch(f"{_VISION_JOBS}.insert_vision_result", new_callable=AsyncMock),
+            patch(f"{_VISION_JOBS}.tag_content_item", new_callable=AsyncMock),
+            patch(f"{_VISION_JOBS}.vision_analyses_total"),
+            patch(f"{_VISION_JOBS}.vision_deepfake_score"),
+        ):
             mock_get_asset.return_value = asset
             mock_read.return_value = b"video-bytes"
             mock_is_video.return_value = True
@@ -242,6 +272,7 @@ class TestVideoSkipsExifOnly:
             mock_clip_cats.return_value = []
 
             from anveshak.vision.jobs import run_vision_analysis
+
             result = await run_vision_analysis(ctx, "asset-1")
 
         # EXIF never extracted for video
@@ -265,20 +296,24 @@ class TestClipSkippedWhenNoCategories:
         yolo.to_jsonb = MagicMock(return_value=[])
         yolo.high_interest_labels = MagicMock(return_value=[])
 
-        with patch(f"{_VISION_JOBS}.get_media_asset", new_callable=AsyncMock) as mock_get_asset, \
-             patch(f"{_VISION_JOBS}.read_media_bytes") as mock_read, \
-             patch(f"{_VISION_JOBS}.is_video_path") as mock_is_video, \
-             patch(f"{_VISION_JOBS}.extract_exif") as mock_exif, \
-             patch(f"{_VISION_JOBS}.compute_phash") as mock_phash, \
-             patch(f"{_VISION_JOBS}.update_media_asset_exif_phash", new_callable=AsyncMock), \
-             patch(f"{_VISION_JOBS}._get_yolo", return_value=yolo), \
-             patch(f"{_VISION_JOBS}._analyse_image", new_callable=AsyncMock) as mock_analyse_img, \
-             patch(f"{_VISION_JOBS}.get_topic_clip_categories", new_callable=AsyncMock) as mock_clip_cats, \
-             patch(f"{_VISION_JOBS}._get_clip") as mock_get_clip, \
-             patch(f"{_VISION_JOBS}.insert_vision_result", new_callable=AsyncMock), \
-             patch(f"{_VISION_JOBS}.tag_content_item", new_callable=AsyncMock), \
-             patch(f"{_VISION_JOBS}.vision_analyses_total") as mock_metric, \
-             patch(f"{_VISION_JOBS}.vision_deepfake_score") as mock_df_metric:
+        with (
+            patch(f"{_VISION_JOBS}.get_media_asset", new_callable=AsyncMock) as mock_get_asset,
+            patch(f"{_VISION_JOBS}.read_media_bytes") as mock_read,
+            patch(f"{_VISION_JOBS}.is_video_path") as mock_is_video,
+            patch(f"{_VISION_JOBS}.extract_exif") as mock_exif,
+            patch(f"{_VISION_JOBS}.compute_phash") as mock_phash,
+            patch(f"{_VISION_JOBS}.update_media_asset_exif_phash", new_callable=AsyncMock),
+            patch(f"{_VISION_JOBS}._get_yolo", return_value=yolo),
+            patch(f"{_VISION_JOBS}._analyse_image", new_callable=AsyncMock) as mock_analyse_img,
+            patch(
+                f"{_VISION_JOBS}.get_topic_clip_categories", new_callable=AsyncMock
+            ) as mock_clip_cats,
+            patch(f"{_VISION_JOBS}._get_clip") as mock_get_clip,
+            patch(f"{_VISION_JOBS}.insert_vision_result", new_callable=AsyncMock),
+            patch(f"{_VISION_JOBS}.tag_content_item", new_callable=AsyncMock),
+            patch(f"{_VISION_JOBS}.vision_analyses_total"),
+            patch(f"{_VISION_JOBS}.vision_deepfake_score"),
+        ):
             mock_get_asset.return_value = asset
             mock_read.return_value = b"image-bytes"
             mock_is_video.return_value = False
@@ -288,6 +323,7 @@ class TestClipSkippedWhenNoCategories:
             mock_clip_cats.return_value = []  # no categories
 
             from anveshak.vision.jobs import run_vision_analysis
+
             result = await run_vision_analysis(ctx, "asset-1")
 
         # CLIP singleton never created when no categories
@@ -309,19 +345,23 @@ class TestDeepfakeNoneSkipsMetric:
         yolo.to_jsonb = MagicMock(return_value=[])
         yolo.high_interest_labels = MagicMock(return_value=[])
 
-        with patch(f"{_VISION_JOBS}.get_media_asset", new_callable=AsyncMock) as mock_get_asset, \
-             patch(f"{_VISION_JOBS}.read_media_bytes") as mock_read, \
-             patch(f"{_VISION_JOBS}.is_video_path") as mock_is_video, \
-             patch(f"{_VISION_JOBS}.extract_exif") as mock_exif, \
-             patch(f"{_VISION_JOBS}.compute_phash") as mock_phash, \
-             patch(f"{_VISION_JOBS}.update_media_asset_exif_phash", new_callable=AsyncMock), \
-             patch(f"{_VISION_JOBS}._get_yolo", return_value=yolo), \
-             patch(f"{_VISION_JOBS}._analyse_image", new_callable=AsyncMock) as mock_analyse_img, \
-             patch(f"{_VISION_JOBS}.get_topic_clip_categories", new_callable=AsyncMock) as mock_clip_cats, \
-             patch(f"{_VISION_JOBS}.insert_vision_result", new_callable=AsyncMock), \
-             patch(f"{_VISION_JOBS}.tag_content_item", new_callable=AsyncMock), \
-             patch(f"{_VISION_JOBS}.vision_analyses_total") as mock_metric, \
-             patch(f"{_VISION_JOBS}.vision_deepfake_score") as mock_df_metric:
+        with (
+            patch(f"{_VISION_JOBS}.get_media_asset", new_callable=AsyncMock) as mock_get_asset,
+            patch(f"{_VISION_JOBS}.read_media_bytes") as mock_read,
+            patch(f"{_VISION_JOBS}.is_video_path") as mock_is_video,
+            patch(f"{_VISION_JOBS}.extract_exif") as mock_exif,
+            patch(f"{_VISION_JOBS}.compute_phash") as mock_phash,
+            patch(f"{_VISION_JOBS}.update_media_asset_exif_phash", new_callable=AsyncMock),
+            patch(f"{_VISION_JOBS}._get_yolo", return_value=yolo),
+            patch(f"{_VISION_JOBS}._analyse_image", new_callable=AsyncMock) as mock_analyse_img,
+            patch(
+                f"{_VISION_JOBS}.get_topic_clip_categories", new_callable=AsyncMock
+            ) as mock_clip_cats,
+            patch(f"{_VISION_JOBS}.insert_vision_result", new_callable=AsyncMock),
+            patch(f"{_VISION_JOBS}.tag_content_item", new_callable=AsyncMock),
+            patch(f"{_VISION_JOBS}.vision_analyses_total"),
+            patch(f"{_VISION_JOBS}.vision_deepfake_score") as mock_df_metric,
+        ):
             mock_get_asset.return_value = asset
             mock_read.return_value = b"image-bytes"
             mock_is_video.return_value = False
@@ -331,6 +371,7 @@ class TestDeepfakeNoneSkipsMetric:
             mock_clip_cats.return_value = []
 
             from anveshak.vision.jobs import run_vision_analysis
+
             result = await run_vision_analysis(ctx, "asset-1")
 
         # None score must NOT be observed in histogram (line 220-221 guard)
@@ -355,12 +396,20 @@ class TestVideoFullPipeline:
             "extract_keyframes": patch(f"{_VISION_JOBS}.extract_keyframes", new_callable=AsyncMock),
             "extract_exif": patch(f"{_VISION_JOBS}.extract_exif"),
             "compute_phash": patch(f"{_VISION_JOBS}.compute_phash"),
-            "update_media_asset_exif_phash": patch(f"{_VISION_JOBS}.update_media_asset_exif_phash", new_callable=AsyncMock),
+            "update_media_asset_exif_phash": patch(
+                f"{_VISION_JOBS}.update_media_asset_exif_phash", new_callable=AsyncMock
+            ),
             "_get_yolo": patch(f"{_VISION_JOBS}._get_yolo"),
             "_get_clip": patch(f"{_VISION_JOBS}._get_clip"),
-            "_deepfake_video_frames": patch(f"{_VISION_JOBS}._deepfake_video_frames", new_callable=AsyncMock),
-            "get_topic_clip_categories": patch(f"{_VISION_JOBS}.get_topic_clip_categories", new_callable=AsyncMock),
-            "insert_vision_result": patch(f"{_VISION_JOBS}.insert_vision_result", new_callable=AsyncMock),
+            "_deepfake_video_frames": patch(
+                f"{_VISION_JOBS}._deepfake_video_frames", new_callable=AsyncMock
+            ),
+            "get_topic_clip_categories": patch(
+                f"{_VISION_JOBS}.get_topic_clip_categories", new_callable=AsyncMock
+            ),
+            "insert_vision_result": patch(
+                f"{_VISION_JOBS}.insert_vision_result", new_callable=AsyncMock
+            ),
             "tag_content_item": patch(f"{_VISION_JOBS}.tag_content_item", new_callable=AsyncMock),
             "vision_analyses_total": patch(f"{_VISION_JOBS}.vision_analyses_total"),
             "vision_deepfake_score": patch(f"{_VISION_JOBS}.vision_deepfake_score"),
@@ -379,20 +428,22 @@ class TestVideoFullPipeline:
         yolo.high_interest_labels = MagicMock(return_value=[])
 
         patches = self._make_video_patches()
-        with patches["get_media_asset"] as m_asset, \
-             patches["read_media_bytes"] as m_read, \
-             patches["is_video_path"] as m_is_video, \
-             patches["extract_keyframes"] as m_extract, \
-             patches["extract_exif"] as m_exif, \
-             patches["compute_phash"] as m_phash, \
-             patches["update_media_asset_exif_phash"], \
-             patches["_get_yolo"] as m_yolo, \
-             patches["_deepfake_video_frames"] as m_deepfake, \
-             patches["get_topic_clip_categories"] as m_clip_cats, \
-             patches["insert_vision_result"], \
-             patches["tag_content_item"], \
-             patches["vision_analyses_total"], \
-             patches["vision_deepfake_score"]:
+        with (
+            patches["get_media_asset"] as m_asset,
+            patches["read_media_bytes"] as m_read,
+            patches["is_video_path"] as m_is_video,
+            patches["extract_keyframes"] as m_extract,
+            patches["extract_exif"] as m_exif,
+            patches["compute_phash"] as m_phash,
+            patches["update_media_asset_exif_phash"],
+            patches["_get_yolo"] as m_yolo,
+            patches["_deepfake_video_frames"] as m_deepfake,
+            patches["get_topic_clip_categories"] as m_clip_cats,
+            patches["insert_vision_result"],
+            patches["tag_content_item"],
+            patches["vision_analyses_total"],
+            patches["vision_deepfake_score"],
+        ):
             m_asset.return_value = asset
             m_read.return_value = b"video-bytes"
             m_is_video.return_value = True
@@ -403,6 +454,7 @@ class TestVideoFullPipeline:
             m_clip_cats.return_value = []
 
             from anveshak.vision.jobs import run_vision_analysis
+
             result = await run_vision_analysis(ctx, "asset-1")
 
         # pHash called with first frame bytes
@@ -426,31 +478,37 @@ class TestVideoFullPipeline:
 
         yolo = MagicMock()
         # Frame 0: person + car, Frame 1: person (duplicate label)
-        yolo.detect = MagicMock(side_effect=[
-            [det_person, det_car],
-            [det_person2],
-        ])
-        yolo.to_jsonb = MagicMock(return_value=[
-            {"label": "person", "confidence": 0.9, "bbox": [0, 0, 100, 100]},
-            {"label": "car", "confidence": 0.8, "bbox": [50, 50, 200, 200]},
-        ])
+        yolo.detect = MagicMock(
+            side_effect=[
+                [det_person, det_car],
+                [det_person2],
+            ]
+        )
+        yolo.to_jsonb = MagicMock(
+            return_value=[
+                {"label": "person", "confidence": 0.9, "bbox": [0, 0, 100, 100]},
+                {"label": "car", "confidence": 0.8, "bbox": [50, 50, 200, 200]},
+            ]
+        )
         yolo.high_interest_labels = MagicMock(return_value=[])
 
         patches = self._make_video_patches()
-        with patches["get_media_asset"] as m_asset, \
-             patches["read_media_bytes"] as m_read, \
-             patches["is_video_path"] as m_is_video, \
-             patches["extract_keyframes"] as m_extract, \
-             patches["extract_exif"], \
-             patches["compute_phash"] as m_phash, \
-             patches["update_media_asset_exif_phash"], \
-             patches["_get_yolo"] as m_get_yolo, \
-             patches["_deepfake_video_frames"] as m_deepfake, \
-             patches["get_topic_clip_categories"] as m_clip_cats, \
-             patches["insert_vision_result"], \
-             patches["tag_content_item"], \
-             patches["vision_analyses_total"], \
-             patches["vision_deepfake_score"]:
+        with (
+            patches["get_media_asset"] as m_asset,
+            patches["read_media_bytes"] as m_read,
+            patches["is_video_path"] as m_is_video,
+            patches["extract_keyframes"] as m_extract,
+            patches["extract_exif"],
+            patches["compute_phash"] as m_phash,
+            patches["update_media_asset_exif_phash"],
+            patches["_get_yolo"] as m_get_yolo,
+            patches["_deepfake_video_frames"] as m_deepfake,
+            patches["get_topic_clip_categories"] as m_clip_cats,
+            patches["insert_vision_result"],
+            patches["tag_content_item"],
+            patches["vision_analyses_total"],
+            patches["vision_deepfake_score"],
+        ):
             m_asset.return_value = asset
             m_read.return_value = b"video-bytes"
             m_is_video.return_value = True
@@ -461,6 +519,7 @@ class TestVideoFullPipeline:
             m_clip_cats.return_value = []
 
             from anveshak.vision.jobs import run_vision_analysis
+
             result = await run_vision_analysis(ctx, "asset-1")
 
         # YOLO called once per frame
@@ -479,14 +538,24 @@ class TestVideoFullPipeline:
 
         clip = MagicMock()
         # Frame 0: military=0.3, civilian=0.7. Frame 1: military=0.8, civilian=0.2
-        clip.classify = MagicMock(side_effect=[
-            [CLIPResult(label="military vehicle", score=0.3), CLIPResult(label="civilian", score=0.7)],
-            [CLIPResult(label="military vehicle", score=0.8), CLIPResult(label="civilian", score=0.2)],
-        ])
-        clip.to_jsonb = MagicMock(return_value=[
-            {"label": "military vehicle", "score": 0.8},
-            {"label": "civilian", "score": 0.7},
-        ])
+        clip.classify = MagicMock(
+            side_effect=[
+                [
+                    CLIPResult(label="military vehicle", score=0.3),
+                    CLIPResult(label="civilian", score=0.7),
+                ],
+                [
+                    CLIPResult(label="military vehicle", score=0.8),
+                    CLIPResult(label="civilian", score=0.2),
+                ],
+            ]
+        )
+        clip.to_jsonb = MagicMock(
+            return_value=[
+                {"label": "military vehicle", "score": 0.8},
+                {"label": "civilian", "score": 0.7},
+            ]
+        )
 
         yolo = MagicMock()
         yolo.detect = MagicMock(return_value=[])
@@ -494,21 +563,23 @@ class TestVideoFullPipeline:
         yolo.high_interest_labels = MagicMock(return_value=[])
 
         patches = self._make_video_patches()
-        with patches["get_media_asset"] as m_asset, \
-             patches["read_media_bytes"] as m_read, \
-             patches["is_video_path"] as m_is_video, \
-             patches["extract_keyframes"] as m_extract, \
-             patches["extract_exif"], \
-             patches["compute_phash"] as m_phash, \
-             patches["update_media_asset_exif_phash"], \
-             patches["_get_yolo"] as m_yolo, \
-             patches["_get_clip"] as m_get_clip, \
-             patches["_deepfake_video_frames"] as m_deepfake, \
-             patches["get_topic_clip_categories"] as m_clip_cats, \
-             patches["insert_vision_result"], \
-             patches["tag_content_item"], \
-             patches["vision_analyses_total"], \
-             patches["vision_deepfake_score"]:
+        with (
+            patches["get_media_asset"] as m_asset,
+            patches["read_media_bytes"] as m_read,
+            patches["is_video_path"] as m_is_video,
+            patches["extract_keyframes"] as m_extract,
+            patches["extract_exif"],
+            patches["compute_phash"] as m_phash,
+            patches["update_media_asset_exif_phash"],
+            patches["_get_yolo"] as m_yolo,
+            patches["_get_clip"] as m_get_clip,
+            patches["_deepfake_video_frames"] as m_deepfake,
+            patches["get_topic_clip_categories"] as m_clip_cats,
+            patches["insert_vision_result"],
+            patches["tag_content_item"],
+            patches["vision_analyses_total"],
+            patches["vision_deepfake_score"],
+        ):
             m_asset.return_value = asset
             m_read.return_value = b"video-bytes"
             m_is_video.return_value = True
@@ -520,6 +591,7 @@ class TestVideoFullPipeline:
             m_clip_cats.return_value = ["military vehicle", "civilian"]
 
             from anveshak.vision.jobs import run_vision_analysis
+
             result = await run_vision_analysis(ctx, "asset-1")
 
         # CLIP called once per frame
@@ -534,26 +606,29 @@ class TestVideoFullPipeline:
         asset = _make_asset_row(storage_path="/media/topic-1/2026/05/09/abc123.mp4")
 
         patches = self._make_video_patches()
-        with patches["get_media_asset"] as m_asset, \
-             patches["read_media_bytes"] as m_read, \
-             patches["is_video_path"] as m_is_video, \
-             patches["extract_keyframes"] as m_extract, \
-             patches["extract_exif"], \
-             patches["compute_phash"], \
-             patches["update_media_asset_exif_phash"], \
-             patches["_get_yolo"], \
-             patches["_deepfake_video_frames"], \
-             patches["get_topic_clip_categories"], \
-             patches["insert_vision_result"], \
-             patches["tag_content_item"], \
-             patches["vision_analyses_total"], \
-             patches["vision_deepfake_score"]:
+        with (
+            patches["get_media_asset"] as m_asset,
+            patches["read_media_bytes"] as m_read,
+            patches["is_video_path"] as m_is_video,
+            patches["extract_keyframes"] as m_extract,
+            patches["extract_exif"],
+            patches["compute_phash"],
+            patches["update_media_asset_exif_phash"],
+            patches["_get_yolo"],
+            patches["_deepfake_video_frames"],
+            patches["get_topic_clip_categories"],
+            patches["insert_vision_result"],
+            patches["tag_content_item"],
+            patches["vision_analyses_total"],
+            patches["vision_deepfake_score"],
+        ):
             m_asset.return_value = asset
             m_read.return_value = b"video-bytes"
             m_is_video.return_value = True
             m_extract.return_value = []  # no frames extracted
 
             from anveshak.vision.jobs import run_vision_analysis
+
             result = await run_vision_analysis(ctx, "asset-1")
 
         assert result["error"] == "video_no_frames"
@@ -572,21 +647,23 @@ class TestVideoFullPipeline:
         yolo.high_interest_labels = MagicMock(return_value=[])
 
         patches = self._make_video_patches()
-        with patches["get_media_asset"] as m_asset, \
-             patches["read_media_bytes"] as m_read, \
-             patches["is_video_path"] as m_is_video, \
-             patches["extract_keyframes"] as m_extract, \
-             patches["extract_exif"], \
-             patches["compute_phash"] as m_phash, \
-             patches["update_media_asset_exif_phash"], \
-             patches["_get_yolo"] as m_yolo, \
-             patches["_deepfake_video_frames"] as m_deepfake, \
-             patches["get_topic_clip_categories"] as m_clip_cats, \
-             patches["insert_vision_result"], \
-             patches["tag_content_item"], \
-             patches["vision_analyses_total"], \
-             patches["vision_deepfake_score"], \
-             patch(f"{_VISION_JOBS}.settings") as m_settings:
+        with (
+            patches["get_media_asset"] as m_asset,
+            patches["read_media_bytes"] as m_read,
+            patches["is_video_path"] as m_is_video,
+            patches["extract_keyframes"] as m_extract,
+            patches["extract_exif"],
+            patches["compute_phash"] as m_phash,
+            patches["update_media_asset_exif_phash"],
+            patches["_get_yolo"] as m_yolo,
+            patches["_deepfake_video_frames"] as m_deepfake,
+            patches["get_topic_clip_categories"] as m_clip_cats,
+            patches["insert_vision_result"],
+            patches["tag_content_item"],
+            patches["vision_analyses_total"],
+            patches["vision_deepfake_score"],
+            patch(f"{_VISION_JOBS}.settings") as m_settings,
+        ):
             m_asset.return_value = asset
             m_read.return_value = b"video-bytes"
             m_is_video.return_value = True
@@ -600,7 +677,8 @@ class TestVideoFullPipeline:
             m_settings.deepfake_high_risk_threshold = 0.8
 
             from anveshak.vision.jobs import run_vision_analysis
-            result = await run_vision_analysis(ctx, "asset-1")
+
+            await run_vision_analysis(ctx, "asset-1")
 
         # YOLO should only have been called on 3 frames, not 10
         assert yolo.detect.call_count == 3
@@ -622,20 +700,22 @@ class TestVideoFullPipeline:
         yolo.high_interest_labels = MagicMock(return_value=[])
 
         patches = self._make_video_patches()
-        with patches["get_media_asset"] as m_asset, \
-             patches["read_media_bytes"] as m_read, \
-             patches["is_video_path"] as m_is_video, \
-             patches["extract_keyframes"] as m_extract, \
-             patches["extract_exif"] as m_exif, \
-             patches["compute_phash"] as m_phash, \
-             patches["update_media_asset_exif_phash"], \
-             patches["_get_yolo"] as m_yolo, \
-             patches["_deepfake_video_frames"] as m_deepfake, \
-             patches["get_topic_clip_categories"] as m_clip_cats, \
-             patches["insert_vision_result"], \
-             patches["tag_content_item"], \
-             patches["vision_analyses_total"], \
-             patches["vision_deepfake_score"]:
+        with (
+            patches["get_media_asset"] as m_asset,
+            patches["read_media_bytes"] as m_read,
+            patches["is_video_path"] as m_is_video,
+            patches["extract_keyframes"] as m_extract,
+            patches["extract_exif"] as m_exif,
+            patches["compute_phash"] as m_phash,
+            patches["update_media_asset_exif_phash"],
+            patches["_get_yolo"] as m_yolo,
+            patches["_deepfake_video_frames"] as m_deepfake,
+            patches["get_topic_clip_categories"] as m_clip_cats,
+            patches["insert_vision_result"],
+            patches["tag_content_item"],
+            patches["vision_analyses_total"],
+            patches["vision_deepfake_score"],
+        ):
             m_asset.return_value = asset
             m_read.return_value = b"video-bytes"
             m_is_video.return_value = True
@@ -646,6 +726,7 @@ class TestVideoFullPipeline:
             m_clip_cats.return_value = []
 
             from anveshak.vision.jobs import run_vision_analysis
+
             result = await run_vision_analysis(ctx, "asset-1")
 
         m_exif.assert_not_called()
@@ -661,14 +742,15 @@ class TestDeepfakeVideoFrames:
         video_detector = MagicMock()
         video_detector.score = MagicMock(side_effect=[0.2, 0.8, 0.4])
 
-        with patch(f"{_VISION_JOBS}._get_deepfake_video_detector", return_value=video_detector), \
-             patch(f"{_VISION_JOBS}.settings") as m_settings:
+        with (
+            patch(f"{_VISION_JOBS}._get_deepfake_video_detector", return_value=video_detector),
+            patch(f"{_VISION_JOBS}.settings") as m_settings,
+        ):
             m_settings.vision_deepfake_video_model = "dire"
 
             from anveshak.vision.jobs import _deepfake_video_frames
-            score, model_name = await _deepfake_video_frames(
-                [b"f1", b"f2", b"f3"], "asset-1"
-            )
+
+            score, model_name = await _deepfake_video_frames([b"f1", b"f2", b"f3"], "asset-1")
 
         assert score == 0.8
         assert "video" in model_name
@@ -681,6 +763,7 @@ class TestDeepfakeVideoFrames:
             m_det.side_effect = RuntimeError("model crash")
 
             from anveshak.vision.jobs import _deepfake_video_frames
+
             score, model_name = await _deepfake_video_frames([b"f1"], "asset-1")
 
         assert score is None
@@ -701,19 +784,23 @@ class TestNoHighInterestNoTag:
         yolo.to_jsonb = MagicMock(return_value=[{"label": "car", "confidence": 0.9}])
         yolo.high_interest_labels = MagicMock(return_value=[])  # car is not high-interest
 
-        with patch(f"{_VISION_JOBS}.get_media_asset", new_callable=AsyncMock) as mock_get_asset, \
-             patch(f"{_VISION_JOBS}.read_media_bytes") as mock_read, \
-             patch(f"{_VISION_JOBS}.is_video_path") as mock_is_video, \
-             patch(f"{_VISION_JOBS}.extract_exif") as mock_exif, \
-             patch(f"{_VISION_JOBS}.compute_phash") as mock_phash, \
-             patch(f"{_VISION_JOBS}.update_media_asset_exif_phash", new_callable=AsyncMock), \
-             patch(f"{_VISION_JOBS}._get_yolo", return_value=yolo), \
-             patch(f"{_VISION_JOBS}._analyse_image", new_callable=AsyncMock) as mock_analyse_img, \
-             patch(f"{_VISION_JOBS}.get_topic_clip_categories", new_callable=AsyncMock) as mock_clip_cats, \
-             patch(f"{_VISION_JOBS}.insert_vision_result", new_callable=AsyncMock), \
-             patch(f"{_VISION_JOBS}.tag_content_item", new_callable=AsyncMock) as mock_tag, \
-             patch(f"{_VISION_JOBS}.vision_analyses_total") as mock_metric, \
-             patch(f"{_VISION_JOBS}.vision_deepfake_score") as mock_df_metric:
+        with (
+            patch(f"{_VISION_JOBS}.get_media_asset", new_callable=AsyncMock) as mock_get_asset,
+            patch(f"{_VISION_JOBS}.read_media_bytes") as mock_read,
+            patch(f"{_VISION_JOBS}.is_video_path") as mock_is_video,
+            patch(f"{_VISION_JOBS}.extract_exif") as mock_exif,
+            patch(f"{_VISION_JOBS}.compute_phash") as mock_phash,
+            patch(f"{_VISION_JOBS}.update_media_asset_exif_phash", new_callable=AsyncMock),
+            patch(f"{_VISION_JOBS}._get_yolo", return_value=yolo),
+            patch(f"{_VISION_JOBS}._analyse_image", new_callable=AsyncMock) as mock_analyse_img,
+            patch(
+                f"{_VISION_JOBS}.get_topic_clip_categories", new_callable=AsyncMock
+            ) as mock_clip_cats,
+            patch(f"{_VISION_JOBS}.insert_vision_result", new_callable=AsyncMock),
+            patch(f"{_VISION_JOBS}.tag_content_item", new_callable=AsyncMock) as mock_tag,
+            patch(f"{_VISION_JOBS}.vision_analyses_total"),
+            patch(f"{_VISION_JOBS}.vision_deepfake_score"),
+        ):
             mock_get_asset.return_value = asset
             mock_read.return_value = b"image-bytes"
             mock_is_video.return_value = False
@@ -723,6 +810,7 @@ class TestNoHighInterestNoTag:
             mock_clip_cats.return_value = []
 
             from anveshak.vision.jobs import run_vision_analysis
+
             result = await run_vision_analysis(ctx, "asset-1")
 
         # tag_content_item NOT called when high_interest is empty (line 190 guard)

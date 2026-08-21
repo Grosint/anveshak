@@ -8,6 +8,7 @@ This one showcases Engine C identifier intelligence on live cyber fraud Telegram
     docker exec anveshak-report-worker-1 python /tmp/gen_cyber_fraud_leave_behind.py
     docker cp anveshak-report-worker-1:/tmp/cyber_fraud_leave_behind.pdf .
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -32,13 +33,12 @@ async def main() -> None:
 
     async with pool.acquire() as conn:
         # ── Topic ──
-        topic = await conn.fetchrow(
-            "SELECT name, keywords FROM topics WHERE id = $1", TOPIC_ID
-        )
+        topic = await conn.fetchrow("SELECT name, keywords FROM topics WHERE id = $1", TOPIC_ID)
         assert topic, f"Topic {TOPIC_ID} not found"
 
         # ── Stats ──
-        stats = await conn.fetchrow("""
+        stats = await conn.fetchrow(
+            """
             SELECT
                 (SELECT COUNT(*) FROM content_items WHERE topic_id = $1) AS content_count,
                 (SELECT COUNT(DISTINCT source_id) FROM content_items WHERE topic_id = $1) AS source_count,
@@ -46,10 +46,13 @@ async def main() -> None:
                 (SELECT COUNT(*) FROM signals WHERE topic_id = $1) AS signal_count,
                 (SELECT MIN(captured_at) FROM content_items WHERE topic_id = $1) AS earliest,
                 (SELECT MAX(captured_at) FROM content_items WHERE topic_id = $1) AS latest
-        """, TOPIC_ID)
+        """,
+            TOPIC_ID,
+        )
 
         # ── Sources ──
-        source_rows = await conn.fetch("""
+        source_rows = await conn.fetch(
+            """
             SELECT s.name, s.platform,
                    CASE WHEN s.credibility_score = 0 THEN NULL
                         ELSE s.credibility_score END AS credibility_score,
@@ -59,7 +62,9 @@ async def main() -> None:
             LEFT JOIN content_items ci ON ci.source_id = s.id AND ci.topic_id = $1
             GROUP BY s.id, s.name, s.platform, s.credibility_score
             ORDER BY item_count DESC
-        """, TOPIC_ID)
+        """,
+            TOPIC_ID,
+        )
         sources = []
         for r in source_rows:
             d = dict(r)
@@ -68,24 +73,30 @@ async def main() -> None:
             sources.append(d)
 
         # ── Clusters ──
-        cluster_rows = await conn.fetch("""
+        cluster_rows = await conn.fetch(
+            """
             SELECT label, item_count, independent_source_count, executive_summary
             FROM narrative_clusters
             WHERE topic_id = $1 AND independent_source_count >= 1
             ORDER BY independent_source_count DESC, item_count DESC
             LIMIT 10
-        """, TOPIC_ID)
+        """,
+            TOPIC_ID,
+        )
         clusters = [dict(r) for r in cluster_rows]
 
         # ── Signals ──
-        signal_rows = await conn.fetch("""
+        signal_rows = await conn.fetch(
+            """
             SELECT s.signal_type, s.description, s.status, s.created_at
             FROM signals s
             WHERE s.topic_id = $1
               AND s.description NOT ILIKE '%URL_DOMAIN%'
             ORDER BY s.created_at DESC
             LIMIT 15
-        """, TOPIC_ID)
+        """,
+            TOPIC_ID,
+        )
         _CLUSTER_NAME_RE = re.compile(r"Cluster '([^']+)'")
         _IDENT_RE = re.compile(r"Identifier (\S+) '([^']+)'")
         signals = []
@@ -102,30 +113,37 @@ async def main() -> None:
 
         # ── Identifiers — the star of this report ──
         # Phone numbers (HK, China, India)
-        phone_rows = await conn.fetch("""
+        phone_rows = await conn.fetch(
+            """
             SELECT identifier_type, identifier_value, source_count, content_item_count
             FROM identifier_clusters
             WHERE topic_id = $1
               AND identifier_type IN ('PHONE_INTL', 'PHONE_IN')
             ORDER BY content_item_count DESC
             LIMIT 20
-        """, TOPIC_ID)
+        """,
+            TOPIC_ID,
+        )
 
         # Telegram handles
-        handle_rows = await conn.fetch("""
+        handle_rows = await conn.fetch(
+            """
             SELECT identifier_type, identifier_value, source_count, content_item_count
             FROM identifier_clusters
             WHERE topic_id = $1
               AND identifier_type = 'TELEGRAM_HANDLE'
             ORDER BY content_item_count DESC
             LIMIT 20
-        """, TOPIC_ID)
+        """,
+            TOPIC_ID,
+        )
 
         # Combine into identifiers list, phones first
         identifiers = [dict(r) for r in phone_rows] + [dict(r) for r in handle_rows]
 
         # ── Identifier summary stats for BLUF ──
-        ident_stats = await conn.fetchrow("""
+        ident_stats = await conn.fetchrow(
+            """
             SELECT
                 COUNT(*) FILTER (WHERE identifier_type = 'PHONE_INTL' AND identifier_value LIKE '+852%') AS hk_phones,
                 COUNT(*) FILTER (WHERE identifier_type = 'PHONE_INTL' AND identifier_value LIKE '+86%') AS cn_phones,
@@ -134,10 +152,13 @@ async def main() -> None:
                 COUNT(*) AS total_identifiers
             FROM identifier_clusters
             WHERE topic_id = $1
-        """, TOPIC_ID)
+        """,
+            TOPIC_ID,
+        )
 
         # ── Top entities ──
-        entity_rows = await conn.fetch("""
+        entity_rows = await conn.fetch(
+            """
             SELECT ee.entity_type,
                    INITCAP(LOWER(ee.entity_text)) AS entity_text,
                    SUM(cnt) AS mention_count
@@ -154,31 +175,44 @@ async def main() -> None:
             HAVING SUM(cnt) >= 2
             ORDER BY mention_count DESC
             LIMIT 15
-        """, TOPIC_ID)
+        """,
+            TOPIC_ID,
+        )
         entities = [dict(r) for r in entity_rows]
 
         # ── Language breakdown ──
         _LANG_NAMES = {
-            "en": "English", "hi": "Hindi", "zh": "Chinese", "ar": "Arabic",
-            "id": "Indonesian", "tl": "Tagalog", "mr": "Marathi",
+            "en": "English",
+            "hi": "Hindi",
+            "zh": "Chinese",
+            "ar": "Arabic",
+            "id": "Indonesian",
+            "tl": "Tagalog",
+            "mr": "Marathi",
         }
-        lang_rows = await conn.fetch("""
+        lang_rows = await conn.fetch(
+            """
             SELECT COALESCE(language, 'unknown') AS language, COUNT(*) AS count
             FROM content_items
             WHERE topic_id = $1 AND language IS NOT NULL
             GROUP BY language
             ORDER BY count DESC
-        """, TOPIC_ID)
+        """,
+            TOPIC_ID,
+        )
         language_breakdown = []
         for r in lang_rows:
             code = r["language"]
-            language_breakdown.append({
-                "language": _LANG_NAMES.get(code, code),
-                "count": r["count"],
-            })
+            language_breakdown.append(
+                {
+                    "language": _LANG_NAMES.get(code, code),
+                    "count": r["count"],
+                }
+            )
 
         # ── Evidence items — sample from fraud content ──
-        evidence_rows = await conn.fetch("""
+        evidence_rows = await conn.fetch(
+            """
             SELECT ci.clean_text, ci.url, ci.captured_at, ci.credibility_score_at_capture,
                    s.name AS source_name, s.platform
             FROM content_items ci
@@ -187,19 +221,23 @@ async def main() -> None:
               AND LENGTH(ci.clean_text) > 50
             ORDER BY ci.captured_at DESC
             LIMIT 15
-        """, TOPIC_ID)
+        """,
+            TOPIC_ID,
+        )
         evidence_items = []
         for r in evidence_rows:
             text = r["clean_text"] or ""
-            evidence_items.append({
-                "title": "Cyber Fraud Content",
-                "snippet": text[:300] + ("..." if len(text) > 300 else ""),
-                "url": r["url"] or "",
-                "captured_at": str(r["captured_at"]),
-                "credibility_score_at_capture": r["credibility_score_at_capture"] or 0,
-                "source_name": r["source_name"],
-                "platform": r["platform"],
-            })
+            evidence_items.append(
+                {
+                    "title": "Cyber Fraud Content",
+                    "snippet": text[:300] + ("..." if len(text) > 300 else ""),
+                    "url": r["url"] or "",
+                    "captured_at": str(r["captured_at"]),
+                    "credibility_score_at_capture": r["credibility_score_at_capture"] or 0,
+                    "source_name": r["source_name"],
+                    "platform": r["platform"],
+                }
+            )
 
         # ── Keyword frequency ──
         keywords_list = topic["keywords"] or []
@@ -208,12 +246,15 @@ async def main() -> None:
             count_row = await conn.fetchrow(
                 "SELECT COUNT(*) AS cnt FROM content_items "
                 "WHERE topic_id = $1 AND clean_text ILIKE $2",
-                TOPIC_ID, f"%{kw}%",
+                TOPIC_ID,
+                f"%{kw}%",
             )
-            keyword_stats.append({
-                "keyword": kw,
-                "frequency": count_row["cnt"] if count_row else 0,
-            })
+            keyword_stats.append(
+                {
+                    "keyword": kw,
+                    "frequency": count_row["cnt"] if count_row else 0,
+                }
+            )
         keyword_stats.sort(key=lambda x: x["frequency"], reverse=True)
 
     await pool.close()

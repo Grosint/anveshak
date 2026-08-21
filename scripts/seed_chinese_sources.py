@@ -18,6 +18,7 @@ Topic created:
     - languages: ["zh"]
     - signal_threshold: 2
 """
+
 from __future__ import annotations
 
 import argparse
@@ -92,7 +93,16 @@ SOURCES = [
 TOPIC = {
     "name": "china_military_osint",
     "description": "PLA military activity, South China Sea developments, Taiwan Strait tensions — Chinese-language sources with automatic English translation.",
-    "keywords": ["PLA", "South China Sea", "military exercise", "Taiwan", "Xi Jinping", "解放军", "南海", "台湾"],
+    "keywords": [
+        "PLA",
+        "South China Sea",
+        "military exercise",
+        "Taiwan",
+        "Xi Jinping",
+        "解放军",
+        "南海",
+        "台湾",
+    ],
     "languages": ["zh", "en"],
     "signal_threshold": 2,
     "labels": {"classification": "OPEN", "domain": "osint", "owner_org": "anveshak"},
@@ -110,10 +120,13 @@ def main() -> int:
     print(f"Seeding Chinese sources → {base}")
 
     # --- Login ---
-    status, resp = _post(f"{base}/api/v1/auth/login", {
-        "username": args.username,
-        "password": args.password,
-    })
+    status, resp = _post(
+        f"{base}/api/v1/auth/login",
+        {
+            "username": args.username,
+            "password": args.password,
+        },
+    )
     if status != 200 or "access_token" not in resp:
         print(f"FAIL: Login failed ({status}): {resp}")
         return 1
@@ -142,8 +155,11 @@ def main() -> int:
         # fetch existing topic id
         _, topics_resp = _get(f"{base}/api/v1/topics", token)
         topic_id = next(
-            (t["id"] for t in (topics_resp if isinstance(topics_resp, list) else [])
-             if t.get("name") == TOPIC["name"]),
+            (
+                t["id"]
+                for t in (topics_resp if isinstance(topics_resp, list) else [])
+                if t.get("name") == TOPIC["name"]
+            ),
             None,
         )
     else:
@@ -155,8 +171,10 @@ def main() -> int:
     print("  1. Ensure Ollama has qwen2:7b:  ollama pull qwen2:7b")
     print("  2. Bring up the stack:          make up")
     print("  3. Run the migration:           make migrate")
-    print(f"  4. Trigger scrape (replace TOPIC_ID with actual id):")
-    print(f"     curl -X POST {base}/api/v1/topics/{topic_id or '<TOPIC_ID>'}/scrape -H 'Authorization: Bearer <TOKEN>'")
+    print("  4. Trigger scrape (replace TOPIC_ID with actual id):")
+    print(
+        f"     curl -X POST {base}/api/v1/topics/{topic_id or '<TOPIC_ID>'}/scrape -H 'Authorization: Bearer <TOKEN>'"
+    )
     print("  5. After scrape+analyse: check translated_text in DB:")
     print("     SELECT language, translation_model, LEFT(translated_text, 100)")
     print("     FROM content_items WHERE language = 'zh' LIMIT 5;")

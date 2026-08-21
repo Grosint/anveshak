@@ -2,8 +2,8 @@
 
 pytest.mark.unit — no external dependencies, no DB, no network.
 """
-import pytest
-from anveshak.scraper.normalise import normalise_text, compute_content_hash
+
+from anveshak.scraper.normalise import compute_content_hash, normalise_text
 
 
 class TestNormaliseText:

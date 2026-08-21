@@ -5,14 +5,16 @@ dummy random-weight ONNX exports.
 
 TDD RED phase — these tests define the expected interface BEFORE implementation.
 """
-import pytest
-from unittest.mock import MagicMock, patch
-import numpy as np
 
+from unittest.mock import MagicMock, patch
+
+import numpy as np
+import pytest
 
 # ---------------------------------------------------------------------------
 # Tests: settings.py — HuggingFace model source env vars
 # ---------------------------------------------------------------------------
+
 
 class TestVisionSettingsHFModels:
     """Settings must expose HuggingFace model names for deepfake detectors."""
@@ -51,6 +53,7 @@ class TestVisionSettingsHFModels:
 # Tests: EfficientNetDetector — 2-class softmax output (not sigmoid)
 # ---------------------------------------------------------------------------
 
+
 def _mock_session_2class(logits: list[float]):
     """Mock ONNX session returning [1, 2] logits (real HF model output)."""
     session = MagicMock()
@@ -65,14 +68,16 @@ class TestEfficientNet2ClassOutput:
     @pytest.mark.unit
     def test_infer_with_2class_logits(self):
         """_infer() must handle [1, 2] logits via softmax, not [1, 1] sigmoid."""
-        from anveshak.vision.detectors.efficientnet import EfficientNetDetector, FAKE_INDEX
+        from anveshak.vision.detectors.efficientnet import EfficientNetDetector
 
         detector = EfficientNetDetector(device="cpu")
         # umm-maybe/AI-image-detector: {0: "artificial", 1: "human"}
         # FAKE_INDEX=0, so high logit at index 0 → high fake score
         detector._model = _mock_session_2class([2.5, 0.1])
 
-        with patch.object(detector, "preprocess_image", return_value=np.zeros((1, 3, 224, 224), dtype=np.float32)):
+        with patch.object(
+            detector, "preprocess_image", return_value=np.zeros((1, 3, 224, 224), dtype=np.float32)
+        ):
             score = detector._infer(b"test_image")
 
         assert isinstance(score, float)
@@ -83,31 +88,33 @@ class TestEfficientNet2ClassOutput:
     @pytest.mark.unit
     def test_infer_real_image_low_score(self):
         """Real image logits [0.1, 2.5] → low fake probability (high human logit)."""
-        from anveshak.vision.detectors.efficientnet import EfficientNetDetector, FAKE_INDEX
+        from anveshak.vision.detectors.efficientnet import EfficientNetDetector
 
         detector = EfficientNetDetector(device="cpu")
         # High human logit (index 1), low artificial logit (index 0) → low fake score
         detector._model = _mock_session_2class([0.1, 2.5])
 
-        with patch.object(detector, "preprocess_image", return_value=np.zeros((1, 3, 224, 224), dtype=np.float32)):
+        with patch.object(
+            detector, "preprocess_image", return_value=np.zeros((1, 3, 224, 224), dtype=np.float32)
+        ):
             score = detector._infer(b"test_image")
 
         assert isinstance(score, float)
-        assert score < 0.5, (
-            f"High human logit [0.1, 2.5] should produce score < 0.5, got {score}"
-        )
+        assert score < 0.5, f"High human logit [0.1, 2.5] should produce score < 0.5, got {score}"
 
     @pytest.mark.unit
     def test_infer_uses_softmax_not_sigmoid(self):
         """Verify softmax is used for 2-class output, not sigmoid."""
         import scipy.special
-        from anveshak.vision.detectors.efficientnet import EfficientNetDetector, FAKE_INDEX
+        from anveshak.vision.detectors.efficientnet import FAKE_INDEX, EfficientNetDetector
 
         detector = EfficientNetDetector(device="cpu")
         logits = [3.0, 1.0]
         detector._model = _mock_session_2class(logits)
 
-        with patch.object(detector, "preprocess_image", return_value=np.zeros((1, 3, 224, 224), dtype=np.float32)):
+        with patch.object(
+            detector, "preprocess_image", return_value=np.zeros((1, 3, 224, 224), dtype=np.float32)
+        ):
             score = detector._infer(b"test")
 
         # Expected softmax result at FAKE_INDEX=0
@@ -121,6 +128,7 @@ class TestEfficientNet2ClassOutput:
 # ---------------------------------------------------------------------------
 # Tests: FacetorchDetector — FAKE_INDEX constant
 # ---------------------------------------------------------------------------
+
 
 class TestFacetorchFakeIndex:
     """FacetorchDetector must have a documented FAKE_INDEX for label ordering."""
@@ -147,6 +155,7 @@ class TestFacetorchFakeIndex:
 # Tests: EfficientNetDetector — FAKE_INDEX constant
 # ---------------------------------------------------------------------------
 
+
 class TestEfficientNetFakeIndex:
     """EfficientNetDetector must also have a FAKE_INDEX constant."""
 
@@ -172,6 +181,7 @@ class TestEfficientNetFakeIndex:
 # Tests: download_models.py — no more random torch.onnx.export
 # ---------------------------------------------------------------------------
 
+
 class TestDownloadModelsNoRandom:
     """download_models.py must download real weights, not generate random ones."""
 
@@ -185,8 +195,7 @@ class TestDownloadModelsNoRandom:
             "a download function that fetches real HuggingFace weights"
         )
         assert hasattr(dm, "_download_facetorch_onnx"), (
-            "_download_facetorch_onnx must exist — downloads real HF model "
-            "and exports to ONNX"
+            "_download_facetorch_onnx must exist — downloads real HF model and exports to ONNX"
         )
 
     @pytest.mark.unit
@@ -199,6 +208,5 @@ class TestDownloadModelsNoRandom:
             "a download function that fetches real HuggingFace weights"
         )
         assert hasattr(dm, "_download_efficientnet_onnx"), (
-            "_download_efficientnet_onnx must exist — downloads real HF model "
-            "and exports to ONNX"
+            "_download_efficientnet_onnx must exist — downloads real HF model and exports to ONNX"
         )

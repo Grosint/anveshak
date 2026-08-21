@@ -8,21 +8,20 @@ Criteria 3.4: raw items from all adapters → same content_items table.
 Criteria 1.5 / 3.4: ON CONFLICT(content_hash) DO NOTHING dedup.
 Criteria 4.2: social adapters download media attachments (raw.media_urls).
 """
+
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import asyncpg
 import structlog
-from arq import ArqRedis
-
 from anveshak.media.downloader import download_media_asset
+from arq import ArqRedis
 
 from .adapters.base import RawItem
 from .settings import settings
@@ -70,19 +69,16 @@ _LABELS_TEMPLATE = '{{"classification":"OPEN","domain":"social","owner_org":"anv
 # Helpers — same logic as scraper/normalise.py (no shared dep to avoid coupling)
 # ---------------------------------------------------------------------------
 
+
 def _normalise(text: str) -> str:
     """Lowercase and collapse whitespace."""
     return re.sub(r"\s+", " ", text.lower()).strip()
 
 
-def _compute_hash(text: str) -> str:
-    """SHA-256 of normalised text — the dedup key."""
-    return hashlib.sha256(_normalise(text).encode("utf-8")).hexdigest()
-
-
 # ---------------------------------------------------------------------------
 # Core function
 # ---------------------------------------------------------------------------
+
 
 async def ingest_raw_item(
     raw: RawItem,
@@ -111,13 +107,14 @@ async def ingest_raw_item(
         log.warning("social.ingest.empty_text", url=raw.url, platform=raw.platform)
         return False
 
-    content_hash = _compute_hash(raw.raw_text)
+    # RawItem owns the dedup key so a platform with a durable ID (YouTube video
+    # or comment) can opt out of text hashing via stable_id. Everything else
+    # falls through to the normalised-text hash RawItem computes by default.
+    content_hash = raw.content_hash()
 
     # Look up source row by handle + platform
     async with pool.acquire() as conn:
-        source_row = await conn.fetchrow(
-            SQL_GET_SOURCE_BY_HANDLE, raw.source_handle, raw.platform
-        )
+        source_row = await conn.fetchrow(SQL_GET_SOURCE_BY_HANDLE, raw.source_handle, raw.platform)
         if source_row is None:
             log.warning(
                 "social.ingest.unknown_source",
@@ -154,19 +151,19 @@ async def ingest_raw_item(
             content_item_id,
             topic_id,
             source_id,
-            raw.raw_text,            # raw_text — untouched
-            clean_text,              # clean_text — normalised
-            raw.language or "en",   # language — adapter may pre-detect or leave for NLP
+            raw.raw_text,  # raw_text — untouched
+            clean_text,  # clean_text — normalised
+            raw.language or "en",  # language — adapter may pre-detect or leave for NLP
             content_hash,
             raw.url,
             raw.captured_at,
-            credibility_score,      # snapshot at ingest time (not FK — criteria 1.6)
+            credibility_score,  # snapshot at ingest time (not FK — criteria 1.6)
             now,
             now,
             labels,
-            raw.forwarded_from_channel_id,     # Telegram Level 2 discovery
-            raw.forwarded_from_channel_name,   # Telegram Level 2 discovery
-            org_id,                            # $16 — org_id for multi-tenancy
+            raw.forwarded_from_channel_id,  # Telegram Level 2 discovery
+            raw.forwarded_from_channel_name,  # Telegram Level 2 discovery
+            org_id,  # $16 — org_id for multi-tenancy
         )
 
     if result is None:
@@ -239,7 +236,9 @@ async def _download_media_attachments(
                 row = await conn.fetchrow(SQL_GET_MEDIA_ASSET_BY_HASH, dl.content_hash)
 
             if row:
-                await arq_pool.enqueue_job("run_vision_analysis", row["id"], _queue_name="arq:vision")
+                await arq_pool.enqueue_job(
+                    "run_vision_analysis", row["id"], _queue_name="arq:vision"
+                )
                 log.debug(
                     "social.ingest.vision_dispatched",
                     media_asset_id=row["id"],

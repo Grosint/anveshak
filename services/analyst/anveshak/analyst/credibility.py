@@ -1,6 +1,6 @@
 """Source credibility auto-feedback loop (M1 complete — criteria 2.21–2.25, 7.1–7.5).
 
-Three automatic scoring passes, all audit-logged (CLAUDE.md rule 8):
+Three automatic scoring passes, all audit-logged (AGENTS.md rule 8):
 
 1. Deepfake amplification drop (2.21–2.24, 7.3):
    Sources that shared items with deepfake_score > 0.8 → score reduced.
@@ -19,13 +19,15 @@ Three automatic scoring passes, all audit-logged (CLAUDE.md rule 8):
 
 All score changes are clamped to [0.0, 100.0] (7.5).
 """
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 import asyncpg
 import structlog
+from anveshak.db import DBConnection
 
 from .metrics import analyst_credibility_changes_total
 from .settings import settings
@@ -121,6 +123,7 @@ _CHANGED_BY = "analyst.auto_credibility"
 # Core functions
 # ---------------------------------------------------------------------------
 
+
 def clamp_score(score: float) -> float:
     """Clamp credibility score to [0.0, 100.0]. Pure function (7.5)."""
     return round(max(0.0, min(100.0, score)), 2)
@@ -137,7 +140,7 @@ def compute_new_score(old_score: float, deepfake_count: int) -> float:
 
 
 async def apply_credibility_drop(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     source_id: str,
     old_score: float,
     new_score: float,
@@ -165,7 +168,7 @@ async def apply_credibility_drop(
 
 
 async def apply_credibility_boost(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     source_id: str,
     old_score: float,
     new_score: float,
@@ -193,7 +196,7 @@ async def apply_credibility_boost(
 
 
 async def find_deepfake_amplifiers(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
 ) -> list[asyncpg.Record]:
     """Return sources that have amplified high-confidence deepfakes recently."""
     return await conn.fetch(SQL_DEEPFAKE_AMPLIFIERS)
@@ -202,6 +205,7 @@ async def find_deepfake_amplifiers(
 # ---------------------------------------------------------------------------
 # Top-level orchestrator (called from ARQ job and credibility_update_loop)
 # ---------------------------------------------------------------------------
+
 
 async def run_credibility_update(pool: asyncpg.Pool) -> int:
     """Run one credibility auto-update pass. Returns number of sources updated.
@@ -257,6 +261,7 @@ async def run_credibility_update(pool: asyncpg.Pool) -> int:
 # ---------------------------------------------------------------------------
 # Cross-verification boost (7.1) — called post-clustering, per topic
 # ---------------------------------------------------------------------------
+
 
 async def run_cross_verification_update(pool: asyncpg.Pool, topic_id: str) -> int:
     """Boost credibility of high-credibility sources confirmed by multi-platform clusters.
@@ -315,6 +320,7 @@ async def run_cross_verification_update(pool: asyncpg.Pool, topic_id: str) -> in
 # ---------------------------------------------------------------------------
 # Contradiction drop (7.2) — daily global pass
 # ---------------------------------------------------------------------------
+
 
 async def run_contradiction_update(pool: asyncpg.Pool) -> int:
     """Reduce credibility of sources with a high noise-item ratio on clustered topics.

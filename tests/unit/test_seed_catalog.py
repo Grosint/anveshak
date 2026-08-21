@@ -1,8 +1,6 @@
 """Unit tests for catalog seed script — manifest loading and idempotency."""
-from __future__ import annotations
 
-import json
-from pathlib import Path
+from __future__ import annotations
 
 import pytest
 
@@ -11,7 +9,7 @@ pytestmark = pytest.mark.unit
 
 def test_load_manifests_finds_json_files(tmp_path):
     """load_manifests reads all JSON files from catalog directory."""
-    from scripts.seed_catalog import load_manifests, CATALOG_DIR
+    from scripts.seed_catalog import load_manifests
 
     # Use real catalog dir
     entries = load_manifests()
@@ -49,9 +47,7 @@ def test_load_manifests_valid_reliability_tiers():
     entries = load_manifests()
     for entry in entries:
         tier = entry.get("reliability_tier", "C")
-        assert tier in valid_tiers, (
-            f"Invalid tier '{tier}' in entry '{entry['name']}'"
-        )
+        assert tier in valid_tiers, f"Invalid tier '{tier}' in entry '{entry['name']}'"
 
 
 def test_load_manifests_no_duplicate_handles():

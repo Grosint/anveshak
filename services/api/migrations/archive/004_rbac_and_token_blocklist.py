@@ -5,6 +5,7 @@
 
 Revision ID: 004
 """
+
 from alembic import op
 
 revision = "004"
@@ -23,8 +24,7 @@ def upgrade() -> None:
         )
     """)
     op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_token_blocklist_expires "
-        "ON token_blocklist(expires_at)"
+        "CREATE INDEX IF NOT EXISTS idx_token_blocklist_expires ON token_blocklist(expires_at)"
     )
 
     # Add CHECK constraint on users.role (allows viewer for read-only analysts)

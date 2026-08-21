@@ -20,6 +20,7 @@ Revision ID: 010
 Revises: 009
 Create Date: 2026-06-17 00:00:00.000000
 """
+
 from alembic import op
 
 revision = "010"
@@ -134,15 +135,25 @@ def upgrade() -> None:
     """)
 
     # -- Indexes --
-    op.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_trackers_case_number ON trackers(case_number)")
+    op.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_trackers_case_number ON trackers(case_number)"
+    )
     op.execute("CREATE INDEX IF NOT EXISTS idx_trackers_org ON trackers(org_id)")
     op.execute("CREATE INDEX IF NOT EXISTS idx_trackers_topic ON trackers(topic_id)")
     op.execute("CREATE INDEX IF NOT EXISTS idx_trackers_status ON trackers(status)")
     op.execute("CREATE INDEX IF NOT EXISTS idx_trackers_assigned ON trackers(assigned_to)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_tracker_content_tracker ON tracker_content_items(tracker_id, attached_at DESC)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_tracker_content_status ON tracker_content_items(tracker_id, status)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_tracker_notes_tracker ON tracker_notes(tracker_id, created_at DESC)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_tracker_audit_tracker ON tracker_audit_log(tracker_id, created_at DESC)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tracker_content_tracker ON tracker_content_items(tracker_id, attached_at DESC)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tracker_content_status ON tracker_content_items(tracker_id, status)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tracker_notes_tracker ON tracker_notes(tracker_id, created_at DESC)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tracker_audit_tracker ON tracker_audit_log(tracker_id, created_at DESC)"
+    )
 
     # -- Grants --
     op.execute("GRANT ALL ON trackers TO anveshak_worker")

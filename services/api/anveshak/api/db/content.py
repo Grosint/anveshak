@@ -1,9 +1,10 @@
 """Content repository — full item detail and pgvector similarity search."""
+
 from __future__ import annotations
 
 from typing import Any
 
-import asyncpg
+from anveshak.db import DBConnection
 
 # ---------------------------------------------------------------------------
 # SQL constants
@@ -45,22 +46,19 @@ SQL_VECTOR_SEARCH = """
 # Repository functions
 # ---------------------------------------------------------------------------
 
-async def get_content_item(
-    conn: asyncpg.Connection, content_id: str
-) -> dict[str, Any] | None:
+
+async def get_content_item(conn: DBConnection, content_id: str) -> dict[str, Any] | None:
     row = await conn.fetchrow(SQL_GET_CONTENT_ITEM, content_id)
     return dict(row) if row else None
 
 
-async def get_entities(
-    conn: asyncpg.Connection, content_id: str
-) -> list[dict[str, Any]]:
+async def get_entities(conn: DBConnection, content_id: str) -> list[dict[str, Any]]:
     rows = await conn.fetch(SQL_GET_ENTITIES, content_id)
     return [dict(r) for r in rows]
 
 
 async def vector_search(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     query_vec_str: str,
     topic_id: str,
 ) -> list[dict[str, Any]]:

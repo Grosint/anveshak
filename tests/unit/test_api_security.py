@@ -5,14 +5,14 @@ Tests:
   - Rate limiter returns 429 when limit exceeded
   - Cache-Control: no-store on auth routes
 """
+
 from __future__ import annotations
 
 import pytest
+from anveshak.api.middleware.rate_limit import RateLimitMiddleware, _windows
+from anveshak.api.middleware.security import SecurityHeadersMiddleware
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from anveshak.api.middleware.security import SecurityHeadersMiddleware
-from anveshak.api.middleware.rate_limit import RateLimitMiddleware, _windows
 
 
 @pytest.fixture(autouse=True)
@@ -82,10 +82,12 @@ def test_login_rate_limit_triggers_429():
 def test_vision_analyse_rate_limit_triggers_429():
     """8D.3 — POST /vision/analyse rate limit (30/min per JWT sub)."""
     # Build a fake JWT-like header with sub claim
-    import base64, json
-    payload = base64.urlsafe_b64encode(
-        json.dumps({"sub": "analyst-1"}).encode()
-    ).decode().rstrip("=")
+    import base64
+    import json
+
+    payload = (
+        base64.urlsafe_b64encode(json.dumps({"sub": "analyst-1"}).encode()).decode().rstrip("=")
+    )
     fake_jwt = f"header.{payload}.sig"
     headers = {"Authorization": f"Bearer {fake_jwt}"}
 

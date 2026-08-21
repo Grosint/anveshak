@@ -1,12 +1,13 @@
 """Jinja2-based prompt templates for LLM report generation.
 
-CLAUDE.md security rule: user input (topic name, keywords) is wrapped in XML
+AGENTS.md security rule: user input (topic name, keywords) is wrapped in XML
 boundary markers (<topic>, <keywords>, <context>) so the LLM cannot confuse
 user-controlled data with system instructions.
 
-CLAUDE.md rule 9: prompts specify the exact JSON schema matching ReportContent
+AGENTS.md rule 9: prompts specify the exact JSON schema matching ReportContent
 so output can be parsed by Pydantic before any storage.
 """
+
 from __future__ import annotations
 
 from jinja2 import Environment, Undefined
@@ -14,7 +15,8 @@ from jinja2 import Environment, Undefined
 # ---------------------------------------------------------------------------
 # Jinja2 environment (no filesystem — inline templates only)
 # ---------------------------------------------------------------------------
-_env = Environment(undefined=Undefined, autoescape=False)  # nosec B701 — LLM text prompts, not HTML; autoescape would corrupt <topic>/<context> boundary markers required by CLAUDE.md rule 9
+# LLM text prompts, not HTML; autoescape would corrupt <topic>/<context> boundary markers required by AGENTS.md rule 9
+_env = Environment(undefined=Undefined, autoescape=False)  # nosec B701
 
 
 # ---------------------------------------------------------------------------
@@ -255,6 +257,7 @@ _TEMPLATE_MAP: dict[str, str] = {
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def render_prompt(
     report_type: str,
     topic_name: str,
@@ -269,7 +272,7 @@ def render_prompt(
     """Render the appropriate Jinja2 template for the given report_type.
 
     User-controlled values (topic_name, keywords) are injected inside XML
-    boundary markers per CLAUDE.md security rule (prompt injection prevention).
+    boundary markers per AGENTS.md security rule (prompt injection prevention).
 
     Args:
         report_type: One of intelligence_brief | research_summary | weekly_digest.
@@ -295,9 +298,7 @@ def render_prompt(
     three_lens_frag = _THREE_LENS_SCHEMA_FRAGMENT if include_three_lens else ""
     json_schema = _JSON_SCHEMA_INSTRUCTION.replace(
         "{{ legal_schema_fragment }}", legal_frag
-    ).replace(
-        "{{ three_lens_schema_fragment }}", three_lens_frag
-    )
+    ).replace("{{ three_lens_schema_fragment }}", three_lens_frag)
 
     tmpl = _env.from_string(template_str)
     return tmpl.render(
@@ -354,7 +355,7 @@ def render_bluf_prompt(
     """Render a short BLUF prompt for data-driven reports.
 
     User-controlled topic_name is wrapped in XML boundary markers
-    per CLAUDE.md security rule (prompt injection prevention).
+    per AGENTS.md security rule (prompt injection prevention).
     """
     tmpl = _env.from_string(_BLUF_TEMPLATE)
     return tmpl.render(
@@ -438,7 +439,7 @@ def render_assessment_prompt(
 ) -> str:
     """Render prompt for source assessment LLM brief.
 
-    User-controlled values wrapped in XML boundary markers per CLAUDE.md security rule.
+    User-controlled values wrapped in XML boundary markers per AGENTS.md security rule.
     """
     tmpl = _env.from_string(_ASSESSMENT_TEMPLATE)
     return tmpl.render(

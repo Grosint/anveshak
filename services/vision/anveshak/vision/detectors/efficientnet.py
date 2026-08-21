@@ -7,12 +7,13 @@ Model: umm-maybe/AI-image-detector (Swin-Base, trained on AI vs human images).
 Input:  [1, 3, 224, 224] float32 (ImageNet-normalised)
 Output: [1, 2] float32 logits — softmax → FAKE_INDEX is fake probability
 """
+
 from __future__ import annotations
 
 import structlog
 
-from .base import DeepfakeDetector
 from ..settings import settings
+from .base import DeepfakeDetector
 
 log = structlog.get_logger(__name__)
 
@@ -55,7 +56,6 @@ class EfficientNetDetector(DeepfakeDetector):
         )
 
     def _infer(self, image_bytes: bytes) -> float:
-        import numpy as np
         import scipy.special
 
         arr = self.preprocess_image(image_bytes, self.MODEL_INPUT_SIZE)
@@ -64,6 +64,8 @@ class EfficientNetDetector(DeepfakeDetector):
         outputs = self._model.run(None, {input_name: arr})
 
         # Output: [1, 2] logits → softmax → FAKE_INDEX is fake probability
-        logits = outputs[0][0]
+        # onnxruntime types run() as returning Sequence[Any | SparseTensor];
+        # these models return dense ndarrays.
+        logits = outputs[0][0]  # pyright: ignore[reportIndexIssue]
         probs = scipy.special.softmax(logits)
         return float(probs[FAKE_INDEX])

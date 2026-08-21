@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """Verify that all Pydantic models have a non-optional `labels` field.
 
-CLAUDE.md rule 2: Labels are NEVER Optional. Never create a model without them.
+AGENTS.md rule 2: Labels are NEVER Optional. Never create a model without them.
+
+Scope: every model that is persisted or crosses a service boundary on its own.
+Nested value objects inherit their parent's classification and are exempt only
+if listed in EXEMPT_MODELS below, with a reason. Nothing is exempt by default.
 
 Usage:
     python scripts/verify_labels.py
     uv run --package anveshak-sdk python scripts/verify_labels.py
 """
+
 import importlib
 import inspect
 import sys
@@ -20,6 +25,7 @@ from pydantic.fields import FieldInfo
 def _is_optional(annotation) -> bool:
     """Return True if the annotation is Optional[X] (i.e. Union[X, None])."""
     import typing
+
     origin = getattr(annotation, "__origin__", None)
     if origin is typing.Union:
         args = annotation.__args__
@@ -37,8 +43,7 @@ def check_model(model_cls: type) -> list[str]:
 
     if "labels" not in hints:
         violations.append(
-            f"  MISSING: {model_cls.__module__}.{model_cls.__name__} "
-            f"has no `labels` field"
+            f"  MISSING: {model_cls.__module__}.{model_cls.__name__} has no `labels` field"
         )
         return violations
 
@@ -59,35 +64,38 @@ def check_model(model_cls: type) -> list[str]:
     return violations
 
 
+# Models exempt from rule 2, each with the reason it is exempt.
+#
+# Deny by default: a model is only exempt if it is named here. Substring name
+# matching was tried and rejected: "Create" in the name would have silently
+# exempted a model called CreatorProfile, which is exactly the silent gap rule 2
+# exists to close.
+#
+# The bar for adding an entry: the model is a nested value object that only ever
+# exists inside an already-labelled parent, so it inherits that parent's
+# classification. Duplicating labels onto it would let the two diverge: an
+# entity marked OPEN inside a SECRET ContentItem.
+EXEMPT_MODELS: dict[str, str] = {
+    "anveshak.models.base.Labels": "Labels is the labels type itself.",
+    "anveshak.models.content.ExtractedEntity": (
+        "Nested value object, only ever a list on ContentItem.extracted_entities, "
+        "never persisted or transmitted on its own, so it inherits ContentItem's labels."
+    ),
+}
+
+
 def scan_module(module: ModuleType) -> list[str]:
     """Scan all Pydantic BaseModel subclasses in a module."""
     violations = []
     for name, obj in inspect.getmembers(module, inspect.isclass):
-        if (
-            issubclass(obj, BaseModel)
-            and obj is not BaseModel
-            and obj.__module__ == module.__name__
-            and "labels" in {f for f in obj.model_fields}
-        ):
+        if not issubclass(obj, BaseModel) or obj is BaseModel or obj.__module__ != module.__name__:
+            continue
+
+        if "labels" in obj.model_fields:
             # Model has a labels field — check it's not optional
             violations.extend(check_model(obj))
-        elif (
-            issubclass(obj, BaseModel)
-            and obj is not BaseModel
-            and obj.__module__ == module.__name__
-            and "labels" not in {f for f in obj.model_fields}
-        ):
-            # Model has no labels field — flag it if it looks like a domain model
-            # (skip settings, config, request/response models)
-            skip_patterns = [
-                "Settings", "Config", "Request", "Response",
-                "Create", "Update", "Filter", "Token", "Claim",
-                "Health", "Labels",  # Labels itself
-            ]
-            if not any(p in name for p in skip_patterns):
-                violations.append(
-                    f"  MISSING: {module.__name__}.{name} has no `labels` field"
-                )
+        elif f"{module.__name__}.{name}" not in EXEMPT_MODELS:
+            violations.append(f"  MISSING: {module.__name__}.{name} has no `labels` field")
     return violations
 
 

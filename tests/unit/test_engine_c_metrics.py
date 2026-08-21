@@ -2,9 +2,12 @@
 
 pytest.mark.unit -- no external dependencies.
 """
+
 from __future__ import annotations
 
 import pytest
+
+_JOBS = "anveshak.analyst.jobs"
 
 
 @pytest.mark.unit
@@ -13,15 +16,18 @@ class TestEngineCMetricsExist:
 
     def test_identifiers_extracted_total(self):
         from anveshak.analyst.metrics import analyst_identifiers_extracted_total
+
         # Counter with no labels — just needs to exist and be incrementable
         analyst_identifiers_extracted_total.inc(0)
 
     def test_template_matches_total(self):
         from anveshak.analyst.metrics import analyst_template_matches_total
+
         analyst_template_matches_total.labels(template_name="test").inc(0)
 
     def test_identifier_clusters_total(self):
         from anveshak.analyst.metrics import analyst_identifier_clusters_total
+
         analyst_identifier_clusters_total.inc(0)
 
 
@@ -31,8 +37,8 @@ class TestEngineCMetricsIncrementedInJobs:
 
     @pytest.mark.asyncio
     async def test_identifier_counter_incremented(self):
-        from unittest.mock import AsyncMock, MagicMock, patch
         from dataclasses import dataclass
+        from unittest.mock import AsyncMock, MagicMock, patch
 
         @dataclass
         class FakeIdMatch:
@@ -41,7 +47,6 @@ class TestEngineCMetricsIncrementedInJobs:
             normalized_value: str
             confidence: float
 
-        _JOBS = "anveshak.analyst.jobs"
         row = {
             "id": "ci-1",
             "clean_text": "Call +91 9876543210",
@@ -78,7 +83,12 @@ class TestEngineCMetricsIncrementedInJobs:
             patch(f"{_JOBS}.encode_text", return_value=[0.1] * 384),
             patch(f"{_JOBS}.build_topic_query_embedding", return_value=[0.2] * 384),
             patch(f"{_JOBS}.compute_topic_relevance", return_value=0.5),
-            patch(f"{_JOBS}.analyse_sentiment", return_value=type("S", (), {"compound": 0.0, "positive": 0.0, "negative": 0.0, "neutral": 1.0})()),
+            patch(
+                f"{_JOBS}.analyse_sentiment",
+                return_value=type(
+                    "S", (), {"compound": 0.0, "positive": 0.0, "negative": 0.0, "neutral": 1.0}
+                )(),
+            ),
             patch(f"{_JOBS}.extract_keywords", return_value=[]),
             patch(f"{_JOBS}.compute_entity_minhash", return_value=None),
             patch(f"{_JOBS}.extract_identifiers", return_value=fake_ids),
@@ -90,6 +100,7 @@ class TestEngineCMetricsIncrementedInJobs:
             patch(f"{_JOBS}.analyst_identifiers_extracted_total") as mock_id_counter,
         ):
             from anveshak.analyst.jobs import analyse_content
+
             await analyse_content({"db_pool": pool}, "ci-1")
 
         mock_id_counter.inc.assert_called_once_with(1)

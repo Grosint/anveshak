@@ -4,14 +4,15 @@ Every mutating API operation (create, update, delete) should call log_action()
 to record who did what, when, and from where. Defence/LEA requirement:
 "who saw what when" is not optional.
 """
+
 from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any, Optional
 
-import asyncpg
+from anveshak.db import DBConnection
 
 # ---------------------------------------------------------------------------
 # SQL constants
@@ -75,7 +76,7 @@ _LABELS_JSON = '{"classification":"OPEN","domain":"audit","owner_org":"anveshak"
 
 
 async def log_action(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     user_id: str,
     action: str,
     resource_type: str,
@@ -99,7 +100,7 @@ async def log_action(
 
 
 async def get_audit_trail(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     resource_type: Optional[str] = None,
     resource_id: Optional[str] = None,
     limit: int = 100,
@@ -114,9 +115,7 @@ async def get_audit_trail(
             SQL_GET_AUDIT_TRAIL_BY_RESOURCE, resource_type, resource_id, limit, offset
         )
     elif resource_id:
-        rows = await conn.fetch(
-            SQL_GET_AUDIT_TRAIL_BY_RESOURCE_ID, resource_id, limit, offset
-        )
+        rows = await conn.fetch(SQL_GET_AUDIT_TRAIL_BY_RESOURCE_ID, resource_id, limit, offset)
     elif resource_type:
         rows = await conn.fetch(SQL_GET_AUDIT_TRAIL, resource_type, limit, offset)
     else:

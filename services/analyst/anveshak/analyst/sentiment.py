@@ -8,6 +8,7 @@ Returns compound score in [-1.0, 1.0]:
 
 No GPU needed. No hardware.md entry required.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -24,6 +25,7 @@ def _get_analyzer():
     global _analyzer
     if _analyzer is None:
         from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
         _analyzer = SentimentIntensityAnalyzer()
         log.info("sentiment.vader_loaded")
     return _analyzer
@@ -31,10 +33,10 @@ def _get_analyzer():
 
 @dataclass
 class SentimentResult:
-    compound: float   # -1.0 to 1.0 overall
-    positive: float   # 0.0 to 1.0
-    negative: float   # 0.0 to 1.0
-    neutral: float    # 0.0 to 1.0
+    compound: float  # -1.0 to 1.0 overall
+    positive: float  # 0.0 to 1.0
+    negative: float  # 0.0 to 1.0
+    neutral: float  # 0.0 to 1.0
 
 
 def analyse_sentiment(text: str) -> SentimentResult:

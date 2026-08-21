@@ -7,14 +7,15 @@ correct output.
 Requires: make up (PostgreSQL + Redis + Ollama running)
 Target: < 60s on CPU
 """
+
 from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
-import pytest
 import asyncpg
+import pytest
 
 from tests.conftest import LABELS_JSON, POSTGRES_URL
 
@@ -24,6 +25,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 async def db_pool():
@@ -52,15 +54,24 @@ async def pipeline_topic(db_pool):
                                 created_at, updated_at, labels, org_id)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             """,
-            topic_id, "Pipeline Integrity Test",
+            topic_id,
+            "Pipeline Integrity Test",
             ["defence", "military", "IAF"],
-            2, "active", now, now, LABELS_JSON, "org-integration-test",
+            2,
+            "active",
+            now,
+            now,
+            LABELS_JSON,
+            "org-integration-test",
         )
     yield topic_id
     async with db_pool.acquire() as conn:
         await conn.execute("DELETE FROM signals WHERE topic_id=$1", topic_id)
         await conn.execute("DELETE FROM narrative_clusters WHERE topic_id=$1", topic_id)
-        await conn.execute("DELETE FROM extracted_entities WHERE content_item_id IN (SELECT id FROM content_items WHERE topic_id=$1)", topic_id)
+        await conn.execute(
+            "DELETE FROM extracted_entities WHERE content_item_id IN (SELECT id FROM content_items WHERE topic_id=$1)",
+            topic_id,
+        )
         await conn.execute("DELETE FROM content_items WHERE topic_id=$1", topic_id)
         await conn.execute("DELETE FROM topic_sources WHERE topic_id=$1", topic_id)
         await conn.execute("DELETE FROM topics WHERE id=$1", topic_id)
@@ -84,7 +95,13 @@ async def pipeline_sources(db_pool):
                                      created_at, updated_at, labels, org_id)
                 VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), $6::jsonb, $7)
                 """,
-                sid, f"Pipeline Source {platform}", handle, platform, 75.0, LABELS_JSON, "org-integration-test",
+                sid,
+                f"Pipeline Source {platform}",
+                handle,
+                platform,
+                75.0,
+                LABELS_JSON,
+                "org-integration-test",
             )
         ids[platform] = sid
     yield ids
@@ -97,8 +114,13 @@ async def pipeline_sources(db_pool):
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 async def _insert_raw_content(
-    pool, topic_id: str, source_id: str, text: str, embedding: list[float],
+    pool,
+    topic_id: str,
+    source_id: str,
+    text: str,
+    embedding: list[float],
 ) -> str:
     """Insert content with pre-computed embedding (bypasses NLP for speed)."""
     item_id = str(uuid.uuid4())
@@ -115,17 +137,29 @@ async def _insert_raw_content(
             ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'{embedding_str}'::vector,$11,$12,$13,$14)
             ON CONFLICT(content_hash) DO NOTHING
             """,
-            item_id, topic_id, source_id, text, text, "en",
-            content_hash, f"https://example.com/pipeline/{item_id[:8]}",
-            now, 75.0, now, now, LABELS_JSON, "org-integration-test",
+            item_id,
+            topic_id,
+            source_id,
+            text,
+            text,
+            "en",
+            content_hash,
+            f"https://example.com/pipeline/{item_id[:8]}",
+            now,
+            75.0,
+            now,
+            now,
+            LABELS_JSON,
+            "org-integration-test",
         )
     return item_id
 
 
 def _similar_embedding(base: list[float], noise: float = 0.02) -> list[float]:
     """Generate a perturbed, L2-normalized embedding."""
-    import random
     import math
+    import random
+
     raw = [x + random.uniform(-noise, noise) for x in base]
     norm = math.sqrt(sum(x * x for x in raw))
     if norm == 0:
@@ -135,6 +169,7 @@ def _similar_embedding(base: list[float], noise: float = 0.02) -> list[float]:
 
 def _normalize(vec: list[float]) -> list[float]:
     import math
+
     norm = math.sqrt(sum(x * x for x in vec))
     return [x / norm for x in vec] if norm > 0 else vec
 
@@ -143,8 +178,11 @@ def _normalize(vec: list[float]) -> list[float]:
 # Tests
 # ---------------------------------------------------------------------------
 
+
 async def test_full_pipeline_scrape_to_signal(
-    db_pool, pipeline_topic, pipeline_sources,
+    db_pool,
+    pipeline_topic,
+    pipeline_sources,
 ):
     """Full chain: insert content → cluster → signal fires → verify DB state."""
     from anveshak.analyst.clustering import run_clustering
@@ -152,6 +190,7 @@ async def test_full_pipeline_scrape_to_signal(
 
     topic_id = pipeline_topic
     import random
+
     random.seed(42)
     # Create a realistic L2-normalized base embedding
     raw_base = [random.gauss(0.0, 1.0) for _ in range(384)]
@@ -163,7 +202,9 @@ async def test_full_pipeline_scrape_to_signal(
         for i in range(4):  # 4 items per platform = 12 total (enough for HDBSCAN)
             emb = _similar_embedding(base_embedding, noise=0.05)
             item_id = await _insert_raw_content(
-                db_pool, topic_id, source_id,
+                db_pool,
+                topic_id,
+                source_id,
                 f"IAF deploys Rafale jets in eastern sector, {platform} report #{i} {uuid.uuid4()}",
                 emb,
             )
@@ -246,9 +287,20 @@ async def test_content_dedup_prevents_double_counting(db_pool, pipeline_topic, p
                 ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
                 ON CONFLICT(content_hash) DO NOTHING
                 """,
-                item_id, pipeline_topic, source_id, text, text, "en",
-                content_hash, f"https://example.com/dedup/{uuid.uuid4()}",
-                now, 75.0, now, now, LABELS_JSON, "org-integration-test",
+                item_id,
+                pipeline_topic,
+                source_id,
+                text,
+                text,
+                "en",
+                content_hash,
+                f"https://example.com/dedup/{uuid.uuid4()}",
+                now,
+                75.0,
+                now,
+                now,
+                LABELS_JSON,
+                "org-integration-test",
             )
 
     async with db_pool.acquire() as conn:

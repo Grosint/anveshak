@@ -3,6 +3,7 @@
 Must have at least one egress rule to restrict outbound traffic.
 Default k8s behavior is allow-all egress — need explicit deny + allows.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -16,7 +17,6 @@ NETPOL_PATH = Path("infra/k3s/networkpolicy.yml")
 
 
 class TestK3sEgressPolicy:
-
     def test_networkpolicy_file_exists(self):
         assert NETPOL_PATH.exists(), "k3s networkpolicy.yml not found"
 
@@ -32,6 +32,5 @@ class TestK3sEgressPolicy:
             for p in policies
         )
         assert has_egress, (
-            "No NetworkPolicy with Egress policyType found — "
-            "outbound traffic is unrestricted"
+            "No NetworkPolicy with Egress policyType found — outbound traffic is unrestricted"
         )

@@ -7,6 +7,7 @@ Tests:
   - send_webhook returns False on network error
   - Webhook never raises (always returns bool)
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -29,7 +30,6 @@ SAMPLE_PAYLOAD = {
 
 
 class TestSendWebhook:
-
     @pytest.mark.asyncio
     async def test_returns_false_when_disabled(self):
         from anveshak.api.notifications import send_webhook
@@ -61,7 +61,7 @@ class TestSendWebhook:
 
         with (
             patch("anveshak.api.notifications.settings") as mock_settings,
-            patch("anveshak.api.notifications.httpx.AsyncClient") as MockClient,
+            patch("anveshak.api.notifications.httpx.AsyncClient") as MockClient,  # noqa: N806 - binds a class, PascalCase is correct
         ):
             mock_settings.signal_webhook_enabled = True
             mock_settings.signal_webhook_url = "https://hook.example.com"
@@ -89,7 +89,7 @@ class TestSendWebhook:
 
         with (
             patch("anveshak.api.notifications.settings") as mock_settings,
-            patch("anveshak.api.notifications.httpx.AsyncClient") as MockClient,
+            patch("anveshak.api.notifications.httpx.AsyncClient") as MockClient,  # noqa: N806 - binds a class, PascalCase is correct
         ):
             mock_settings.signal_webhook_enabled = True
             mock_settings.signal_webhook_url = "https://hook.example.com"
@@ -110,7 +110,7 @@ class TestSendWebhook:
 
         with (
             patch("anveshak.api.notifications.settings") as mock_settings,
-            patch("anveshak.api.notifications.httpx.AsyncClient") as MockClient,
+            patch("anveshak.api.notifications.httpx.AsyncClient") as MockClient,  # noqa: N806 - binds a class, PascalCase is correct
         ):
             mock_settings.signal_webhook_enabled = True
             mock_settings.signal_webhook_url = "https://hook.example.com"
@@ -134,7 +134,7 @@ class TestSendWebhook:
 
         with (
             patch("anveshak.api.notifications.settings") as mock_settings,
-            patch("anveshak.api.notifications.httpx.AsyncClient") as MockClient,
+            patch("anveshak.api.notifications.httpx.AsyncClient") as MockClient,  # noqa: N806 - binds a class, PascalCase is correct
         ):
             mock_settings.signal_webhook_enabled = True
             mock_settings.signal_webhook_url = "https://hook.example.com"

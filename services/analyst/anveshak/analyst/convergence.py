@@ -11,18 +11,19 @@ Design:
   - Reuses existing signals table and 24h dedup window
   - Gated by cross_topic_check_interval_s (0 = disabled)
 """
+
 from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 import asyncpg
 import structlog
 
 from .metrics import analyst_signals_fired_total
 from .settings import settings
-from .signal_engine import is_duplicate_signal, _SIGNAL_TYPE_CROSS_TOPIC, SQL_INSERT_SIGNAL
+from .signal_engine import _SIGNAL_TYPE_CROSS_TOPIC, SQL_INSERT_SIGNAL, is_duplicate_signal
 
 log = structlog.get_logger(__name__)
 
@@ -58,6 +59,7 @@ SQL_CONVERGENT_CLUSTERS = """
 # Core functions
 # ---------------------------------------------------------------------------
 
+
 async def check_cross_topic_convergence(pool: asyncpg.Pool) -> int:
     """Detect and signal cross-topic cluster convergence.
 
@@ -89,13 +91,15 @@ async def check_cross_topic_convergence(pool: asyncpg.Pool) -> int:
                 f"and '{label_b}' (topic {row['topic_b_id'][:8]}) "
                 f"share {similarity:.0%} narrative similarity"
             )
-            evidence = json.dumps({
-                "cluster_a_id": cluster_a_id,
-                "cluster_b_id": row["cluster_b_id"],
-                "topic_a_id": topic_a_id,
-                "topic_b_id": row["topic_b_id"],
-                "similarity": round(similarity, 4),
-            })
+            evidence = json.dumps(
+                {
+                    "cluster_a_id": cluster_a_id,
+                    "cluster_b_id": row["cluster_b_id"],
+                    "topic_a_id": topic_a_id,
+                    "topic_b_id": row["topic_b_id"],
+                    "similarity": round(similarity, 4),
+                }
+            )
 
             await conn.execute(
                 SQL_INSERT_SIGNAL,

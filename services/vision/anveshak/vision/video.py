@@ -6,11 +6,11 @@ Criteria 4.21: each keyframe analysed independently; worst-case score propagated
 Requires ffmpeg on PATH. Falls back to first-frame-only if ffmpeg is absent,
 with a structured warning log so the operator knows precision is degraded.
 """
+
 from __future__ import annotations
 
 import asyncio
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -33,7 +33,7 @@ def _check_ffmpeg() -> bool:
             log.warning(
                 "vision.video.ffmpeg_missing",
                 hint="Install ffmpeg for full keyframe extraction. "
-                     "Falling back to first-frame-only analysis.",
+                "Falling back to first-frame-only analysis.",
             )
     return _FFMPEG_AVAILABLE
 
@@ -61,12 +61,16 @@ async def _ffmpeg_extract(video_path: Path) -> list[bytes]:
         output_pattern = Path(tmpdir) / "frame_%04d.jpg"
         cmd = [
             "ffmpeg",
-            "-i", str(video_path),
-            "-vf", f"fps=1/{settings.video_keyframe_interval_s}",
-            "-q:v", "2",          # JPEG quality (2 = high quality, low compression)
+            "-i",
+            str(video_path),
+            "-vf",
+            f"fps=1/{settings.video_keyframe_interval_s}",
+            "-q:v",
+            "2",  # JPEG quality (2 = high quality, low compression)
             str(output_pattern),
-            "-y",                  # overwrite without asking
-            "-loglevel", "error",  # suppress ffmpeg console output
+            "-y",  # overwrite without asking
+            "-loglevel",
+            "error",  # suppress ffmpeg console output
         ]
         proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -105,6 +109,7 @@ async def _pillow_first_frame(video_path: Path) -> list[bytes]:
     a placeholder that will produce a neutral (0.0) deepfake score.
     """
     import io
+
     from PIL import Image
 
     try:
@@ -126,7 +131,7 @@ def worst_case_score(frame_scores: list[float]) -> float | None:
     """Return worst-case (maximum) deepfake score across all keyframes.
 
     Criteria 4.21: worst-case score propagated to media_asset.
-    CLAUDE.md rule 7: always float, never bool. None = analysis failed.
+    AGENTS.md rule 7: always float, never bool. None = analysis failed.
     """
     if not frame_scores:
         return None

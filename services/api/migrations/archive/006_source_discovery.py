@@ -8,6 +8,7 @@ content_items: add forwarding columns for Telegram forwarding chain (Level 2).
 
 Revision ID: 006
 """
+
 from alembic import op
 
 revision = "006"
@@ -52,8 +53,7 @@ def upgrade() -> None:
         "ON source_catalog USING GIN(domain_tags)"
     )
     op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_source_catalog_rank "
-        "ON source_catalog(recommendation_rank)"
+        "CREATE INDEX IF NOT EXISTS idx_source_catalog_rank ON source_catalog(recommendation_rank)"
     )
 
     # ------------------------------------------------------------------
@@ -103,13 +103,9 @@ def upgrade() -> None:
     # ------------------------------------------------------------------
     # content_items — Telegram forwarding metadata (Level 2)
     # ------------------------------------------------------------------
+    op.execute("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS forwarded_from_channel_id TEXT")
     op.execute(
-        "ALTER TABLE content_items "
-        "ADD COLUMN IF NOT EXISTS forwarded_from_channel_id TEXT"
-    )
-    op.execute(
-        "ALTER TABLE content_items "
-        "ADD COLUMN IF NOT EXISTS forwarded_from_channel_name TEXT"
+        "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS forwarded_from_channel_name TEXT"
     )
 
 

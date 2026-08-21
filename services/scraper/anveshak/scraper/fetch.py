@@ -3,13 +3,13 @@
 Browser reuse: create_shared_crawler() returns a context manager that spawns
 one Chromium instance and reuses it for all URLs in a scrape_topic job.
 """
+
 from __future__ import annotations
 
 import os
-import re
 import time
 from contextlib import asynccontextmanager
-from typing import AsyncIterator, Optional
+from typing import Optional
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
@@ -31,6 +31,7 @@ _ROBOTS_CACHE_TTL = 3600  # 1 hour
 # ---------------------------------------------------------------------------
 # PDF URL detection
 # ---------------------------------------------------------------------------
+
 
 def is_pdf_url(url: str) -> bool:
     """Return True if the URL likely points to a PDF file."""
@@ -99,6 +100,7 @@ async def check_robots_allowed(url: str) -> bool:
         log.info("scraper.robots_blocked", url=url, domain=domain)
     return allowed
 
+
 # ---------------------------------------------------------------------------
 # Shared browser context manager — one Chromium per job, not per URL
 # ---------------------------------------------------------------------------
@@ -119,7 +121,8 @@ async def create_shared_crawler():
     from crawl4ai import AsyncWebCrawler
 
     if not os.environ.get("HOME") or os.environ["HOME"] == "/nonexistent":
-        os.environ["HOME"] = "/tmp"
+        # crawl4ai/Playwright needs a writable HOME; container user has none
+        os.environ["HOME"] = "/tmp"  # nosec B108
 
     proxy_kwargs: dict = {}
     if settings.tor_proxy_url:
@@ -154,9 +157,7 @@ def _extract_markdown(result) -> Optional[str]:
     return str(markdown) or None
 
 
-async def fetch_url_with_crawler(
-    url: str, crawler, run_cfg=None
-) -> Optional[str]:
+async def fetch_url_with_crawler(url: str, crawler, run_cfg=None) -> Optional[str]:
     """Fetch a URL using an existing shared crawler instance.
 
     Falls back to trafilatura if Crawl4AI returns empty.
@@ -206,8 +207,19 @@ async def fetch_url(url: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 _SKIP_EXTENSIONS = {
-    ".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp",
-    ".mp4", ".mp3", ".avi", ".mov", ".zip", ".tar", ".gz",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".svg",
+    ".webp",
+    ".mp4",
+    ".mp3",
+    ".avi",
+    ".mov",
+    ".zip",
+    ".tar",
+    ".gz",
 }
 # Note: .pdf removed — PDFs are now fetched and text-extracted by pdf_extract.py
 
@@ -257,7 +269,7 @@ def extract_article_links(html: str, base_url: str) -> list[str]:
     except Exception:
         pass
 
-    return links[:settings.scraper_max_links_per_page]
+    return links[: settings.scraper_max_links_per_page]
 
 
 async def fetch_html(url: str) -> Optional[str]:
@@ -268,7 +280,9 @@ async def fetch_html(url: str) -> Optional[str]:
         async with httpx.AsyncClient(
             timeout=settings.scraper_request_timeout_s,
             follow_redirects=True,
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            },
         ) as client:
             resp = await client.get(url)
             resp.raise_for_status()
@@ -278,9 +292,7 @@ async def fetch_html(url: str) -> Optional[str]:
         return None
 
 
-async def _trafilatura_fetch(
-    url: str, *, proxy_url: Optional[str] = None
-) -> Optional[str]:
+async def _trafilatura_fetch(url: str, *, proxy_url: Optional[str] = None) -> Optional[str]:
     """Download raw HTML via httpx then extract with trafilatura.
 
     Args:
@@ -292,11 +304,14 @@ async def _trafilatura_fetch(
     client_kwargs: dict = {
         "timeout": settings.scraper_request_timeout_s,
         "follow_redirects": True,
-        "headers": {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"},
+        "headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        },
     }
     if effective_proxy:
         try:
             import inspect
+
             sig = inspect.signature(httpx.AsyncClient.__init__)
             if "proxy" in sig.parameters:
                 client_kwargs["proxy"] = effective_proxy
@@ -318,6 +333,7 @@ async def _trafilatura_fetch(
 # Dark web (.onion) — Tor-forced fetching with DNS leak protection
 # ---------------------------------------------------------------------------
 
+
 def validate_onion_url(url: str) -> None:
     """Raise ValueError if URL is not a .onion address.
 
@@ -327,13 +343,10 @@ def validate_onion_url(url: str) -> None:
     parsed = urlparse(url)
     if not parsed.netloc.endswith(".onion"):
         raise ValueError(
-            f"DNS leak prevention: {url} is not a .onion URL — "
-            "refusing to fetch via clearnet"
+            f"DNS leak prevention: {url} is not a .onion URL — refusing to fetch via clearnet"
         )
     if parsed.scheme not in ("http", "https"):
-        raise ValueError(
-            f"Dark web URL must use http:// or https:// scheme, got {parsed.scheme}"
-        )
+        raise ValueError(f"Dark web URL must use http:// or https:// scheme, got {parsed.scheme}")
 
 
 @asynccontextmanager
@@ -346,7 +359,8 @@ async def create_tor_crawler():
     from crawl4ai import AsyncWebCrawler
 
     if not os.environ.get("HOME") or os.environ["HOME"] == "/nonexistent":
-        os.environ["HOME"] = "/tmp"
+        # crawl4ai/Playwright needs a writable HOME; container user has none
+        os.environ["HOME"] = "/tmp"  # nosec B108
 
     proxy_kwargs: dict = {"proxy": settings.darkweb_tor_proxy_url}
 
@@ -367,9 +381,7 @@ async def create_tor_crawler():
             yield crawler, None
 
 
-async def fetch_url_via_tor(
-    url: str, crawler, run_cfg=None
-) -> Optional[str]:
+async def fetch_url_via_tor(url: str, crawler, run_cfg=None) -> Optional[str]:
     """Fetch a .onion URL through Tor. Validates URL before fetching.
 
     Unlike fetch_url_with_crawler, this function:
@@ -394,9 +406,7 @@ async def fetch_url_via_tor(
 
     # Fallback: trafilatura via Tor proxy (explicitly passed, not optional)
     try:
-        return await _trafilatura_fetch(
-            url, proxy_url=settings.darkweb_tor_proxy_url
-        )
+        return await _trafilatura_fetch(url, proxy_url=settings.darkweb_tor_proxy_url)
     except Exception as exc:
         log.warning("scraper.darkweb_fetch_failed", url=url, error=str(exc))
         return None

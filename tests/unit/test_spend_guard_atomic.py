@@ -3,10 +3,11 @@
 Critical fix: INCR/DECR pattern has a race window where concurrent calls
 can exceed the cap. Tests verify Lua-script-based atomic enforcement.
 """
+
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -90,9 +91,7 @@ class TestXSpendGuardAtomic:
         call_results = [1, 2, 3, -1, -1]
         mock_redis.eval = AsyncMock(side_effect=call_results)
 
-        results = await asyncio.gather(
-            *[guard.check_and_increment() for _ in range(5)]
-        )
+        results = await asyncio.gather(*[guard.check_and_increment() for _ in range(5)])
 
         assert results.count(True) == 3
         assert results.count(False) == 2

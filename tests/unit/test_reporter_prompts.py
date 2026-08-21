@@ -6,9 +6,10 @@ Tests:
   - assemble_context returns source_count and date_range metadata
   - Token budget is respected
 """
+
 from __future__ import annotations
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 import pytest
 
@@ -19,12 +20,14 @@ pytestmark = pytest.mark.unit
 # render_prompt
 # ---------------------------------------------------------------------------
 
-class TestRenderPrompt:
 
+class TestRenderPrompt:
     def test_intelligence_brief_contains_grounding_rules(self):
         from anveshak.reporter.prompt_templates import render_prompt
 
-        prompt = render_prompt("intelligence_brief", "Naval Ops", ["navy", "patrol"], "some context")
+        prompt = render_prompt(
+            "intelligence_brief", "Naval Ops", ["navy", "patrol"], "some context"
+        )
         assert "STRICT RULES:" in prompt
         assert "ONLY use facts" in prompt
 
@@ -61,8 +64,12 @@ class TestRenderPrompt:
         from anveshak.reporter.prompt_templates import render_prompt
 
         prompt = render_prompt(
-            "intelligence_brief", "T", [], "c",
-            source_count=5, date_range="2026-04-10 to 2026-04-15",
+            "intelligence_brief",
+            "T",
+            [],
+            "c",
+            source_count=5,
+            date_range="2026-04-10 to 2026-04-15",
         )
         assert "5 sources" in prompt
         assert "2026-04-10 to 2026-04-15" in prompt
@@ -82,8 +89,8 @@ class TestRenderPrompt:
 
     def test_invalid_report_type_rejected_by_request_model(self):
         """GenerateReportRequest must reject invalid report_type via Pydantic."""
-        from pydantic import ValidationError
         from anveshak.reporter.main import GenerateReportRequest
+        from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
             GenerateReportRequest(topic_id="t1", report_type="bogus_type")
@@ -107,10 +114,15 @@ class TestRenderPrompt:
 # assemble_context
 # ---------------------------------------------------------------------------
 
-class TestAssembleContext:
 
-    def _make_chunk(self, url: str = "https://example.com", text: str = "Some content",
-                    cred: float = 65.0, captured_at: datetime | None = None) -> dict:
+class TestAssembleContext:
+    def _make_chunk(
+        self,
+        url: str = "https://example.com",
+        text: str = "Some content",
+        cred: float = 65.0,
+        captured_at: datetime | None = None,
+    ) -> dict:
         return {
             "url": url,
             "clean_text": text,

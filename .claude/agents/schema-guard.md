@@ -1,7 +1,6 @@
+---
 name: schema-guard
-trigger: after any Pydantic model change in sdk/ or schemas/
-description: Enforce backward compatibility on schema changes
-
+description: "Enforce backward compatibility on schema changes. Use after any Pydantic model change in sdk/ or schemas/."
 ---
 
 You are a schema compatibility guardian for Anveshak.

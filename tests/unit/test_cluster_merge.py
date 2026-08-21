@@ -6,6 +6,7 @@ Tests:
   - Merge SQL deletes absorbed cluster
   - Cluster lookup query is correct
 """
+
 from __future__ import annotations
 
 import pytest
@@ -14,7 +15,6 @@ pytestmark = pytest.mark.unit
 
 
 class TestClusterMergeSQL:
-
     def test_reassign_query_updates_cluster_id(self):
         from anveshak.api.routes.intelligence import SQL_REASSIGN_CONTENT_ITEMS
 

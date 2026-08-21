@@ -8,9 +8,10 @@ Tests:
 
 pytest.mark.unit — mock DB, no external dependencies.
 """
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -23,21 +24,25 @@ class TestUserDB:
     @pytest.mark.asyncio
     async def test_list_users_exists(self):
         from anveshak.api.db.users import list_users
+
         assert callable(list_users)
 
     @pytest.mark.asyncio
     async def test_create_user_exists(self):
         from anveshak.api.db.users import create_user
+
         assert callable(create_user)
 
     @pytest.mark.asyncio
     async def test_delete_user_exists(self):
         from anveshak.api.db.users import delete_user
+
         assert callable(delete_user)
 
     @pytest.mark.asyncio
     async def test_update_user_role_exists(self):
         from anveshak.api.db.users import update_user_role
+
         assert callable(update_user_role)
 
     @pytest.mark.asyncio
@@ -45,9 +50,11 @@ class TestUserDB:
         from anveshak.api.db.users import list_users
 
         mock_conn = AsyncMock()
-        mock_conn.fetch = AsyncMock(return_value=[
-            {"id": "u1", "username": "admin", "role": "admin", "created_at": "2026-01-01"},
-        ])
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {"id": "u1", "username": "admin", "role": "admin", "created_at": "2026-01-01"},
+            ]
+        )
 
         result = await list_users(mock_conn)
         assert isinstance(result, list)

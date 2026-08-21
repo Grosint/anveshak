@@ -73,7 +73,7 @@ ISO 27001 is the single most requested certification in Indian government and de
 |------------------------|----------------|----------|
 | A.8 — Access Control | JWT auth on all endpoints, rate limiting | Phase 8 criteria 8.1, 8.2 |
 | A.8 — Logging & Monitoring | structlog JSON, Prometheus, Grafana, Loki | Phase 8 criteria 8.7-8.11 |
-| A.8 — Data Classification | Labels on every Pydantic model, content_hash logging only | Architectural rules 2, CLAUDE.md security rules |
+| A.8 — Data Classification | Labels on every Pydantic model, content_hash logging only | Architectural rules 2, AGENTS.md security rules |
 | A.8 — Cryptographic Controls | bcrypt password hashing, JWT tokens | Phase 8 criterion 8.1 |
 | A.8 — Backup | pg_dump + Redis RDB + media archive via Makefile | make backup/restore |
 | A.8 — Secure Development | Bandit scan zero HIGH, no hardcoded secrets, Pydantic strict mode | Phase 8 criteria 8.5, 8.6 |

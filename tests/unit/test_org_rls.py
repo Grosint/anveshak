@@ -1,75 +1,81 @@
 """RED phase — Row-Level Security safety net tests (PR 4).
 
 Tests for:
-  1. Migration 008 exists with RLS policy SQL
+  1. The migration set carries RLS policy SQL
   2. set_org_context() function exists in pool.py
-  3. Migration enables RLS on correct tables
-  4. Migration creates policies with current_setting pattern
-  5. Migration creates anveshak_worker role with BYPASSRLS
+  3. Migrations enable RLS on correct tables
+  4. Migrations create policies with current_setting pattern
+  5. Migrations create anveshak_worker role with BYPASSRLS
+
+These assert on migration *content*, never on a version filename: the RLS
+migration was originally 008_rls_policies.py and has since been squashed
+into 001_initial_schema.py.
 
 pytest.mark.unit — no external dependencies (migration file content checks).
 """
+
 from __future__ import annotations
 
-from pathlib import Path
+import re
 
 import pytest
 
+from tests.helpers.migrations import migrations_sql
+
 pytestmark = pytest.mark.unit
 
-MIGRATION_PATH = Path("services/api/migrations/versions/008_rls_policies.py")
-
 
 # ===================================================================
-# 1. Migration file exists
+# 1. RLS SQL is present in the migration set
 # ===================================================================
+
 
 class TestRLSMigrationExists:
-
-    def test_migration_008_exists(self):
-        """Migration 008_rls_policies.py must exist."""
-        assert MIGRATION_PATH.exists(), "Migration 008_rls_policies.py not found"
+    def test_rls_migration_present(self):
+        """Some live migration must enable row-level security."""
+        assert "ENABLE ROW LEVEL SECURITY" in migrations_sql().upper()
 
 
 # ===================================================================
 # 2. RLS enabled on correct tables
 # ===================================================================
 
+
+# Root tables carrying org_id. See AGENTS.md "org_id placement, root tables only".
+RLS_TABLES = ["topics", "content_items", "users", "credibility_audit_log"]
+
+
 class TestRLSEnabledOnTables:
+    @pytest.mark.parametrize("table", RLS_TABLES)
+    def test_rls_enabled(self, table: str):
+        """Each org-scoped root table must have RLS turned on."""
+        content = migrations_sql().upper()
+        assert f"ALTER TABLE {table.upper()} ENABLE ROW LEVEL SECURITY" in content
 
-    def test_rls_on_topics(self):
-        content = MIGRATION_PATH.read_text().lower()
-        assert "enable row level security" in content
-        assert "topics" in content
-
-    def test_rls_on_content_items(self):
-        content = MIGRATION_PATH.read_text().lower()
-        assert "content_items" in content
-
-    def test_rls_on_users(self):
-        content = MIGRATION_PATH.read_text().lower()
-        assert "users" in content
-
-    def test_rls_on_credibility_audit_log(self):
-        content = MIGRATION_PATH.read_text().lower()
-        assert "credibility_audit_log" in content
+    @pytest.mark.parametrize("table", RLS_TABLES)
+    def test_policy_created(self, table: str):
+        """Enabling RLS without a policy denies every row, so require both."""
+        pattern = rf"CREATE\s+POLICY\s+\w+\s+ON\s+{table}\b"
+        assert re.search(pattern, migrations_sql(), re.IGNORECASE), (
+            f"no RLS policy found for {table}"
+        )
 
 
 # ===================================================================
 # 3. RLS policies use current_setting pattern
 # ===================================================================
 
-class TestRLSPolicies:
 
+class TestRLSPolicies:
     def test_policies_use_current_setting(self):
         """Policies must use current_setting('app.current_org', true)."""
-        content = MIGRATION_PATH.read_text().lower()
+        content = migrations_sql().lower()
         assert "current_setting" in content
         assert "app.current_org" in content
 
     def test_policies_allow_empty_setting_for_superadmin(self):
         """Policies must allow access when setting is empty (super-admin bypass)."""
-        content = MIGRATION_PATH.read_text()
+        content = migrations_sql()
         # Should have a condition like: OR current_setting(...) = ''
         assert "= ''" in content or "=''" in content
 
@@ -78,16 +84,16 @@ class TestRLSPolicies:
 # 4. Worker role with BYPASSRLS
 # ===================================================================
 
-class TestWorkerRole:
 
+class TestWorkerRole:
     def test_creates_worker_role(self):
-        """Migration must create anveshak_worker role."""
-        content = MIGRATION_PATH.read_text().lower()
+        """Migrations must create the anveshak_worker role."""
+        content = migrations_sql().lower()
         assert "anveshak_worker" in content
 
     def test_worker_has_bypassrls(self):
         """Worker role must have BYPASSRLS privilege."""
-        content = MIGRATION_PATH.read_text()
+        content = migrations_sql()
         assert "BYPASSRLS" in content
 
 
@@ -95,16 +101,18 @@ class TestWorkerRole:
 # 5. set_org_context() removed — dead code cleanup
 # ===================================================================
 
-class TestSetOrgContext:
 
+class TestSetOrgContext:
     def test_set_org_context_removed(self):
         """set_org_context() was dead code — removed in security review.
 
         Application-level verify_topic_access() is the primary isolation
-        mechanism. RLS policies in migration 008 still exist as a secondary
-        safety net, but SET LOCAL is not called from application code.
+        mechanism. The RLS policies in the migration set still exist as a
+        secondary safety net, but SET LOCAL is not called from application
+        code.
         """
         import anveshak.api.db.pool as pool_mod
+
         assert not hasattr(pool_mod, "set_org_context"), (
             "set_org_context was dead code — should have been removed"
         )

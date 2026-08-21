@@ -4,11 +4,10 @@ Criteria 4.12: DeepfakeDetector ABC with .score(image_bytes: bytes) -> float
 Criteria 4.14: Score is ALWAYS float 0.0–1.0 — NEVER bool.
 Criteria 4.16: CUDAExecutionProvider used when settings.vision_device=cuda — zero code change.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import Optional
 
 
 class DeepfakeDetector(ABC):
@@ -70,11 +69,14 @@ class DeepfakeDetector(ABC):
         Used by FacetorchDetector and EfficientNetDetector.
         """
         import io
+
         import numpy as np
         from PIL import Image
 
         img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        img = img.resize(target_size, Image.BILINEAR)
+        # Pillow's stubs expose the resampling filters on Image.Resampling only;
+        # Image.BILINEAR is still the documented runtime alias.
+        img = img.resize(target_size, Image.BILINEAR)  # pyright: ignore[reportAttributeAccessIssue]
         arr = np.array(img, dtype=np.float32) / 255.0
         mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
         std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
@@ -89,15 +91,18 @@ class DeepfakeDetector(ABC):
         threshold. Used to route to FacetorchDetector vs EfficientNetDetector.
         """
         import io
-        import numpy as np
+
         import cv2
+        import numpy as np
         from PIL import Image
 
         img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         arr = np.array(img)
         gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+        # cv2.data is a runtime submodule that opencv's stubs do not declare.
         cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+            cv2.data.haarcascades  # pyright: ignore[reportAttributeAccessIssue]
+            + "haarcascade_frontalface_default.xml"
         )
         faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
         return len(faces) > 0

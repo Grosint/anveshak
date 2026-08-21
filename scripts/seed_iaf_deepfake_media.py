@@ -9,6 +9,7 @@ Run inside vision-worker container (has PIL + asyncpg + media volume):
     docker cp scripts/seed_iaf_deepfake_media.py anveshak-analyse-vision-worker-1:/tmp/
     docker exec anveshak-analyse-vision-worker-1 python /tmp/seed_iaf_deepfake_media.py
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -168,14 +169,23 @@ def generate_image(label: str, sublabel: str, color: tuple, path: Path) -> str:
     watermark = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     wdraw = ImageDraw.Draw(watermark)
     for offset in range(-height, width + height, 120):
-        wdraw.text((offset, height // 2 - 30), "AI GENERATED  ·  ", fill=(255, 50, 50, 40), font=font_small)
+        wdraw.text(
+            (offset, height // 2 - 30), "AI GENERATED  ·  ", fill=(255, 50, 50, 40), font=font_small
+        )
     watermark = watermark.rotate(30, expand=False, center=(width // 2, height // 2))
     img.paste(Image.alpha_composite(img.convert("RGBA"), watermark).convert("RGB"))
 
     # Bottom info bar
     draw.rectangle([0, height - 60, width, height], fill=(15, 15, 18))
-    draw.text((20, height - 45), "ANVESHAK VISION MODULE  ·  DEEPFAKE DETECTION  ·  DIRE-ONNX", fill=(120, 120, 130), font=font_tiny)
-    draw.text((width - 250, height - 45), "CLASSIFICATION: RESTRICTED", fill=(200, 80, 80), font=font_tiny)
+    draw.text(
+        (20, height - 45),
+        "ANVESHAK VISION MODULE  ·  DEEPFAKE DETECTION  ·  DIRE-ONNX",
+        fill=(120, 120, 130),
+        font=font_tiny,
+    )
+    draw.text(
+        (width - 250, height - 45), "CLASSIFICATION: RESTRICTED", fill=(200, 80, 80), font=font_tiny
+    )
 
     # Save
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -198,13 +208,17 @@ async def main() -> None:
             storage_dir = MEDIA_ROOT / "iaf-topic-02" / "2026" / "06" / "17"
             img_path = storage_dir / f"{item['media_id']}.jpg"
             content_hash = generate_image(
-                item["label"], item["sublabel"], item["color"], img_path,
+                item["label"],
+                item["sublabel"],
+                item["color"],
+                img_path,
             )
             storage_path = str(img_path)
             print(f"Generated: {storage_path} ({content_hash[:16]}...)")
 
             # Insert media_asset
-            await conn.execute("""
+            await conn.execute(
+                """
                 INSERT INTO media_assets (id, content_item_id, asset_type, storage_path, content_hash, exif_data, labels)
                 VALUES ($1, $2, 'image', $3, $4, $5::jsonb,
                         '{"classification":"RESTRICTED","domain":"info_warfare","owner_org":"iaf"}'::jsonb)
@@ -221,7 +235,8 @@ async def main() -> None:
             print(f"  media_asset: {item['media_id']}")
 
             # Insert vision_result
-            await conn.execute("""
+            await conn.execute(
+                """
                 INSERT INTO vision_results (
                     id, media_asset_id, deepfake_score, deepfake_model,
                     synthetic_probability, clip_labels, yolo_detections,

@@ -1,21 +1,22 @@
 """Tracker endpoints — persistent analyst-owned case files."""
+
 from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Literal, Optional
 
-import asyncpg
 import structlog
+from anveshak.db import DBConnection
 from arq import create_pool as arq_create_pool
 from arq.connections import RedisSettings
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict
 
-from ..auth.rbac import require_role, get_user_org
+from ..auth.rbac import get_user_org, require_org_context, require_role
+from ..db import audit as audit_db
 from ..db import reports as reports_db
 from ..db import trackers as trackers_db
-from ..db import audit as audit_db
 from ..db.pool import get_db
 from ..pagination import paginate_rows
 from ..settings import settings
@@ -27,6 +28,7 @@ log = structlog.get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Request models
 # ---------------------------------------------------------------------------
+
 
 class CreateTrackerRequest(BaseModel):
     model_config = ConfigDict(strict=True)
@@ -75,11 +77,12 @@ class AddNoteRequest(BaseModel):
 # Routes
 # ---------------------------------------------------------------------------
 
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_tracker(
     req: CreateTrackerRequest,
     request: Request,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Create a new tracker from scratch."""
@@ -95,7 +98,11 @@ async def create_tracker(
         status=req.status,
     )
     await audit_db.log_action(
-        db, user["sub"], "tracker.create", "tracker", tracker["id"],
+        db,
+        user["sub"],
+        "tracker.create",
+        "tracker",
+        tracker["id"],
         {"title": req.title},
         request.client.host if request.client else "",
     )
@@ -108,14 +115,16 @@ async def create_from_cluster(
     cluster_id: str,
     req: CreateFromClusterRequest,
     request: Request,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Create a tracker seeded from a narrative cluster."""
     org_id = get_user_org(user)
     try:
         tracker = await trackers_db.create_tracker_from_cluster(
-            db, cluster_id, user["sub"],
+            db,
+            cluster_id,
+            user["sub"],
             org_id=org_id,
             external_case_ref=req.external_case_ref,
             status=req.status,
@@ -124,7 +133,11 @@ async def create_from_cluster(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     await audit_db.log_action(
-        db, user["sub"], "tracker.create_from_cluster", "tracker", tracker["id"],
+        db,
+        user["sub"],
+        "tracker.create_from_cluster",
+        "tracker",
+        tracker["id"],
         {"cluster_id": cluster_id},
         request.client.host if request.client else "",
     )
@@ -138,11 +151,12 @@ async def list_trackers(
     status_filter: Optional[str] = Query(None, alias="status"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """List trackers for the user's org, optionally filtered by topic."""
-    org_id = get_user_org(user)
+    # Every branch below scopes by org, so None would silently list nothing.
+    org_id = require_org_context(user)
     if status_filter:
         # Fetch all (no SQL pagination) then filter + paginate in Python
         if topic_id:
@@ -151,10 +165,12 @@ async def list_trackers(
             all_items, _ = await trackers_db.list_trackers_by_org(db, org_id, 1000, 0)
         filtered = [t for t in all_items if t["status"] == status_filter]
         total = len(filtered)
-        items = filtered[offset:offset + limit]
+        items = filtered[offset : offset + limit]
     else:
         if topic_id:
-            items, total = await trackers_db.list_trackers_by_topic(db, topic_id, org_id, limit, offset)
+            items, total = await trackers_db.list_trackers_by_topic(
+                db, topic_id, org_id, limit, offset
+            )
         else:
             items, total = await trackers_db.list_trackers_by_org(db, org_id, limit, offset)
     return paginate_rows(items, total, offset, limit)
@@ -163,7 +179,7 @@ async def list_trackers(
 @router.get("/{tracker_id}")
 async def get_tracker(
     tracker_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Get tracker detail with content/pending counts."""
@@ -179,18 +195,25 @@ async def update_status(
     tracker_id: str,
     req: UpdateStatusRequest,
     request: Request,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     await trackers_db.verify_tracker_access(db, tracker_id, user)
     if req.status == "concluded" and not req.closing_summary:
         raise HTTPException(status_code=422, detail="closing_summary required when concluding")
     await trackers_db.update_tracker_status(
-        db, tracker_id, req.status, user["sub"],
+        db,
+        tracker_id,
+        req.status,
+        user["sub"],
         closing_summary=req.closing_summary,
     )
     await audit_db.log_action(
-        db, user["sub"], "tracker.status_changed", "tracker", tracker_id,
+        db,
+        user["sub"],
+        "tracker.status_changed",
+        "tracker",
+        tracker_id,
         {"status": req.status},
         request.client.host if request.client else "",
     )
@@ -202,7 +225,7 @@ async def update_priority(
     tracker_id: str,
     req: UpdatePriorityRequest,
     request: Request,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     await trackers_db.verify_tracker_access(db, tracker_id, user)
@@ -215,7 +238,7 @@ async def assign_tracker(
     tracker_id: str,
     req: AssignRequest,
     request: Request,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     await trackers_db.verify_tracker_access(db, tracker_id, user)
@@ -228,7 +251,7 @@ async def update_tracker(
     tracker_id: str,
     req: UpdateTrackerRequest,
     request: Request,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     await trackers_db.verify_tracker_access(db, tracker_id, user)
@@ -237,7 +260,11 @@ async def update_tracker(
         raise HTTPException(status_code=404, detail="Tracker not found")
     now = datetime.now(UTC)
     title = req.title or tracker["title"]
-    ext_ref = req.external_case_ref if req.external_case_ref is not None else tracker.get("external_case_ref")
+    ext_ref = (
+        req.external_case_ref
+        if req.external_case_ref is not None
+        else tracker.get("external_case_ref")
+    )
     await db.execute(trackers_db.SQL_UPDATE_TRACKER_DETAILS, title, ext_ref, now, tracker_id)
     changes: dict = {}
     if req.title is not None:
@@ -245,7 +272,11 @@ async def update_tracker(
     if req.external_case_ref is not None:
         changes["external_case_ref"] = req.external_case_ref
     await audit_db.log_action(
-        db, user["sub"], "tracker.updated", "tracker", tracker_id,
+        db,
+        user["sub"],
+        "tracker.updated",
+        "tracker",
+        tracker_id,
         changes,
         request.client.host if request.client else "",
     )
@@ -255,12 +286,13 @@ async def update_tracker(
 
 # -- Content --
 
+
 @router.get("/{tracker_id}/content")
 async def list_content(
     tracker_id: str,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     await trackers_db.verify_tracker_access(db, tracker_id, user)
@@ -270,7 +302,7 @@ async def list_content(
 @router.get("/{tracker_id}/pending")
 async def list_pending(
     tracker_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     await trackers_db.verify_tracker_access(db, tracker_id, user)
@@ -281,7 +313,7 @@ async def list_pending(
 async def confirm_item(
     tracker_id: str,
     item_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     await trackers_db.verify_tracker_access(db, tracker_id, user)
@@ -293,7 +325,7 @@ async def confirm_item(
 async def reject_item(
     tracker_id: str,
     item_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     await trackers_db.verify_tracker_access(db, tracker_id, user)
@@ -304,7 +336,7 @@ async def reject_item(
 @router.post("/{tracker_id}/content/confirm-all")
 async def confirm_all(
     tracker_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     await trackers_db.verify_tracker_access(db, tracker_id, user)
@@ -316,7 +348,7 @@ async def confirm_all(
 async def add_content_manually(
     tracker_id: str,
     item_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     await trackers_db.verify_tracker_access(db, tracker_id, user)
@@ -328,7 +360,7 @@ async def add_content_manually(
 async def remove_content(
     tracker_id: str,
     item_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Soft remove: moves to exclusion list."""
@@ -339,11 +371,12 @@ async def remove_content(
 
 # -- Notes --
 
+
 @router.post("/{tracker_id}/notes")
 async def add_note(
     tracker_id: str,
     req: AddNoteRequest,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     await trackers_db.verify_tracker_access(db, tracker_id, user)
@@ -354,7 +387,7 @@ async def add_note(
 @router.get("/{tracker_id}/notes")
 async def list_notes(
     tracker_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     await trackers_db.verify_tracker_access(db, tracker_id, user)
@@ -363,10 +396,11 @@ async def list_notes(
 
 # -- Signals --
 
+
 @router.get("/{tracker_id}/signals")
 async def list_signals(
     tracker_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     await trackers_db.verify_tracker_access(db, tracker_id, user)
@@ -377,7 +411,7 @@ async def list_signals(
 async def link_signal(
     tracker_id: str,
     signal_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     await trackers_db.verify_tracker_access(db, tracker_id, user)
@@ -387,9 +421,12 @@ async def link_signal(
 
 # -- Reports --
 
+
 class GenerateTrackerReportRequest(BaseModel):
     model_config = ConfigDict(strict=True)
-    report_type: Literal["intelligence_brief", "research_summary", "weekly_digest"] = "intelligence_brief"
+    report_type: Literal["intelligence_brief", "research_summary", "weekly_digest"] = (
+        "intelligence_brief"
+    )
     time_window_hours: int = 72
     credibility_min: float = 30.0
 
@@ -397,7 +434,7 @@ class GenerateTrackerReportRequest(BaseModel):
 @router.get("/{tracker_id}/reports")
 async def list_tracker_reports(
     tracker_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     await trackers_db.verify_tracker_access(db, tracker_id, user)
@@ -409,7 +446,7 @@ async def generate_tracker_report(
     tracker_id: str,
     req: GenerateTrackerReportRequest,
     request: Request,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Generate a report scoped to this tracker's confirmed content."""
@@ -424,8 +461,15 @@ async def generate_tracker_report(
     labels_json = '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'
 
     await reports_db.insert_report(
-        db, report_id, tracker["topic_id"], req.report_type,
-        time_start, now, req.credibility_min, now, labels_json,
+        db,
+        report_id,
+        tracker["topic_id"],
+        req.report_type,
+        time_start,
+        now,
+        req.credibility_min,
+        now,
+        labels_json,
         tracker_id=tracker_id,
     )
 
@@ -439,7 +483,11 @@ async def generate_tracker_report(
         arq_job_id = None
 
     await audit_db.log_action(
-        db, user["sub"], "tracker.report_generated", "tracker", tracker_id,
+        db,
+        user["sub"],
+        "tracker.report_generated",
+        "tracker",
+        tracker_id,
         {"report_id": report_id, "report_type": req.report_type},
         request.client.host if request.client else "",
     )
@@ -448,12 +496,13 @@ async def generate_tracker_report(
 
 # -- Audit log --
 
+
 @router.get("/{tracker_id}/audit-log")
 async def get_audit_log(
     tracker_id: str,
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     await trackers_db.verify_tracker_access(db, tracker_id, user)

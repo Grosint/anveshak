@@ -6,6 +6,7 @@ as production scraping. Outputs JSON to stdout for the host orchestrator.
 Usage (from host):
     docker exec anveshak-scrape-web-scheduler-1 python /tmp/test_scrape_sources.py
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -51,12 +52,20 @@ WEB_SOURCES = [
 
 ONION_SOURCES = [
     ("Tor Project Onion", "http://2gzyxa5ihm7nsber64ilibmccyxpbjufoir247jkoebi7wy3qkgecdid.onion"),
-    ("BBC Tor Mirror", "https://www.bbcnewsd73hkzno2ini43t4gblxvycyac5aw4gnv7t2rccijh7745uqd.onion/"),
+    (
+        "BBC Tor Mirror",
+        "https://www.bbcnewsd73hkzno2ini43t4gblxvycyac5aw4gnv7t2rccijh7745uqd.onion/",
+    ),
 ]
 
 
 def _result(
-    source_type: str, name: str, passed: bool, chars: int, reason: str, elapsed: float,
+    source_type: str,
+    name: str,
+    passed: bool,
+    chars: int,
+    reason: str,
+    elapsed: float,
 ) -> dict[str, Any]:
     return {
         "type": source_type,
@@ -72,6 +81,7 @@ def _result(
 # RSS tests — uses real fetch_rss_items()
 # ---------------------------------------------------------------------------
 
+
 async def test_rss(name: str, url: str) -> dict:
     from anveshak.scraper.rss import fetch_rss_items
 
@@ -83,8 +93,12 @@ async def test_rss(name: str, url: str) -> dict:
             return _result("rss", name, False, 0, "No entries parsed", elapsed)
         total_chars = sum(len(it.raw_text) for it in items)
         return _result(
-            "rss", name, True, total_chars,
-            f"{len(items)} entries parsed", elapsed,
+            "rss",
+            name,
+            True,
+            total_chars,
+            f"{len(items)} entries parsed",
+            elapsed,
         )
     except Exception as exc:
         elapsed = time.monotonic() - t0
@@ -94,6 +108,7 @@ async def test_rss(name: str, url: str) -> dict:
 # ---------------------------------------------------------------------------
 # Web tests — uses real create_shared_crawler() + fetch_url_with_crawler()
 # ---------------------------------------------------------------------------
+
 
 async def test_web_all(sources: list[tuple[str, str]]) -> list[dict]:
     """Test all web sources sharing one Crawl4AI browser instance (same as production)."""
@@ -108,32 +123,54 @@ async def test_web_all(sources: list[tuple[str, str]]) -> list[dict]:
                     text = await fetch_url_with_crawler(url, crawler, run_cfg)
                     elapsed = time.monotonic() - t0
                     if text and len(text.strip()) >= 200:
-                        results.append(_result(
-                            "web", name, True, len(text),
-                            "Crawl4AI extracted", elapsed,
-                        ))
+                        results.append(
+                            _result(
+                                "web",
+                                name,
+                                True,
+                                len(text),
+                                "Crawl4AI extracted",
+                                elapsed,
+                            )
+                        )
                     elif text:
-                        results.append(_result(
-                            "web", name, False, len(text),
-                            f"Too short ({len(text)} chars, need 200+)", elapsed,
-                        ))
+                        results.append(
+                            _result(
+                                "web",
+                                name,
+                                False,
+                                len(text),
+                                f"Too short ({len(text)} chars, need 200+)",
+                                elapsed,
+                            )
+                        )
                     else:
-                        results.append(_result(
-                            "web", name, False, 0, "No text extracted", elapsed,
-                        ))
+                        results.append(
+                            _result(
+                                "web",
+                                name,
+                                False,
+                                0,
+                                "No text extracted",
+                                elapsed,
+                            )
+                        )
                 except Exception as exc:
                     elapsed = time.monotonic() - t0
                     results.append(_result("web", name, False, 0, str(exc)[:120], elapsed))
     except Exception as exc:
         # Browser failed to start — mark all as failed
         for name, url in sources:
-            results.append(_result("web", name, False, 0, f"Browser init failed: {str(exc)[:80]}", 0))
+            results.append(
+                _result("web", name, False, 0, f"Browser init failed: {str(exc)[:80]}", 0)
+            )
     return results
 
 
 # ---------------------------------------------------------------------------
 # Onion tests — uses real create_tor_crawler() + fetch_url_via_tor()
 # ---------------------------------------------------------------------------
+
 
 async def test_onion_all(sources: list[tuple[str, str]]) -> list[dict]:
     """Test onion sources through Tor using the real dark web fetch path."""
@@ -159,16 +196,20 @@ async def test_onion_all(sources: list[tuple[str, str]]) -> list[dict]:
     try:
         sock = socket.create_connection((tor_host, tor_port), timeout=10)
         sock.close()
-        tor_reachable = True
         tor_elapsed = round(time.monotonic() - t0, 1)
     except Exception as exc:
-        tor_reachable = False
         tor_elapsed = round(time.monotonic() - t0, 1)
         for name, url in sources:
-            results.append(_result(
-                "onion", name, False, 0,
-                f"Tor proxy unreachable ({tor_host}:{tor_port}): {str(exc)[:60]}", tor_elapsed,
-            ))
+            results.append(
+                _result(
+                    "onion",
+                    name,
+                    False,
+                    0,
+                    f"Tor proxy unreachable ({tor_host}:{tor_port}): {str(exc)[:60]}",
+                    tor_elapsed,
+                )
+            )
         return results
 
     # Tor proxy is reachable — test each onion source
@@ -181,35 +222,59 @@ async def test_onion_all(sources: list[tuple[str, str]]) -> list[dict]:
                     text = await fetch_url_via_tor(url, crawler, run_cfg)
                     elapsed = time.monotonic() - t0
                     if text and len(text.strip()) >= 50:
-                        results.append(_result(
-                            "onion", name, True, len(text),
-                            "Tor circuit OK", elapsed,
-                        ))
+                        results.append(
+                            _result(
+                                "onion",
+                                name,
+                                True,
+                                len(text),
+                                "Tor circuit OK",
+                                elapsed,
+                            )
+                        )
                     elif text:
-                        results.append(_result(
-                            "onion", name, False, len(text),
-                            f"Too short ({len(text)} chars)", elapsed,
-                        ))
+                        results.append(
+                            _result(
+                                "onion",
+                                name,
+                                False,
+                                len(text),
+                                f"Too short ({len(text)} chars)",
+                                elapsed,
+                            )
+                        )
                     else:
-                        results.append(_result(
-                            "onion", name, False, 0, "No text extracted via Tor", elapsed,
-                        ))
+                        results.append(
+                            _result(
+                                "onion",
+                                name,
+                                False,
+                                0,
+                                "No text extracted via Tor",
+                                elapsed,
+                            )
+                        )
                 except ValueError as exc:
                     elapsed = time.monotonic() - t0
-                    results.append(_result("onion", name, False, 0, f"DNS leak check: {exc}", elapsed))
+                    results.append(
+                        _result("onion", name, False, 0, f"DNS leak check: {exc}", elapsed)
+                    )
                 except Exception as exc:
                     elapsed = time.monotonic() - t0
                     results.append(_result("onion", name, False, 0, str(exc)[:120], elapsed))
     except Exception as exc:
         for name, url in sources:
             if not any(r["name"] == name for r in results):
-                results.append(_result("onion", name, False, 0, f"Tor browser failed: {str(exc)[:80]}", 0))
+                results.append(
+                    _result("onion", name, False, 0, f"Tor browser failed: {str(exc)[:80]}", 0)
+                )
     return results
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 async def main() -> list[dict]:
     results: list[dict] = []
@@ -230,6 +295,7 @@ async def main() -> list[dict]:
 if __name__ == "__main__":
     # Redirect stderr to suppress log noise — JSON goes to stdout only
     import io
+
     sys.stderr = io.TextIOWrapper(open(os.devnull, "wb"), write_through=True)
 
     try:
@@ -240,12 +306,18 @@ if __name__ == "__main__":
         sys.__stdout__.flush()
     except Exception:
         # If something crashes entirely, output an error result
-        print(json.dumps([{
-            "type": "error",
-            "name": "scraper_test",
-            "status": "FAIL",
-            "chars": 0,
-            "reason": traceback.format_exc()[-200:],
-            "elapsed_s": 0,
-        }]))
+        print(
+            json.dumps(
+                [
+                    {
+                        "type": "error",
+                        "name": "scraper_test",
+                        "status": "FAIL",
+                        "chars": 0,
+                        "reason": traceback.format_exc()[-200:],
+                        "elapsed_s": 0,
+                    }
+                ]
+            )
+        )
         sys.exit(1)

@@ -9,29 +9,28 @@
 
 These tests are pure unit tests — no DB, no network (pytest.mark.unit).
 """
+
 from __future__ import annotations
 
 import hashlib
 import re
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 
 import pytest
-
 from anveshak.social.adapters.base import (
     RawItem,
     SourceAdapterBase,
-    AdapterAuthError,
 )
-from anveshak.social.adapters.reddit import RedditAdapter
 from anveshak.social.adapters.bluesky import BlueskyAdapter
+from anveshak.social.adapters.reddit import RedditAdapter
 from anveshak.social.adapters.telegram import TelegramAdapter
-from anveshak.social.adapters.x_adapter import XPollingAdapter, XStreamAdapter
 from anveshak.social.adapters.whatsapp import WhatsAppAdapter
-
+from anveshak.social.adapters.x_adapter import XPollingAdapter, XStreamAdapter
 
 # ---------------------------------------------------------------------------
 # RawItem contract assertions (shared by all adapter tests)
 # ---------------------------------------------------------------------------
+
 
 class SourceAdapterConformanceSuite:
     """Reusable conformance assertions. Parameterise per adapter.
@@ -43,7 +42,16 @@ class SourceAdapterConformanceSuite:
     def assert_platform_defined(self, adapter: SourceAdapterBase) -> None:
         assert hasattr(adapter, "platform"), "adapter must define platform"
         assert isinstance(adapter.platform, str) and adapter.platform
-        assert adapter.platform in {"telegram", "reddit", "bluesky", "twitter", "web", "instagram", "youtube", "whatsapp"}
+        assert adapter.platform in {
+            "telegram",
+            "reddit",
+            "bluesky",
+            "twitter",
+            "web",
+            "instagram",
+            "youtube",
+            "whatsapp",
+        }
 
     # 2 — RawItem.content_hash() is deterministic and a valid SHA-256 hex string
     def assert_content_hash_deterministic(self, raw: RawItem) -> None:
@@ -59,14 +67,10 @@ class SourceAdapterConformanceSuite:
 
     # 4 — captured_at is timezone-aware
     def assert_captured_at_timezone_aware(self, raw: RawItem) -> None:
-        assert raw.captured_at.tzinfo is not None, (
-            "captured_at must be timezone-aware (UTC)"
-        )
+        assert raw.captured_at.tzinfo is not None, "captured_at must be timezone-aware (UTC)"
 
     # 5 — platform on RawItem matches adapter.platform
-    def assert_raw_item_platform_matches(
-        self, raw: RawItem, adapter: SourceAdapterBase
-    ) -> None:
+    def assert_raw_item_platform_matches(self, raw: RawItem, adapter: SourceAdapterBase) -> None:
         assert raw.platform == adapter.platform, (
             f"RawItem.platform={raw.platform!r} must equal adapter.platform={adapter.platform!r}"
         )
@@ -87,6 +91,7 @@ class SourceAdapterConformanceSuite:
 # Fixtures — minimal RawItems per platform
 # ---------------------------------------------------------------------------
 
+
 def _make_raw(platform: str, handle: str = "test-handle") -> RawItem:
     return RawItem(
         raw_text="Test content for OSINT analysis. India Pakistan border.",
@@ -101,6 +106,7 @@ def _make_raw(platform: str, handle: str = "test-handle") -> RawItem:
 # ---------------------------------------------------------------------------
 # Test classes — one per adapter
 # ---------------------------------------------------------------------------
+
 
 class TestRedditAdapterConformance(SourceAdapterConformanceSuite):
     @pytest.fixture
@@ -219,7 +225,6 @@ class TestXAdapterConformance(SourceAdapterConformanceSuite):
 
     def test_platform_defined(self, raw):
         # XPollingAdapter platform = "twitter"
-        from anveshak.social.adapters.x_adapter import XPollingAdapter
         adapter = XPollingAdapter.__new__(XPollingAdapter)
         adapter._client = None
         adapter._spend_guard = None
@@ -235,7 +240,6 @@ class TestXAdapterConformance(SourceAdapterConformanceSuite):
         self.assert_captured_at_timezone_aware(raw)
 
     def test_raw_item_platform_matches(self, raw):
-        from anveshak.social.adapters.x_adapter import XPollingAdapter
         adapter = XPollingAdapter.__new__(XPollingAdapter)
         adapter._client = None
         adapter._spend_guard = None
@@ -249,6 +253,7 @@ class TestXAdapterConformance(SourceAdapterConformanceSuite):
 
     def test_monthly_key_includes_year_month(self):
         from anveshak.social.adapters.x_adapter import _monthly_key
+
         key = _monthly_key()
         assert key.startswith("anveshak:x:monthly_reads:")
         # Format: YYYY-MM
@@ -257,9 +262,10 @@ class TestXAdapterConformance(SourceAdapterConformanceSuite):
 
     def test_seconds_until_month_end_positive(self):
         from anveshak.social.adapters.x_adapter import _seconds_until_month_end
+
         ttl = _seconds_until_month_end()
         assert ttl > 0
-        assert ttl <= 31 * 24 * 3600   # never more than ~31 days
+        assert ttl <= 31 * 24 * 3600  # never more than ~31 days
 
 
 class TestWhatsAppAdapterConformance(SourceAdapterConformanceSuite):
@@ -305,6 +311,7 @@ class TestWhatsAppAdapterConformance(SourceAdapterConformanceSuite):
 # Content hash cross-platform consistency
 # ---------------------------------------------------------------------------
 
+
 class TestContentHashConsistency:
     """Same text on different platforms gets different hashes via different RawItems
     (different URL / platform). This confirms cluster grouping works via embeddings,
@@ -348,3 +355,66 @@ class TestContentHashConsistency:
             source_handle="r/x",
         )
         assert raw1.content_hash() != raw2.content_hash()
+
+
+# ---------------------------------------------------------------------------
+# stable_id — platform-stable dedup key (rule 3 narrow exception)
+# ---------------------------------------------------------------------------
+
+
+class TestStableIdContentHash:
+    """RawItem.stable_id overrides text hashing for platforms with a durable ID.
+
+    Text hashing re-ingests an item whenever its text is edited. YouTube
+    captions are the motivating case: an ASR re-run rewrites the transcript,
+    so the same video lands as a new content item on the next poll.
+    """
+
+    def _item(self, text: str, stable_id: str | None) -> RawItem:
+        return RawItem(
+            raw_text=text,
+            url="https://www.youtube.com/watch?v=abc123",
+            platform="youtube",
+            captured_at=datetime.now(UTC),
+            source_handle="@ch",
+            stable_id=stable_id,
+        )
+
+    def test_defaults_to_none_so_text_hashing_is_unchanged(self):
+        raw = RawItem(
+            raw_text="Story A.",
+            url="https://t.me/ch/1",
+            platform="telegram",
+            captured_at=datetime.now(UTC),
+            source_handle="@ch",
+        )
+        assert raw.stable_id is None
+        expected = hashlib.sha256("story a.".encode()).hexdigest()
+        assert raw.content_hash() == expected
+
+    def test_stable_id_hash_is_text_independent(self):
+        original = self._item("Title\n\n[TRANSCRIPT]\nfirst asr pass", "video:abc123")
+        recaptioned = self._item("Title\n\n[TRANSCRIPT]\nsecond asr pass", "video:abc123")
+        assert original.content_hash() == recaptioned.content_hash()
+
+    def test_stable_id_hash_is_platform_scoped(self):
+        yt = self._item("text", "video:abc123")
+        other = RawItem(
+            raw_text="text",
+            url="https://example.com/abc123",
+            platform="web",
+            captured_at=datetime.now(UTC),
+            source_handle="example.com",
+            stable_id="video:abc123",
+        )
+        assert yt.content_hash() != other.content_hash()
+
+    def test_stable_id_hash_format(self):
+        raw = self._item("text", "video:abc123")
+        expected = hashlib.sha256("youtube:video:abc123".encode()).hexdigest()
+        assert raw.content_hash() == expected
+
+    def test_distinct_stable_ids_differ(self):
+        assert self._item("same text", "video:a").content_hash() != (
+            self._item("same text", "video:b").content_hash()
+        )

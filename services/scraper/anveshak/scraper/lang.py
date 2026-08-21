@@ -3,6 +3,7 @@
 Same algorithm as analyst/nlp.py:detect_language() but without spaCy dependency.
 langdetect is already a scraper dependency (pyproject.toml).
 """
+
 from __future__ import annotations
 
 import re
@@ -25,6 +26,7 @@ def detect_language(text: str) -> str:
         return "en"
     try:
         from langdetect import detect
+
         lang = detect(cleaned)
     except Exception:
         return "en"

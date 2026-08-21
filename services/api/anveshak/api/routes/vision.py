@@ -7,28 +7,28 @@ Criteria:
   4.30:      GET  /api/v1/content/{id}/vision — all vision_results for a content_item
   4.31:      GET  /api/v1/media/{asset_id} — serve media file for frontend display
 
-All heavy ML work dispatched as ARQ jobs (CLAUDE.md rule 5: never block routes).
+All heavy ML work dispatched as ARQ jobs (AGENTS.md rule 5: never block routes).
 """
+
 from __future__ import annotations
 
 import hashlib
-import json
 import mimetypes
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional
 
-import asyncpg
 import structlog
+from anveshak.db import DBConnection
 from arq import ArqRedis
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 
 from ..auth.rbac import require_role
-from ..db.pool import get_db
-from ..db import vision as vision_db
 from ..db import topics as topics_db
+from ..db import vision as vision_db
+from ..db.pool import get_db
 from ..settings import settings
 
 log = structlog.get_logger(__name__)
@@ -42,6 +42,7 @@ _VID_EXTS: frozenset[str] = frozenset({".mp4", ".avi", ".mov", ".webm", ".mkv"})
 # Dependencies
 # ---------------------------------------------------------------------------
 
+
 def get_arq_pool(request: Request) -> ArqRedis:
     """Inject ARQ pool from app state (wired in main.py lifespan)."""
     return request.app.state.arq_pool
@@ -50,6 +51,7 @@ def get_arq_pool(request: Request) -> ArqRedis:
 # ---------------------------------------------------------------------------
 # POST /api/v1/vision/analyse
 # ---------------------------------------------------------------------------
+
 
 @router.post("/analyse")
 async def analyse_image(
@@ -63,7 +65,7 @@ async def analyse_image(
         None,
         description="Link upload to a topic (content appears in topic workspace)",
     ),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Accept image/video upload → store to disk → dispatch ARQ job.
@@ -122,7 +124,10 @@ async def analyse_image(
     # Resolve content_item_id — required FK on media_assets.
     # For ad-hoc uploads (no existing content_item) create a stub so the FK is satisfied.
     resolved_content_item_id = content_item_id or await vision_db.get_or_create_stub_content_item(
-        db, content_hash, file.filename or "upload", topic_id=topic_id,
+        db,
+        content_hash,
+        file.filename or "upload",
+        topic_id=topic_id,
     )
 
     # Upsert media_assets row with ON CONFLICT(content_hash) DO NOTHING (criteria 4.34 dedup)
@@ -132,14 +137,25 @@ async def analyse_image(
     else:
         new_id = str(uuid.uuid4())
         row = await vision_db.insert_media_asset(
-            db, new_id, resolved_content_item_id, asset_type, storage_path, content_hash,
+            db,
+            new_id,
+            resolved_content_item_id,
+            asset_type,
+            storage_path,
+            content_hash,
         )
         # RETURNING id → None if conflict (shouldn't happen, but guard anyway)
         media_asset_id = row["id"] if row else new_id
 
-    # Dispatch ARQ vision job (CLAUDE.md rule 5: never call ML inline)
+    # Dispatch ARQ vision job (AGENTS.md rule 5: never call ML inline)
     arq_pool: ArqRedis = get_arq_pool(request)
-    job = await arq_pool.enqueue_job("run_vision_analysis", media_asset_id, _queue_name="arq:vision")
+    job = await arq_pool.enqueue_job(
+        "run_vision_analysis", media_asset_id, _queue_name="arq:vision"
+    )
+    if job is None:
+        # ARQ returns None when a job with the same _job_id is already queued.
+        # No _job_id is passed here, so treat it as a dispatch failure.
+        raise HTTPException(status_code=503, detail="Could not queue vision job")
 
     log.info(
         "vision_api.job_dispatched",
@@ -159,10 +175,11 @@ async def analyse_image(
 # POST /api/v1/vision/analyse-youtube
 # ---------------------------------------------------------------------------
 
+
 @router.post("/analyse-youtube")
 async def analyse_youtube_video(
     request: Request,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Accept YouTube video URL → dispatch download + vision analysis as ARQ job.
@@ -184,6 +201,10 @@ async def analyse_youtube_video(
         content_item_id,
         _queue_name="arq:vision",
     )
+    if job is None:
+        # ARQ returns None when a job with the same _job_id is already queued.
+        # No _job_id is passed here, so treat it as a dispatch failure.
+        raise HTTPException(status_code=503, detail="Could not queue vision job")
 
     log.info(
         "vision_api.youtube_job_dispatched",
@@ -200,10 +221,11 @@ async def analyse_youtube_video(
 # GET /api/v1/vision/jobs/recent
 # ---------------------------------------------------------------------------
 
+
 @router.get("/jobs/recent")
 async def list_recent_vision_jobs(
     limit: int = Query(10, ge=1, le=50),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Return the last N completed vision analysis jobs for history display."""
@@ -220,19 +242,26 @@ async def list_recent_vision_jobs(
         result = r["result"] or {}
         if isinstance(result, str):
             import json as _json
+
             try:
                 result = _json.loads(result)
             except Exception:
                 result = {}
         yolo = result.get("yolo_detections") or []
-        jobs.append({
-            "job_id": r["id"],
-            "deepfake_score": result.get("deepfake_score"),
-            "yolo_count": len(yolo) if isinstance(yolo, list) else 0,
-            "clip_top": max(result.get("clip_labels", {}).items(), key=lambda x: x[1], default=("", 0))[0] if result.get("clip_labels") else None,
-            "status": r["status"],
-            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
-        })
+        jobs.append(
+            {
+                "job_id": r["id"],
+                "deepfake_score": result.get("deepfake_score"),
+                "yolo_count": len(yolo) if isinstance(yolo, list) else 0,
+                "clip_top": max(
+                    result.get("clip_labels", {}).items(), key=lambda x: x[1], default=("", 0)
+                )[0]
+                if result.get("clip_labels")
+                else None,
+                "status": r["status"],
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            }
+        )
     return jobs
 
 
@@ -240,11 +269,12 @@ async def list_recent_vision_jobs(
 # GET /api/v1/vision/jobs/{job_id}
 # ---------------------------------------------------------------------------
 
+
 @router.get("/jobs/{job_id}")
 async def get_vision_job(
     job_id: str,
     request: Request,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Poll vision job status. Returns results when complete.
@@ -302,6 +332,7 @@ async def get_vision_job(
 # GET /api/v1/vision/reverse-search
 # ---------------------------------------------------------------------------
 
+
 @router.get("/reverse-search")
 async def reverse_image_search(
     phash: str = Query(..., description="Perceptual hash (16 hex chars, 64-bit)"),
@@ -309,7 +340,7 @@ async def reverse_image_search(
         None,
         description="Max Hamming distance (default from settings)",
     ),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Find near-duplicate media assets by pHash Hamming distance.
@@ -325,9 +356,7 @@ async def reverse_image_search(
             detail="Invalid phash. Must be 16 hex characters (64-bit integer).",
         )
 
-    effective_threshold = (
-        threshold if threshold is not None else settings.phash_duplicate_threshold
-    )
+    effective_threshold = threshold if threshold is not None else settings.phash_duplicate_threshold
 
     rows = await vision_db.phash_reverse_search(db, phash_int, effective_threshold)
     return [
@@ -354,13 +383,13 @@ content_vision_router = APIRouter(prefix="/api/v1/content", tags=["vision"])
 @content_vision_router.get("/{content_id}/vision")
 async def get_vision_for_content(
     content_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """All vision_results for all media assets linked to a content_item.
 
     Criteria 4.30.
-    deepfake_score is always float (CLAUDE.md rule 7 — never bool).
+    deepfake_score is always float (AGENTS.md rule 7 — never bool).
     """
     rows = await vision_db.get_vision_results_for_content(db, content_id)
     return [
@@ -369,7 +398,7 @@ async def get_vision_for_content(
             "media_asset_id": r["media_asset_id"],
             "yolo_detections": r["yolo_detections"],
             "clip_labels": r["clip_labels"],
-            "deepfake_score": r["deepfake_score"],           # float 0.0–1.0 or null (analysis failed)
+            "deepfake_score": r["deepfake_score"],  # float 0.0–1.0 or null (analysis failed)
             "deepfake_model": r["deepfake_model"],
             "synthetic_probability": r["synthetic_probability"],
             "processed_at": r["processed_at"],
@@ -398,7 +427,7 @@ SQL_GET_MEDIA_ASSET_PATH = """
 @content_vision_router.get("/media/{asset_id}")
 async def serve_media(
     asset_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Serve a media asset file for frontend display.

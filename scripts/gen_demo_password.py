@@ -7,6 +7,7 @@ Usage:
 
 The output hash goes into scripts/seed_demo.sql (hashed_password column).
 """
+
 from __future__ import annotations
 
 import argparse

@@ -2,12 +2,12 @@
 
 pytest.mark.unit — mocked Redis, no real connection.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
 import pytest
-
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 
@@ -42,8 +42,13 @@ class TestGeocodeCache:
 
         redis = _make_redis()
         await geocode_cache_set(
-            redis, "mumbai", "GPE",
-            lat=19.07, lon=72.88, source="geonamescache", confidence=0.9,
+            redis,
+            "mumbai",
+            "GPE",
+            lat=19.07,
+            lon=72.88,
+            source="geonamescache",
+            confidence=0.9,
         )
         redis.set.assert_awaited_once()
         # No expiry — coordinates don't change
@@ -69,8 +74,13 @@ class TestGeocodeCache:
         redis.set.side_effect = ConnectionError("Redis down")
         # Should not raise
         await geocode_cache_set(
-            redis, "mumbai", "GPE",
-            lat=19.07, lon=72.88, source="geonamescache", confidence=0.9,
+            redis,
+            "mumbai",
+            "GPE",
+            lat=19.07,
+            lon=72.88,
+            source="geonamescache",
+            confidence=0.9,
         )
 
     async def test_cache_key_format(self):

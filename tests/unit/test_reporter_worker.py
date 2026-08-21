@@ -3,10 +3,11 @@
 pytest.mark.unit — mocks all DB and LLM calls, no external dependencies.
 Tests real business logic: idempotency, failure paths, markdown building.
 """
+
 from __future__ import annotations
 
 import json
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -17,6 +18,7 @@ pytestmark = pytest.mark.unit
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_ctx(settings=None):
     """Build a fake ARQ context dict with mocked DB pool and settings."""
@@ -76,9 +78,21 @@ def _make_chunk(source_id="src-1"):
 
 def _make_data_bundle():
     return {
-        "topic_stats": {"name": "Test Topic", "content_count": 10, "source_count": 3, "cluster_count": 2, "signal_count": 1},
-        "sources": [], "clusters": [], "signals": [], "entities": [],
-        "sentiment_trend": [], "keywords": [], "evidence_items": [], "language_breakdown": [],
+        "topic_stats": {
+            "name": "Test Topic",
+            "content_count": 10,
+            "source_count": 3,
+            "cluster_count": 2,
+            "signal_count": 1,
+        },
+        "sources": [],
+        "clusters": [],
+        "signals": [],
+        "entities": [],
+        "sentiment_trend": [],
+        "keywords": [],
+        "evidence_items": [],
+        "language_breakdown": [],
     }
 
 
@@ -86,8 +100,8 @@ def _make_data_bundle():
 # generate_report tests
 # ---------------------------------------------------------------------------
 
-class TestGenerateReport:
 
+class TestGenerateReport:
     @pytest.mark.asyncio
     async def test_generate_report_not_found(self):
         """Report not in DB -> returns early, no crash."""
@@ -97,6 +111,7 @@ class TestGenerateReport:
             mock_db.fetch_report = AsyncMock(return_value=None)
 
             from anveshak.reporter.worker import generate_report
+
             await generate_report(ctx, "nonexistent-id")
 
             mock_db.fetch_report.assert_awaited_once_with(ctx["db"], "nonexistent-id")
@@ -113,20 +128,27 @@ class TestGenerateReport:
             mock_db.set_report_failed = AsyncMock()
 
             from anveshak.reporter.worker import generate_report
+
             await generate_report(ctx, "report-1")
 
             mock_db.set_report_failed.assert_awaited_once()
             args = mock_db.set_report_failed.call_args
-            assert "not found" in args[1].get("error_message", args[0][-1]).lower() or \
-                   "deleted" in args[1].get("error_message", args[0][-1]).lower()
+            assert (
+                "not found" in args[1].get("error_message", args[0][-1]).lower()
+                or "deleted" in args[1].get("error_message", args[0][-1]).lower()
+            )
 
     @pytest.mark.asyncio
     async def test_generate_report_no_rag_chunks(self):
         """No content available -> set_report_failed with helpful message."""
         ctx = _make_ctx()
 
-        with patch("anveshak.reporter.worker.db") as mock_db, \
-             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed:
+        with (
+            patch("anveshak.reporter.worker.db") as mock_db,
+            patch(
+                "anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock
+            ) as mock_embed,
+        ):
             mock_db.fetch_report = AsyncMock(return_value=_make_report_row())
             mock_db.fetch_topic = AsyncMock(return_value=_make_topic_row())
             mock_db.fetch_report_data_bundle = AsyncMock(return_value=_make_data_bundle())
@@ -135,6 +157,7 @@ class TestGenerateReport:
             mock_embed.return_value = [0.1] * 384
 
             from anveshak.reporter.worker import generate_report
+
             await generate_report(ctx, "report-1")
 
             mock_db.set_report_failed.assert_awaited_once()
@@ -147,13 +170,19 @@ class TestGenerateReport:
         ctx = _make_ctx()
         chunks = [_make_chunk()]
 
-        with patch("anveshak.reporter.worker.db") as mock_db, \
-             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed, \
-             patch("anveshak.reporter.worker.render_bluf_prompt") as mock_prompt, \
-             patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_llm, \
-             patch("anveshak.reporter.worker.geocode_locations") as mock_geo, \
-             patch("anveshak.reporter.worker.build_geojson") as mock_geojson, \
-             patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract:
+        with (
+            patch("anveshak.reporter.worker.db") as mock_db,
+            patch(
+                "anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock
+            ) as mock_embed,
+            patch("anveshak.reporter.worker.render_bluf_prompt") as mock_prompt,
+            patch(
+                "anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock
+            ) as mock_llm,
+            patch("anveshak.reporter.worker.geocode_locations") as mock_geo,
+            patch("anveshak.reporter.worker.build_geojson") as mock_geojson,
+            patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract,
+        ):
             mock_db.fetch_report = AsyncMock(return_value=_make_report_row())
             mock_db.fetch_topic = AsyncMock(return_value=_make_topic_row())
             mock_db.fetch_report_data_bundle = AsyncMock(return_value=_make_data_bundle())
@@ -172,6 +201,7 @@ class TestGenerateReport:
             mock_extract.return_value = []
 
             from anveshak.reporter.worker import generate_report
+
             await generate_report(ctx, "report-1")
 
             # v2 uses fallback BLUF — report succeeds, not failed
@@ -186,18 +216,26 @@ class TestGenerateReport:
         chunks = [_make_chunk()]
 
         from anveshak.reporter.llm import BlufContent
+
         bluf = BlufContent(
-            bluf="Test summary.", confidence_level=0.85,
+            bluf="Test summary.",
+            confidence_level=0.85,
             labels={"classification": "OPEN", "domain": "report", "owner_org": "anveshak"},
         )
 
-        with patch("anveshak.reporter.worker.db") as mock_db, \
-             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed, \
-             patch("anveshak.reporter.worker.render_bluf_prompt") as mock_prompt, \
-             patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_llm, \
-             patch("anveshak.reporter.worker.geocode_locations") as mock_geo, \
-             patch("anveshak.reporter.worker.build_geojson") as mock_geojson, \
-             patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract:
+        with (
+            patch("anveshak.reporter.worker.db") as mock_db,
+            patch(
+                "anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock
+            ) as mock_embed,
+            patch("anveshak.reporter.worker.render_bluf_prompt") as mock_prompt,
+            patch(
+                "anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock
+            ) as mock_llm,
+            patch("anveshak.reporter.worker.geocode_locations") as mock_geo,
+            patch("anveshak.reporter.worker.build_geojson") as mock_geojson,
+            patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract,
+        ):
             mock_db.fetch_report = AsyncMock(return_value=_make_report_row())
             mock_db.fetch_topic = AsyncMock(return_value=_make_topic_row())
             mock_db.fetch_report_data_bundle = AsyncMock(return_value=_make_data_bundle())
@@ -216,6 +254,7 @@ class TestGenerateReport:
             mock_extract.return_value = []
 
             from anveshak.reporter.worker import generate_report
+
             # Should not crash
             await generate_report(ctx, "report-1")
 
@@ -231,23 +270,33 @@ class TestGenerateReport:
         chunks = [_make_chunk("src-1"), _make_chunk("src-2")]
 
         from anveshak.reporter.llm import BlufContent
+
         bluf = BlufContent(
-            bluf="Test summary.", confidence_level=0.85,
+            bluf="Test summary.",
+            confidence_level=0.85,
             labels={"classification": "OPEN", "domain": "report", "owner_org": "anveshak"},
         )
 
-        with patch("anveshak.reporter.worker.db") as mock_db, \
-             patch("anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock) as mock_embed, \
-             patch("anveshak.reporter.worker.render_bluf_prompt") as mock_prompt, \
-             patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mock_llm, \
-             patch("anveshak.reporter.worker.geocode_locations") as mock_geo, \
-             patch("anveshak.reporter.worker.build_geojson") as mock_geojson, \
-             patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract:
+        with (
+            patch("anveshak.reporter.worker.db") as mock_db,
+            patch(
+                "anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock
+            ) as mock_embed,
+            patch("anveshak.reporter.worker.render_bluf_prompt") as mock_prompt,
+            patch(
+                "anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock
+            ) as mock_llm,
+            patch("anveshak.reporter.worker.geocode_locations") as mock_geo,
+            patch("anveshak.reporter.worker.build_geojson") as mock_geojson,
+            patch("anveshak.reporter.worker.extract_locations_from_text") as mock_extract,
+        ):
             mock_db.fetch_report = AsyncMock(return_value=_make_report_row())
             mock_db.fetch_topic = AsyncMock(return_value=_make_topic_row())
             mock_db.fetch_report_data_bundle = AsyncMock(return_value=_make_data_bundle())
             mock_db.fetch_rag_chunks = AsyncMock(return_value=chunks)
-            mock_db.fetch_sources_for_snapshot = AsyncMock(return_value={"src-1": {"credibility_score": 80}})
+            mock_db.fetch_sources_for_snapshot = AsyncMock(
+                return_value={"src-1": {"credibility_score": 80}}
+            )
             mock_db.fetch_topic_location_entities = AsyncMock(return_value=["Delhi"])
             mock_db.fetch_topic_identifiers = AsyncMock(return_value=[])
             mock_db.fetch_topic_template_matches = AsyncMock(return_value=[])
@@ -261,6 +310,7 @@ class TestGenerateReport:
             mock_extract.return_value = []
 
             from anveshak.reporter.worker import generate_report
+
             await generate_report(ctx, "report-1")
 
             mock_db.set_report_generated.assert_awaited_once()
@@ -269,17 +319,15 @@ class TestGenerateReport:
             assert call_kwargs["confidence_score"] == 0.85
             assert call_kwargs["content_item_count"] == 2
             assert "<!-- report-v2 -->" in call_kwargs["content_md"]
-            mock_db.update_job_status.assert_awaited_once_with(
-                ctx["db"], "report-1", "complete"
-            )
+            mock_db.update_job_status.assert_awaited_once_with(ctx["db"], "report-1", "complete")
 
 
 # ---------------------------------------------------------------------------
 # check_source_warnings tests
 # ---------------------------------------------------------------------------
 
-class TestCheckSourceWarnings:
 
+class TestCheckSourceWarnings:
     @pytest.mark.asyncio
     async def test_snapshot_as_string(self):
         """source_snapshot stored as JSON string -> parsed correctly."""
@@ -298,6 +346,7 @@ class TestCheckSourceWarnings:
             mock_db.insert_source_warning = AsyncMock()
 
             from anveshak.reporter.worker import check_source_warnings
+
             await check_source_warnings(ctx)
 
             # No downgrade — same score, so no warning
@@ -320,6 +369,7 @@ class TestCheckSourceWarnings:
             mock_db.insert_source_warning = AsyncMock()
 
             from anveshak.reporter.worker import check_source_warnings
+
             await check_source_warnings(ctx)
 
             # No downgrade
@@ -342,6 +392,7 @@ class TestCheckSourceWarnings:
             mock_db.insert_source_warning = AsyncMock()
 
             from anveshak.reporter.worker import check_source_warnings
+
             await check_source_warnings(ctx)
 
             mock_db.insert_source_warning.assert_awaited_once()
@@ -356,22 +407,25 @@ class TestCheckSourceWarnings:
 # check_scheduled_reports tests
 # ---------------------------------------------------------------------------
 
+
 def _make_pool_with_topics(topics: list[dict]):
     """Build a mock asyncpg pool that returns topics from acquire→fetch."""
     mock_conn = AsyncMock()
     mock_conn.fetch = AsyncMock(return_value=topics)
     mock_pool = MagicMock()
-    mock_pool.acquire = MagicMock(return_value=AsyncMock(
-        __aenter__=AsyncMock(return_value=mock_conn),
-        __aexit__=AsyncMock(return_value=False),
-    ))
+    mock_pool.acquire = MagicMock(
+        return_value=AsyncMock(
+            __aenter__=AsyncMock(return_value=mock_conn),
+            __aexit__=AsyncMock(return_value=False),
+        )
+    )
     return mock_pool
 
 
 class TestCheckScheduledReports:
-
     def _make_topic_record(
-        self, *,
+        self,
+        *,
         topic_id="topic-1",
         cron_expr="0 0 * * 0",
         scheduled_type=None,
@@ -404,6 +458,7 @@ class TestCheckScheduledReports:
 
         with patch("anveshak.reporter.db.create_report_row", new_callable=AsyncMock) as mock_create:
             from anveshak.reporter.worker import check_scheduled_reports
+
             await check_scheduled_reports(ctx)
 
             mock_create.assert_awaited_once()
@@ -420,6 +475,7 @@ class TestCheckScheduledReports:
 
         with patch("anveshak.reporter.db.create_report_row", new_callable=AsyncMock) as mock_create:
             from anveshak.reporter.worker import check_scheduled_reports
+
             await check_scheduled_reports(ctx)
             mock_create.assert_not_awaited()
 
@@ -431,6 +487,7 @@ class TestCheckScheduledReports:
 
         with patch("anveshak.reporter.db.create_report_row", new_callable=AsyncMock) as mock_create:
             from anveshak.reporter.worker import check_scheduled_reports
+
             await check_scheduled_reports(ctx)
             mock_create.assert_awaited_once()
 
@@ -446,6 +503,7 @@ class TestCheckScheduledReports:
 
         with patch("anveshak.reporter.db.create_report_row", new_callable=AsyncMock) as mock_create:
             from anveshak.reporter.worker import check_scheduled_reports
+
             await check_scheduled_reports(ctx)
             assert mock_create.call_args[1]["report_type"] == "weekly_digest"
 
@@ -460,6 +518,7 @@ class TestCheckScheduledReports:
 
         with patch("anveshak.reporter.db.create_report_row", new_callable=AsyncMock) as mock_create:
             from anveshak.reporter.worker import check_scheduled_reports
+
             await check_scheduled_reports(ctx)
             kw = mock_create.call_args[1]
             delta = kw["time_window_end"] - kw["time_window_start"]
@@ -472,6 +531,7 @@ class TestCheckScheduledReports:
 
         with patch("anveshak.reporter.db.create_report_row", new_callable=AsyncMock) as mock_create:
             from anveshak.reporter.worker import check_scheduled_reports
+
             await check_scheduled_reports(ctx)
             mock_create.assert_not_awaited()
 
@@ -480,8 +540,8 @@ class TestCheckScheduledReports:
 # _build_content_md tests
 # ---------------------------------------------------------------------------
 
-class TestBuildContentMd:
 
+class TestBuildContentMd:
     def test_format(self):
         """Markdown output has correct sections and content."""
         from anveshak.reporter.worker import _build_content_md

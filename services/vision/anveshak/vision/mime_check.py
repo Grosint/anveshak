@@ -5,6 +5,7 @@ MIME type — regardless of the filename extension provided by the user.
 Prevents upload of .php, .html, .svg, or other dangerous file types
 disguised with media extensions.
 """
+
 from __future__ import annotations
 
 import mimetypes
@@ -20,24 +21,34 @@ _MAGIC_SIGNATURES: list[tuple[bytes, int, str]] = [
     (b"\x89PNG\r\n\x1a\n", 0, "image/png"),
     (b"GIF87a", 0, "image/gif"),
     (b"GIF89a", 0, "image/gif"),
-    (b"RIFF", 0, "image/webp"),     # RIFF....WEBP — check WEBP at offset 8
+    (b"RIFF", 0, "image/webp"),  # RIFF....WEBP — check WEBP at offset 8
     (b"BM", 0, "image/bmp"),
 ]
 
 # Video signatures need offset-aware checking
 _VIDEO_SIGNATURES: list[tuple[bytes, int, str]] = [
-    (b"ftyp", 4, "video/mp4"),      # MP4/M4V: offset 4 = "ftyp"
+    (b"ftyp", 4, "video/mp4"),  # MP4/M4V: offset 4 = "ftyp"
     (b"\x1a\x45\xdf\xa3", 0, "video/webm"),  # WebM/MKV (EBML)
     (b"\x00\x00\x00\x1c\x66\x74\x79\x70", 0, "video/mp4"),  # MP4 with box size
-    (b"RIFF", 0, "video/avi"),       # AVI: RIFF....AVI — checked after WEBP
+    (b"RIFF", 0, "video/avi"),  # AVI: RIFF....AVI — checked after WEBP
 ]
 
 # All MIME types we accept
-_ALLOWED_MIMES: frozenset[str] = frozenset({
-    "image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp",
-    "video/mp4", "video/avi", "video/webm", "video/x-msvideo",
-    "video/x-matroska", "video/quicktime",
-})
+_ALLOWED_MIMES: frozenset[str] = frozenset(
+    {
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "image/bmp",
+        "video/mp4",
+        "video/avi",
+        "video/webm",
+        "video/x-msvideo",
+        "video/x-matroska",
+        "video/quicktime",
+    }
+)
 
 
 class UnsafeMimeError(ValueError):
@@ -51,7 +62,7 @@ def _detect_mime(data: bytes) -> str | None:
 
     # Check image signatures
     for sig, offset, mime in _MAGIC_SIGNATURES:
-        if data[offset:offset + len(sig)] == sig:
+        if data[offset : offset + len(sig)] == sig:
             # RIFF can be WEBP or AVI — disambiguate
             if sig == b"RIFF" and len(data) > 12:
                 if data[8:12] == b"WEBP":
@@ -63,7 +74,7 @@ def _detect_mime(data: bytes) -> str | None:
 
     # Check video signatures
     for sig, offset, mime in _VIDEO_SIGNATURES:
-        if len(data) > offset + len(sig) and data[offset:offset + len(sig)] == sig:
+        if len(data) > offset + len(sig) and data[offset : offset + len(sig)] == sig:
             if sig == b"RIFF":
                 continue  # Already handled above
             return mime

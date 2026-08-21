@@ -1,9 +1,12 @@
 """Health check endpoints."""
-from fastapi import APIRouter, Depends, Response
-from datetime import datetime, UTC
-import asyncpg
-import redis.asyncio as aioredis
+
+from datetime import UTC, datetime
+
 import httpx
+import redis.asyncio as aioredis
+from anveshak.db import DBConnection
+from fastapi import APIRouter, Depends, Response
+
 from ..db.pool import get_db
 from ..settings import settings
 
@@ -21,7 +24,7 @@ async def health():
 
 
 @router.get("/health/ready")
-async def readiness(response: Response, db: asyncpg.Connection = Depends(get_db)):
+async def readiness(response: Response, db: DBConnection = Depends(get_db)):
     """8D.7 — Deep health check: DB + Redis + Ollama.
 
     Returns HTTP 200 when all checks pass, HTTP 503 when any check fails.
@@ -54,8 +57,7 @@ async def readiness(response: Response, db: asyncpg.Connection = Depends(get_db)
         checks["ollama"] = f"error: {e}"
 
     all_ok = all(
-        v == "ok" or (isinstance(v, dict) and v.get("status") == "ok")
-        for v in checks.values()
+        v == "ok" or (isinstance(v, dict) and v.get("status") == "ok") for v in checks.values()
     )
 
     if not all_ok:

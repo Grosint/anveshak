@@ -1,4 +1,5 @@
 """PostgreSQL connection pool and FastAPI dependency."""
+
 from __future__ import annotations
 
 import asyncio
@@ -7,6 +8,7 @@ from typing import AsyncGenerator
 
 import asyncpg
 import structlog
+from anveshak.db import DBConnection
 
 from ..settings import settings
 
@@ -15,7 +17,7 @@ log = structlog.get_logger(__name__)
 _pool: asyncpg.Pool | None = None
 
 
-async def _init_connection(conn: asyncpg.Connection) -> None:
+async def _init_connection(conn: DBConnection) -> None:
     """Register JSON/JSONB codecs so json_agg() results and jsonb columns are
     automatically decoded into Python objects instead of raw strings.
 
@@ -57,14 +59,31 @@ async def close_pool() -> None:
         log.info("database.pool_closed")
 
 
-async def get_db() -> AsyncGenerator[asyncpg.Connection, None]:
+async def get_db() -> AsyncGenerator[DBConnection, None]:
     """FastAPI dependency — yields a connection from the pool."""
+    if _pool is None:
+        # Only reachable if a route runs before the lifespan handler called
+        # init_pool(). Say so, rather than raising AttributeError on None.
+        raise RuntimeError("DB pool not initialised — init_pool() never ran")
     async with _pool.acquire() as conn:
         yield conn
 
 
 def get_pool() -> asyncpg.Pool | None:
     """Return the raw pool (used by WebSocket handlers that can't use Depends)."""
+    return _pool
+
+
+def require_pool() -> asyncpg.Pool:
+    """Return the pool, or fail loudly if the lifespan never initialised it.
+
+    get_pool() stays Optional for callers that legitimately probe for a pool.
+    Routes that hand the pool straight to a repository function want this
+    instead: passing None through surfaces as an AttributeError deep inside the
+    query helper, several frames from the actual cause.
+    """
+    if _pool is None:
+        raise RuntimeError("DB pool not initialised - init_pool() never ran")
     return _pool
 
 

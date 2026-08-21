@@ -1,15 +1,17 @@
 """Organization management endpoints — CRUD for multi-tenancy."""
+
 from __future__ import annotations
 
 from typing import Optional
 
 import asyncpg
+from anveshak.db import DBConnection
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 
 from ..auth.rbac import require_role
-from ..db.pool import get_db
 from ..db import organizations as org_db
+from ..db.pool import get_db
 
 router = APIRouter(prefix="/api/v1/organizations", tags=["organizations"])
 
@@ -28,7 +30,7 @@ class UpdateOrgRequest(BaseModel):
 
 @router.get("")
 async def list_organizations(
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     _user: dict = Depends(require_role("super-admin")),
 ):
     """List all organizations (super-admin only)."""
@@ -38,7 +40,7 @@ async def list_organizations(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_organization(
     req: CreateOrgRequest,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     _user: dict = Depends(require_role("super-admin")),
 ):
     """Create a new organization (super-admin only)."""
@@ -55,7 +57,7 @@ async def create_organization(
 @router.get("/{org_id}")
 async def get_organization(
     org_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     _user: dict = Depends(require_role("super-admin")),
 ):
     """Get a single organization (super-admin only)."""
@@ -69,7 +71,7 @@ async def get_organization(
 async def update_organization(
     org_id: str,
     req: UpdateOrgRequest,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     _user: dict = Depends(require_role("super-admin")),
 ):
     """Update an organization (super-admin only)."""

@@ -7,19 +7,19 @@ Tests:
   - ISC exclusion of duplicates
   - Empty topic handling
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 import pytest
-
-from anveshak.analyst.clustering import EmbeddingRow, ClusterData, count_independent_sources
-
+from anveshak.analyst.clustering import EmbeddingRow, count_independent_sources
 
 # ---------------------------------------------------------------------------
 # detect_near_duplicates tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 def test_identical_embeddings_detected():
@@ -102,6 +102,7 @@ def test_canonical_ordering():
 # ISC exclusion tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 def test_isc_excludes_duplicates():
     """3 items from 3 platforms, 2 near-duplicates → ISC should be 2."""
@@ -112,8 +113,7 @@ def test_isc_excludes_duplicates():
     duplicate_ids = {"item-b"}
 
     filtered_platforms = [
-        p for cid, p in zip(content_item_ids, platforms)
-        if cid not in duplicate_ids
+        p for cid, p in zip(content_item_ids, platforms) if cid not in duplicate_ids
     ]
 
     isc = count_independent_sources(filtered_platforms)
@@ -136,18 +136,22 @@ def test_isc_all_duplicates_falls_back():
     duplicate_ids = {"item-a", "item-b"}
 
     filtered_platforms = [
-        p for cid, p in zip(content_item_ids, platforms)
-        if cid not in duplicate_ids
+        p for cid, p in zip(content_item_ids, platforms) if cid not in duplicate_ids
     ]
 
     # When all filtered out, should use original platforms
-    isc = count_independent_sources(filtered_platforms) if filtered_platforms else count_independent_sources(platforms)
+    isc = (
+        count_independent_sources(filtered_platforms)
+        if filtered_platforms
+        else count_independent_sources(platforms)
+    )
     assert isc == 2, "Fallback: all duplicates → use original platform list"
 
 
 # ---------------------------------------------------------------------------
 # detect_near_duplicates async tests (mocked DB)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio
@@ -157,6 +161,7 @@ async def test_detect_empty_topic_returns_empty():
 
     with patch("anveshak.analyst.dedup.load_embeddings", return_value=[]):
         from anveshak.analyst.dedup import detect_near_duplicates
+
         pairs = await detect_near_duplicates("topic-empty", mock_pool)
 
     assert pairs == []
@@ -170,9 +175,12 @@ async def test_detect_single_item_returns_empty():
     vec /= np.linalg.norm(vec)
     mock_pool = AsyncMock()
 
-    rows = [EmbeddingRow(content_item_id="only-item", vector=vec, source_id="web", entity_minhash=None)]
+    rows = [
+        EmbeddingRow(content_item_id="only-item", vector=vec, source_id="web", entity_minhash=None)
+    ]
     with patch("anveshak.analyst.dedup.load_embeddings", return_value=rows):
         from anveshak.analyst.dedup import detect_near_duplicates
+
         pairs = await detect_near_duplicates("topic-single", mock_pool)
 
     assert pairs == []
@@ -187,11 +195,16 @@ async def test_detect_finds_near_duplicate_pair():
     mock_pool = AsyncMock()
 
     rows = [
-        EmbeddingRow(content_item_id="aaa-item", vector=vec.copy(), source_id="telegram", entity_minhash=None),
-        EmbeddingRow(content_item_id="bbb-item", vector=vec.copy(), source_id="reddit", entity_minhash=None),
+        EmbeddingRow(
+            content_item_id="aaa-item", vector=vec.copy(), source_id="telegram", entity_minhash=None
+        ),
+        EmbeddingRow(
+            content_item_id="bbb-item", vector=vec.copy(), source_id="reddit", entity_minhash=None
+        ),
     ]
     with patch("anveshak.analyst.dedup.load_embeddings", return_value=rows):
         from anveshak.analyst.dedup import detect_near_duplicates
+
         pairs = await detect_near_duplicates("topic-dup", mock_pool)
 
     assert len(pairs) == 1
@@ -203,6 +216,7 @@ async def test_detect_finds_near_duplicate_pair():
 # ---------------------------------------------------------------------------
 # upsert_near_duplicates tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio
@@ -247,6 +261,7 @@ async def test_upsert_calls_insert():
 # ---------------------------------------------------------------------------
 # get_duplicate_ids_for_cluster tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio

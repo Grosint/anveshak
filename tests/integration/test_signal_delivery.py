@@ -9,17 +9,17 @@ Tests:
   D3: WebSocket auth rejects invalid token BEFORE accept
   D4: Org boundary — analyst without org_id gets close code 4003
 """
+
 from __future__ import annotations
 
-import asyncio
 import json
 import uuid
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
 
-from tests.conftest import LABELS_JSON, TEST_ORG_ID
+from tests.conftest import LABELS_JSON
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
@@ -27,6 +27,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 async def _insert_signal(
     conn,
@@ -48,8 +49,14 @@ async def _insert_signal(
             status, delivered_at, created_at, updated_at, labels
         ) VALUES ($1, $2, $3, $4, $5::jsonb, 'new', $6, $7, $7, $8)
         """,
-        signal_id, topic_id, signal_type, description,
-        ev, delivered_at, now, LABELS_JSON,
+        signal_id,
+        topic_id,
+        signal_type,
+        description,
+        ev,
+        delivered_at,
+        now,
+        LABELS_JSON,
     )
     return signal_id
 
@@ -57,6 +64,7 @@ async def _insert_signal(
 # ---------------------------------------------------------------------------
 # D1: Delivery loop finds undelivered signals and broadcasts
 # ---------------------------------------------------------------------------
+
 
 async def test_delivery_loop_finds_and_delivers(db_pool, make_topic):
     """Undelivered signals (delivered_at IS NULL) must be picked up.
@@ -80,15 +88,14 @@ async def test_delivery_loop_finds_and_delivers(db_pool, make_topic):
             """,
         )
         found_ids = [r["id"] for r in rows]
-        assert sig_id in found_ids, (
-            f"Undelivered signal {sig_id[:8]} not found in delivery query"
-        )
+        assert sig_id in found_ids, f"Undelivered signal {sig_id[:8]} not found in delivery query"
 
         # Simulate delivery: mark as delivered
         now = datetime.now(UTC)
         await conn.execute(
             "UPDATE signals SET delivered_at = $1 WHERE id = $2",
-            now, sig_id,
+            now,
+            sig_id,
         )
 
         # Verify no longer in undelivered
@@ -106,6 +113,7 @@ async def test_delivery_loop_finds_and_delivers(db_pool, make_topic):
 # D2: Broadcast payload has correct field names and types
 # ---------------------------------------------------------------------------
 
+
 async def test_ws_payload_shape_matches_contract(db_pool, make_topic):
     """WebSocket payload must contain required fields with correct types.
 
@@ -118,7 +126,8 @@ async def test_ws_payload_shape_matches_contract(db_pool, make_topic):
 
     async with db_pool.acquire() as conn:
         sig_id = await _insert_signal(
-            conn, topic_id,
+            conn,
+            topic_id,
             signal_type="multi_source_convergence",
             description="Cluster confirmed by 5 sources",
             evidence=evidence,
@@ -152,8 +161,13 @@ async def test_ws_payload_shape_matches_contract(db_pool, make_topic):
 
     # Contract: all required fields present
     required_fields = {
-        "type", "signal_id", "topic_id", "signal_type",
-        "severity", "independent_source_count", "description",
+        "type",
+        "signal_id",
+        "topic_id",
+        "signal_type",
+        "severity",
+        "independent_source_count",
+        "description",
     }
     missing = required_fields - set(payload.keys())
     assert not missing, f"Payload missing required fields: {missing}"
@@ -176,6 +190,7 @@ async def test_ws_payload_shape_matches_contract(db_pool, make_topic):
 # D3: WebSocket auth — verify_token before accept
 # ---------------------------------------------------------------------------
 
+
 async def test_ws_auth_rejects_invalid_token():
     """WebSocket must reject invalid JWT BEFORE calling ws.accept().
 
@@ -188,6 +203,7 @@ async def test_ws_auth_rejects_invalid_token():
     # verify_token will fail on this garbage token
     # Simulate the handler behavior
     from services.api.anveshak.api.auth.jwt import verify_token
+
     try:
         verify_token("invalid.garbage.token")
         token_valid = True
@@ -208,16 +224,18 @@ async def test_ws_auth_rejects_invalid_token():
     # ws.close(code=4001) should have been called
     ws.close.assert_awaited_once()
     close_args = ws.close.call_args
-    assert close_args[1].get("code") == 4001 or (
-        close_args[0] and close_args[0][0] == 4001
-    ) or close_args == ((4001,),) or "code=4001" in str(close_args), (
-        f"Expected close(code=4001), got {close_args}"
-    )
+    assert (
+        close_args[1].get("code") == 4001
+        or (close_args[0] and close_args[0][0] == 4001)
+        or close_args == ((4001,),)
+        or "code=4001" in str(close_args)
+    ), f"Expected close(code=4001), got {close_args}"
 
 
 # ---------------------------------------------------------------------------
 # D4: Org boundary — analyst without org_id gets 4003
 # ---------------------------------------------------------------------------
+
 
 async def test_ws_auth_rejects_analyst_without_org():
     """Non-super-admin analyst WITHOUT org_id must get close code 4003.

@@ -2,8 +2,16 @@
 
 pytest.mark.unit — no external dependencies, no DB, no network.
 """
+
 import pytest
-from anveshak.scraper.clean import clean_extracted_text, is_paywall_page, score_content_quality
+from anveshak.scraper.clean import (
+    clean_extracted_text,
+    compute_clean_hash,
+    extract_title,
+    is_nav_icon_garbage,
+    is_paywall_page,
+    score_content_quality,
+)
 
 
 class TestMarkdownLinkRemoval:
@@ -34,7 +42,7 @@ class TestMarkdownImageRemoval:
     """Markdown ![alt](url) should be stripped entirely."""
 
     def test_simple_image(self):
-        result = clean_extracted_text('![GlobalSecurity.org](https://example.com/img.png)')
+        result = clean_extracted_text("![GlobalSecurity.org](https://example.com/img.png)")
         assert "https://" not in result
 
     def test_image_with_title(self):
@@ -45,7 +53,7 @@ class TestMarkdownImageRemoval:
         assert "index.html" not in result
 
     def test_image_in_context(self):
-        text = 'See ![photo](https://example.com/photo.jpg) for reference. Real content here.'
+        text = "See ![photo](https://example.com/photo.jpg) for reference. Real content here."
         result = clean_extracted_text(text)
         assert "Real content here." in result
         assert "https://" not in result
@@ -344,8 +352,6 @@ class TestPaywallDetection:
 # Additional clean.py tests — quality scoring, title extraction, clean hash
 # ---------------------------------------------------------------------------
 
-from anveshak.scraper.clean import compute_clean_hash, extract_title
-
 
 class TestScoreContentQualityExtended:
     """Extended tests for score_content_quality business logic.
@@ -587,8 +593,6 @@ class TestComputeCleanHash:
 # ---------------------------------------------------------------------------
 # Nav-icon garbage detection — RSS/web pages with scraped UI element names
 # ---------------------------------------------------------------------------
-
-from anveshak.scraper.clean import is_nav_icon_garbage
 
 
 class TestNavIconGarbageDetection:

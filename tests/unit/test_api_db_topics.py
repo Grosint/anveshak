@@ -2,6 +2,7 @@
 
 Validates parameter ordering, label parsing, and filter composition.
 """
+
 from __future__ import annotations
 
 import json
@@ -42,6 +43,7 @@ def _make_row(**overrides) -> dict:
 
 # ---- Test 1: Basic call, no optional filters ----
 
+
 @pytest.mark.unit
 async def test_get_topic_content_basic(mock_conn: AsyncMock) -> None:
     """No filters: params should be $1=topic_id, $2=limit, $3=offset, $4=threshold."""
@@ -73,6 +75,7 @@ async def test_get_topic_content_basic(mock_conn: AsyncMock) -> None:
 
 # ---- Test 2: Platform filter shifts threshold to $5 ----
 
+
 @pytest.mark.unit
 async def test_get_topic_content_with_platform(mock_conn: AsyncMock) -> None:
     """platform='web' -> $4=platform, $5=threshold (5 params total)."""
@@ -96,10 +99,11 @@ async def test_get_topic_content_with_platform(mock_conn: AsyncMock) -> None:
     # SQL must contain parameterized platform clause
     assert "s.platform = $4" in sql
     # Relevance threshold should use $5
-    assert f"topic_relevance_score >= $5" in sql
+    assert "topic_relevance_score >= $5" in sql
 
 
 # ---- Test 3: All filters together — param count and order ----
+
 
 @pytest.mark.unit
 async def test_get_topic_content_param_order_with_all_filters(mock_conn: AsyncMock) -> None:
@@ -133,6 +137,7 @@ async def test_get_topic_content_param_order_with_all_filters(mock_conn: AsyncMo
 
 # ---- Test 4: Labels column returns JSON string -> parsed to dict ----
 
+
 @pytest.mark.unit
 async def test_get_topic_content_labels_as_string(mock_conn: AsyncMock) -> None:
     """When labels is a JSON string, it should be parsed and sentiment/keywords extracted."""
@@ -140,8 +145,12 @@ async def test_get_topic_content_labels_as_string(mock_conn: AsyncMock) -> None:
     mock_conn.fetch = AsyncMock(return_value=[_make_row(labels=labels_str)])
 
     result = await get_topic_content(
-        conn=mock_conn, topic_id=TOPIC_ID, limit=10, offset=0,
-        has_embedding=None, platform=None,
+        conn=mock_conn,
+        topic_id=TOPIC_ID,
+        limit=10,
+        offset=0,
+        has_embedding=None,
+        platform=None,
     )
 
     assert result[0]["sentiment"] == {"compound": -0.3}
@@ -152,6 +161,7 @@ async def test_get_topic_content_labels_as_string(mock_conn: AsyncMock) -> None:
 
 # ---- Test 5: Labels column returns dict directly ----
 
+
 @pytest.mark.unit
 async def test_get_topic_content_labels_as_dict(mock_conn: AsyncMock) -> None:
     """When asyncpg returns labels as a dict (jsonb), no JSON parsing needed."""
@@ -159,8 +169,12 @@ async def test_get_topic_content_labels_as_dict(mock_conn: AsyncMock) -> None:
     mock_conn.fetch = AsyncMock(return_value=[_make_row(labels=labels_dict)])
 
     result = await get_topic_content(
-        conn=mock_conn, topic_id=TOPIC_ID, limit=10, offset=0,
-        has_embedding=None, platform=None,
+        conn=mock_conn,
+        topic_id=TOPIC_ID,
+        limit=10,
+        offset=0,
+        has_embedding=None,
+        platform=None,
     )
 
     assert result[0]["sentiment"] == {"compound": 0.9}
@@ -169,14 +183,19 @@ async def test_get_topic_content_labels_as_dict(mock_conn: AsyncMock) -> None:
 
 # ---- Test 6: Labels is None -> sentiment=None, keywords=[] ----
 
+
 @pytest.mark.unit
 async def test_get_topic_content_labels_null(mock_conn: AsyncMock) -> None:
     """Null labels -> sentiment is None, keywords is empty list."""
     mock_conn.fetch = AsyncMock(return_value=[_make_row(labels=None)])
 
     result = await get_topic_content(
-        conn=mock_conn, topic_id=TOPIC_ID, limit=10, offset=0,
-        has_embedding=None, platform=None,
+        conn=mock_conn,
+        topic_id=TOPIC_ID,
+        limit=10,
+        offset=0,
+        has_embedding=None,
+        platform=None,
     )
 
     assert result[0]["sentiment"] is None
@@ -185,14 +204,19 @@ async def test_get_topic_content_labels_null(mock_conn: AsyncMock) -> None:
 
 # ---- Test 7: Custom relevance threshold overrides default ----
 
+
 @pytest.mark.unit
 async def test_get_topic_content_custom_relevance_threshold(mock_conn: AsyncMock) -> None:
     """Override default threshold (0.35) with 0.75 — verify it's passed as param."""
     mock_conn.fetch = AsyncMock(return_value=[])
 
     await get_topic_content(
-        conn=mock_conn, topic_id=TOPIC_ID, limit=10, offset=0,
-        has_embedding=None, platform=None,
+        conn=mock_conn,
+        topic_id=TOPIC_ID,
+        limit=10,
+        offset=0,
+        has_embedding=None,
+        platform=None,
         relevance_threshold=0.75,
     )
 

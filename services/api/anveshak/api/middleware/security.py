@@ -10,8 +10,9 @@ Security headers applied to every response:
   Cache-Control: no-store (auth routes only)
 
 Request logging: method, path, status_code, duration_ms, analyst_id (from JWT).
-No request bodies, no raw scraped content — CLAUDE.md security rule.
+No request bodies, no raw scraped content — AGENTS.md security rule.
 """
+
 from __future__ import annotations
 
 import time
@@ -49,9 +50,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         # HSTS — only when TLS is terminated upstream (avoid breaking HTTP-only dev)
         if _settings.hsts_enabled:
-            response.headers["Strict-Transport-Security"] = (
-                "max-age=31536000; includeSubDomains"
-            )
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
         # Cache-Control: no-store on auth paths — auth tokens must never be cached
         if any(request.url.path.startswith(p) for p in _AUTH_PREFIXES):
@@ -77,8 +76,9 @@ def _extract_analyst_id(request: Request) -> str | None:
     if not auth.startswith("Bearer "):
         return None
     try:
-        import json
         import base64
+        import json
+
         token = auth.removeprefix("Bearer ")
         payload_b64 = token.split(".")[1]
         # Pad to valid base64 length

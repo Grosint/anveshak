@@ -2,6 +2,7 @@
 
 All unit tests are pure: no database, no network, no Docker.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
@@ -15,6 +16,7 @@ pytestmark = pytest.mark.unit
 # ---------------------------------------------------------------------------
 # Shared mock fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def mock_conn() -> AsyncMock:

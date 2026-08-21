@@ -3,13 +3,14 @@
 When an ARQ job fails after max retries, the on_job_result callback
 calls record_failed_job() to persist the failure for admin review.
 """
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any, Optional
 
-import asyncpg
+from anveshak.db import DBConnection
 
 # ---------------------------------------------------------------------------
 # SQL constants
@@ -39,7 +40,7 @@ _LABELS_JSON = '{"classification":"OPEN","domain":"system","owner_org":"anveshak
 
 
 async def record_failed_job(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     job_id: str,
     function_name: str,
     args: str,
@@ -61,7 +62,7 @@ async def record_failed_job(
 
 
 async def list_failed_jobs(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     queue_name: Optional[str] = None,
     limit: int = 100,
 ) -> list[dict[str, Any]]:

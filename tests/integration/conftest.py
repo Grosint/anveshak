@@ -4,6 +4,7 @@ All integration tests use real PostgreSQL and Redis via Docker Compose.
 Fixtures from the root conftest.py (db_pool, make_topic, make_source, etc.)
 are automatically available here.
 """
+
 from __future__ import annotations
 
 import warnings

@@ -5,6 +5,7 @@ Also re-cleans clean_text with the latest cleaner. Preserves raw_text and conten
 Usage:
     uv run python scripts/backfill_quality_and_titles.py [--dry-run]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -13,7 +14,6 @@ import os
 
 import asyncpg
 import structlog
-
 from anveshak.scraper.clean import (
     clean_extracted_text,
     compute_clean_hash,

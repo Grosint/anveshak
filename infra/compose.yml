@@ -186,7 +186,7 @@ services:
       <<: *common-env
       SCRAPER_PORT: 8001
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
-      SCRAPER_CONCURRENCY: ${SCRAPER_CONCURRENCY:-4}
+      SCRAPER_CONCURRENCY: ${SCRAPER_CONCURRENCY:-2}
       SCRAPER_REQUEST_TIMEOUT_S: ${SCRAPER_REQUEST_TIMEOUT_S:-30}
       SCRAPER_MAX_LINKS_PER_PAGE: ${SCRAPER_MAX_LINKS_PER_PAGE:-100}
       SCRAPER_PER_DOMAIN_DELAY_S: ${SCRAPER_PER_DOMAIN_DELAY_S:-1.5}
@@ -221,11 +221,15 @@ services:
   scrape-web-worker:
     image: anveshak-scraper:latest
     restart: unless-stopped
-    mem_limit: 1g
+    # Each SCRAPER_CONCURRENCY slot is a Playwright Chromium (~350-450 MB).
+    # At 1g with concurrency 4 this container was OOM-killed repeatedly, and
+    # every restart re-crawled the same queue, burning CPU with no progress.
+    mem_limit: ${SCRAPER_MEM_LIMIT:-3g}
+    cpus: ${SCRAPER_WORKER_CPUS:-3}
     environment:
       <<: *common-env
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
-      SCRAPER_CONCURRENCY: ${SCRAPER_CONCURRENCY:-4}
+      SCRAPER_CONCURRENCY: ${SCRAPER_CONCURRENCY:-2}
       SCRAPER_REQUEST_TIMEOUT_S: ${SCRAPER_REQUEST_TIMEOUT_S:-30}
       SCRAPER_MAX_LINKS_PER_PAGE: ${SCRAPER_MAX_LINKS_PER_PAGE:-100}
       SCRAPER_PER_DOMAIN_DELAY_S: ${SCRAPER_PER_DOMAIN_DELAY_S:-1.5}
@@ -469,6 +473,9 @@ services:
     image: anveshak-analyst:latest
     restart: unless-stopped
     mem_limit: 6g
+    # Without a cpu bound this worker took 900% on a 12-core host: max_jobs=4
+    # concurrent torch jobs each defaulting to os.cpu_count() threads.
+    cpus: ${ANALYST_WORKER_CPUS:-4}
     command: ["python", "-m", "arq", "anveshak.analyst.jobs.WorkerSettings"]
     environment:
       <<: *common-env
@@ -478,6 +485,8 @@ services:
       TRANSLATION_MODEL: ${TRANSLATION_MODEL:-facebook/nllb-200-distilled-600M}
       TRANSLATION_MAX_CHARS: ${TRANSLATION_MAX_CHARS:-1500}
       TRANSLATION_MAX_TOKENS: ${TRANSLATION_MAX_TOKENS:-512}
+      TRANSLATION_MAX_INPUT_TOKENS: ${TRANSLATION_MAX_INPUT_TOKENS:-480}
+      TORCH_NUM_THREADS: ${TORCH_NUM_THREADS:-2}
       NER_CONFIDENCE_THRESHOLD: ${NER_CONFIDENCE_THRESHOLD:-0.75}
       ENTITY_SIMILARITY_THRESHOLD: ${ENTITY_SIMILARITY_THRESHOLD:-0.85}
       CLUSTERING_SIMILARITY_THRESHOLD: ${CLUSTERING_SIMILARITY_THRESHOLD:-0.55}

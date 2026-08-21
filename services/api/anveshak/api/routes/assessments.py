@@ -5,24 +5,25 @@ Routes:
   GET   /api/v1/topics/{tid}/sources/{sid}/assessments
   GET   /api/v1/topics/{tid}/sources/{sid}/assessments/{aid}
 """
+
 from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from typing import Optional
 
-import asyncpg
 import structlog
+from anveshak.db import DBConnection
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
 
-from ..auth.rbac import require_role
-from ..db.pool import get_db
+from ..auth.rbac import require_org_context, require_role
 from ..db import assessments as assessments_db
+from ..db import audit as audit_db
 from ..db import sources as sources_db
 from ..db import topics as topics_db
-from ..db import audit as audit_db
+from ..db.pool import get_db
 from ..settings import settings
 
 log = structlog.get_logger(__name__)
@@ -33,6 +34,7 @@ router = APIRouter(tags=["assessments"])
 # ---------------------------------------------------------------------------
 # Request models
 # ---------------------------------------------------------------------------
+
 
 class CreateAssessmentRequest(BaseModel):
     model_config = ConfigDict(strict=True)
@@ -45,6 +47,7 @@ class CreateAssessmentRequest(BaseModel):
 # Route: POST /api/v1/topics/{tid}/sources/{sid}/assessment
 # ---------------------------------------------------------------------------
 
+
 @router.post(
     "/api/v1/topics/{topic_id}/sources/{source_id}/assessment",
     status_code=status.HTTP_200_OK,
@@ -55,7 +58,7 @@ async def create_assessment(
     req: CreateAssessmentRequest = CreateAssessmentRequest(),
     *,
     request: Request,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict:
     """Compute deterministic source stats and return assessment.
@@ -82,7 +85,11 @@ async def create_assessment(
 
     # 4. Check minimum content
     content_count = await assessments_db.count_source_content(
-        db, topic_id, source_id, time_start, time_end,
+        db,
+        topic_id,
+        source_id,
+        time_start,
+        time_end,
     )
     if content_count < 5:
         raise HTTPException(
@@ -91,8 +98,10 @@ async def create_assessment(
         )
 
     # 5. Get user org
-    from ..auth.rbac import get_user_org
-    org_id = get_user_org(user)
+
+    # Not get_user_org: org_id is NOT NULL on assessments, so a token without an
+    # org must fail with 400 rather than attempt a NULL insert.
+    org_id = require_org_context(user)
 
     # 6. Compute stats
     stats = await assessments_db.compute_source_stats(
@@ -109,11 +118,13 @@ async def create_assessment(
 
     # 8. Insert assessment row
     assessment_id = str(uuid.uuid4())
-    labels = json.dumps({
-        "classification": "OPEN",
-        "domain": "assessment",
-        "owner_org": "anveshak",
-    })
+    labels = json.dumps(
+        {
+            "classification": "OPEN",
+            "domain": "assessment",
+            "owner_org": "anveshak",
+        }
+    )
 
     await assessments_db.insert_assessment(
         db,
@@ -132,8 +143,9 @@ async def create_assessment(
 
     # 9. Enqueue platform metadata fetch (async, fail-open)
     try:
-        from arq.connections import RedisSettings
         from arq import create_pool as arq_create_pool
+        from arq.connections import RedisSettings
+
         # Get source platform + handle for adapter lookup
         source_row = await db.fetchrow(
             "SELECT platform, url_or_handle FROM sources WHERE id = $1", source_id
@@ -153,7 +165,11 @@ async def create_assessment(
 
     # 10. Audit log
     await audit_db.log_action(
-        db, user["sub"], "assessment.create", "source_assessment", assessment_id,
+        db,
+        user["sub"],
+        "assessment.create",
+        "source_assessment",
+        assessment_id,
         {"topic_id": topic_id, "source_id": source_id},
         request.client.host if request.client else "",
     )
@@ -178,7 +194,7 @@ async def create_assessment(
         "platform_metadata": None,
         "brief_md": None,
         "confidence_score": None,
-        "generated_at": None,  # NULL until LLM brief is generated (CLAUDE.md rule 4)
+        "generated_at": None,  # NULL until LLM brief is generated (AGENTS.md rule 4)
         "generation_status": "stats_only",
         "created_at": now.isoformat(),
     }
@@ -187,6 +203,7 @@ async def create_assessment(
 # ---------------------------------------------------------------------------
 # Route: POST /api/v1/topics/{tid}/sources/{sid}/assessments/{aid}/brief
 # ---------------------------------------------------------------------------
+
 
 @router.post(
     "/api/v1/topics/{topic_id}/sources/{source_id}/assessments/{assessment_id}/brief",
@@ -197,7 +214,7 @@ async def generate_assessment_brief(
     source_id: str,
     assessment_id: str,
     request: Request,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict:
     """Enqueue LLM brief generation for an existing assessment.
@@ -218,8 +235,9 @@ async def generate_assessment_brief(
     # Enqueue ARQ job
     arq_job_id: Optional[str] = None
     try:
-        from arq.connections import RedisSettings
         from arq import create_pool as arq_create_pool
+        from arq.connections import RedisSettings
+
         arq_pool = await arq_create_pool(RedisSettings.from_dsn(settings.redis_url))
         job = await arq_pool.enqueue_job(
             "generate_source_assessment",
@@ -232,13 +250,18 @@ async def generate_assessment_brief(
         # Store job ID
         await db.execute(
             "UPDATE source_assessments SET arq_job_id = $1 WHERE id = $2",
-            arq_job_id, assessment_id,
+            arq_job_id,
+            assessment_id,
         )
     except Exception as exc:
         log.warning("assessment.brief_enqueue_failed", error=str(exc))
 
     await audit_db.log_action(
-        db, user["sub"], "assessment.generate_brief", "source_assessment", assessment_id,
+        db,
+        user["sub"],
+        "assessment.generate_brief",
+        "source_assessment",
+        assessment_id,
         {"topic_id": topic_id, "source_id": source_id},
         request.client.host if request.client else "",
     )
@@ -254,11 +277,12 @@ async def generate_assessment_brief(
 # Route: GET /api/v1/topics/{tid}/sources/{sid}/assessments
 # ---------------------------------------------------------------------------
 
+
 @router.get("/api/v1/topics/{topic_id}/sources/{source_id}/assessments")
 async def list_assessments(
     topic_id: str,
     source_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> list[dict]:
     """List all assessments for a source in a topic, newest first."""
@@ -270,14 +294,13 @@ async def list_assessments(
 # Route: GET /api/v1/topics/{tid}/sources/{sid}/assessments/{aid}
 # ---------------------------------------------------------------------------
 
-@router.get(
-    "/api/v1/topics/{topic_id}/sources/{source_id}/assessments/{assessment_id}"
-)
+
+@router.get("/api/v1/topics/{topic_id}/sources/{source_id}/assessments/{assessment_id}")
 async def get_assessment(
     topic_id: str,
     source_id: str,
     assessment_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict:
     """Get a single assessment by ID."""

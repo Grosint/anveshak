@@ -9,17 +9,17 @@ Criteria:
   4.22–4.24: CLIP classification
   4.31–4.34: Data flow assertions (integration tests verify these)
 """
+
 from __future__ import annotations
 
 import asyncio
+import threading
 from typing import Any, Optional
 
 import arq
 import asyncpg
 import structlog
 from arq.connections import RedisSettings
-
-from .metrics import vision_analyses_total, vision_analysis_duration_seconds, vision_deepfake_score, arq_jobs_failed_total
 
 from .db import (
     clear_media_storage_path,
@@ -40,6 +40,11 @@ from .media_store import (
     is_video_path,
     read_media_bytes,
 )
+from .metrics import (
+    arq_jobs_failed_total,
+    vision_analyses_total,
+    vision_deepfake_score,
+)
 from .settings import settings
 from .video import extract_keyframes, worst_case_score
 
@@ -48,8 +53,6 @@ log = structlog.get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Module-level singletons — loaded once per worker process, reused across jobs
 # ---------------------------------------------------------------------------
-
-import threading
 
 # Serializes GPU-bound inference to prevent concurrent CUDA kernel conflicts
 _inference_semaphore = asyncio.Semaphore(1)
@@ -109,6 +112,7 @@ def _get_clip() -> CLIPClassifier:
 # Main ARQ job
 # ---------------------------------------------------------------------------
 
+
 async def run_vision_analysis(ctx: dict, media_asset_id: str) -> dict:
     """Full vision analysis pipeline for one media asset.
 
@@ -145,6 +149,7 @@ async def run_vision_analysis(ctx: dict, media_asset_id: str) -> dict:
         frames: list[bytes] = []
         if is_video:
             from pathlib import Path as _Path
+
             frames = await extract_keyframes(_Path(storage_path))
             if not frames:
                 log.error("vision.job.video_no_frames", media_asset_id=media_asset_id)
@@ -166,9 +171,9 @@ async def run_vision_analysis(ctx: dict, media_asset_id: str) -> dict:
             # pHash on first frame as representative; EXIF not applicable to video
             phash_val = await asyncio.to_thread(compute_phash, frames[0])
         else:
-            exif_data = await asyncio.to_thread(
-                extract_exif, image_bytes, settings.exif_backend
-            ) or {}
+            exif_data = (
+                await asyncio.to_thread(extract_exif, image_bytes, settings.exif_backend) or {}
+            )
             phash_val = await asyncio.to_thread(compute_phash, image_bytes)
 
         await update_media_asset_exif_phash(conn, media_asset_id, exif_data, phash_val)
@@ -177,9 +182,7 @@ async def run_vision_analysis(ctx: dict, media_asset_id: str) -> dict:
         yolo_detections: list[dict] = []
         high_interest: list[str] = []
         if is_video:
-            yolo_detections, high_interest = await _aggregate_yolo_frames(
-                frames, media_asset_id
-            )
+            yolo_detections, high_interest = await _aggregate_yolo_frames(frames, media_asset_id)
         else:
             try:
                 yolo = _get_yolo()
@@ -200,9 +203,7 @@ async def run_vision_analysis(ctx: dict, media_asset_id: str) -> dict:
             )
             synthetic_probability = deepfake_score
         else:
-            deepfake_score, deepfake_model_name = await _analyse_image(
-                image_bytes, media_asset_id
-            )
+            deepfake_score, deepfake_model_name = await _analyse_image(image_bytes, media_asset_id)
             synthetic_probability = deepfake_score  # same score for image
 
         # STEP 5: CLIP classification (criteria 4.22–4.24)
@@ -230,7 +231,7 @@ async def run_vision_analysis(ctx: dict, media_asset_id: str) -> dict:
             media_asset_id=media_asset_id,
             yolo_detections=yolo_detections,
             clip_labels=clip_labels,
-            deepfake_score=deepfake_score,          # float 0.0–1.0 or None on error (CLAUDE.md rule 7)
+            deepfake_score=deepfake_score,  # float 0.0–1.0 or None on error (AGENTS.md rule 7)
             deepfake_model=deepfake_model_name,
             synthetic_probability=synthetic_probability,
         )
@@ -345,7 +346,10 @@ async def _aggregate_yolo_frames(
         for frame_bytes in frames:
             detections = await asyncio.to_thread(yolo.detect, frame_bytes)
             for d in detections:
-                if d.label not in best_per_label or d.confidence > best_per_label[d.label].confidence:
+                if (
+                    d.label not in best_per_label
+                    or d.confidence > best_per_label[d.label].confidence
+                ):
                     best_per_label[d.label] = d
 
         deduped = list(best_per_label.values())
@@ -389,6 +393,7 @@ async def _aggregate_clip_frames(
 # Media retention cleanup
 # ---------------------------------------------------------------------------
 
+
 async def cleanup_expired_media(ctx: dict) -> dict:
     """Delete media files older than MEDIA_RETENTION_DAYS where vision analysis is complete.
 
@@ -400,7 +405,7 @@ async def cleanup_expired_media(ctx: dict) -> dict:
         log.info("vision.cleanup.disabled", reason="MEDIA_RETENTION_DAYS=0")
         return {"skipped": "retention_disabled"}
 
-    from datetime import datetime, timedelta, UTC
+    from datetime import UTC, datetime, timedelta
     from pathlib import Path
 
     cutoff = datetime.now(UTC) - timedelta(days=settings.media_retention_days)
@@ -438,6 +443,7 @@ async def cleanup_expired_media(ctx: dict) -> dict:
 # ---------------------------------------------------------------------------
 # ARQ worker lifecycle
 # ---------------------------------------------------------------------------
+
 
 async def on_startup(ctx: dict) -> None:
     ctx["db_pool"] = await create_pool()
@@ -497,20 +503,29 @@ async def run_yolo(ctx: dict, media_asset_id: str) -> dict:
 
         # Upsert yolo_detections into vision_results
         import json
-        await conn.execute("""
+
+        await conn.execute(
+            """
             INSERT INTO vision_results (id, media_asset_id, yolo_detections, labels)
             VALUES ($1, $2, $3::jsonb,
                     '{"classification":"OPEN","domain":"vision","owner_org":"anveshak"}'::jsonb)
             ON CONFLICT (media_asset_id) DO UPDATE
             SET yolo_detections = EXCLUDED.yolo_detections
-        """, str(__import__("uuid").uuid4()), media_asset_id, json.dumps(yolo_detections))
+        """,
+            str(__import__("uuid").uuid4()),
+            media_asset_id,
+            json.dumps(yolo_detections),
+        )
 
         if high_interest:
             await tag_content_item(conn, content_item_id, {"yolo_detections": high_interest})
 
     log.info("vision.run_yolo.complete", media_asset_id=media_asset_id, count=len(yolo_detections))
-    return {"media_asset_id": media_asset_id, "yolo_detections": len(yolo_detections),
-            "high_interest_labels": high_interest}
+    return {
+        "media_asset_id": media_asset_id,
+        "yolo_detections": len(yolo_detections),
+        "high_interest_labels": high_interest,
+    }
 
 
 async def run_clip(ctx: dict, media_asset_id: str, categories: list[str]) -> dict:
@@ -547,22 +562,32 @@ async def run_clip(ctx: dict, media_asset_id: str, categories: list[str]) -> dic
         clip_labels = clip.to_jsonb(clip_results)
 
         import json
-        await conn.execute("""
+
+        await conn.execute(
+            """
             INSERT INTO vision_results (id, media_asset_id, clip_labels, labels)
             VALUES ($1, $2, $3::jsonb,
                     '{"classification":"OPEN","domain":"vision","owner_org":"anveshak"}'::jsonb)
             ON CONFLICT (media_asset_id) DO UPDATE
             SET clip_labels = EXCLUDED.clip_labels
-        """, str(__import__("uuid").uuid4()), media_asset_id, json.dumps(clip_labels))
+        """,
+            str(__import__("uuid").uuid4()),
+            media_asset_id,
+            json.dumps(clip_labels),
+        )
 
-    log.info("vision.run_clip.complete", media_asset_id=media_asset_id,
-             top_label=clip_labels[0]["label"] if clip_labels else None)
+    log.info(
+        "vision.run_clip.complete",
+        media_asset_id=media_asset_id,
+        top_label=clip_labels[0]["label"] if clip_labels else None,
+    )
     return {"media_asset_id": media_asset_id, "clip_labels": clip_labels}
 
 
 # ---------------------------------------------------------------------------
 # YouTube video download + analyse (on-demand only)
 # ---------------------------------------------------------------------------
+
 
 async def download_and_analyse_youtube(
     ctx: dict, video_url: str, content_item_id: str | None = None
@@ -574,14 +599,13 @@ async def download_and_analyse_youtube(
     """
     import hashlib
     import uuid
+    from datetime import UTC, datetime
     from pathlib import Path
-    from datetime import datetime, UTC
 
     try:
-        import yt_dlp
+        import yt_dlp  # noqa: F401  # pyright: ignore[reportMissingModuleSource]  # availability probe; container-only dep
     except ImportError:
-        log.error("vision.youtube.yt_dlp_not_installed",
-                  hint="Install yt-dlp: pip install yt-dlp")
+        log.error("vision.youtube.yt_dlp_not_installed", hint="Install yt-dlp: pip install yt-dlp")
         return {"error": "yt-dlp not installed", "video_url": video_url}
 
     max_size_mb = settings.vision_max_video_size_mb
@@ -601,7 +625,7 @@ async def download_and_analyse_youtube(
 
     try:
         log.info("vision.youtube.downloading", video_url=video_url)
-        info = await asyncio.to_thread(lambda: _yt_download(ydl_opts, video_url))
+        await asyncio.to_thread(lambda: _yt_download(ydl_opts, video_url))
     except Exception as exc:
         log.error("vision.youtube.download_failed", video_url=video_url, error=str(exc))
         return {"error": str(exc), "video_url": video_url}
@@ -624,8 +648,9 @@ async def download_and_analyse_youtube(
     final_path = dl_dir / f"{content_hash}{ext}"
     downloaded.rename(final_path)
 
-    log.info("vision.youtube.stored",
-             content_hash=content_hash, size_mb=len(file_bytes) / (1024 * 1024))
+    log.info(
+        "vision.youtube.stored", content_hash=content_hash, size_mb=len(file_bytes) / (1024 * 1024)
+    )
 
     # Create media_asset and run vision
     pool = ctx.get("db_pool")
@@ -634,6 +659,7 @@ async def download_and_analyse_youtube(
             cid = content_item_id
             if not cid:
                 from .db import get_or_create_stub_content_item
+
                 cid = await get_or_create_stub_content_item(conn, content_hash, video_url)
 
             asset_id = str(uuid.uuid4())
@@ -641,7 +667,10 @@ async def download_and_analyse_youtube(
                 """INSERT INTO media_assets (id, content_item_id, asset_type, storage_path, content_hash)
                    VALUES ($1, $2, 'video', $3, $4)
                    ON CONFLICT (content_hash) DO NOTHING""",
-                asset_id, cid, str(final_path), content_hash,
+                asset_id,
+                cid,
+                str(final_path),
+                content_hash,
             )
 
         # Chain to existing vision analysis
@@ -652,9 +681,12 @@ async def download_and_analyse_youtube(
 
 def _yt_download(opts: dict, url: str) -> dict:
     """Blocking yt-dlp download — called via asyncio.to_thread."""
-    import yt_dlp
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        return ydl.extract_info(url, download=True)
+    import yt_dlp  # pyright: ignore[reportMissingModuleSource]  # container-only dep
+
+    # yt-dlp's stubs declare a stricter params type and an _InfoDict return than
+    # the runtime accepts or produces.
+    with yt_dlp.YoutubeDL(opts) as ydl:  # pyright: ignore[reportArgumentType]
+        return dict(ydl.extract_info(url, download=True))
 
 
 class WorkerSettings:
@@ -674,6 +706,6 @@ class WorkerSettings:
     on_job_result = on_job_result
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
     queue_name = "arq:vision"  # dedicated queue — avoids consuming scraper/social jobs
-    max_jobs = 2     # vision is CPU-heavy — limit concurrency to avoid OOM
+    max_jobs = 2  # vision is CPU-heavy — limit concurrency to avoid OOM
     job_timeout = 300  # 5 minutes max per job (handles slow CPU deepfake)
     keep_result = 3600  # 8C.6 — keep results 1h for UI polling

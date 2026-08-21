@@ -3,6 +3,7 @@
 Checks that all expected tables and critical indexes exist after migrations.
 Requires: make up (PostgreSQL running with migrations applied)
 """
+
 from __future__ import annotations
 
 import pytest
@@ -61,9 +62,7 @@ async def test_content_hash_unique_index(db):
             """
         )
     index_names = [r["indexname"] for r in rows]
-    assert len(index_names) >= 1, (
-        "content_items must have an index on content_hash for dedup"
-    )
+    assert len(index_names) >= 1, "content_items must have an index on content_hash for dedup"
 
 
 async def test_pgvector_extension_enabled(db):

@@ -6,15 +6,14 @@ Preserves raw_text and content_hash (hash is based on raw, not cleaned).
 Usage:
     uv run python scripts/backfill_clean_text.py [--dry-run] [--batch-size 500]
 """
+
 from __future__ import annotations
 
 import argparse
 import asyncio
-import sys
 
 import asyncpg
 import structlog
-
 from anveshak.scraper.clean import clean_extracted_text
 
 log = structlog.get_logger(__name__)

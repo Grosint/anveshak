@@ -11,6 +11,7 @@ Tests for:
 
 pytest.mark.unit — file-based checks only, no cluster required.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -48,6 +49,7 @@ def _get_env_names(container: dict) -> list[str]:
 # 1. Required manifests exist
 # ===================================================================
 
+
 class TestManifestExistence:
     """All required K3s service manifests must exist."""
 
@@ -70,6 +72,7 @@ class TestManifestExistence:
 # ===================================================================
 # 2. Env var ordering: POSTGRES_PASSWORD before POSTGRES_URL
 # ===================================================================
+
 
 class TestEnvVarOrdering:
     """POSTGRES_PASSWORD must be defined before POSTGRES_URL."""
@@ -94,12 +97,19 @@ class TestEnvVarOrdering:
 # 3. securityContext on all Deployments
 # ===================================================================
 
+
 class TestSecurityContext:
     """All Deployments must have pod-level securityContext."""
 
     MANIFESTS_WITH_DEPLOYMENTS = [
-        "api.yml", "analyst.yml", "postgres.yml", "redis.yml",
-        "ollama.yml", "scraper.yml", "reporter.yml", "vision.yml",
+        "api.yml",
+        "analyst.yml",
+        "postgres.yml",
+        "redis.yml",
+        "ollama.yml",
+        "scraper.yml",
+        "reporter.yml",
+        "vision.yml",
         "frontend.yml",
     ]
 
@@ -115,17 +125,13 @@ class TestSecurityContext:
             container = _get_container(dep)
             csc = container.get("securityContext", {})
             # At least one of pod-level or container-level must set runAsNonRoot
-            has_non_root = (
-                sc.get("runAsNonRoot") is True
-                or csc.get("runAsNonRoot") is True
-            )
+            has_non_root = sc.get("runAsNonRoot") is True or csc.get("runAsNonRoot") is True
             # postgres and redis run as their own user — skip runAsNonRoot check
             name = dep["metadata"]["name"]
             if name in ("postgres", "redis"):
                 continue
             assert has_non_root, (
-                f"{filename}/{name}: must set runAsNonRoot: true "
-                f"in securityContext"
+                f"{filename}/{name}: must set runAsNonRoot: true in securityContext"
             )
 
 
@@ -133,12 +139,18 @@ class TestSecurityContext:
 # 4. Liveness probes on all Deployments
 # ===================================================================
 
+
 class TestLivenessProbes:
     """All Deployments must have livenessProbe (not just readinessProbe)."""
 
     MANIFESTS = [
-        "api.yml", "analyst.yml", "ollama.yml", "scraper.yml",
-        "reporter.yml", "vision.yml", "frontend.yml",
+        "api.yml",
+        "analyst.yml",
+        "ollama.yml",
+        "scraper.yml",
+        "reporter.yml",
+        "vision.yml",
+        "frontend.yml",
     ]
 
     @pytest.mark.parametrize("filename", MANIFESTS)
@@ -150,14 +162,13 @@ class TestLivenessProbes:
         for dep in _find_deployments(docs):
             container = _get_container(dep)
             name = dep["metadata"]["name"]
-            assert "livenessProbe" in container, (
-                f"{filename}/{name}: must have livenessProbe"
-            )
+            assert "livenessProbe" in container, f"{filename}/{name}: must have livenessProbe"
 
 
 # ===================================================================
 # 5. NetworkPolicy
 # ===================================================================
+
 
 class TestNetworkPolicy:
     """NetworkPolicy must define default-deny + allow rules."""
@@ -172,18 +183,18 @@ class TestNetworkPolicy:
 
         # At least one policy should be a default-deny (empty podSelector)
         deny_policies = [
-            p for p in policies
+            p
+            for p in policies
             if p["spec"].get("podSelector", {}).get("matchLabels") is None
             or p["spec"].get("podSelector", {}).get("matchLabels") == {}
         ]
-        assert len(deny_policies) >= 1, (
-            "Must have a default-deny NetworkPolicy (empty podSelector)"
-        )
+        assert len(deny_policies) >= 1, "Must have a default-deny NetworkPolicy (empty podSelector)"
 
 
 # ===================================================================
 # 6. PodDisruptionBudget for API
 # ===================================================================
+
 
 class TestPodDisruptionBudget:
     """API must have a PodDisruptionBudget."""
@@ -198,14 +209,13 @@ class TestPodDisruptionBudget:
         pdbs = [d for d in docs if d and d.get("kind") == "PodDisruptionBudget"]
         assert pdbs, "No PDB found"
         pdb = pdbs[0]
-        assert pdb["spec"].get("minAvailable") == 1, (
-            "API PDB must set minAvailable: 1"
-        )
+        assert pdb["spec"].get("minAvailable") == 1, "API PDB must set minAvailable: 1"
 
 
 # ===================================================================
 # 7. Kustomization includes all resources
 # ===================================================================
+
 
 class TestKustomization:
     """kustomization.yml must reference all manifest files."""
@@ -231,14 +241,13 @@ class TestKustomization:
         kustomization = docs[0]
         resources = kustomization.get("resources", [])
         for r in self.REQUIRED_RESOURCES:
-            assert r in resources, (
-                f"kustomization.yml missing resource: {r}"
-            )
+            assert r in resources, f"kustomization.yml missing resource: {r}"
 
 
 # ===================================================================
 # 8. Ollama manifest specifics
 # ===================================================================
+
 
 class TestOllamaManifest:
     """Ollama manifest must have correct memory limits and health probe."""

@@ -8,6 +8,7 @@ Revision ID: 003
 Revises: 002
 Create Date: 2026-06-29 12:00:00.000000
 """
+
 from alembic import op
 
 # revision identifiers, used by Alembic.

@@ -1,12 +1,12 @@
 """Vision repository — media_assets and vision_results SQL for the API gateway."""
+
 from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import datetime, UTC
 from typing import Any, Optional
 
-import asyncpg
+from anveshak.db import DBConnection
 
 # ---------------------------------------------------------------------------
 # SQL constants
@@ -80,15 +80,14 @@ SQL_GET_VISION_RESULTS_FOR_CONTENT = """
 # Repository functions
 # ---------------------------------------------------------------------------
 
-async def get_media_asset_by_hash(
-    conn: asyncpg.Connection, content_hash: str
-) -> dict[str, Any] | None:
+
+async def get_media_asset_by_hash(conn: DBConnection, content_hash: str) -> dict[str, Any] | None:
     row = await conn.fetchrow(SQL_GET_MEDIA_ASSET_BY_HASH, content_hash)
     return dict(row) if row else None
 
 
 async def insert_media_asset(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     asset_id: str,
     content_item_id: Optional[str],
     asset_type: str,
@@ -98,13 +97,17 @@ async def insert_media_asset(
     """Insert media asset with ON CONFLICT DO NOTHING. Returns row if inserted."""
     row = await conn.fetchrow(
         SQL_INSERT_MEDIA_ASSET,
-        asset_id, content_item_id, asset_type, storage_path, content_hash,
+        asset_id,
+        content_item_id,
+        asset_type,
+        storage_path,
+        content_hash,
     )
     return dict(row) if row else None
 
 
 async def phash_reverse_search(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     phash_int: int,
     threshold: int,
 ) -> list[dict[str, Any]]:
@@ -113,14 +116,14 @@ async def phash_reverse_search(
 
 
 async def get_vision_results_for_content(
-    conn: asyncpg.Connection, content_id: str
+    conn: DBConnection, content_id: str
 ) -> list[dict[str, Any]]:
     rows = await conn.fetch(SQL_GET_VISION_RESULTS_FOR_CONTENT, content_id)
     return [dict(r) for r in rows]
 
 
 async def get_or_create_stub_content_item(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     content_hash: str,
     filename: str,
     topic_id: Optional[str] = None,
@@ -142,13 +145,21 @@ async def get_or_create_stub_content_item(
 
     row = await conn.fetchrow(
         SQL_INSERT_STUB_CONTENT_ITEM,
-        stub_id, _MANUAL_SOURCE_ID, stub_text, stub_hash, topic_id,
+        stub_id,
+        _MANUAL_SOURCE_ID,
+        stub_text,
+        stub_hash,
+        topic_id,
     )
     if row:
         content_item_id = str(row["id"])
     else:
-        # ON CONFLICT — fetch existing
+        # ON CONFLICT: fetch existing. Reachable as None if the conflicting row
+        # was deleted between the insert and this read (retention purge), so fail
+        # loudly instead of raising an opaque TypeError on the subscript.
         existing = await conn.fetchrow(SQL_GET_STUB_CONTENT_ITEM_BY_HASH, stub_hash)
+        if existing is None:
+            raise RuntimeError(f"stub content item vanished after ON CONFLICT: hash={stub_hash}")
         content_item_id = str(existing["id"])
 
     # Link to topic via join table (Pipeline Data Threading — dual-path query)

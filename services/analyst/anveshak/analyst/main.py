@@ -7,10 +7,10 @@ The analyst service is split into two containers:
 This module is the default CMD in the Dockerfile. It runs the scheduler.
 The worker is started via: python -m arq anveshak.analyst.jobs.WorkerSettings
 """
+
 import asyncio
 
 from .scheduler import main
-
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -1,4 +1,5 @@
 """Unit tests for snowball discovery — outbound URL extraction with frequency."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
@@ -21,6 +22,7 @@ def _freq_row(domain, citation_count):
 # ---------------------------------------------------------------------------
 # Snowball extraction logic
 # ---------------------------------------------------------------------------
+
 
 async def test_snowball_extracts_domains_from_urls():
     """extract_domains_with_frequency returns domain + count."""
@@ -85,6 +87,7 @@ async def test_snowball_handles_malformed_urls():
 # Snowball job function
 # ---------------------------------------------------------------------------
 
+
 async def test_discover_snowball_sources_upserts(mock_conn):
     """discover_snowball_sources must upsert results into discovered_sources."""
     from anveshak.analyst.discovery import discover_snowball_sources
@@ -97,15 +100,17 @@ async def test_discover_snowball_sources_upserts(mock_conn):
     mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
 
     # Mock outbound links
-    mock_conn.fetch = AsyncMock(side_effect=[
-        # First call: SQL_OUTBOUND_LINKS
-        [
-            _link_row("https://src.com/article", "https://newsite.com/page1"),
-            _link_row("https://src.com/article2", "https://newsite.com/page2"),
-        ],
-        # Second call: SQL_EXISTING_SOURCE_URLS
-        [{"url_or_handle": "https://registered.com"}],
-    ])
+    mock_conn.fetch = AsyncMock(
+        side_effect=[
+            # First call: SQL_OUTBOUND_LINKS
+            [
+                _link_row("https://src.com/article", "https://newsite.com/page1"),
+                _link_row("https://src.com/article2", "https://newsite.com/page2"),
+            ],
+            # Second call: SQL_EXISTING_SOURCE_URLS
+            [{"url_or_handle": "https://registered.com"}],
+        ]
+    )
     mock_conn.execute = AsyncMock()
 
     count = await discover_snowball_sources(mock_pool, "topic-1")

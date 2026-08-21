@@ -9,14 +9,14 @@ Tests:
 
 Requires: make up seed-demo
 """
+
 from __future__ import annotations
 
-import json
 import urllib.parse
 
 import pytest
 
-from tests.e2e.conftest import _http, API_BASE, DEMO_TOPIC_UAV
+from tests.e2e.conftest import API_BASE, DEMO_TOPIC_UAV, _http
 
 pytestmark = [pytest.mark.e2e]
 
@@ -56,16 +56,13 @@ class TestIdentifierExportCSV:
     """GET /api/v1/identifiers/export returns CSV."""
 
     def test_export_csv(self, auth_headers):
-        url = (
-            f"{API_BASE}/api/v1/identifiers/export"
-            f"?topic_id={DEMO_TOPIC_UAV}&format=csv&limit=10"
-        )
+        url = f"{API_BASE}/api/v1/identifiers/export?topic_id={DEMO_TOPIC_UAV}&format=csv&limit=10"
         # Use raw request to check content-type
         import urllib.request
+
         req = urllib.request.Request(url, headers={**auth_headers, "Accept": "*/*"})
         try:
             with urllib.request.urlopen(req, timeout=10) as resp:
-                content_type = resp.headers.get("Content-Type", "")
                 data = resp.read().decode()
                 assert resp.status == 200
                 if data:  # May be empty if no identifiers seeded
@@ -81,14 +78,11 @@ class TestTemplateLinkingE2E:
 
     def test_template_linking_cycle(self, auth_headers):
         # List templates (initially may be empty)
-        list_url = (
-            f"{API_BASE}/api/v1/identifiers/topics/{DEMO_TOPIC_UAV}/templates"
-        )
+        list_url = f"{API_BASE}/api/v1/identifiers/topics/{DEMO_TOPIC_UAV}/templates"
         status, initial = _http("GET", list_url, headers=auth_headers)
         assert status == 200
 
         # We need a template_id — skip if no templates exist
-        tpl_url = f"{API_BASE}/api/v1/identifiers/search?topic_id={DEMO_TOPIC_UAV}&q=test"
         # Instead, try to get template from the list or use a known seeded ID
         # For now, just verify the endpoint returns 200
         assert isinstance(initial, list)

@@ -2,7 +2,7 @@
 
 This file documents every hardware-constrained decision in the codebase.
 Before adding any ML component, add its entry here.
-The CLAUDE.md hardware independence rule requires all settings to be env-var driven.
+The AGENTS.md hardware independence rule requires all settings to be env-var driven.
 
 **Production hardware tiers:**
 

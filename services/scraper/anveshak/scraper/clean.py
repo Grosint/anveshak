@@ -7,6 +7,7 @@ extracted text into something an analyst can actually read.
 Applied AFTER extraction (Crawl4AI/trafilatura) and BEFORE storage as clean_text.
 raw_text is preserved as-is for audit trail.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -142,9 +143,7 @@ _RE_INLINE_JUNK = re.compile(
 )
 
 # Lines that are just nav separators
-_RE_NAV_SEPARATOR = re.compile(
-    r"^[\s\-|·•►▸▹>]+$", re.MULTILINE
-)
+_RE_NAV_SEPARATOR = re.compile(r"^[\s\-|·•►▸▹>]+$", re.MULTILINE)
 
 
 # ---------------------------------------------------------------------------
@@ -152,21 +151,53 @@ _RE_NAV_SEPARATOR = re.compile(
 # ---------------------------------------------------------------------------
 
 # Common icon/nav element names found in scraped RSS/web pages
-_NAV_ICON_WORDS = frozenset({
-    # Directional icons
-    "arrow-down", "arrow-up", "arrow-left", "arrow-right",
-    "chevron-down", "chevron-up", "chevron-left", "chevron-right",
-    "left-arrow", "right-arrow", "top-nav", "caret-down", "caret-up",
-    # Action icons
-    "search", "menu", "close", "hamburger", "printer", "print",
-    "share", "bookmark", "copy-link", "download", "upload",
-    # Social icons
-    "facebook", "twitter", "whatsapp", "telegram", "instagram",
-    "linkedin", "youtube", "email",
-    # UI elements
-    "comments", "bell", "user", "account", "cart", "settings",
-    "notifications",
-})
+_NAV_ICON_WORDS = frozenset(
+    {
+        # Directional icons
+        "arrow-down",
+        "arrow-up",
+        "arrow-left",
+        "arrow-right",
+        "chevron-down",
+        "chevron-up",
+        "chevron-left",
+        "chevron-right",
+        "left-arrow",
+        "right-arrow",
+        "top-nav",
+        "caret-down",
+        "caret-up",
+        # Action icons
+        "search",
+        "menu",
+        "close",
+        "hamburger",
+        "printer",
+        "print",
+        "share",
+        "bookmark",
+        "copy-link",
+        "download",
+        "upload",
+        # Social icons
+        "facebook",
+        "twitter",
+        "whatsapp",
+        "telegram",
+        "instagram",
+        "linkedin",
+        "youtube",
+        "email",
+        # UI elements
+        "comments",
+        "bell",
+        "user",
+        "account",
+        "cart",
+        "settings",
+        "notifications",
+    }
+)
 
 # Minimum word count and hit ratio to flag as nav-icon garbage
 _NAV_ICON_MIN_WORDS = 5
@@ -262,6 +293,7 @@ def _is_nav_line(line: str) -> bool:
 def _detect_repeated_blocks(lines: list[str], threshold: int = 2) -> set[str]:
     """Find lines that appear multiple times — likely headers/footers."""
     from collections import Counter
+
     normalised = Counter()
     for line in lines:
         key = line.strip().lower()
@@ -278,6 +310,7 @@ def _strip_camel_nav(text: str) -> str:
     2. Mixed: 'policyNEWUS-China relationsHong Kong economyBusinessTech'
        (lowercase→uppercase transitions indicating concatenated nav items)
     """
+
     # 1. Standard CamelCase (4+ title-case words)
     def _is_camel_junk(match: re.Match) -> str:
         word = match.group(0)
@@ -450,7 +483,7 @@ def is_paywall_page(text: str) -> bool:
 # ---------------------------------------------------------------------------
 
 _MIN_CLEAN_CHARS = 100
-_MIN_QUALITY_RATIO = 0.08   # lowered from 0.15 — rescues real articles from HTML-heavy sites
+_MIN_QUALITY_RATIO = 0.08  # lowered from 0.15 — rescues real articles from HTML-heavy sites
 _RATIO_BYPASS_MIN_CHARS = 500  # bypass ratio check if clean_text is substantial
 
 
@@ -525,7 +558,7 @@ def extract_title(clean_text: str) -> str | None:
     # Reject nav-icon garbage as titles
     if is_nav_icon_garbage(first_line):
         # Try the second line instead
-        lines = [l.strip() for l in clean_text.split("\n") if l.strip()]
+        lines = [ln.strip() for ln in clean_text.split("\n") if ln.strip()]
         for line in lines[1:]:
             if not is_nav_icon_garbage(line) and 10 <= len(line) <= 200:
                 sentence_match = re.match(r"^(.+?[.?!])\s", line)
@@ -536,7 +569,7 @@ def extract_title(clean_text: str) -> str | None:
 
     # Skip "Skip links" concatenated navigation text
     if first_line.lower().startswith("skip links") or first_line.lower().startswith("skip to"):
-        lines = [l.strip() for l in clean_text.split("\n") if l.strip()]
+        lines = [ln.strip() for ln in clean_text.split("\n") if ln.strip()]
         for line in lines[1:]:
             if not line.lower().startswith("skip") and 10 <= len(line) <= 200:
                 return line

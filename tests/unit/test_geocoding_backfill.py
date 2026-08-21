@@ -2,12 +2,12 @@
 
 pytest.mark.unit — mocked DB, no real connection.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 
@@ -24,8 +24,10 @@ class TestBackfillGeocodingJob:
     """backfill_geocoding: process existing extracted_entities."""
 
     async def test_function_exists_and_is_async(self):
-        from anveshak.analyst.geocoding_backfill import backfill_geocoding
         import asyncio
+
+        from anveshak.analyst.geocoding_backfill import backfill_geocoding
+
         assert asyncio.iscoroutinefunction(backfill_geocoding)
 
     async def test_processes_location_entities_only(self):
@@ -60,6 +62,7 @@ class TestBackfillGeocodingJob:
         """Backfill job must be in WorkerSettings.functions."""
         from anveshak.analyst.jobs import WorkerSettings
 
-        func_names = [f.__name__ if callable(f) else f.coroutine.__name__
-                      for f in WorkerSettings.functions]
+        func_names = [
+            f.__name__ if callable(f) else f.coroutine.__name__ for f in WorkerSettings.functions
+        ]
         assert "backfill_geocoding" in func_names

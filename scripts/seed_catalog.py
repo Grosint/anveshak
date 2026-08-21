@@ -6,6 +6,7 @@ Run: uv run python scripts/seed_catalog.py
 
 Requires POSTGRES_URL env var or defaults to local dev database.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -49,17 +50,18 @@ def load_manifests() -> list[dict]:
         try:
             data = json.loads(manifest_path.read_text())
             if not isinstance(data, list):
-                log.warning("catalog.invalid_manifest", path=str(manifest_path),
-                            reason="expected JSON array")
+                log.warning(
+                    "catalog.invalid_manifest",
+                    path=str(manifest_path),
+                    reason="expected JSON array",
+                )
                 continue
             for entry in data:
                 entry["_source_file"] = manifest_path.stem
             entries.extend(data)
-            log.info("catalog.manifest_loaded", file=manifest_path.stem,
-                     count=len(data))
+            log.info("catalog.manifest_loaded", file=manifest_path.stem, count=len(data))
         except json.JSONDecodeError as exc:
-            log.error("catalog.json_parse_error", path=str(manifest_path),
-                      error=str(exc))
+            log.error("catalog.json_parse_error", path=str(manifest_path), error=str(exc))
     return entries
 
 
@@ -90,13 +92,19 @@ async def seed(pool: asyncpg.Pool) -> int:
                 entry.get("description", ""),
                 entry.get("subscriber_count"),
                 entry.get("activity_frequency", "unknown"),
-                now, now, LABELS_JSON,
+                now,
+                now,
+                LABELS_JSON,
             )
             if result and "INSERT 0 1" in result:
                 inserted += 1
 
-    log.info("catalog.seed_complete", total=len(entries), inserted=inserted,
-             skipped=len(entries) - inserted)
+    log.info(
+        "catalog.seed_complete",
+        total=len(entries),
+        inserted=inserted,
+        skipped=len(entries) - inserted,
+    )
     return inserted
 
 

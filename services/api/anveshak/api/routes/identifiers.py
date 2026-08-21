@@ -8,6 +8,7 @@ Six endpoints for analysts to search, browse, and export identifiers:
   /export          — CSV/JSON download for CFCFRMS, I4C, bank requests
   /co-occurrence   — content items where both identifiers appear
 """
+
 from __future__ import annotations
 
 import csv
@@ -15,15 +16,15 @@ import io
 import json
 from typing import Any, Optional
 
-import asyncpg
 import structlog
+from anveshak.db import DBConnection
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from ..auth.rbac import require_role
+from ..db import audit as audit_db
 from ..db import identifiers as identifiers_db
 from ..db import topics as topics_db
-from ..db import audit as audit_db
 from ..db.pool import get_db
 
 log = structlog.get_logger(__name__)
@@ -32,15 +33,21 @@ router = APIRouter(prefix="/api/v1/identifiers", tags=["identifiers"])
 MAX_EXPORT_ROWS = 10000
 
 EXPORT_COLUMNS = [
-    "entity_type", "entity_text", "confidence",
-    "content_item_id", "content_url",
-    "source_name", "source_platform", "captured_at",
+    "entity_type",
+    "entity_text",
+    "confidence",
+    "content_item_id",
+    "content_url",
+    "source_name",
+    "source_platform",
+    "captured_at",
 ]
 
 
 # ---------------------------------------------------------------------------
 # Helpers (reuse export.py pattern)
 # ---------------------------------------------------------------------------
+
 
 def _rows_to_csv(rows: list[dict[str, Any]], columns: list[str]) -> str:
     buf = io.StringIO()
@@ -63,19 +70,23 @@ def _rows_to_json(rows: list[dict[str, Any]]) -> str:
 # Routes
 # ---------------------------------------------------------------------------
 
+
 @router.get("/convergence")
 async def get_identifier_convergence(
     limit: int = Query(20, ge=1, le=100, description="Max results"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ) -> list[dict[str, Any]]:
     """Identifiers appearing in 2+ topics — cross-topic convergence detection."""
     from ..auth.rbac import get_user_org
+
     org_id = get_user_org(user)
     if not org_id:
         raise HTTPException(status_code=400, detail="Org context required for convergence")
     return await identifiers_db.get_identifier_convergence(
-        db, org_id=org_id, limit=limit,
+        db,
+        org_id=org_id,
+        limit=limit,
     )
 
 
@@ -84,16 +95,21 @@ async def search_identifiers_global(
     q: str = Query(..., min_length=2, description="Search query (partial match)"),
     type: Optional[str] = Query(None, description="Filter by identifier type"),
     limit: int = Query(50, ge=1, le=200, description="Max results"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ) -> list[dict[str, Any]]:
     """Cross-topic identifier search, scoped to user's org."""
     from ..auth.rbac import get_user_org
+
     org_id = get_user_org(user)
     if not org_id:
         raise HTTPException(status_code=400, detail="Org context required for global search")
     return await identifiers_db.search_identifiers_global(
-        db, q=q, org_id=org_id, identifier_type=type, limit=limit,
+        db,
+        q=q,
+        org_id=org_id,
+        identifier_type=type,
+        limit=limit,
     )
 
 
@@ -103,13 +119,17 @@ async def search_identifiers(
     q: str = Query(..., min_length=1, description="Search query (partial match)"),
     type: Optional[str] = Query(None, description="Filter by identifier type"),
     limit: int = Query(50, ge=1, le=500, description="Max results"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ) -> list[dict[str, Any]]:
     """Search extracted identifiers with partial match (phone suffix, UPI domain, etc.)."""
     await topics_db.verify_topic_access(db, topic_id, user)
     return await identifiers_db.search_identifiers(
-        db, q=q, topic_id=topic_id, identifier_type=type, limit=limit,
+        db,
+        q=q,
+        topic_id=topic_id,
+        identifier_type=type,
+        limit=limit,
     )
 
 
@@ -119,14 +139,17 @@ async def get_top_identifiers(
     type: Optional[str] = Query(None, description="Filter by identifier type"),
     min_items: int = Query(1, ge=1, le=100, description="Min content items to include"),
     limit: int = Query(20, ge=1, le=100, description="Max results"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ) -> list[dict[str, Any]]:
     """Most frequently appearing identifiers, grouped from extracted_entities."""
     await topics_db.verify_topic_access(db, topic_id, user)
     return await identifiers_db.get_top_identifiers(
-        db, topic_id=topic_id, identifier_type=type,
-        min_items=min_items, limit=limit,
+        db,
+        topic_id=topic_id,
+        identifier_type=type,
+        min_items=min_items,
+        limit=limit,
     )
 
 
@@ -136,13 +159,17 @@ async def list_clusters(
     type: Optional[str] = Query(None, description="Filter by identifier type"),
     limit: int = Query(50, ge=1, le=200, description="Max results"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ) -> list[dict[str, Any]]:
     """List identifier clusters for a topic, sorted by source_count descending."""
     await topics_db.verify_topic_access(db, topic_id, user)
     return await identifiers_db.list_identifier_clusters(
-        db, topic_id=topic_id, identifier_type=type, limit=limit, offset=offset,
+        db,
+        topic_id=topic_id,
+        identifier_type=type,
+        limit=limit,
+        offset=offset,
     )
 
 
@@ -150,7 +177,7 @@ async def list_clusters(
 async def get_cluster_detail(
     cluster_id: str,
     topic_id: str = Query(..., description="Topic ID (for access control)"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ) -> dict[str, Any]:
     """Full cluster detail: identifier, all content items, all sources, timeline."""
@@ -170,7 +197,7 @@ async def export_identifiers(
     topic_id: str = Query(..., description="Topic ID to export"),
     format: str = Query("csv", pattern="^(csv|json)$", description="Export format"),
     limit: int = Query(5000, ge=1, le=MAX_EXPORT_ROWS, description="Max rows"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> StreamingResponse:
     """Export all identifiers for a topic as CSV or JSON (for CFCFRMS, I4C, bank requests)."""
@@ -182,7 +209,11 @@ async def export_identifiers(
     data = _rows_to_csv(rows, EXPORT_COLUMNS) if format == "csv" else _rows_to_json(rows)
     log.info("identifiers.export", topic_id=topic_id, format=format, rows=len(rows))
     await audit_db.log_action(
-        db, user["sub"], "export.identifiers", "topic", topic_id,
+        db,
+        user["sub"],
+        "export.identifiers",
+        "topic",
+        topic_id,
         {"format": format, "rows": len(rows)},
         request.client.host if request.client else "",
     )
@@ -205,7 +236,7 @@ async def export_identifiers(
 async def link_template(
     topic_id: str,
     template_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, str]:
     """Link a scam template to a topic."""
@@ -218,7 +249,7 @@ async def link_template(
 async def unlink_template(
     topic_id: str,
     template_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ) -> dict[str, str]:
     """Unlink a scam template from a topic."""
@@ -230,7 +261,7 @@ async def unlink_template(
 @router.get("/topics/{topic_id}/templates")
 async def list_topic_templates(
     topic_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ) -> list[dict[str, Any]]:
     """List all scam templates linked to a topic."""
@@ -244,14 +275,16 @@ async def get_co_occurrence(
     identifier_a: str = Query(..., description="First identifier value"),
     identifier_b: str = Query(..., description="Second identifier value"),
     limit: int = Query(100, ge=1, le=500, description="Max results"),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("viewer", "analyst", "admin")),
 ) -> dict[str, Any]:
     """Content items where both identifiers appear — network inference."""
     await topics_db.verify_topic_access(db, topic_id, user)
     items = await identifiers_db.get_co_occurrence(
-        db, topic_id=topic_id,
-        identifier_a=identifier_a, identifier_b=identifier_b,
+        db,
+        topic_id=topic_id,
+        identifier_a=identifier_a,
+        identifier_b=identifier_b,
         limit=limit,
     )
     return {

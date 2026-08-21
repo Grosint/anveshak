@@ -10,6 +10,7 @@ Tests:
   Q1-Q5: Each service queue receives enqueued jobs
   Q6: Wrong queue name → job NOT in target queue
 """
+
 from __future__ import annotations
 
 import pytest
@@ -50,7 +51,7 @@ async def cleanup_test_jobs(arq_pool):
     yield
     redis = arq_pool._redis if hasattr(arq_pool, "_redis") else arq_pool
     # Clean up any test job results
-    async for key in redis.scan_iter(f"arq:result:*"):
+    async for key in redis.scan_iter("arq:result:*"):
         val = await redis.get(key)
         if val and _TEST_PREFIX.encode() in (val if isinstance(val, bytes) else b""):
             await redis.delete(key)
@@ -62,6 +63,7 @@ async def cleanup_test_jobs(arq_pool):
 # ---------------------------------------------------------------------------
 # Q1-Q5: Each queue receives its jobs
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("service,queue_name", list(SERVICE_QUEUES.items()))
 async def test_job_lands_in_correct_queue(arq_pool, service, queue_name):
@@ -82,8 +84,7 @@ async def test_job_lands_in_correct_queue(arq_pool, service, queue_name):
     # Verify queue grew by 1
     after = await redis.zcard(queue_name)
     assert after == before + 1, (
-        f"Queue {queue_name} should have grown by 1: "
-        f"before={before}, after={after}"
+        f"Queue {queue_name} should have grown by 1: before={before}, after={after}"
     )
 
     # Cleanup: remove the test job from queue
@@ -98,6 +99,7 @@ async def test_job_lands_in_correct_queue(arq_pool, service, queue_name):
 # ---------------------------------------------------------------------------
 # Q6: Wrong queue name → job not in target queue
 # ---------------------------------------------------------------------------
+
 
 async def test_wrong_queue_job_not_in_target(arq_pool):
     """Job enqueued to wrong queue must NOT appear in the intended queue.
@@ -127,9 +129,7 @@ async def test_wrong_queue_job_not_in_target(arq_pool):
 
     # But wrong queue should have the job
     wrong_count = await redis.zcard(wrong_queue)
-    assert wrong_count >= 1, (
-        f"Job should be in {wrong_queue} (count={wrong_count})"
-    )
+    assert wrong_count >= 1, f"Job should be in {wrong_queue} (count={wrong_count})"
 
     # Cleanup
     await redis.delete(wrong_queue)

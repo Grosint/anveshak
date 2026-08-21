@@ -9,6 +9,7 @@ Existing tests in test_relevance.py cover happy-path. These tests catch:
 
 pytest.mark.unit — pure functions, no DB, no GPU.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -18,7 +19,6 @@ pytestmark = pytest.mark.unit
 
 
 class TestComputeTopicRelevanceEdgeCases:
-
     def test_identical_normalised_vectors_equal_one(self):
         """L2-normalised identical vectors must dot-product to exactly 1.0."""
         from anveshak.analyst.relevance import compute_topic_relevance
@@ -63,7 +63,6 @@ class TestComputeTopicRelevanceEdgeCases:
 
 
 class TestResolveThresholdEdgeCases:
-
     def test_per_topic_zero_is_not_none(self):
         """Bug caught: if check uses `if per_topic:` instead of `if per_topic is not None:`,
         0.0 is falsy and falls through to global default — silently enabling

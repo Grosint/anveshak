@@ -1,21 +1,21 @@
 """Source management endpoints."""
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Optional
-
 from urllib.parse import urlparse
 
-import asyncpg
 import httpx
 import structlog
+from anveshak.db import DBConnection
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict
 
-from ..auth.rbac import require_role, is_super_admin, get_user_org
-from ..db import sources as sources_db
+from ..auth.rbac import get_user_org, is_super_admin, require_org_context, require_role
 from ..db import audit as audit_db
+from ..db import sources as sources_db
 from ..db.pool import get_db
 from ..pagination import paginate_rows
 
@@ -29,7 +29,13 @@ _BROWSER_UA = (
 )
 # Only strong paywall indicators — "subscribe" triggers false positives on
 # virtually every news site (nav-bar / footer links).
-_PAYWALL_PATTERNS = {"paywall", "premium content", "sign in to read", "create an account", "subscribers only"}
+_PAYWALL_PATTERNS = {
+    "paywall",
+    "premium content",
+    "sign in to read",
+    "create an account",
+    "subscribers only",
+}
 
 
 class CreateSourceRequest(BaseModel):
@@ -46,11 +52,13 @@ class CreateSourceRequest(BaseModel):
 # Lightweight health probe — used at registration and manual re-check
 # ---------------------------------------------------------------------------
 
+
 async def _probe_rss(url: str) -> tuple[bool, Optional[str]]:
     """Returns (ok, error_message). Hard check — RSS must return 200 + XML."""
     try:
         async with httpx.AsyncClient(
-            timeout=15, follow_redirects=True,
+            timeout=15,
+            follow_redirects=True,
             headers={"User-Agent": _BROWSER_UA},
         ) as client:
             resp = await client.get(url)
@@ -59,8 +67,15 @@ async def _probe_rss(url: str) -> tuple[bool, Optional[str]]:
             if not any(k in ct for k in ("xml", "rss", "atom")):
                 # Some feeds serve as text/plain — also accept non-empty body starting with XML
                 body = resp.text.lstrip()
-                if not body.startswith("<?xml") and not body.startswith("<rss") and not body.startswith("<feed"):
-                    return False, f"URL returned content-type '{ct}' — does not look like an RSS/Atom feed"
+                if (
+                    not body.startswith("<?xml")
+                    and not body.startswith("<rss")
+                    and not body.startswith("<feed")
+                ):
+                    return (
+                        False,
+                        f"URL returned content-type '{ct}' — does not look like an RSS/Atom feed",
+                    )
             return True, None
     except httpx.HTTPStatusError as exc:
         return False, f"HTTP {exc.response.status_code}"
@@ -76,7 +91,8 @@ async def _probe_web(url: str) -> tuple[str, Optional[str], bool]:
     """
     try:
         async with httpx.AsyncClient(
-            timeout=15, follow_redirects=True,
+            timeout=15,
+            follow_redirects=True,
             headers={"User-Agent": _BROWSER_UA},
         ) as client:
             resp = await client.get(url)
@@ -85,7 +101,11 @@ async def _probe_web(url: str) -> tuple[str, Optional[str], bool]:
             if any(p in text for p in _PAYWALL_PATTERNS):
                 return "degraded", "Possible paywall detected — content may be incomplete", False
             if len(resp.text) < 200:
-                return "degraded", f"Response too short ({len(resp.text)} chars) — may be blocked", True
+                return (
+                    "degraded",
+                    f"Response too short ({len(resp.text)} chars) — may be blocked",
+                    True,
+                )
             return "healthy", None, False
     except httpx.HTTPStatusError as exc:
         return "degraded", f"HTTP {exc.response.status_code}", True
@@ -97,11 +117,12 @@ async def _probe_web(url: str) -> tuple[str, Optional[str], bool]:
 # Routes
 # ---------------------------------------------------------------------------
 
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_source(
     req: CreateSourceRequest,
     request: Request,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     initial_health = "unverified"
@@ -143,8 +164,14 @@ async def create_source(
     now = datetime.now(UTC)
     org_id = get_user_org(user)
     await sources_db.insert_source(
-        db, source_id, req.name, req.url_or_handle, req.platform,
-        req.credibility_score, now, _LABELS_JSON,
+        db,
+        source_id,
+        req.name,
+        req.url_or_handle,
+        req.platform,
+        req.credibility_score,
+        now,
+        _LABELS_JSON,
         org_id=org_id,
     )
     # Write initial health status
@@ -170,7 +197,11 @@ async def create_source(
         health=initial_health,
     )
     await audit_db.log_action(
-        db, user["sub"], "source.create", "source", source_id,
+        db,
+        user["sub"],
+        "source.create",
+        "source",
+        source_id,
         {"name": req.name, "platform": req.platform},
         request.client.host if request.client else "",
     )
@@ -185,7 +216,7 @@ async def list_sources(
     credibility_below: float | None = None,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin", "super-admin")),
 ):
     if credibility_below is not None:
@@ -194,14 +225,18 @@ async def list_sources(
     if is_super_admin(user):
         items, total = await sources_db.list_sources(db, limit, offset)
     else:
-        items, total = await sources_db.list_sources_by_org(db, get_user_org(user), limit, offset)
+        # Super-admin took the branch above, so require an org here rather than
+        # passing None and returning an empty list.
+        items, total = await sources_db.list_sources_by_org(
+            db, require_org_context(user), limit, offset
+        )
     return paginate_rows(items, total, offset, limit)
 
 
 @router.post("/{source_id}/check-health", status_code=status.HTTP_200_OK)
 async def check_source_health(
     source_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Trigger an immediate health probe for one source. Updates health_status in DB."""
@@ -239,8 +274,11 @@ async def check_source_health(
 
     elif platform == "darkweb":
         # Dark web sources are probed by the scraper service via Tor, not by the API
-        health_status, failures, health_error = "unverified", prev_failures, \
-            "Dark web health checks run via scraper service (Tor proxy)"
+        health_status, failures, health_error = (
+            "unverified",
+            prev_failures,
+            "Dark web health checks run via scraper service (Tor proxy)",
+        )
 
     else:
         # telegram/x/reddit — not HTTP-probeable from API; mark as unverified
@@ -263,7 +301,7 @@ async def update_credibility(
     new_score: float,
     reason: str,
     request: Request,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Update source credibility — always audit-logged."""
@@ -275,12 +313,22 @@ async def update_credibility(
     now = datetime.now(UTC)
     async with db.transaction():
         await sources_db.update_credibility(
-            db, source_id, str(uuid.uuid4()),
-            old_score, new_score, reason,
-            f"user:{user['sub']}", now, _LABELS_JSON,
+            db,
+            source_id,
+            str(uuid.uuid4()),
+            old_score,
+            new_score,
+            reason,
+            f"user:{user['sub']}",
+            now,
+            _LABELS_JSON,
         )
     await audit_db.log_action(
-        db, user["sub"], "source.credibility_update", "source", source_id,
+        db,
+        user["sub"],
+        "source.credibility_update",
+        "source",
+        source_id,
         {"old_score": old_score, "new_score": new_score, "reason": reason},
         request.client.host if request.client else "",
     )
@@ -291,7 +339,7 @@ async def update_credibility(
 async def toggle_source_active(
     source_id: str,
     is_active: bool,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     await sources_db.verify_source_access(db, source_id, user)
@@ -304,7 +352,7 @@ async def toggle_source_active(
 @router.get("/{source_id}/report-warnings/count")
 async def get_report_warnings_count(
     source_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     await sources_db.verify_source_access(db, source_id, user)
@@ -324,7 +372,7 @@ class UpdateSourceRequest(BaseModel):
 async def update_source(
     source_id: str,
     req: UpdateSourceRequest,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Update source name and/or URL. Both fields are optional (patch semantics)."""
@@ -344,7 +392,7 @@ async def delete_source(
     source_id: str,
     request: Request,
     force: bool = False,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     """Delete a source. Returns 409 if content items exist unless force=true."""
@@ -359,7 +407,11 @@ async def delete_source(
         )
     await sources_db.delete_source(db, source_id)
     await audit_db.log_action(
-        db, user["sub"], "source.delete", "source", source_id,
+        db,
+        user["sub"],
+        "source.delete",
+        "source",
+        source_id,
         {"force": force, "content_items_removed": content_count},
         request.client.host if request.client else "",
     )
@@ -369,7 +421,7 @@ async def delete_source(
 @router.get("/{source_id}/audit-log")
 async def get_audit_log(
     source_id: str,
-    db: asyncpg.Connection = Depends(get_db),
+    db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
     await sources_db.verify_source_access(db, source_id, user)

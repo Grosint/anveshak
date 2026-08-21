@@ -3,10 +3,12 @@
 Pure-function text normalization + geocode lookup.
 Uses geonamescache (bundled offline data — no network calls).
 """
+
 from __future__ import annotations
 
 import json
 import unicodedata
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -165,8 +167,11 @@ def normalize_entity_text(text: str) -> str:
 # ---------------------------------------------------------------------------
 _gc = geonamescache.GeonamesCache()
 
-_CITIES_BY_NAME: dict[str, dict[str, Any]] = {}
-_COUNTRIES_BY_NAME: dict[str, dict[str, Any]] = {}
+# Mapping, not dict: geonamescache yields TypedDicts, which are read-compatible
+# with Mapping but not assignable to dict[str, Any]. Every read below is a
+# lookup, so the covariant type is the accurate one.
+_CITIES_BY_NAME: dict[str, Mapping[str, Any]] = {}
+_COUNTRIES_BY_NAME: dict[str, Mapping[str, Any]] = {}
 _CUSTOM_LOCATIONS: dict[str, tuple[float, float]] = {}
 
 
@@ -184,10 +189,11 @@ def _build_indices() -> None:
 
 
 def _load_custom_locations() -> None:
-    # Find project root by CLAUDE.md marker (unique to repo root)
+    # Find project root by uv.lock marker. AGENTS.md and pyproject.toml both
+    # appear in subdirectories, so neither is safe as a root marker.
     project_root = Path(__file__).resolve().parent
     while project_root != project_root.parent:
-        if (project_root / "CLAUDE.md").exists():
+        if (project_root / "uv.lock").exists():
             break
         project_root = project_root.parent
 
@@ -217,6 +223,7 @@ _load_custom_locations()
 # Public API
 # ---------------------------------------------------------------------------
 
+
 async def geocode_and_store(
     entities: list[Any],
     db_pool: Any,
@@ -232,10 +239,7 @@ async def geocode_and_store(
     from anveshak.analyst.geocoding_cache import geocode_cache_get, geocode_cache_set
     from anveshak.analyst.geocoding_db import upsert_geocoded_location
 
-    location_entities = [
-        e for e in entities
-        if e.entity_type in LOCATION_ENTITY_TYPES
-    ]
+    location_entities = [e for e in entities if e.entity_type in LOCATION_ENTITY_TYPES]
     if not location_entities:
         return 0
 
@@ -332,14 +336,16 @@ def geocode_entities(
             continue
 
         lat, lon, source, confidence = coords
-        results.append({
-            "entity_text_normalized": normalized,
-            "entity_type": etype,
-            "latitude": lat,
-            "longitude": lon,
-            "geocode_confidence": confidence,
-            "geocode_source": source,
-        })
+        results.append(
+            {
+                "entity_text_normalized": normalized,
+                "entity_type": etype,
+                "latitude": lat,
+                "longitude": lon,
+                "geocode_confidence": confidence,
+                "geocode_source": source,
+            }
+        )
 
     return results
 

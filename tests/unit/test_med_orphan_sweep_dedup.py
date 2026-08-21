@@ -3,6 +3,7 @@
 Orphan sweep must check that content_item still has embedding IS NULL
 before re-enqueuing, to avoid double analysis of items already being processed.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -11,24 +12,19 @@ pytestmark = pytest.mark.unit
 
 
 class TestOrphanSweepDedupQuery:
-
     def test_orphan_query_checks_embedding_is_null(self):
         """SQL_ORPHANED_CONTENT must filter on embedding IS NULL."""
         from anveshak.analyst.scheduler import SQL_ORPHANED_CONTENT
 
         sql = SQL_ORPHANED_CONTENT.lower()
-        assert "embedding is null" in sql, (
-            "Orphan sweep query must check embedding IS NULL"
-        )
+        assert "embedding is null" in sql, "Orphan sweep query must check embedding IS NULL"
 
     def test_orphan_query_has_time_bound(self):
         """Query must limit to recent items (prevent full table scan)."""
         from anveshak.analyst.scheduler import SQL_ORPHANED_CONTENT
 
         sql = SQL_ORPHANED_CONTENT.lower()
-        assert "interval" in sql or "now()" in sql, (
-            "Orphan sweep must have a time-bound filter"
-        )
+        assert "interval" in sql or "now()" in sql, "Orphan sweep must have a time-bound filter"
 
     def test_orphan_query_has_batch_limit(self):
         """Query must have LIMIT to prevent unbounded processing."""
@@ -55,6 +51,4 @@ class TestOrphanSweepDedupQuery:
             or "not exists" in sql
             or "last_enqueued" in sql
             or "orphan_enqueued_at" in sql
-        ), (
-            "Orphan sweep must exclude items already enqueued to prevent double analysis"
-        )
+        ), "Orphan sweep must exclude items already enqueued to prevent double analysis"

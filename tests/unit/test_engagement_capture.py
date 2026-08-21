@@ -3,59 +3,69 @@
 Verifies that each adapter populates RawItem.engagement, author_id,
 author_handle, and reply_to_id from platform API objects.
 """
+
 from __future__ import annotations
 
-import json
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 from anveshak.social.adapters.base import RawItem
 from anveshak.social.adapters.instagram import InstagramAdapter
 from anveshak.social.adapters.reddit import RedditAdapter
-from anveshak.social.adapters.telegram import TelegramAdapter
-from anveshak.social.adapters.bluesky import BlueskyAdapter
-
 
 # ---------------------------------------------------------------------------
 # RawItem — new fields exist and have correct defaults
 # ---------------------------------------------------------------------------
 
+
 class TestRawItemEngagementFields:
     def test_engagement_default_none(self):
         raw = RawItem(
-            raw_text="test", url="https://x.com/1", platform="twitter",
-            captured_at=datetime.now(UTC), source_handle="test",
+            raw_text="test",
+            url="https://x.com/1",
+            platform="twitter",
+            captured_at=datetime.now(UTC),
+            source_handle="test",
         )
         assert raw.engagement is None
 
     def test_reply_to_id_default_none(self):
         raw = RawItem(
-            raw_text="test", url="https://x.com/1", platform="twitter",
-            captured_at=datetime.now(UTC), source_handle="test",
+            raw_text="test",
+            url="https://x.com/1",
+            platform="twitter",
+            captured_at=datetime.now(UTC),
+            source_handle="test",
         )
         assert raw.reply_to_id is None
 
     def test_author_id_default_none(self):
         raw = RawItem(
-            raw_text="test", url="https://x.com/1", platform="twitter",
-            captured_at=datetime.now(UTC), source_handle="test",
+            raw_text="test",
+            url="https://x.com/1",
+            platform="twitter",
+            captured_at=datetime.now(UTC),
+            source_handle="test",
         )
         assert raw.author_id is None
 
     def test_author_handle_default_none(self):
         raw = RawItem(
-            raw_text="test", url="https://x.com/1", platform="twitter",
-            captured_at=datetime.now(UTC), source_handle="test",
+            raw_text="test",
+            url="https://x.com/1",
+            platform="twitter",
+            captured_at=datetime.now(UTC),
+            source_handle="test",
         )
         assert raw.author_handle is None
 
     def test_engagement_populated(self):
         raw = RawItem(
-            raw_text="test", url="https://x.com/1", platform="twitter",
-            captured_at=datetime.now(UTC), source_handle="test",
+            raw_text="test",
+            url="https://x.com/1",
+            platform="twitter",
+            captured_at=datetime.now(UTC),
+            source_handle="test",
             engagement={"likes": 42, "views": 1000},
         )
         assert raw.engagement == {"likes": 42, "views": 1000}
@@ -63,8 +73,11 @@ class TestRawItemEngagementFields:
     def test_content_hash_unchanged_by_engagement(self):
         """Engagement fields must NOT affect content_hash (dedup key)."""
         base = dict(
-            raw_text="same text", url="https://x.com/1", platform="twitter",
-            captured_at=datetime.now(UTC), source_handle="test",
+            raw_text="same text",
+            url="https://x.com/1",
+            platform="twitter",
+            captured_at=datetime.now(UTC),
+            source_handle="test",
         )
         raw_no_eng = RawItem(**base)
         raw_with_eng = RawItem(**base, engagement={"likes": 99})
@@ -74,6 +87,7 @@ class TestRawItemEngagementFields:
 # ---------------------------------------------------------------------------
 # Instagram — engagement from Media and UserInfo objects
 # ---------------------------------------------------------------------------
+
 
 class TestInstagramEngagement:
     def test_media_engagement_captured(self):
@@ -108,8 +122,11 @@ class TestInstagramEngagement:
 
     def test_media_author_handle_set(self):
         media = SimpleNamespace(
-            caption_text="Test", code="A", taken_at=datetime.now(UTC),
-            thumbnail_url=None, video_url=None,
+            caption_text="Test",
+            code="A",
+            taken_at=datetime.now(UTC),
+            thumbnail_url=None,
+            video_url=None,
         )
         raw = InstagramAdapter._media_to_raw_item(media, "myuser")
         assert raw.author_handle == "myuser"
@@ -142,13 +159,17 @@ class TestInstagramEngagement:
 # Reddit — engagement from PRAW Submission
 # ---------------------------------------------------------------------------
 
+
 class TestRedditEngagement:
     def _make_post(self, **overrides):
         defaults = dict(
-            title="Test post", selftext="body text",
+            title="Test post",
+            selftext="body text",
             permalink="/r/test/comments/abc/test_post/",
             created_utc=datetime.now(UTC).timestamp(),
-            score=42, upvote_ratio=0.95, num_comments=7,
+            score=42,
+            upvote_ratio=0.95,
+            num_comments=7,
             author=SimpleNamespace(__str__=lambda self: "testuser"),
             url="https://i.reddit.com/test.jpg",
         )
@@ -161,7 +182,6 @@ class TestRedditEngagement:
 
     def test_engagement_captured(self):
         post = self._make_post()
-        raw = RedditAdapter._poll_subreddit  # can't call directly, test via _post_to_text pattern
         # Instead, test the RawItem construction pattern directly
         text = RedditAdapter._post_to_text(post)
         assert text  # non-empty
@@ -191,6 +211,7 @@ class TestRedditEngagement:
 # ---------------------------------------------------------------------------
 # Telegram — engagement from Telethon Message
 # ---------------------------------------------------------------------------
+
 
 class TestTelegramEngagement:
     def test_engagement_dict_from_message_attrs(self):
@@ -224,10 +245,14 @@ class TestTelegramEngagement:
 # Bluesky — engagement from atproto post
 # ---------------------------------------------------------------------------
 
+
 class TestBlueskyEngagement:
     def test_engagement_captured(self):
         post = SimpleNamespace(
-            like_count=20, reply_count=5, repost_count=8, quote_count=2,
+            like_count=20,
+            reply_count=5,
+            repost_count=8,
+            quote_count=2,
             author=SimpleNamespace(did="did:plc:abc", handle="user.bsky.social"),
         )
         engagement: dict[str, int | float] = {}
@@ -266,6 +291,7 @@ class TestBlueskyEngagement:
 # X/Twitter — engagement from public_metrics
 # ---------------------------------------------------------------------------
 
+
 class TestXEngagement:
     def test_public_metrics_captured(self):
         metrics = {
@@ -287,8 +313,11 @@ class TestXEngagement:
             if val is not None:
                 engagement[eng_key] = val
         assert engagement == {
-            "likes": 100, "retweets": 25, "replies": 10,
-            "quotes": 3, "impressions": 5000,
+            "likes": 100,
+            "retweets": 25,
+            "replies": 10,
+            "quotes": 3,
+            "impressions": 5000,
         }
 
     def test_no_metrics_returns_empty(self):
@@ -305,10 +334,10 @@ class TestXEngagement:
 # Ingest — engagement flows into labels JSONB
 # ---------------------------------------------------------------------------
 
+
 class TestIngestEngagementLabels:
     def test_engagement_included_in_labels(self):
         """Verify engagement dict is serialized into labels JSON."""
-        from anveshak.social.ingest import _LABELS_TEMPLATE
         import json as _json
 
         raw = RawItem(

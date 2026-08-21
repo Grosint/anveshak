@@ -3,6 +3,7 @@
 All services must use min_size=2 for connection pooling.
 Reporter was the outlier at min_size=1.
 """
+
 from __future__ import annotations
 
 import re
@@ -24,7 +25,6 @@ _POOL_FILES = [
 
 
 class TestPoolSizeConsistency:
-
     @pytest.mark.parametrize("filepath", _POOL_FILES, ids=lambda p: p.parts[-1])
     def test_min_size_is_two(self, filepath):
         """Every create_pool call must use min_size=2."""
@@ -34,6 +34,4 @@ class TestPoolSizeConsistency:
         # Find all create_pool calls with min_size
         matches = re.findall(r"min_size\s*=\s*(\d+)", source)
         for val in matches:
-            assert int(val) == 2, (
-                f"{filepath}: min_size={val}, expected 2"
-            )
+            assert int(val) == 2, f"{filepath}: min_size={val}, expected 2"

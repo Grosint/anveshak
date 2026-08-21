@@ -5,9 +5,10 @@ should attempt refresh_credentials() once before recording a circuit breaker fai
 
 pytest.mark.unit — no external dependencies.
 """
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -21,6 +22,7 @@ class TestRefreshCredentials:
     async def test_base_class_has_refresh_method(self):
         """SourceAdapterBase must define refresh_credentials()."""
         from anveshak.social.adapters.base import SourceAdapterBase
+
         assert hasattr(SourceAdapterBase, "refresh_credentials")
 
     @pytest.mark.asyncio
@@ -32,9 +34,16 @@ class TestRefreshCredentials:
             adapter_id = "dummy-v1"
             platform = "dummy"
             adapter_version = "1.0.0"
-            async def authenticate(self): pass
-            async def collect(self, kw, sh, tid): return; yield
-            async def health(self): return {"status": "HEALTHY"}
+
+            async def authenticate(self):
+                pass
+
+            async def collect(self, kw, sh, tid):
+                return
+                yield  # unreachable: makes this an async generator
+
+            async def health(self):
+                return {"status": "HEALTHY"}
 
         adapter = DummyAdapter()
         result = await adapter.refresh_credentials()
@@ -54,12 +63,13 @@ class TestRefreshCredentials:
     @pytest.mark.asyncio
     async def test_bluesky_refresh_returns_false_on_auth_failure(self):
         """If re-authentication fails, refresh_credentials returns False."""
-        from anveshak.social.adapters.bluesky import BlueskyAdapter
         from anveshak.social.adapters.base import AdapterAuthError
+        from anveshak.social.adapters.bluesky import BlueskyAdapter
 
         adapter = BlueskyAdapter()
         with patch.object(
-            adapter, "authenticate",
+            adapter,
+            "authenticate",
             new_callable=AsyncMock,
             side_effect=AdapterAuthError("bad creds"),
         ):
@@ -79,17 +89,21 @@ class TestRefreshInPollLoop:
             adapter_id = "failing-v1"
             platform = "failing"
             adapter_version = "1.0.0"
-            async def authenticate(self): pass
+
+            async def authenticate(self):
+                pass
+
             async def collect(self, kw, sh, tid):
                 raise AdapterAuthError("token expired")
                 yield  # noqa
-            async def health(self): return {"status": "DOWN"}
+
+            async def health(self):
+                return {"status": "DOWN"}
 
         adapter = FailingAdapter()
         adapter.refresh_credentials = AsyncMock(return_value=True)
 
         # Simulate what poll_social_topic does on auth error
-        from anveshak.social.adapters.base import AdapterAuthError
         try:
             async for _ in adapter.collect(["test"], [], "topic-1"):
                 pass

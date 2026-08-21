@@ -21,6 +21,7 @@ Usage:
         --real-noface path/to/landscape.jpg \\
         --fake-noface path/to/ai_landscape.jpg
 """
+
 from __future__ import annotations
 
 import argparse
@@ -75,6 +76,7 @@ class TestCase:
 # Image generation — Pillow + numpy for realistic 224x224 test fixtures
 # ---------------------------------------------------------------------------
 
+
 def _generate_real_face(size: int = 256) -> bytes:
     """Generate a realistic face-like image that triggers Haar cascade detection.
 
@@ -109,14 +111,18 @@ def _generate_real_face(size: int = 256) -> bytes:
     # Nose shadow
     draw.line(
         [(cx, eye_y + eye_h * 2), (cx, cy + face_h // 6)],
-        fill=(170, 140, 120), width=2,
+        fill=(170, 140, 120),
+        width=2,
     )
 
     # Mouth
     mouth_y = cy + face_h // 3
     draw.arc(
         [cx - eye_gap, mouth_y - 5, cx + eye_gap, mouth_y + 10],
-        0, 180, fill=(150, 80, 70), width=2,
+        0,
+        180,
+        fill=(150, 80, 70),
+        width=2,
     )
 
     # Hair (dark region above face)
@@ -199,14 +205,12 @@ def _generate_ai_face(size: int = 256) -> bytes:
         )
         # Highlight (too perfect)
         draw.ellipse(
-            [ex - eye_w // 3, eye_y - eye_h // 3,
-             ex + eye_w // 3, eye_y + eye_h // 3],
+            [ex - eye_w // 3, eye_y - eye_h // 3, ex + eye_w // 3, eye_y + eye_h // 3],
             fill=(255, 255, 255),
         )
 
     # Perfect nose
-    draw.line([(cx, eye_y + eye_h * 2), (cx, cy + face_h // 6)],
-              fill=(200, 160, 140), width=3)
+    draw.line([(cx, eye_y + eye_h * 2), (cx, cy + face_h // 6)], fill=(200, 160, 140), width=3)
 
     # Perfect lips
     mouth_y = cy + face_h // 3
@@ -291,11 +295,18 @@ def _generate_video(frames: list[bytes], fps: int = 1) -> bytes | None:
         out_path = Path(tmpdir, "output.mp4")
         subprocess.run(
             [
-                "ffmpeg", "-y",
-                "-framerate", str(fps),
-                "-i", str(Path(tmpdir, "frame_%03d.jpg")),
-                "-c:v", "libx264", "-pix_fmt", "yuv420p",
-                "-t", "3",
+                "ffmpeg",
+                "-y",
+                "-framerate",
+                str(fps),
+                "-i",
+                str(Path(tmpdir, "frame_%03d.jpg")),
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-t",
+                "3",
                 str(out_path),
             ],
             capture_output=True,
@@ -308,12 +319,17 @@ def _generate_video(frames: list[bytes], fps: int = 1) -> bytes | None:
 # HTTP helpers (stdlib only)
 # ---------------------------------------------------------------------------
 
-def http_json(method: str, url: str, headers: dict, data=None, timeout: int = 10) -> tuple[int, dict]:
+
+def http_json(
+    method: str, url: str, headers: dict, data=None, timeout: int = 10
+) -> tuple[int, dict]:
     try:
         if isinstance(data, dict):
             data = json.dumps(data).encode()
             headers = {**headers, "Content-Type": "application/json"}
-        req = urllib.request.Request(url, data=data, headers={"Accept": "application/json", **headers}, method=method)
+        req = urllib.request.Request(
+            url, data=data, headers={"Accept": "application/json", **headers}, method=method
+        )
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return resp.status, json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
@@ -336,10 +352,14 @@ def http_post_multipart(
 ) -> tuple[int, dict]:
     boundary = uuid.uuid4().hex
     body = (
-        f"--{boundary}\r\n"
-        f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
-        f"Content-Type: {content_type}\r\n\r\n"
-    ).encode() + file_bytes + f"\r\n--{boundary}--\r\n".encode()
+        (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+            f"Content-Type: {content_type}\r\n\r\n"
+        ).encode()
+        + file_bytes
+        + f"\r\n--{boundary}--\r\n".encode()
+    )
     hdrs = {**headers, "Content-Type": f"multipart/form-data; boundary={boundary}"}
     try:
         req = urllib.request.Request(url, data=body, headers=hdrs, method="POST")
@@ -363,9 +383,11 @@ def _auth(token: str) -> dict:
 # Pipeline stages
 # ---------------------------------------------------------------------------
 
+
 def login() -> tuple[Check, str | None]:
-    status, body = http_json("POST", f"{BASE}/api/v1/auth/login", {},
-                             {"username": DEMO_USER, "password": DEMO_PASS})
+    status, body = http_json(
+        "POST", f"{BASE}/api/v1/auth/login", {}, {"username": DEMO_USER, "password": DEMO_PASS}
+    )
     token = body.get("access_token")
     return Check("Login", bool(token), "OK" if token else f"HTTP {status}"), token
 
@@ -373,7 +395,11 @@ def login() -> tuple[Check, str | None]:
 def upload(tc: TestCase, token: str) -> Check:
     status, body = http_post_multipart(
         f"{BASE}/api/v1/vision/analyse",
-        tc.image_bytes, tc.filename, tc.content_type, _auth(token), timeout=60,
+        tc.image_bytes,
+        tc.filename,
+        tc.content_type,
+        _auth(token),
+        timeout=60,
     )
     if status != 200:
         return Check(f"Upload {tc.label}", False, f"HTTP {status}: {body.get('detail', body)}")
@@ -405,11 +431,13 @@ def validate_result(tc: TestCase) -> list[Check]:
 
     # 1. Deepfake score exists and is float
     score = r.get("deepfake_score")
-    checks.append(Check(
-        f"{tc.label} deepfake_score type",
-        isinstance(score, float),
-        f"{score:.4f}" if isinstance(score, float) else f"wrong type: {type(score).__name__}",
-    ))
+    checks.append(
+        Check(
+            f"{tc.label} deepfake_score type",
+            isinstance(score, float),
+            f"{score:.4f}" if isinstance(score, float) else f"wrong type: {type(score).__name__}",
+        )
+    )
 
     # 2. Model routing
     model = r.get("deepfake_model", "")
@@ -422,58 +450,72 @@ def validate_result(tc: TestCase) -> list[Check]:
     else:
         expected_prefix = "efficientnet:no_face"
         routed_ok = model == expected_prefix
-    checks.append(Check(
-        f"{tc.label} model routing",
-        routed_ok,
-        f"{model} (expected {expected_prefix})",
-        warning=not routed_ok,
-    ))
+    checks.append(
+        Check(
+            f"{tc.label} model routing",
+            routed_ok,
+            f"{model} (expected {expected_prefix})",
+            warning=not routed_ok,
+        )
+    )
 
     # 3. Score direction
     if isinstance(score, float):
         if tc.expect_high_score:
             direction_ok = score > 0.5
-            checks.append(Check(
-                f"{tc.label} score > 0.5 (fake expected)",
-                True, f"{score:.4f}",
-                warning=not direction_ok,
-            ))
+            checks.append(
+                Check(
+                    f"{tc.label} score > 0.5 (fake expected)",
+                    True,
+                    f"{score:.4f}",
+                    warning=not direction_ok,
+                )
+            )
         else:
             direction_ok = score < 0.5
-            checks.append(Check(
-                f"{tc.label} score < 0.5 (real expected)",
-                True, f"{score:.4f}",
-                warning=not direction_ok,
-            ))
+            checks.append(
+                Check(
+                    f"{tc.label} score < 0.5 (real expected)",
+                    True,
+                    f"{score:.4f}",
+                    warning=not direction_ok,
+                )
+            )
 
     # 4. YOLO (images only)
     if not tc.is_video:
         yolo = r.get("yolo_detections")
-        checks.append(Check(
-            f"{tc.label} YOLO ran",
-            yolo is not None and yolo >= 0,
-            f"{yolo} detection(s)" if yolo is not None else "missing",
-        ))
+        checks.append(
+            Check(
+                f"{tc.label} YOLO ran",
+                yolo is not None and yolo >= 0,
+                f"{yolo} detection(s)" if yolo is not None else "missing",
+            )
+        )
 
     # 5. pHash (images only)
     if not tc.is_video:
         phash = r.get("phash")
-        checks.append(Check(
-            f"{tc.label} pHash",
-            phash is not None,
-            f"{hex(phash)}" if phash is not None else "None",
-            warning=phash is None,
-        ))
+        checks.append(
+            Check(
+                f"{tc.label} pHash",
+                phash is not None,
+                f"{hex(phash)}" if phash is not None else "None",
+                warning=phash is None,
+            )
+        )
 
     # 6. CLIP (only for no-face images with test_clip flag)
     if tc.test_clip:
         clip_matched = r.get("clip_categories_matched", 0)
-        checks.append(Check(
-            f"{tc.label} CLIP categories",
-            clip_matched is not None and clip_matched >= 0,
-            f"{clip_matched} categories matched",
-            warning=clip_matched == 0,
-        ))
+        checks.append(
+            Check(
+                f"{tc.label} CLIP categories",
+                clip_matched is not None and clip_matched >= 0,
+                f"{clip_matched} categories matched",
+                warning=clip_matched == 0,
+            )
+        )
 
     return checks
 
@@ -481,6 +523,7 @@ def validate_result(tc: TestCase) -> list[Check]:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Anveshak vision full E2E validation")
@@ -540,23 +583,65 @@ def main() -> int:
 
     # Build test cases
     cases: list[TestCase] = [
-        TestCase("Real+Face", real_face, "real_face.jpg", "image/jpeg",
-                 expect_face=True, expect_high_score=False),
-        TestCase("Real+NoFace", real_noface, "real_landscape.jpg", "image/jpeg",
-                 expect_face=False, expect_high_score=False, test_clip=True),
-        TestCase("AI+Face", fake_face, "ai_face.jpg", "image/jpeg",
-                 expect_face=True, expect_high_score=True),
-        TestCase("AI+NoFace", fake_noface, "ai_landscape.jpg", "image/jpeg",
-                 expect_face=False, expect_high_score=True, test_clip=True),
+        TestCase(
+            "Real+Face",
+            real_face,
+            "real_face.jpg",
+            "image/jpeg",
+            expect_face=True,
+            expect_high_score=False,
+        ),
+        TestCase(
+            "Real+NoFace",
+            real_noface,
+            "real_landscape.jpg",
+            "image/jpeg",
+            expect_face=False,
+            expect_high_score=False,
+            test_clip=True,
+        ),
+        TestCase(
+            "AI+Face",
+            fake_face,
+            "ai_face.jpg",
+            "image/jpeg",
+            expect_face=True,
+            expect_high_score=True,
+        ),
+        TestCase(
+            "AI+NoFace",
+            fake_noface,
+            "ai_landscape.jpg",
+            "image/jpeg",
+            expect_face=False,
+            expect_high_score=True,
+            test_clip=True,
+        ),
     ]
 
     if real_video_bytes and fake_video_bytes:
-        cases.extend([
-            TestCase("Real+Video", real_video_bytes, "real_video.mp4", "video/mp4",
-                     expect_face=False, expect_high_score=False, is_video=True),
-            TestCase("AI+Video", fake_video_bytes, "ai_video.mp4", "video/mp4",
-                     expect_face=False, expect_high_score=True, is_video=True),
-        ])
+        cases.extend(
+            [
+                TestCase(
+                    "Real+Video",
+                    real_video_bytes,
+                    "real_video.mp4",
+                    "video/mp4",
+                    expect_face=False,
+                    expect_high_score=False,
+                    is_video=True,
+                ),
+                TestCase(
+                    "AI+Video",
+                    fake_video_bytes,
+                    "ai_video.mp4",
+                    "video/mp4",
+                    expect_face=False,
+                    expect_high_score=True,
+                    is_video=True,
+                ),
+            ]
+        )
 
     # -- Stage 3: Upload all --
     print(f"\nStage 3 — Uploading {len(cases)} test cases:")
@@ -575,7 +660,7 @@ def main() -> int:
             return 1
 
     # -- Stage 5: Validate results --
-    print(f"\nStage 5 — Validating results:")
+    print("\nStage 5 — Validating results:")
     for tc in cases:
         for c in validate_result(tc):
             _p(c)
@@ -598,12 +683,14 @@ def main() -> int:
         fs = fake_tc.result.get("deepfake_score")
         if isinstance(rs, float) and isinstance(fs, float):
             separated = fs > rs
-            _p(Check(
-                f"{pair_label}: AI score > Real score",
-                True,
-                f"real={rs:.4f}  ai={fs:.4f}  {'separated' if separated else 'NOT separated'}",
-                warning=not separated,
-            ))
+            _p(
+                Check(
+                    f"{pair_label}: AI score > Real score",
+                    True,
+                    f"real={rs:.4f}  ai={fs:.4f}  {'separated' if separated else 'NOT separated'}",
+                    warning=not separated,
+                )
+            )
         else:
             _p(Check(f"{pair_label}: score comparison", False, "missing scores"))
 

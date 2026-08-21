@@ -1,24 +1,22 @@
 """LLM-powered source type suggestions (Level 4).
 
 Uses local Ollama to suggest source types based on topic context.
-All LLM calls are async (CLAUDE.md rule 5), localhost only (rule 10),
+All LLM calls are async (AGENTS.md rule 5), localhost only (rule 10),
 and output is Pydantic-validated (rule 9).
 """
+
 from __future__ import annotations
 
 import json
-import re
 import uuid
 from datetime import UTC, datetime
-from typing import Any
 
 import asyncpg
 import httpx
 import structlog
-from pydantic import ValidationError
-
-from anveshak.models.catalog import SourceSuggestion
 from anveshak.models.base import Labels
+from anveshak.models.catalog import SourceSuggestion
+from pydantic import ValidationError
 
 from .settings import settings
 
@@ -125,7 +123,7 @@ def parse_llm_suggestions(raw_response: str) -> list[SourceSuggestion] | None:
 
 
 async def call_ollama(prompt: str) -> str:
-    """Call local Ollama for LLM inference (CLAUDE.md rule 10: localhost only)."""
+    """Call local Ollama for LLM inference (AGENTS.md rule 10: localhost only)."""
     async with httpx.AsyncClient(timeout=300) as client:
         resp = await client.post(
             f"{settings.ollama_host}/api/generate",

@@ -12,6 +12,7 @@ Redis keys per adapter:
   anveshak:social:failures:{adapter_id}   — consecutive failure count (int)
   anveshak:social:opened_at:{adapter_id}  — monotonic timestamp when circuit opened
 """
+
 from __future__ import annotations
 
 import time

@@ -2,9 +2,10 @@
 
 Validates broadcast delivery, dead connection cleanup, and empty session handling.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -32,6 +33,7 @@ def _make_ws(*, healthy: bool = True) -> AsyncMock:
 
 # ---- Test 1: Broadcast sends to all sessions ----
 
+
 @pytest.mark.unit
 async def test_broadcast_signal_sends_to_all_sessions() -> None:
     """Two connected sessions should both receive the signal payload."""
@@ -53,6 +55,7 @@ async def test_broadcast_signal_sends_to_all_sessions() -> None:
 
 # ---- Test 2: Dead connection is removed ----
 
+
 @pytest.mark.unit
 async def test_broadcast_signal_removes_dead_sessions() -> None:
     """A session that raises on send_json gets removed from _sessions."""
@@ -73,6 +76,7 @@ async def test_broadcast_signal_removes_dead_sessions() -> None:
 
 
 # ---- Test 3: Empty sessions -> no error ----
+
 
 @pytest.mark.unit
 async def test_broadcast_signal_empty_sessions() -> None:

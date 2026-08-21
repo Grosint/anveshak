@@ -1,9 +1,10 @@
 """Source repository — all SQL for the sources domain."""
+
 from __future__ import annotations
 
 from typing import Any, Optional
 
-import asyncpg
+from anveshak.db import DBConnection
 
 # ---------------------------------------------------------------------------
 # SQL constants
@@ -55,9 +56,7 @@ SQL_GET_SOURCE_SCORE = "SELECT credibility_score FROM sources WHERE id = $1"
 
 SQL_CHECK_SOURCE_EXISTS = "SELECT id FROM sources WHERE id = $1"
 
-SQL_UPDATE_SOURCE_SCORE = (
-    "UPDATE sources SET credibility_score=$1, updated_at=$2 WHERE id=$3"
-)
+SQL_UPDATE_SOURCE_SCORE = "UPDATE sources SET credibility_score=$1, updated_at=$2 WHERE id=$3"
 
 SQL_INSERT_CREDIBILITY_AUDIT = """
     INSERT INTO credibility_audit_log
@@ -65,9 +64,7 @@ SQL_INSERT_CREDIBILITY_AUDIT = """
     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
 """
 
-SQL_TOGGLE_SOURCE_ACTIVE = (
-    "UPDATE sources SET is_active=$1, updated_at=$2 WHERE id=$3"
-)
+SQL_TOGGLE_SOURCE_ACTIVE = "UPDATE sources SET is_active=$1, updated_at=$2 WHERE id=$3"
 
 SQL_COUNT_REPORT_WARNINGS = """
     SELECT COUNT(*)
@@ -121,9 +118,7 @@ SQL_UPDATE_SOURCE_FIELDS = """
 
 SQL_DELETE_SOURCE = "DELETE FROM sources WHERE id = $1"
 
-SQL_COUNT_CONTENT_ITEMS_FOR_SOURCE = (
-    "SELECT COUNT(*) FROM content_items WHERE source_id = $1"
-)
+SQL_COUNT_CONTENT_ITEMS_FOR_SOURCE = "SELECT COUNT(*) FROM content_items WHERE source_id = $1"
 
 SQL_TOPIC_SOURCES = """
     SELECT
@@ -174,8 +169,9 @@ SQL_ADD_ORG_SOURCE = """
 # Repository functions
 # ---------------------------------------------------------------------------
 
+
 async def insert_source(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     source_id: str,
     name: str,
     url_or_handle: str,
@@ -188,13 +184,22 @@ async def insert_source(
 ) -> None:
     await conn.execute(
         SQL_INSERT_SOURCE,
-        source_id, name, url_or_handle, platform,
-        credibility_score, True, True, now, now, labels_json, org_id,
+        source_id,
+        name,
+        url_or_handle,
+        platform,
+        credibility_score,
+        True,
+        True,
+        now,
+        now,
+        labels_json,
+        org_id,
     )
 
 
 async def list_sources(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[dict[str, Any]], int]:
@@ -205,7 +210,7 @@ async def list_sources(
 
 
 async def list_sources_by_org(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     org_id: str,
     limit: int = 50,
     offset: int = 0,
@@ -218,12 +223,12 @@ async def list_sources_by_org(
 
 
 async def verify_source_access(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     source_id: str,
     user: dict,
 ) -> None:
     """Raise 404 if source is not visible to user's org (unless super-admin)."""
-    from ..auth.rbac import is_super_admin, get_user_org
+    from ..auth.rbac import get_user_org, is_super_admin
 
     if is_super_admin(user):
         return
@@ -231,23 +236,22 @@ async def verify_source_access(
     exists = await conn.fetchval(SQL_CHECK_SOURCE_VISIBILITY, org_id, source_id)
     if not exists:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail="Source not found")
 
 
-async def get_source_score(
-    conn: asyncpg.Connection, source_id: str
-) -> float | None:
+async def get_source_score(conn: DBConnection, source_id: str) -> float | None:
     row = await conn.fetchrow(SQL_GET_SOURCE_SCORE, source_id)
     return row["credibility_score"] if row else None
 
 
-async def source_exists(conn: asyncpg.Connection, source_id: str) -> bool:
+async def source_exists(conn: DBConnection, source_id: str) -> bool:
     row = await conn.fetchrow(SQL_CHECK_SOURCE_EXISTS, source_id)
     return row is not None
 
 
 async def update_credibility(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     source_id: str,
     audit_id: str,
     old_score: float,
@@ -262,12 +266,20 @@ async def update_credibility(
     await conn.execute(SQL_UPDATE_SOURCE_SCORE, new_score, now, source_id)
     await conn.execute(
         SQL_INSERT_CREDIBILITY_AUDIT,
-        audit_id, source_id, old_score, new_score, reason, changed_by, now, labels_json, org_id,
+        audit_id,
+        source_id,
+        old_score,
+        new_score,
+        reason,
+        changed_by,
+        now,
+        labels_json,
+        org_id,
     )
 
 
 async def toggle_source_active(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     source_id: str,
     is_active: bool,
     now: Any,
@@ -275,30 +287,24 @@ async def toggle_source_active(
     await conn.execute(SQL_TOGGLE_SOURCE_ACTIVE, is_active, now, source_id)
 
 
-async def count_report_warnings(
-    conn: asyncpg.Connection, source_id: str
-) -> int:
+async def count_report_warnings(conn: DBConnection, source_id: str) -> int:
     result = await conn.fetchval(SQL_COUNT_REPORT_WARNINGS, source_id)
     return int(result or 0)
 
 
-async def get_audit_log(
-    conn: asyncpg.Connection, source_id: str
-) -> list[dict[str, Any]]:
+async def get_audit_log(conn: DBConnection, source_id: str) -> list[dict[str, Any]]:
     rows = await conn.fetch(SQL_GET_AUDIT_LOG, source_id)
     return [dict(r) for r in rows]
 
 
-async def list_sources_below(
-    conn: asyncpg.Connection, threshold: float
-) -> list[dict[str, Any]]:
+async def list_sources_below(conn: DBConnection, threshold: float) -> list[dict[str, Any]]:
     """Return sources with credibility_score < threshold, ascending (worst first)."""
     rows = await conn.fetch(SQL_LIST_SOURCES_BELOW, threshold)
     return [dict(r) for r in rows]
 
 
 async def update_source_health(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     source_id: str,
     health_status: str,
     consecutive_failures: int,
@@ -308,19 +314,21 @@ async def update_source_health(
     """Write health check result. Called by scraper worker and API check-health endpoint."""
     await conn.execute(
         SQL_UPDATE_SOURCE_HEALTH,
-        source_id, health_status, consecutive_failures, health_error, now,
+        source_id,
+        health_status,
+        consecutive_failures,
+        health_error,
+        now,
     )
 
 
-async def get_source_for_health(
-    conn: asyncpg.Connection, source_id: str
-) -> dict[str, Any] | None:
+async def get_source_for_health(conn: DBConnection, source_id: str) -> dict[str, Any] | None:
     row = await conn.fetchrow(SQL_GET_SOURCE_FOR_HEALTH, source_id)
     return dict(row) if row else None
 
 
 async def update_source_fields(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     source_id: str,
     name: str | None,
     url_or_handle: str | None,
@@ -330,48 +338,36 @@ async def update_source_fields(
     await conn.execute(SQL_UPDATE_SOURCE_FIELDS, source_id, name, url_or_handle, now)
 
 
-async def delete_source(conn: asyncpg.Connection, source_id: str) -> None:
+async def delete_source(conn: DBConnection, source_id: str) -> None:
     await conn.execute(SQL_DELETE_SOURCE, source_id)
 
 
-async def count_content_items_for_source(
-    conn: asyncpg.Connection, source_id: str
-) -> int:
+async def count_content_items_for_source(conn: DBConnection, source_id: str) -> int:
     result = await conn.fetchval(SQL_COUNT_CONTENT_ITEMS_FOR_SOURCE, source_id)
     return int(result or 0)
 
 
-async def list_topic_sources(
-    conn: asyncpg.Connection, topic_id: str
-) -> list[dict[str, Any]]:
+async def list_topic_sources(conn: DBConnection, topic_id: str) -> list[dict[str, Any]]:
     """Return sources assigned to a topic via topic_sources, with item_count."""
     rows = await conn.fetch(SQL_TOPIC_SOURCES, topic_id)
     return [dict(r) for r in rows]
 
 
-async def add_topic_source(
-    conn: asyncpg.Connection, topic_id: str, source_id: str
-) -> None:
+async def add_topic_source(conn: DBConnection, topic_id: str, source_id: str) -> None:
     """Associate a source with a topic."""
     await conn.execute(SQL_ADD_TOPIC_SOURCE, topic_id, source_id)
 
 
-async def remove_topic_source(
-    conn: asyncpg.Connection, topic_id: str, source_id: str
-) -> None:
+async def remove_topic_source(conn: DBConnection, topic_id: str, source_id: str) -> None:
     """Remove a source association from a topic."""
     await conn.execute(SQL_REMOVE_TOPIC_SOURCE, topic_id, source_id)
 
 
-async def topic_source_exists(
-    conn: asyncpg.Connection, topic_id: str, source_id: str
-) -> bool:
+async def topic_source_exists(conn: DBConnection, topic_id: str, source_id: str) -> bool:
     row = await conn.fetchrow(SQL_CHECK_TOPIC_SOURCE, topic_id, source_id)
     return row is not None
 
 
-async def add_org_source(
-    conn: asyncpg.Connection, org_id: str, source_id: str
-) -> None:
+async def add_org_source(conn: DBConnection, org_id: str, source_id: str) -> None:
     """Link a source to an organization for visibility."""
     await conn.execute(SQL_ADD_ORG_SOURCE, org_id, source_id)

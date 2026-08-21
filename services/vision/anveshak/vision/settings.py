@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Optional
 
 from pydantic_settings import BaseSettings
 
@@ -9,11 +8,11 @@ class VisionSettings(BaseSettings):
     redis_url: str = "redis://localhost:6379"
 
     # Hardware-controlled settings — see hardware.md
-    vision_device: str = "cpu"                          # cpu → cuda (see hardware.md)
-    yolo_model_size: str = "nano"                       # nano → xlarge (see hardware.md)
-    vision_deepfake_image_model: str = "facetorch"      # facetorch (upgradeable)
-    vision_deepfake_video_model: str = "efficientnet"   # efficientnet → dire (see hardware.md)
-    vision_batch_size: int = 1                          # increase on GPU (see hardware.md)
+    vision_device: str = "cpu"  # cpu → cuda (see hardware.md)
+    yolo_model_size: str = "nano"  # nano → xlarge (see hardware.md)
+    vision_deepfake_image_model: str = "facetorch"  # facetorch (upgradeable)
+    vision_deepfake_video_model: str = "efficientnet"  # efficientnet → dire (see hardware.md)
+    vision_batch_size: int = 1  # increase on GPU (see hardware.md)
 
     # Model directory — populated by Dockerfile pre-download step
     # Never hardcode model names in service logic — always read from here
@@ -40,7 +39,7 @@ class VisionSettings(BaseSettings):
     facetorch_model_path: str = "facetorch/face_deepfake.onnx"
     efficientnet_model_path: str = "efficientnet/deepfake_b0.onnx"
     deepfake_face_confidence_threshold: float = 0.5
-    deepfake_high_risk_threshold: float = 0.8           # triggers credibility downgrade (criteria 4.33)
+    deepfake_high_risk_threshold: float = 0.8  # triggers credibility downgrade (criteria 4.33)
 
     # Video keyframe extraction
     video_keyframe_interval_s: int = 5
@@ -58,7 +57,7 @@ class VisionSettings(BaseSettings):
     media_retention_days: int = 30
 
     # EXIF backend — pillow (stdlib) or exiftool (binary must be on PATH)
-    exif_backend: str = "pillow"                        # pillow → exiftool via env
+    exif_backend: str = "pillow"  # pillow → exiftool via env
 
     port: int = 8003
     log_level: str = "INFO"

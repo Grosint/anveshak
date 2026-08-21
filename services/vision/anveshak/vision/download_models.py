@@ -11,6 +11,7 @@ Downloads:
 Idempotent — skips downloads if models already exist.
 Used by the vision-init container in compose.yml.
 """
+
 from __future__ import annotations
 
 import sys
@@ -26,6 +27,7 @@ log = structlog.get_logger(__name__)
 # ---------------------------------------------------------------------------
 # YOLO
 # ---------------------------------------------------------------------------
+
 
 def _download_yolo(model_dir: Path) -> None:
     """Download YOLO .pt weight file to model_dir/yolo/.
@@ -46,14 +48,20 @@ def _download_yolo(model_dir: Path) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
 
     url = f"https://github.com/ultralytics/assets/releases/download/v8.2.0/{model_file}"
-    urllib.request.urlretrieve(url, str(target))
-    log.info("download_models.yolo_done", model=model_file, path=str(target),
-             size_mb=f"{target.stat().st_size / 1024 / 1024:.1f}")
+    # scheme and host are the literal https://github.com prefix above
+    urllib.request.urlretrieve(url, str(target))  # nosec B310
+    log.info(
+        "download_models.yolo_done",
+        model=model_file,
+        path=str(target),
+        size_mb=f"{target.stat().st_size / 1024 / 1024:.1f}",
+    )
 
 
 # ---------------------------------------------------------------------------
 # CLIP
 # ---------------------------------------------------------------------------
+
 
 def _download_clip() -> None:
     """Download CLIP model to HF_HOME (set via env var in compose)."""
@@ -62,14 +70,17 @@ def _download_clip() -> None:
     log.info("download_models.clip_downloading", model=model_name)
     from transformers import CLIPModel, CLIPProcessor
 
-    CLIPProcessor.from_pretrained(model_name)
-    CLIPModel.from_pretrained(model_name)
+    # sovereign deployment; init container pre-caches models, no runtime HuggingFace download in production
+    CLIPProcessor.from_pretrained(model_name)  # nosec B615
+    # sovereign deployment; init container pre-caches models, no runtime HuggingFace download in production
+    CLIPModel.from_pretrained(model_name)  # nosec B615
     log.info("download_models.clip_done", model=model_name)
 
 
 # ---------------------------------------------------------------------------
 # Facetorch ONNX — real HuggingFace model
 # ---------------------------------------------------------------------------
+
 
 def _download_facetorch_onnx(model_dir: Path) -> None:
     """Download face deepfake model from HuggingFace and export to ONNX.
@@ -87,11 +98,15 @@ def _download_facetorch_onnx(model_dir: Path) -> None:
     log.info("download_models.facetorch_downloading", hf_model=hf_model)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    from optimum.onnxruntime import ORTModelForImageClassification
+    # optimum is a container-only dependency, absent from the host venv.
+    from optimum.onnxruntime import (  # pyright: ignore[reportMissingImports]
+        ORTModelForImageClassification,
+    )
 
     try:
         ort_model = ORTModelForImageClassification.from_pretrained(
-            hf_model, export=True,
+            hf_model,
+            export=True,
         )
         ort_model.save_pretrained(str(out_path.parent))
 
@@ -117,6 +132,7 @@ def _download_facetorch_onnx(model_dir: Path) -> None:
 # EfficientNet ONNX — real HuggingFace model
 # ---------------------------------------------------------------------------
 
+
 def _download_efficientnet_onnx(model_dir: Path) -> None:
     """Download non-face deepfake model from HuggingFace and export to ONNX.
 
@@ -133,11 +149,15 @@ def _download_efficientnet_onnx(model_dir: Path) -> None:
     log.info("download_models.efficientnet_downloading", hf_model=hf_model)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    from optimum.onnxruntime import ORTModelForImageClassification
+    # optimum is a container-only dependency, absent from the host venv.
+    from optimum.onnxruntime import (  # pyright: ignore[reportMissingImports]
+        ORTModelForImageClassification,
+    )
 
     try:
         ort_model = ORTModelForImageClassification.from_pretrained(
-            hf_model, export=True,
+            hf_model,
+            export=True,
         )
         ort_model.save_pretrained(str(out_path.parent))
 
@@ -162,6 +182,7 @@ def _download_efficientnet_onnx(model_dir: Path) -> None:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     model_dir = settings.model_dir

@@ -8,9 +8,10 @@ Tests:
   - Setting respect_robots_txt=False bypasses check
   - Unreachable robots.txt defaults to allow (permissive)
 """
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -18,10 +19,10 @@ pytestmark = pytest.mark.unit
 
 
 class TestRobotsCheck:
-
     @pytest.fixture(autouse=True)
     def clear_cache(self):
         from anveshak.scraper.fetch import _robots_cache
+
         _robots_cache.clear()
         yield
         _robots_cache.clear()
@@ -31,7 +32,9 @@ class TestRobotsCheck:
         """URL allowed by robots.txt is fetched normally."""
         from anveshak.scraper.fetch import check_robots_allowed
 
-        with patch("anveshak.scraper.fetch._fetch_robots_txt", new_callable=AsyncMock) as mock_fetch:
+        with patch(
+            "anveshak.scraper.fetch._fetch_robots_txt", new_callable=AsyncMock
+        ) as mock_fetch:
             mock_fetch.return_value = "User-agent: *\nAllow: /\n"
             with patch("anveshak.scraper.fetch.settings") as mock_settings:
                 mock_settings.respect_robots_txt = True
@@ -43,7 +46,9 @@ class TestRobotsCheck:
         """URL disallowed by robots.txt returns False."""
         from anveshak.scraper.fetch import check_robots_allowed
 
-        with patch("anveshak.scraper.fetch._fetch_robots_txt", new_callable=AsyncMock) as mock_fetch:
+        with patch(
+            "anveshak.scraper.fetch._fetch_robots_txt", new_callable=AsyncMock
+        ) as mock_fetch:
             mock_fetch.return_value = "User-agent: *\nDisallow: /private\n"
             with patch("anveshak.scraper.fetch.settings") as mock_settings:
                 mock_settings.respect_robots_txt = True
@@ -55,7 +60,9 @@ class TestRobotsCheck:
         """Second call for same domain uses cache — doesn't fetch robots.txt again."""
         from anveshak.scraper.fetch import check_robots_allowed
 
-        with patch("anveshak.scraper.fetch._fetch_robots_txt", new_callable=AsyncMock) as mock_fetch:
+        with patch(
+            "anveshak.scraper.fetch._fetch_robots_txt", new_callable=AsyncMock
+        ) as mock_fetch:
             mock_fetch.return_value = "User-agent: *\nAllow: /\n"
             with patch("anveshak.scraper.fetch.settings") as mock_settings:
                 mock_settings.respect_robots_txt = True
@@ -88,7 +95,9 @@ class TestRobotsCheck:
         """If robots.txt can't be fetched, default to allowing."""
         from anveshak.scraper.fetch import check_robots_allowed
 
-        with patch("anveshak.scraper.fetch._fetch_robots_txt", new_callable=AsyncMock) as mock_fetch:
+        with patch(
+            "anveshak.scraper.fetch._fetch_robots_txt", new_callable=AsyncMock
+        ) as mock_fetch:
             mock_fetch.return_value = None  # fetch failed
             with patch("anveshak.scraper.fetch.settings") as mock_settings:
                 mock_settings.respect_robots_txt = True

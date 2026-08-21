@@ -8,6 +8,7 @@ Criteria 4.22–4.24:
 Hardware: openai/clip-vit-base-patch32 on CPU by default.
 Upgrade:  CLIP_MODEL_NAME=openai/clip-vit-large-patch14 on GPU (see hardware.md).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -22,7 +23,7 @@ log = structlog.get_logger(__name__)
 @dataclass
 class CLIPResult:
     label: str
-    score: float   # 0.0–1.0 cosine similarity
+    score: float  # 0.0–1.0 cosine similarity
 
 
 class CLIPClassifier:
@@ -41,8 +42,10 @@ class CLIPClassifier:
 
         model_name = settings.clip_model_name
         log.info("vision.clip.loading", model=model_name)
-        self._processor = CLIPProcessor.from_pretrained(model_name)  # nosec B615 — sovereign deployment; models pre-cached locally, no runtime HuggingFace download in production
-        self._model = CLIPModel.from_pretrained(model_name)  # nosec B615 — sovereign deployment; models pre-cached locally, no runtime HuggingFace download in production
+        # sovereign deployment; models pre-cached locally, no runtime HuggingFace download in production
+        self._processor = CLIPProcessor.from_pretrained(model_name)  # nosec B615
+        # sovereign deployment; models pre-cached locally, no runtime HuggingFace download in production
+        self._model = CLIPModel.from_pretrained(model_name)  # nosec B615
         self._model.eval()
         log.info("vision.clip.loaded", model=model_name)
 
@@ -63,17 +66,28 @@ class CLIPClassifier:
 
         if self._model is None:
             self._load_model()
+        if self._model is None or self._processor is None:
+            # Reachable when the model volume is mounted but empty, which is the
+            # state on a first deploy. Fail loudly: the silent alternative is a
+            # NoneType TypeError three frames down, or scores that look real.
+            raise RuntimeError(
+                f"CLIP model {settings.clip_model_name} failed to load "
+                "- check the mounted model cache"
+            )
 
         import io
+
         import torch
         from PIL import Image
 
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        # transformers types ProcessorMixin.__call__ generically; CLIPProcessor
+        # does accept text/images/return_tensors/padding.
         inputs = self._processor(
             text=categories,
             images=image,
-            return_tensors="pt",
-            padding=True,
+            return_tensors="pt",  # pyright: ignore[reportCallIssue]
+            padding=True,  # pyright: ignore[reportCallIssue]
         )
         with torch.no_grad():
             outputs = self._model(**inputs)
@@ -82,8 +96,7 @@ class CLIPClassifier:
             probs = logits.softmax(dim=0).tolist()
 
         results = [
-            CLIPResult(label=cat, score=round(float(p), 4))
-            for cat, p in zip(categories, probs)
+            CLIPResult(label=cat, score=round(float(p), 4)) for cat, p in zip(categories, probs)
         ]
         results.sort(key=lambda r: r.score, reverse=True)
 

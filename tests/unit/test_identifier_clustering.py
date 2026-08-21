@@ -7,12 +7,12 @@ Tests cover:
   4. find_co_occurrences() — identifiers sharing content items
   5. build_identifier_network() — full network from co-occurrences
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
 import pytest
-
 from anveshak.analyst.identifier_clustering import (
     ContentIdentifier,
     IdentifierCluster,
@@ -23,10 +23,10 @@ from anveshak.analyst.identifier_clustering import (
     merge_into_cluster,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _ts(hour: int = 12, day: int = 1) -> datetime:
     """Quick timestamp factory."""
@@ -53,6 +53,7 @@ def _ci(
 # ===================================================================
 # 1. Data model tests
 # ===================================================================
+
 
 class TestContentIdentifierModel:
     """ContentIdentifier dataclass integrity."""
@@ -139,6 +140,7 @@ class TestNetworkEdgeModel:
 # ===================================================================
 # 2. build_clusters() tests
 # ===================================================================
+
 
 class TestBuildClusters:
     """build_clusters() groups identifiers and applies threshold."""
@@ -316,6 +318,7 @@ class TestBuildClusters:
 # 3. merge_into_cluster() tests
 # ===================================================================
 
+
 class TestMergeIntoCluster:
     """merge_into_cluster() adds new item to existing cluster."""
 
@@ -406,6 +409,7 @@ class TestMergeIntoCluster:
 # 4. find_co_occurrences() tests
 # ===================================================================
 
+
 class TestFindCoOccurrences:
     """find_co_occurrences() finds identifiers sharing content items."""
 
@@ -494,6 +498,7 @@ class TestFindCoOccurrences:
 # 5. build_identifier_network() tests
 # ===================================================================
 
+
 class TestBuildIdentifierNetwork:
     """build_identifier_network() combines clusters + co-occurrences."""
 
@@ -512,7 +517,7 @@ class TestBuildIdentifierNetwork:
         ]
         clusters, edges = build_identifier_network(items)
         assert len(clusters) == 2  # phone cluster + UPI cluster
-        assert len(edges) == 1    # phone-UPI co-occurrence
+        assert len(edges) == 1  # phone-UPI co-occurrence
 
     def test_clusters_without_edges(self) -> None:
         """Same phone in different content (no other identifiers) → cluster, no edges."""
@@ -531,8 +536,8 @@ class TestBuildIdentifierNetwork:
             _ci(id_type="UPI", value="test@ybl", content_id="c1", source_id="s1"),
         ]
         clusters, edges = build_identifier_network(items)
-        assert clusters == []     # neither meets 2+ sources threshold
-        assert len(edges) == 1   # but they co-occur
+        assert clusters == []  # neither meets 2+ sources threshold
+        assert len(edges) == 1  # but they co-occur
 
     def test_complex_network(self) -> None:
         """Multiple identifiers, multiple content items → realistic network."""

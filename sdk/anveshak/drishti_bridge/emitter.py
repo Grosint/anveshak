@@ -1,10 +1,11 @@
 """Drishti bridge emitter — emits extracted entities as source.envelopes.v1."""
-import os
+
 import hashlib
 import json
+import os
+from datetime import UTC, datetime
+
 import structlog
-from datetime import datetime, UTC
-from typing import Any
 
 log = structlog.get_logger(__name__)
 
@@ -41,7 +42,11 @@ class DrishtiBridgeEmitter:
         if not self._enabled:
             return
         try:
-            from aiokafka import AIOKafkaProducer
+            # aiokafka is a container-only dependency, absent from the host venv.
+            from aiokafka import (  # pyright: ignore[reportMissingImports]
+                AIOKafkaProducer,
+            )
+
             self._producer = AIOKafkaProducer(
                 bootstrap_servers=self._bootstrap,
                 value_serializer=lambda v: json.dumps(v).encode(),
@@ -56,8 +61,9 @@ class DrishtiBridgeEmitter:
         if self._producer:
             await self._producer.stop()
 
-    async def emit_entity(self, entity_text: str, entity_type: str,
-                          topic_name: str, source_url: str) -> None:
+    async def emit_entity(
+        self, entity_text: str, entity_type: str, topic_name: str, source_url: str
+    ) -> None:
         """Emit an extracted entity as a Drishti-compatible RawRecord envelope."""
         if not self._enabled:
             raise BridgeDisabledError("Drishti bridge is disabled")
@@ -86,7 +92,12 @@ class DrishtiBridgeEmitter:
                 "source_id": self.SOURCE_ID,
             },
         }
+        if self._producer is None:
+            raise BridgeDisabledError("Drishti bridge producer not started - call start() first")
         await self._producer.send_and_wait(self.TOPIC, envelope)
-        log.info("drishti_bridge.emitted",
-                 entity=entity_text, entity_type=entity_type,
-                 content_hash=content_hash)
+        log.info(
+            "drishti_bridge.emitted",
+            entity=entity_text,
+            entity_type=entity_type,
+            content_hash=content_hash,
+        )

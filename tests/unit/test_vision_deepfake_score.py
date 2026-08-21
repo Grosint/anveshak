@@ -1,16 +1,18 @@
 """Unit tests: deepfake score is always float 0.0–1.0, never bool.
 
 Criteria 4.14: score is float 0.0–1.0 — NEVER bool.
-CLAUDE.md rule 7: deepfake scores are probabilities, never booleans.
+AGENTS.md rule 7: deepfake scores are probabilities, never booleans.
 """
-import pytest
-from unittest.mock import MagicMock, patch
-import numpy as np
 
+from unittest.mock import MagicMock, patch
+
+import numpy as np
+import pytest
 
 # ---------------------------------------------------------------------------
 # Helper: build a mock ONNX session that returns controlled logits
 # ---------------------------------------------------------------------------
+
 
 def _mock_session(logits: list[float]):
     """Return a mock onnxruntime.InferenceSession that outputs given logits."""
@@ -23,6 +25,7 @@ def _mock_session(logits: list[float]):
 # ---------------------------------------------------------------------------
 # Tests: DeepfakeDetector base — score() always returns clamped float
 # ---------------------------------------------------------------------------
+
 
 class TestDeepfakeDetectorBase:
     """Test the ABC contract without needing real ONNX models."""
@@ -42,7 +45,7 @@ class TestDeepfakeDetectorBase:
 
     @pytest.mark.unit
     def test_score_returns_float_not_bool(self):
-        """score() must return float — never bool (CLAUDE.md rule 7)."""
+        """score() must return float — never bool (AGENTS.md rule 7)."""
         detector = self._make_concrete_detector(0.9)
         result = detector.score(b"fake_image_bytes")
         assert isinstance(result, float), "deepfake_score must be float, not bool"
@@ -101,6 +104,7 @@ class TestDeepfakeDetectorBase:
 # Tests: DIRE raises NotImplementedError on CPU
 # ---------------------------------------------------------------------------
 
+
 class TestDIREDetector:
     @pytest.mark.unit
     def test_dire_raises_on_cpu(self):
@@ -123,6 +127,7 @@ class TestDIREDetector:
 # ---------------------------------------------------------------------------
 # Tests: worst_case_score — None for empty, max for non-empty
 # ---------------------------------------------------------------------------
+
 
 class TestWorstCaseScore:
     @pytest.mark.unit
@@ -155,6 +160,7 @@ class TestWorstCaseScore:
 # Tests: _analyse_image / _analyse_video return (None, "error") on failure
 # ---------------------------------------------------------------------------
 
+
 class TestDeepfakeErrorHandling:
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -164,6 +170,7 @@ class TestDeepfakeErrorHandling:
             mock_get.side_effect = RuntimeError("model not found")
 
             from anveshak.vision.jobs import _analyse_image
+
             score, model = await _analyse_image(b"fake", "asset-1")
 
         assert score is None, "Failed deepfake analysis must return None, not 0.0"
@@ -177,6 +184,7 @@ class TestDeepfakeErrorHandling:
             mock_det.side_effect = RuntimeError("model not found")
 
             from anveshak.vision.jobs import _deepfake_video_frames
+
             score, model = await _deepfake_video_frames([b"frame"], "asset-2")
 
         assert score is None, "Failed video analysis must return None, not 0.0"

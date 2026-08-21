@@ -9,6 +9,7 @@ Catches real bugs:
 
 pytest.mark.unit — no network, no browser, no external deps.
 """
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -24,7 +25,6 @@ pytestmark = pytest.mark.unit
 
 
 class TestValidateOnionUrl:
-
     def test_valid_http_onion(self):
         """http://<hash>.onion/page should not raise."""
         from anveshak.scraper.fetch import validate_onion_url
@@ -82,7 +82,6 @@ class TestValidateOnionUrl:
 
 
 class TestExtractArticleLinks:
-
     @patch("anveshak.scraper.fetch.settings")
     def test_same_domain_only(self, mock_settings):
         """Cross-domain links are excluded when scraper_follow_same_domain is True."""
@@ -144,9 +143,7 @@ class TestExtractArticleLinks:
         mock_settings.scraper_follow_same_domain = True
         mock_settings.scraper_max_links_per_page = 5
 
-        html = "".join(
-            f'<a href="/article{i}">Art {i}</a>' for i in range(25)
-        )
+        html = "".join(f'<a href="/article{i}">Art {i}</a>' for i in range(25))
         links = extract_article_links(html, "http://example.com")
         assert len(links) == 5
 

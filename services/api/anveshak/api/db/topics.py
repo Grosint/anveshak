@@ -1,10 +1,12 @@
 """Topic repository — all SQL for the topics domain."""
+
 from __future__ import annotations
 
 import json
 from typing import Any, Optional
 
 import asyncpg
+from anveshak.db import DBConnection
 
 # ---------------------------------------------------------------------------
 # SQL constants
@@ -255,8 +257,9 @@ _CONTENT_SELECT = """
 # Repository functions
 # ---------------------------------------------------------------------------
 
+
 async def insert_topic(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     topic_id: str,
     name: str,
     keywords: list[str],
@@ -274,20 +277,31 @@ async def insert_topic(
 ) -> None:
     await conn.execute(
         SQL_INSERT_TOPIC,
-        topic_id, name, keywords, languages,
-        credibility_min, signal_threshold, "active",
-        clip_categories, scheduled_report_cron, scheduled_report_type,
-        now, now, labels_json, org_id, identifier_signal_threshold,
+        topic_id,
+        name,
+        keywords,
+        languages,
+        credibility_min,
+        signal_threshold,
+        "active",
+        clip_categories,
+        scheduled_report_cron,
+        scheduled_report_type,
+        now,
+        now,
+        labels_json,
+        org_id,
+        identifier_signal_threshold,
     )
 
 
-async def list_topics(conn: asyncpg.Connection) -> list[dict[str, Any]]:
+async def list_topics(conn: DBConnection) -> list[dict[str, Any]]:
     rows = await conn.fetch(SQL_LIST_TOPICS)
     return [dict(r) for r in rows]
 
 
 async def list_topics_by_org(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     org_id: str,
 ) -> list[dict[str, Any]]:
     """Return topics filtered by organization."""
@@ -296,33 +310,34 @@ async def list_topics_by_org(
 
 
 async def verify_topic_access(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     topic_id: str,
     user: dict,
 ) -> None:
     """Raise 404 if topic doesn't belong to user's org (unless super-admin)."""
-    from ..auth.rbac import is_super_admin, get_user_org
+    from ..auth.rbac import get_user_org, is_super_admin
 
     if is_super_admin(user):
         return
     row = await conn.fetchrow(SQL_GET_TOPIC_ORG, topic_id)
     if not row or row["org_id"] != get_user_org(user):
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail="Topic not found")
 
 
-async def get_topic(conn: asyncpg.Connection, topic_id: str) -> dict[str, Any] | None:
+async def get_topic(conn: DBConnection, topic_id: str) -> dict[str, Any] | None:
     row = await conn.fetchrow(SQL_GET_TOPIC, topic_id)
     return dict(row) if row else None
 
 
-async def topic_exists(conn: asyncpg.Connection, topic_id: str) -> bool:
+async def topic_exists(conn: DBConnection, topic_id: str) -> bool:
     row = await conn.fetchrow(SQL_CHECK_TOPIC_EXISTS, topic_id)
     return row is not None
 
 
 async def update_topic_status(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     topic_id: str,
     status: str,
     now: Any,
@@ -340,7 +355,7 @@ SQL_UPDATE_TOPIC_SCHEDULE = """
 
 
 async def update_topic_schedule(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     topic_id: str,
     scheduled_report_cron: str | None,
     scheduled_report_type: str | None,
@@ -348,7 +363,9 @@ async def update_topic_schedule(
     """Update or clear scheduled report configuration."""
     await conn.execute(
         SQL_UPDATE_TOPIC_SCHEDULE,
-        scheduled_report_cron, scheduled_report_type, topic_id,
+        scheduled_report_cron,
+        scheduled_report_type,
+        topic_id,
     )
 
 
@@ -356,7 +373,7 @@ _DEFAULT_RELEVANCE_THRESHOLD = 0.35  # must match analyst settings.topic_relevan
 
 
 async def get_topic_content(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     topic_id: str,
     limit: int,
     offset: int,
@@ -374,7 +391,9 @@ async def get_topic_content(
     else:
         emb_clause = ""
 
-    quality_clause = "" if include_low_quality else "AND COALESCE(ci.content_quality, 'good') != 'low_quality'"
+    quality_clause = (
+        "" if include_low_quality else "AND COALESCE(ci.content_quality, 'good') != 'low_quality'"
+    )
 
     # Build positional params: $1=topic_id, $2=limit, $3=offset, then dynamic
     params: list[Any] = [topic_id, limit, offset]
@@ -387,8 +406,12 @@ async def get_topic_content(
     else:
         platform_clause = ""
 
-    threshold = relevance_threshold if relevance_threshold is not None else _DEFAULT_RELEVANCE_THRESHOLD
-    relevance_clause = f"AND (ci.topic_relevance_score IS NULL OR ci.topic_relevance_score >= ${next_param})"
+    threshold = (
+        relevance_threshold if relevance_threshold is not None else _DEFAULT_RELEVANCE_THRESHOLD
+    )
+    relevance_clause = (
+        f"AND (ci.topic_relevance_score IS NULL OR ci.topic_relevance_score >= ${next_param})"
+    )
     params.append(threshold)
     next_param += 1
 
@@ -412,6 +435,8 @@ async def get_topic_content(
 
     # Use a CTE to dedup on clean_hash — show newest item per unique clean_hash,
     # with a count of how many duplicates were collapsed.
+    # Safe despite the f-string: every {..._clause} is an internal literal
+    # assembled above, never user input. User values are bind params ($1...$4).
     sql = f"""
         WITH all_items AS (
             SELECT ci.id,
@@ -494,7 +519,7 @@ async def get_topic_content(
         FROM with_counts
         {order_clause}
         LIMIT $2 OFFSET $3
-    """  # nosec B608 — clauses are internal strings, not user input; platform is parameterized as $4
+    """  # nosec B608
     rows = await conn.fetch(sql, *params)
     results = []
     for r in rows:
@@ -544,7 +569,7 @@ SQL_TRENDING_KEYWORDS = """
 
 
 async def get_sentiment_trend(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     topic_id: str,
     days: int = 30,
 ) -> list[dict[str, Any]]:
@@ -560,7 +585,7 @@ async def get_sentiment_trend(
 
 
 async def get_trending_keywords(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     topic_id: str,
     days: int = 7,
     limit: int = 15,
@@ -570,15 +595,13 @@ async def get_trending_keywords(
 
 
 async def get_topic_entities(
-    conn: asyncpg.Connection, topic_id: str, days: int = 30
+    conn: DBConnection, topic_id: str, days: int = 30
 ) -> list[dict[str, Any]]:
     rows = await conn.fetch(SQL_GET_TOPIC_ENTITIES, topic_id, days)
     return [dict(r) for r in rows]
 
 
-async def get_topic_clusters(
-    conn: asyncpg.Connection, topic_id: str
-) -> list[dict[str, Any]]:
+async def get_topic_clusters(conn: DBConnection, topic_id: str) -> list[dict[str, Any]]:
     rows = await conn.fetch(SQL_GET_TOPIC_CLUSTERS, topic_id)
     clusters = []
     for r in rows:
@@ -620,7 +643,7 @@ def _relevance_tier(score: float | None) -> str:
 
 
 async def _enrich_clusters(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     rows: list[asyncpg.Record],
 ) -> list[dict[str, Any]]:
     """Add source breakdown and relevance tier to cluster rows."""
@@ -644,7 +667,7 @@ async def _enrich_clusters(
 
 
 async def search_clusters_by_centroid(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     query_vec_str: str,
     topic_id: str,
     min_similarity: float = _MIN_CLUSTER_SIMILARITY,
@@ -653,13 +676,16 @@ async def search_clusters_by_centroid(
     """Semantic search: rank clusters by centroid cosine similarity."""
     rows = await conn.fetch(
         SQL_CLUSTER_CENTROID_SEARCH,
-        query_vec_str, topic_id, min_similarity, limit,
+        query_vec_str,
+        topic_id,
+        min_similarity,
+        limit,
     )
     return await _enrich_clusters(conn, rows)
 
 
 async def search_clusters_by_label(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     query_text: str,
     topic_id: str,
     limit: int = 20,
@@ -667,13 +693,15 @@ async def search_clusters_by_label(
     """ILIKE fallback: search cluster labels and executive summaries."""
     rows = await conn.fetch(
         SQL_CLUSTER_LABEL_SEARCH,
-        topic_id, query_text, limit,
+        topic_id,
+        query_text,
+        limit,
     )
     return await _enrich_clusters(conn, rows)
 
 
 async def get_cluster_content(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     cluster_id: str,
     sort: str = "time",
     query_vec_str: str | None = None,
@@ -684,12 +712,17 @@ async def get_cluster_content(
     if sort == "relevance" and query_vec_str:
         rows = await conn.fetch(
             SQL_CLUSTER_CONTENT_BY_RELEVANCE,
-            query_vec_str, cluster_id, limit, offset,
+            query_vec_str,
+            cluster_id,
+            limit,
+            offset,
         )
     else:
         rows = await conn.fetch(
             SQL_CLUSTER_CONTENT_BY_TIME,
-            cluster_id, limit, offset,
+            cluster_id,
+            limit,
+            offset,
         )
     results = []
     for r in rows:
@@ -708,7 +741,7 @@ async def get_cluster_content(
 
 
 async def verify_cluster_belongs_to_topic(
-    conn: asyncpg.Connection,
+    conn: DBConnection,
     cluster_id: str,
     topic_id: str,
 ) -> bool:
