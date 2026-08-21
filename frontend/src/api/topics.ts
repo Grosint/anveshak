@@ -1,4 +1,5 @@
 import api from './client'
+import type { HealthStatus } from '../lib/domain'
 
 export interface Topic {
   id: string
@@ -9,6 +10,9 @@ export interface Topic {
   created_at: string
   content_count?: number
   signal_count?: number
+  new_content_24h?: number
+  worst_source_health?: HealthStatus
+  last_activity?: string | null
   keywords?: string[]
   languages?: string[]
   clip_categories?: string[]
@@ -47,6 +51,7 @@ export interface ClusterContentItem {
   platform?: string
   similarity_score?: number | null
   relevance_tier?: string
+  sentiment?: { compound: number; label: string }
 }
 
 export interface CreateTopicPayload {

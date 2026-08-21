@@ -29,7 +29,36 @@ SQL_LIST_TOPICS = """
                UNION
                SELECT tci.content_item_id FROM topic_content_items tci WHERE tci.topic_id = t.id
            ) x) AS content_count,
-           COUNT(DISTINCT sig.id) FILTER (WHERE sig.status = 'new') AS signal_count
+           COUNT(DISTINCT sig.id) FILTER (WHERE sig.status = 'new') AS signal_count,
+           (SELECT COUNT(DISTINCT x2.id) FROM (
+               SELECT ci2.id FROM content_items ci2
+               WHERE ci2.topic_id = t.id AND ci2.captured_at >= NOW() - INTERVAL '24 hours'
+               UNION
+               SELECT tci2.content_item_id FROM topic_content_items tci2
+               JOIN content_items ci3 ON ci3.id = tci2.content_item_id
+               WHERE tci2.topic_id = t.id AND ci3.captured_at >= NOW() - INTERVAL '24 hours'
+           ) x2) AS new_content_24h,
+           (SELECT CASE COALESCE(
+               MIN(CASE src.health_status
+                   WHEN 'down' THEN 1
+                   WHEN 'degraded' THEN 2
+                   ELSE 3
+               END), 3)
+               WHEN 1 THEN 'down'
+               WHEN 2 THEN 'degraded'
+               ELSE 'healthy'
+            END
+            FROM topic_sources ts2
+            JOIN sources src ON src.id = ts2.source_id
+            WHERE ts2.topic_id = t.id
+           ) AS worst_source_health,
+           (SELECT MAX(la.captured_at) FROM (
+               SELECT ci4.captured_at FROM content_items ci4 WHERE ci4.topic_id = t.id
+               UNION ALL
+               SELECT ci5.captured_at FROM topic_content_items tci3
+               JOIN content_items ci5 ON ci5.id = tci3.content_item_id
+               WHERE tci3.topic_id = t.id
+           ) la) AS last_activity
     FROM topics t
     LEFT JOIN signals sig ON sig.topic_id = t.id
     GROUP BY t.id
@@ -43,7 +72,36 @@ SQL_LIST_TOPICS_BY_ORG = """
                UNION
                SELECT tci.content_item_id FROM topic_content_items tci WHERE tci.topic_id = t.id
            ) x) AS content_count,
-           COUNT(DISTINCT sig.id) FILTER (WHERE sig.status = 'new') AS signal_count
+           COUNT(DISTINCT sig.id) FILTER (WHERE sig.status = 'new') AS signal_count,
+           (SELECT COUNT(DISTINCT x2.id) FROM (
+               SELECT ci2.id FROM content_items ci2
+               WHERE ci2.topic_id = t.id AND ci2.captured_at >= NOW() - INTERVAL '24 hours'
+               UNION
+               SELECT tci2.content_item_id FROM topic_content_items tci2
+               JOIN content_items ci3 ON ci3.id = tci2.content_item_id
+               WHERE tci2.topic_id = t.id AND ci3.captured_at >= NOW() - INTERVAL '24 hours'
+           ) x2) AS new_content_24h,
+           (SELECT CASE COALESCE(
+               MIN(CASE src.health_status
+                   WHEN 'down' THEN 1
+                   WHEN 'degraded' THEN 2
+                   ELSE 3
+               END), 3)
+               WHEN 1 THEN 'down'
+               WHEN 2 THEN 'degraded'
+               ELSE 'healthy'
+            END
+            FROM topic_sources ts2
+            JOIN sources src ON src.id = ts2.source_id
+            WHERE ts2.topic_id = t.id
+           ) AS worst_source_health,
+           (SELECT MAX(la.captured_at) FROM (
+               SELECT ci4.captured_at FROM content_items ci4 WHERE ci4.topic_id = t.id
+               UNION ALL
+               SELECT ci5.captured_at FROM topic_content_items tci3
+               JOIN content_items ci5 ON ci5.id = tci3.content_item_id
+               WHERE tci3.topic_id = t.id
+           ) la) AS last_activity
     FROM topics t
     LEFT JOIN signals sig ON sig.topic_id = t.id
     WHERE t.org_id = $1
@@ -143,6 +201,7 @@ SQL_CLUSTER_CONTENT_BY_RELEVANCE = """
            LEFT(ci.translated_text, 500) AS translated_text,
            ci.language, ci.captured_at,
            ci.credibility_score_at_capture,
+           ci.labels,
            s.name AS source_name, s.platform,
            1 - (ci.embedding <=> $1::vector) AS similarity_score
     FROM content_items ci
@@ -160,6 +219,7 @@ SQL_CLUSTER_CONTENT_BY_TIME = """
            LEFT(ci.translated_text, 500) AS translated_text,
            ci.language, ci.captured_at,
            ci.credibility_score_at_capture,
+           ci.labels,
            s.name AS source_name, s.platform,
            NULL::float AS similarity_score
     FROM content_items ci
@@ -637,6 +697,12 @@ async def get_cluster_content(
         if d.get("similarity_score") is not None:
             d["similarity_score"] = round(float(d["similarity_score"]), 4)
             d["relevance_tier"] = _relevance_tier(d["similarity_score"])
+        # Extract sentiment from labels JSONB
+        raw_labels = d.pop("labels", None)
+        if raw_labels:
+            labels = json.loads(raw_labels) if isinstance(raw_labels, str) else raw_labels
+            if isinstance(labels, dict) and "sentiment" in labels:
+                d["sentiment"] = labels["sentiment"]
         results.append(d)
     return results
 

@@ -172,6 +172,19 @@ async def daily_signal_counts(
     return await signals_db.daily_signal_counts(db, status, since, until, org_id=org_id)
 
 
+@router.get("/{signal_id}")
+async def get_signal(
+    signal_id: str,
+    db: asyncpg.Connection = Depends(get_db),
+    user: dict = Depends(require_role("viewer", "analyst", "admin")),
+):
+    """Fetch a single signal by ID."""
+    signal = await signals_db.get_signal(db, signal_id)
+    if not signal:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    return signal
+
+
 @router.get("/{signal_id}/connections")
 async def get_signal_connections(
     signal_id: str,

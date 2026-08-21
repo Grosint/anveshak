@@ -9,10 +9,9 @@ import IdentifierSearch from '../search/IdentifierSearch'
 
 const primaryNav = [
   { to: '/topics',      label: 'Topics',      icon: <TargetIcon /> },
-  { to: '/trackers',    label: 'Trackers',    icon: <TrackerIcon /> },
   { to: '/signals',     label: 'Signals',     icon: <ZapIcon /> },
+  { to: '/cases',       label: 'Cases',       icon: <TrackerIcon /> },
   { to: '/vision',      label: 'Vision',      icon: <EyeIcon /> },
-  { to: '/reports',     label: 'Reports',     icon: <FileIcon /> },
 ]
 
 const settingsNav = { to: '/settings', label: 'Settings', icon: <GearIcon /> }
@@ -32,6 +31,18 @@ export default function Layout() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchInitialQuery, setSearchInitialQuery] = useState('')
+
+  // Global Cmd+K / Ctrl+K shortcut
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setSearchOpen(true)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   // Open search modal from URL param ?search=...
   useEffect(() => {
@@ -229,13 +240,6 @@ function EyeIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-    </svg>
-  )
-}
-function FileIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
-      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
     </svg>
   )
 }

@@ -46,8 +46,8 @@ describe('SignalsInbox page', () => {
   it('shows time filter presets', async () => {
     renderWithProviders(<SignalsInbox />)
     await waitFor(() => {
-      expect(screen.getByText('Today')).toBeInTheDocument()
-      expect(screen.getByText('Last 7 days')).toBeInTheDocument()
+      expect(screen.getByText('7 days')).toBeInTheDocument()
+      expect(screen.getByText('30 days')).toBeInTheDocument()
     })
   })
 })

@@ -7,6 +7,7 @@
  */
 import type { Signal } from '../api/signals'
 import type { ContentItem, ContentFilters } from '../api/content'
+import type { Topic } from '../api/topics'
 
 // ── Signal severity ─────────────────────────────────────────────────────
 
@@ -23,6 +24,18 @@ export function inferSeverity(signal: Signal): string {
   if (t.includes('MED')) return 'MEDIUM'
   if (t.includes('LOW')) return 'LOW'
   return 'LOW'
+}
+
+export type SeverityLevel = 'HIGH' | 'MEDIUM' | 'LOW'
+
+export function inferSeverityFromISC(isc: number): SeverityLevel {
+  if (isc >= 3) return 'HIGH'
+  if (isc >= 2) return 'MEDIUM'
+  return 'LOW'
+}
+
+export const SEVERITY_VARIANT: Record<string, 'danger' | 'warning' | 'success' | 'default'> = {
+  HIGH: 'danger', MEDIUM: 'warning', LOW: 'success',
 }
 
 // ── Confidence badge ────────────────────────────────────────────────────
@@ -108,6 +121,40 @@ export function resolveTimeRange(
     ? new Date(customTo + 'T23:59:59Z').toISOString()
     : until
   return { since, until: customUntil }
+}
+
+// ── Source health ───────────────────────────────────────────────────────
+
+export type HealthStatus = 'healthy' | 'degraded' | 'down'
+
+// ── Topic urgency sort ─────────────────────────────────────────────────
+
+export function compareByUrgency(a: Topic, b: Topic): number {
+  const aSig = a.signal_count ?? 0
+  const bSig = b.signal_count ?? 0
+  if (aSig !== bSig) return bSig - aSig
+  const aTime = a.last_activity ? new Date(a.last_activity).getTime() : 0
+  const bTime = b.last_activity ? new Date(b.last_activity).getTime() : 0
+  return bTime - aTime
+}
+
+// ── Workspace view resolution ──────────────────────────────────────────
+
+export type WorkspaceView = 'intelligence' | 'content' | 'map'
+
+export const WORKSPACE_VIEWS: { key: WorkspaceView; label: string; path: string }[] = [
+  { key: 'intelligence', label: 'Intelligence', path: '' },
+  { key: 'content', label: 'Content', path: '/content' },
+  { key: 'map', label: 'Map', path: '/map' },
+]
+
+export function resolveWorkspaceView(pathname: string, topicId: string): WorkspaceView {
+  const base = `/topics/${topicId}`
+  const match = WORKSPACE_VIEWS.find((v) => v.path && pathname === `${base}${v.path}`)
+  if (match) return match.key
+  // Backward compat: /feed → content
+  if (pathname === `${base}/feed`) return 'content'
+  return 'intelligence'
 }
 
 // ── Client-side content filtering ───────────────────────────────────────

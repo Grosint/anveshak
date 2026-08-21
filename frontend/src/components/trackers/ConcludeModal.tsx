@@ -27,7 +27,7 @@ export function ConcludeModal({ open, trackerId, onClose, onConcluded }: Conclud
       onConcluded()
     },
     onError: (err: Error) => {
-      setError(err.message || 'Failed to conclude tracker.')
+      setError(err.message || 'Failed to conclude case.')
     },
   })
 
@@ -51,7 +51,7 @@ export function ConcludeModal({ open, trackerId, onClose, onConcluded }: Conclud
     <Modal
       open={open}
       onClose={handleClose}
-      title="Conclude Tracker"
+      title="Conclude Case"
       footer={
         <>
           <Button variant="secondary" size="sm" onClick={handleClose} disabled={concludeMutation.isPending}>
@@ -70,7 +70,7 @@ export function ConcludeModal({ open, trackerId, onClose, onConcluded }: Conclud
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <p className="text-sm text-text-muted">
-          Concluding this tracker marks the investigation as closed. This action cannot be undone
+          Concluding this case marks the investigation as closed. This action cannot be undone
           through normal workflow. Provide a closing summary before proceeding.
         </p>
 

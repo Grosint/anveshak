@@ -5,7 +5,7 @@ import { applyClientFilters } from '../lib/domain'
 
 const PAGE_SIZE = 50
 
-export function useInfiniteContent(topicId: string, filters: ContentFilters = {}) {
+export function useInfiniteContent(topicId: string, filters: ContentFilters = {}, enabled = true) {
   const query = useInfiniteQuery({
     queryKey: ['content', topicId, filters],
     queryFn: ({ pageParam }) => contentApi.list(topicId, pageParam as number, PAGE_SIZE, filters.sentiment, filters.sort_by),
@@ -15,6 +15,7 @@ export function useInfiniteContent(topicId: string, filters: ContentFilters = {}
       return allPages.flat().length
     },
     staleTime: 30_000,
+    enabled: enabled && !!topicId,
   })
 
   const allItems = query.data?.pages.flat() ?? []

@@ -12,8 +12,10 @@ import {
   deepfakeLabel,
   resolveTimeRange,
   applyClientFilters,
+  compareByUrgency,
+  resolveWorkspaceView,
 } from '../../lib/domain'
-import { makeSignal, makeContentItem } from '../factories'
+import { makeSignal, makeContentItem, makeTopic } from '../factories'
 
 // ── inferSeverity ───────────────────────────────────────────────────────
 
@@ -195,6 +197,65 @@ describe('resolveTimeRange', () => {
     // UTC start of day (previous day 18:30 local). Documenting the behavior.
     const { since } = resolveTimeRange('today', '', '')
     expect(since).toContain('T00:00:00') // UTC midnight, not local midnight
+  })
+})
+
+// ── compareByUrgency ────────────────────────────────────────────────────
+
+describe('compareByUrgency', () => {
+  it('sorts by signal count descending', () => {
+    const a = makeTopic({ signal_count: 5 })
+    const b = makeTopic({ signal_count: 2 })
+    expect(compareByUrgency(a, b)).toBeLessThan(0) // a first
+    expect(compareByUrgency(b, a)).toBeGreaterThan(0)
+  })
+
+  it('equal signals → sorts by last_activity descending', () => {
+    const a = makeTopic({ signal_count: 3, last_activity: '2026-07-27T10:00:00Z' })
+    const b = makeTopic({ signal_count: 3, last_activity: '2026-07-27T08:00:00Z' })
+    expect(compareByUrgency(a, b)).toBeLessThan(0) // a more recent, comes first
+  })
+
+  it('null last_activity treated as oldest', () => {
+    const a = makeTopic({ signal_count: 0, last_activity: null })
+    const b = makeTopic({ signal_count: 0, last_activity: '2026-07-27T08:00:00Z' })
+    expect(compareByUrgency(a, b)).toBeGreaterThan(0) // b first
+  })
+
+  it('both null last_activity → equal', () => {
+    const a = makeTopic({ signal_count: 0, last_activity: null })
+    const b = makeTopic({ signal_count: 0, last_activity: null })
+    expect(compareByUrgency(a, b)).toBe(0)
+  })
+
+  it('undefined signal_count treated as zero', () => {
+    const a = makeTopic({ signal_count: undefined, last_activity: '2026-07-27T10:00:00Z' })
+    const b = makeTopic({ signal_count: 1, last_activity: '2026-07-27T08:00:00Z' })
+    expect(compareByUrgency(a, b)).toBeGreaterThan(0) // b has signal, comes first
+  })
+})
+
+// ── resolveWorkspaceView ────────────────────────────────────────────────
+
+describe('resolveWorkspaceView', () => {
+  it('base path → intelligence', () => {
+    expect(resolveWorkspaceView('/topics/t1', 't1')).toBe('intelligence')
+  })
+
+  it('/content → content', () => {
+    expect(resolveWorkspaceView('/topics/t1/content', 't1')).toBe('content')
+  })
+
+  it('/map → map', () => {
+    expect(resolveWorkspaceView('/topics/t1/map', 't1')).toBe('map')
+  })
+
+  it('/feed → content (backward compat)', () => {
+    expect(resolveWorkspaceView('/topics/t1/feed', 't1')).toBe('content')
+  })
+
+  it('unknown suffix → intelligence', () => {
+    expect(resolveWorkspaceView('/topics/t1/unknown', 't1')).toBe('intelligence')
   })
 })
 

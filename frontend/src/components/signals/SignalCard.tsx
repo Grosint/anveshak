@@ -58,7 +58,7 @@ export function SignalCard({ signal, onAcknowledge, onDismiss, isActioning }: Si
   const itemCount = signal.cluster_item_count ?? 0
 
   function handleCardClick() {
-    navigate(`/topics/${signal.topic_id}/feed`)
+    navigate(`/topics/${signal.topic_id}`)
   }
 
   const timelineText = (() => {

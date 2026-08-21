@@ -5,13 +5,13 @@
 Consolidated from 6 learned instincts covering the full adapter lifecycle:
 startup validation → authentication → quota enforcement → polling → failure handling → recovery.
 
-> See also: `learned/adapter-circuit-breaker-redis.md` — Redis-backed CLOSED/OPEN/HALF_OPEN per adapter
-> See also: `learned/credential-refresh-before-circuit-break.md` — try refresh_credentials() before circuit breaking
-> See also: `learned/startup-credential-validation.md` — validate env vars at startup, not at first API call
-> See also: `learned/per-adapter-interval-scheduling.md` — independent poll cadence per adapter
-> See also: `learned/redis-atomic-budget-guard.md` — atomic INCR for X monthly / Bluesky daily caps
-> See also: `learned/robots-txt-cache-permissive-default.md` — robots.txt enforcement with 1h cache
-> See also: `learned/optional-dep-lazy-import-two-level-log.md` — graceful degradation for optional deps
+> See also: `.claude/skills/learned/adapter-circuit-breaker-redis.md` — Redis-backed CLOSED/OPEN/HALF_OPEN per adapter
+> See also: `.claude/skills/learned/credential-refresh-before-circuit-break.md` — try refresh_credentials() before circuit breaking
+> See also: `.claude/skills/learned/startup-credential-validation.md` — validate env vars at startup, not at first API call
+> See also: `.claude/skills/learned/per-adapter-interval-scheduling.md` — independent poll cadence per adapter
+> See also: `.claude/skills/learned/redis-atomic-budget-guard.md` — atomic INCR for X monthly / Bluesky daily caps
+> See also: `.claude/skills/learned/robots-txt-cache-permissive-default.md` — robots.txt enforcement with 1h cache
+> See also: `.claude/skills/learned/optional-dep-lazy-import-two-level-log.md` — graceful degradation for optional deps
 > See also: `source-adapter-sdk.md` — adapter contract, RawItem, conformance suite
 
 ---

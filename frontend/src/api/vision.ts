@@ -52,15 +52,18 @@ export interface VisionJobSummary {
 }
 
 export const visionApi = {
-  analyse: (file: File, contentItemId?: string) => {
+  analyse: (file: File, contentItemId?: string, topicId?: string) => {
     const form = new FormData()
     form.append('file', file)
+    const params: Record<string, string> = {}
+    if (contentItemId) params.content_item_id = contentItemId
+    if (topicId) params.topic_id = topicId
     return api
       .post<{ job_id: string; media_asset_id: string; asset_type: string; status: string }>(
         '/api/v1/vision/analyse',
         form,
         {
-          params: contentItemId ? { content_item_id: contentItemId } : undefined,
+          params: Object.keys(params).length > 0 ? params : undefined,
           headers: { 'Content-Type': 'multipart/form-data' },
         },
       )

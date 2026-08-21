@@ -18,7 +18,7 @@ export function SentimentBadge({ compound }: SentimentBadgeProps) {
       title={`Sentiment: ${compound.toFixed(2)}`}
       aria-label={`Sentiment: ${label} (${compound.toFixed(2)})`}
     >
-      {label}
+      {label} {Math.round(Math.abs(compound) * 100)}%
     </span>
   )
 }

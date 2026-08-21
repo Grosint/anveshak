@@ -68,7 +68,7 @@ function formatAuditDetail(action: string, detail: Record<string, unknown>): str
   if (action === 'status_changed') return `Status → ${detail.status}`
   if (action === 'priority_changed') return `Priority → ${detail.priority}`
   if (action === 'assigned') return `Assigned to ${detail.assigned_to || 'unassigned'}`
-  if (action === 'created') return `Tracker created`
+  if (action === 'created') return `Case created`
   if (action === 'signal_linked') return `Linked signal`
   if (action === 'all_pending_confirmed') return 'Confirmed all pending items'
   return JSON.stringify(detail)
@@ -94,7 +94,7 @@ function reportStatusBadgeClass(status: string): string {
 }
 
 export default function TrackerDetail() {
-  const { trackerId: id } = useParams<{ trackerId: string }>()
+  const { caseId: id } = useParams<{ caseId: string }>()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [activeTab, setActiveTab] = useState<Tab>('overview')
@@ -226,7 +226,7 @@ export default function TrackerDetail() {
   if (isLoading) {
     return (
       <div className="flex justify-center py-20">
-        <Spinner label="Loading tracker…" />
+        <Spinner label="Loading case…" />
       </div>
     )
   }
@@ -234,12 +234,12 @@ export default function TrackerDetail() {
   if (!tracker) {
     return (
       <div className="p-6">
-        <p className="text-text-muted">Tracker not found.</p>
+        <p className="text-text-muted">Case not found.</p>
         <button
-          onClick={() => navigate('/trackers')}
+          onClick={() => navigate('/cases')}
           className="mt-3 text-anveshak-accent hover:underline text-sm"
         >
-          Back to Trackers
+          Back to Cases
         </button>
       </div>
     )
@@ -250,10 +250,10 @@ export default function TrackerDetail() {
       {/* Header */}
       <div className="px-6 pt-5 pb-4 border-b border-anveshak-border">
         <Link
-          to="/trackers"
+          to="/cases"
           className="text-xs text-text-muted hover:text-anveshak-accent mb-3 inline-flex items-center gap-1"
         >
-          ← Trackers
+          ← Cases
         </Link>
 
         <div className="flex items-start justify-between gap-4">
@@ -274,7 +274,7 @@ export default function TrackerDetail() {
               )}
               {tracker.topic_id && (
                 <Link
-                  to={`/topics/${tracker.topic_id}/feed`}
+                  to={`/topics/${tracker.topic_id}`}
                   className="text-anveshak-accent hover:underline"
                 >
                   {tracker.topic_name || tracker.topic_id}
@@ -375,7 +375,7 @@ export default function TrackerDetail() {
               <div className="flex gap-6 text-sm">
                 <div>
                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-teal-500/20 text-teal-400 mr-2">SEED</span>
-                  <span className="text-text-muted">Items that seeded this tracker</span>
+                  <span className="text-text-muted">Items that seeded this case</span>
                 </div>
                 <div>
                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-500/20 text-green-400 mr-2">CONFIRMED</span>
@@ -561,7 +561,7 @@ export default function TrackerDetail() {
             ) : signalsLoading ? (
               <div className="flex justify-center py-10"><Spinner /></div>
             ) : !signals || (signals as unknown[]).length === 0 ? (
-              <p className="text-text-muted text-sm">No signals linked to this tracker.</p>
+              <p className="text-text-muted text-sm">No signals linked to this case.</p>
             ) : (
               <div className="space-y-3">
                 {(signals as Record<string, unknown>[]).map((signal, i) => (
@@ -624,7 +624,7 @@ export default function TrackerDetail() {
             ) : reportsLoading ? (
               <div className="flex justify-center py-10"><Spinner /></div>
             ) : !reports || (reports as unknown[]).length === 0 ? (
-              <p className="text-text-muted text-sm">No reports generated for this tracker.</p>
+              <p className="text-text-muted text-sm">No reports generated for this case.</p>
             ) : (
               <div className="space-y-3">
                 {(reports as Record<string, unknown>[]).map((report, i) => (
@@ -645,12 +645,9 @@ export default function TrackerDetail() {
                           <span className="text-xs text-text-muted">{formatDate(String(report.created_at))}</span>
                         )}
                         {typeof report.id === 'string' && (
-                          <Link
-                            to={`/reports?id=${report.id}`}
-                            className="text-xs text-anveshak-accent hover:underline"
-                          >
-                            View
-                          </Link>
+                          <span className="text-xs text-text-muted font-mono">
+                            {String(report.id).slice(0, 8)}
+                          </span>
                         )}
                       </div>
                     </div>

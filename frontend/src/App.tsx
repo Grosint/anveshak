@@ -1,17 +1,17 @@
 import React from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
 import { WSProvider } from './contexts/WSContext'
+import { ProvenanceProvider } from './contexts/ProvenanceContext'
 import Layout from './components/ui/Layout'
 import Login from './pages/Login'
 import TopicsDashboard from './pages/TopicsDashboard'
 import TopicWorkspace from './pages/TopicWorkspace'
 import ImageAnalysis from './pages/ImageAnalysis'
 import SignalsInbox from './pages/SignalsInbox'
-import ReportBuilder from './pages/ReportBuilder'
 import Settings from './pages/Settings'
-import Trackers from './pages/Trackers'
-import TrackerDetail from './pages/TrackerDetail'
+import Cases from './pages/Trackers'
+import CaseDetail from './pages/TrackerDetail'
 
 // ── Error boundary — catches unhandled render errors so the page never
 // goes silently blank. Shows the error message + a reload button.
@@ -61,6 +61,11 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, EBSta
   }
 }
 
+function TrackerRedirect() {
+  const { trackerId } = useParams<{ trackerId: string }>()
+  return <Navigate to={`/cases/${trackerId}`} replace />
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
   if (!isAuthenticated) return <Navigate to="/login" replace />
@@ -76,19 +81,25 @@ export default function App() {
           element={
             <ProtectedRoute>
               <WSProvider>
-                <Layout />
+                <ProvenanceProvider>
+                  <Layout />
+                </ProvenanceProvider>
               </WSProvider>
             </ProtectedRoute>
           }
         >
           <Route path="/" element={<Navigate to="/topics" replace />} />
           <Route path="/topics" element={<TopicsDashboard />} />
-          <Route path="/topics/:topicId/feed" element={<TopicWorkspace />} />
+          <Route path="/topics/:topicId" element={<TopicWorkspace />} />
+          <Route path="/topics/:topicId/content" element={<TopicWorkspace />} />
+          <Route path="/topics/:topicId/map" element={<TopicWorkspace />} />
           <Route path="/vision" element={<ImageAnalysis />} />
           <Route path="/signals" element={<SignalsInbox />} />
-          <Route path="/trackers" element={<Trackers />} />
-          <Route path="/trackers/:trackerId" element={<TrackerDetail />} />
-          <Route path="/reports" element={<ReportBuilder />} />
+          <Route path="/cases" element={<Cases />} />
+          <Route path="/cases/:caseId" element={<CaseDetail />} />
+          {/* Legacy redirects: Trackers → Cases */}
+          <Route path="/trackers" element={<Navigate to="/cases" replace />} />
+          <Route path="/trackers/:trackerId" element={<TrackerRedirect />} />
           <Route path="/analytics" element={<Navigate to="/settings/dashboard" replace />} />
           <Route path="/settings/:tab" element={<Settings />} />
           <Route path="/settings" element={<Settings />} />
@@ -96,7 +107,8 @@ export default function App() {
           <Route path="/sources" element={<Navigate to="/settings/sources" replace />} />
           <Route path="/source-health" element={<Navigate to="/settings/sources" replace />} />
           <Route path="/users" element={<Navigate to="/settings/users" replace />} />
-          <Route path="/schedules" element={<Navigate to="/reports" replace />} />
+          <Route path="/reports" element={<Navigate to="/topics" replace />} />
+          <Route path="/schedules" element={<Navigate to="/topics" replace />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

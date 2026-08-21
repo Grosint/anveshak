@@ -25,7 +25,7 @@ paths:
   Calibration: 0.02 (tight clusters), 0.03 (realistic), 0.05 (broad topics)
 - Golden test data: content in supported languages w/ pre-decided expected outputs
   Fuzzy keyword matching (3/5, not 5/5) — NLLB translation non-deterministic
-  See: `learned/test-embedding-realism.md`, `learned/golden-test-data-ml-pipeline.md`
+  See: `.claude/skills/learned/test-embedding-realism.md`, `.claude/skills/learned/golden-test-data-ml-pipeline.md`
 
 ## DB Module Mocking
 
@@ -34,7 +34,7 @@ paths:
 - `side_effect=[row1, row2]` (not `return_value`) for functions making multiple
   sequential DB fetches w/ different column schemas
 - SQL JOINs change → expand fake_row dicts w/ new columns
-  See: `learned/new-db-func-mock-all-callers.md`, `learned/mock-sequential-db-calls.md`
+  See: `.claude/skills/learned/new-db-func-mock-all-callers.md`, `.claude/skills/learned/mock-sequential-db-calls.md`
 
 ## Mock Shape Must Match Reality
 
@@ -43,24 +43,24 @@ paths:
 - Common mismatch: API returns `r.data` (unwrapped) but mock returns `[{...}]` (wrapped)
 - JOIN adds columns → expand fake_row dicts
 - Function signature changes (new param) → grep all test mocks, add new param — stale mocks cause `TypeError`
-  See: `learned/mock-shape-unwrap-mismatch.md`
+  See: `.claude/skills/learned/mock-shape-unwrap-mismatch.md`
 
 ## Test-Reality Seams (A→cache→B Boundaries)
 
 - Unit tests pass but integration breaks at service boundaries. Test seams:
   scraper→DB→analyst, analyst→DB→reporter, API→WebSocket→frontend
 - Frontend seams: React Query `queryKey` prefix matching, optimistic mutation rollback,
-  WebSocket invalidation. See: `learned/frontend-seam-testing.md`
+  WebSocket invalidation. See: `.claude/skills/learned/frontend-seam-testing.md`
 - ML pipeline seams: test w/ real models inside containers via `docker exec`.
-  Host orchestrator + container-side script. See: `learned/docker-exec-integration-test.md`
+  Host orchestrator + container-side script. See: `.claude/skills/learned/docker-exec-integration-test.md`
 - Characterization tests: pin existing behavior before refactoring — prevents regressions
-  on code you don't fully understand. See: `learned/characterization-testing-existing-code.md`
+  on code you don't fully understand. See: `.claude/skills/learned/characterization-testing-existing-code.md`
 
 ## Test Database Safety
 
 - Hard-block tests from production DB: `if "test" not in POSTGRES_URL: pytest.exit()`
-  See: `learned/pytest-exit-safety-guard.md`
+  See: `.claude/skills/learned/pytest-exit-safety-guard.md`
 - Separate `anveshak_test` DB in same postgres container — pool-based tests
-  can't use transaction rollback. See: `learned/test-db-same-container-isolation.md`
+  can't use transaction rollback. See: `.claude/skills/learned/test-db-same-container-isolation.md`
 - FK teardown order matters: delete in reverse dependency order (13 tables).
-  See: `learned/fk-cascade-teardown-order.md`
+  See: `.claude/skills/learned/fk-cascade-teardown-order.md`

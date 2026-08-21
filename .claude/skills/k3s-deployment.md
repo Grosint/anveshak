@@ -2,8 +2,7 @@
 
 ## When to load: any task involving production deployment, Kubernetes, k3s, or Docker container restarts
 
-> See also: `learned/docker-run-compose-env-vars.md` — docker run misses compose x-common-env vars; must pass POSTGRES_URL/REDIS_URL/OLLAMA_BASE_URL explicitly with -e
-> See also: `learned/dotenv-inline-comment-int-fields.md` — inline comments on integer .env vars cause pydantic ValidationError at startup
+> See also: `.claude/skills/learned/dotenv-inline-comment-int-fields.md` — inline comments on integer .env vars cause pydantic ValidationError at startup
 
 ---
 

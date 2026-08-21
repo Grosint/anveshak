@@ -5,8 +5,11 @@ import { topicsApi, Topic, CreateTopicPayload } from '../api/topics'
 import { CreateTopicModal } from '../components/topics/CreateTopicModal'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
+import { SignalBadge, NewContentBadge, SourceHealthDot } from '../components/ui/UrgencyBadge'
 import { Spinner } from '../components/ui/Spinner'
 import { EmptyState } from '../components/ui/EmptyState'
+import { compareByUrgency } from '../lib/domain'
+import type { HealthStatus } from '../lib/domain'
 import { formatDistanceToNow } from 'date-fns'
 
 function TopicCard({
@@ -21,6 +24,9 @@ function TopicCard({
   isToggling: boolean
 }) {
   const statusVariant = topic.status === 'active' ? 'success' : 'default'
+  const signalCount = topic.signal_count ?? 0
+  const newContent = topic.new_content_24h ?? 0
+  const healthStatus: HealthStatus = topic.worst_source_health ?? 'healthy'
   return (
     <article
       className="bg-anveshak-card border border-anveshak-border rounded-lg p-4 hover:border-anveshak-accent/50 hover:shadow-card-hover transition-all cursor-pointer group animate-fade-in"
@@ -37,9 +43,8 @@ function TopicCard({
               {topic.name}
             </h3>
             <Badge variant={statusVariant}>{topic.status}</Badge>
-            {(topic.signal_count ?? 0) > 0 && (
-              <Badge variant="warning">{topic.signal_count} signals</Badge>
-            )}
+            <SignalBadge count={signalCount} />
+            <NewContentBadge count={newContent} />
           </div>
           <p className="text-xs text-text-muted">
             {topic.content_count ?? 0} items
@@ -50,6 +55,7 @@ function TopicCard({
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <SourceHealthDot status={healthStatus} />
           <button
             type="button"
             onClick={onToggleStatus}
@@ -74,7 +80,9 @@ function TopicCard({
 
       <div className="flex items-center gap-3 mt-3 text-xs text-text-muted">
         <span>
-          Created {formatDistanceToNow(new Date(topic.created_at), { addSuffix: true })}
+          {topic.last_activity
+            ? `Last activity ${formatDistanceToNow(new Date(topic.last_activity), { addSuffix: true })}`
+            : `Created ${formatDistanceToNow(new Date(topic.created_at), { addSuffix: true })}`}
         </span>
       </div>
     </article>
@@ -82,13 +90,13 @@ function TopicCard({
 }
 
 type StatusFilter = 'all' | 'active' | 'paused'
-type SortBy = 'newest' | 'oldest' | 'most_content' | 'most_signals'
+type SortBy = 'urgency' | 'newest' | 'oldest' | 'most_content' | 'most_signals'
 
 export default function TopicsDashboard() {
   const [showModal, setShowModal] = useState(false)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
-  const [sortBy, setSortBy] = useState<SortBy>('newest')
+  const [sortBy, setSortBy] = useState<SortBy>('urgency')
   const qc = useQueryClient()
   const navigate = useNavigate()
 
@@ -114,6 +122,8 @@ export default function TopicsDashboard() {
 
     list.sort((a, b) => {
       switch (sortBy) {
+        case 'urgency':
+          return compareByUrgency(a, b)
         case 'oldest':
           return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
         case 'most_content':
@@ -221,6 +231,7 @@ export default function TopicsDashboard() {
               onChange={(e) => setSortBy(e.target.value as SortBy)}
               className="bg-anveshak-bg border border-anveshak-border rounded px-2.5 py-1.5 text-xs text-text-primary focus:border-anveshak-accent outline-none"
             >
+              <option value="urgency">Urgency</option>
               <option value="newest">Newest first</option>
               <option value="oldest">Oldest first</option>
               <option value="most_content">Most content</option>
@@ -254,7 +265,7 @@ export default function TopicsDashboard() {
               <TopicCard
                 key={topic.id}
                 topic={topic}
-                onClick={() => navigate(`/topics/${topic.id}/feed`)}
+                onClick={() => navigate(`/topics/${topic.id}`)}
                 onToggleStatus={(e) => {
                   e.stopPropagation()
                   toggleStatus.mutate({

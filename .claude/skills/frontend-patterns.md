@@ -2,20 +2,19 @@
 
 ## When to load: any task involving React, TypeScript, Vite, Tailwind, or the analyst workbench
 
-> See also: `learned/css-variable-theming.md` — dark/light theme with CSS vars + html.light class toggle
-> See also: `learned/react-infinite-scroll-hook.md` — IntersectionObserver + React Query useInfiniteQuery
-> See also: `learned/optimistic-ui-mutations.md` — onMutate/onError rollback for list mutations
-> See also: `learned/react-lazy-heavy-chunks.md` — React.lazy + Suspense for MapLibre and other heavy libs
-> See also: `learned/npm-lockfile-docker-ci.md` — npm ci in Docker fails with stale lockfile; wipe node_modules + lockfile to regenerate
-> See also: `learned/jwt-expiry-countdown.md` — JWT expiry countdown with 5-min warning toast
-> See also: `learned/vitest-vite-setup.md` — Vitest + jsdom + tsconfig exclusion for Vite projects
-> See also: `learned/phase-check-pitfalls.md` — pitfalls 12–14 (postcss CJS, missing SQL JOINs, vitest tsconfig)
-> See also: `learned/time-filter-bar-pattern.md` — preset chip + custom date range filter with React Query, UTC ISO strings, conditional pickers
-> See also: `learned/frontend-domain-logic-extraction.md` — extract pure functions from components to lib/domain.ts; tests import the real function, no drift
-> See also: `learned/fake-timers-react-query-trap.md` — vi.useFakeTimers() deadlocks React Query; use fireEvent not userEvent, or avoid fake timers entirely
-> See also: `learned/frontend-seam-testing.md` — 12 cross-system data flows (WS→cache→UI, auth→localStorage→interceptor, etc.); A→cache→B integration tests
-> See also: `learned/mock-shape-unwrap-mismatch.md` — API mocks must return unwrapped shape ([] not {data:[]}); axios .then(r=>r.data) already unwraps
-> See also: `learned/characterization-testing-existing-code.md` — pin current behavior including bugs; TDD is for new code, characterization for existing
+> See also: `.claude/skills/learned/css-variable-theming.md` — dark/light theme with CSS vars + html.light class toggle
+> See also: `.claude/skills/learned/react-infinite-scroll-hook.md` — IntersectionObserver + React Query useInfiniteQuery
+> See also: `.claude/skills/learned/optimistic-ui-mutations.md` — onMutate/onError rollback for list mutations
+> See also: `.claude/skills/learned/react-lazy-heavy-chunks.md` — React.lazy + Suspense for MapLibre and other heavy libs
+> See also: `.claude/skills/learned/jwt-expiry-countdown.md` — JWT expiry countdown with 5-min warning toast
+> See also: `.claude/skills/learned/vitest-vite-setup.md` — Vitest + jsdom + tsconfig exclusion for Vite projects
+> See also: `.claude/skills/learned/phase-check-pitfalls.md` — pitfalls 12–14 (postcss CJS, missing SQL JOINs, vitest tsconfig)
+> See also: `.claude/skills/learned/time-filter-bar-pattern.md` — preset chip + custom date range filter with React Query, UTC ISO strings, conditional pickers
+> See also: `.claude/skills/learned/frontend-domain-logic-extraction.md` — extract pure functions from components to lib/domain.ts; tests import the real function, no drift
+> See also: `.claude/skills/learned/fake-timers-react-query-trap.md` — vi.useFakeTimers() deadlocks React Query; use fireEvent not userEvent, or avoid fake timers entirely
+> See also: `.claude/skills/learned/frontend-seam-testing.md` — 12 cross-system data flows (WS→cache→UI, auth→localStorage→interceptor, etc.); A→cache→B integration tests
+> See also: `.claude/skills/learned/mock-shape-unwrap-mismatch.md` — API mocks must return unwrapped shape ([] not {data:[]}); axios .then(r=>r.data) already unwraps
+> See also: `.claude/skills/learned/characterization-testing-existing-code.md` — pin current behavior including bugs; TDD is for new code, characterization for existing
 
 ---
 
@@ -64,7 +63,7 @@ The `WSContext` is a singleton. It:
 2. On message, calls `queryClient.invalidateQueries(['signals'])` + notifies subscribers
 3. Reconnects with exponential backoff (1s, 2s, 4s, 8s max)
 
-See `learned/websocket-auth-pattern.md` for the backend WS auth pattern.
+See `.claude/skills/learned/websocket-auth-pattern.md` for the backend WS auth pattern.
 
 ## API module convention
 

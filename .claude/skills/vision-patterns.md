@@ -2,10 +2,10 @@
 
 ## When to load: any task involving image analysis, video processing, deepfake detection, or computer vision
 
-> See also: `learned/onnx-hardware-independence.md` — ONNX provider selection, DeepfakeDetector ABC, DIRE GPU guard
-> See also: `learned/arq-worker-ml-singleton.md` — lazy module-level model loading in ARQ workers
-> See also: `learned/sdk-shared-utility-no-db.md` — shared downloader in SDK without DB/ARQ deps
-> See also: `learned/phase-check-pitfalls.md` — pitfall 7 (standalone ARQ function vs helper)
+> See also: `.claude/skills/learned/onnx-hardware-independence.md` — ONNX provider selection, DeepfakeDetector ABC, DIRE GPU guard
+> See also: `.claude/skills/learned/arq-worker-ml-singleton.md` — lazy module-level model loading in ARQ workers
+> See also: `.claude/skills/learned/sdk-shared-utility-no-db.md` — shared downloader in SDK without DB/ARQ deps
+> See also: `.claude/skills/learned/phase-check-pitfalls.md` — pitfall 7 (standalone ARQ function vs helper)
 
 ---
 
@@ -99,7 +99,7 @@ class DeepfakeDetector(ABC):
         return float(max(0.0, min(1.0, self._infer(image_bytes))))
 ```
 
-See `learned/onnx-hardware-independence.md` for the full ONNX provider pattern.
+See `.claude/skills/learned/onnx-hardware-independence.md` for the full ONNX provider pattern.
 
 ### Deepfake detection — always return float, never bool
 ```python
