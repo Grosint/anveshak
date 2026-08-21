@@ -34,6 +34,7 @@ def configure_tracing(service_name: str) -> None:
     are not installed. This ensures services start cleanly without OTEL deps.
     """
     if os.getenv("OTEL_ENABLED", "false").lower() != "true":
+        log.info("tracing.disabled", service=service_name, reason="OTEL_ENABLED is not true")
         return
 
     try:

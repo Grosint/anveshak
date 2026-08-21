@@ -16,6 +16,11 @@ from urllib.parse import urljoin, urlparse
 import arq
 import asyncpg
 import structlog
+from anveshak.logging import configure_logging
+from anveshak.tracing import configure_tracing
+
+configure_logging("scraper-worker")
+configure_tracing("scraper-worker")
 from anveshak.media.downloader import download_media_asset
 from arq import cron
 from arq.connections import RedisSettings
@@ -786,3 +791,7 @@ class WorkerSettings:
     max_jobs = settings.scraper_concurrency
     job_timeout = settings.scraper_job_timeout_s  # default 300s (5 min)
     keep_result = 3600  # 8C.6 — keep results 1h
+    # ARQ's default is 3600s, so a wedged worker stays "healthy" for an hour.
+    # The container healthcheck reads this key's presence, so the interval is
+    # also the detection window for a frozen event loop.
+    health_check_interval = 30

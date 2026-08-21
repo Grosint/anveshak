@@ -12,6 +12,11 @@ from datetime import UTC, datetime
 import arq
 import asyncpg
 import structlog
+from anveshak.logging import configure_logging
+from anveshak.tracing import configure_tracing
+
+configure_logging("analyst-worker")
+configure_tracing("analyst-worker")
 from arq.connections import RedisSettings
 
 from .backfill import backfill_topic as _backfill_topic

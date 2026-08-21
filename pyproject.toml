@@ -95,6 +95,14 @@ ignore = ["E501"]
 "services/scraper/anveshak/scraper/main.py" = ["E402"]
 "services/social/anveshak/social/main.py" = ["E402"]
 "services/vision/anveshak/vision/main.py" = ["E402"]
+# ARQ workers are entrypoints too: `arq anveshak.<svc>.jobs.WorkerSettings`
+# starts its own process and imports only this module, so it has to configure
+# logging and tracing itself. Without it the worker's logs carry no service
+# field and Loki cannot attribute them.
+"services/analyst/anveshak/analyst/jobs.py" = ["E402"]
+"services/scraper/anveshak/scraper/jobs.py" = ["E402"]
+"services/social/anveshak/social/jobs.py" = ["E402"]
+"services/vision/anveshak/vision/jobs.py" = ["E402"]
 
 # One-off demo report generators. Function-local UPPER_CASE constants (regexes,
 # lookup tables) are deliberate and readable here; renaming them to lowercase

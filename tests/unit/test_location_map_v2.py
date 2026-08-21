@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import pytest
 
-pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
+# asyncio_mode = "auto" in pyproject.toml already marks the async tests here.
+# An explicit asyncio mark also lands on the sync ones and emits a PytestWarning.
+pytestmark = pytest.mark.unit
 
 
 class TestLocationMapV2SQL:

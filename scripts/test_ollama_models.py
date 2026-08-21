@@ -30,6 +30,31 @@ def _result(test: str, passed: bool, detail: str, elapsed: float) -> dict[str, A
     }
 
 
+def _exc_detail(exc: BaseException, limit: int = 200) -> str:
+    """Format an exception as type plus message.
+
+    Many exceptions stringify to nothing: httpx.ReadTimeout is the one that cost
+    time here, since a timed-out Ollama call was reported as `"detail": ""`, with
+    only the elapsed_s hinting at what happened. The type alone is diagnostic.
+    """
+    message = str(exc).strip()
+    return f"{type(exc).__name__}: {message}"[:limit] if message else type(exc).__name__
+
+
+def _generation_or_error(resp: Any) -> tuple[str, str | None]:
+    """Return (response_text, error) for an /api/generate reply.
+
+    A non-2xx reply carries no `response` key, so reading it with .get() turns a
+    server error into an empty string and the caller reports "response_length=0",
+    which says nothing about why. Ollama's real message here was
+    `llama-server process has terminated: signal: killed`, an OOM kill under
+    memory pressure, and that is the one detail worth printing.
+    """
+    if resp.status_code >= 400:
+        return "", f"HTTP {resp.status_code}: {resp.text[:200]}"
+    return resp.json().get("response", ""), None
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -48,7 +73,7 @@ async def test_ollama_reachable() -> dict:
         elapsed = time.monotonic() - t0
         return _result("ollama_reachable", len(models) > 0, f"models: {', '.join(models)}", elapsed)
     except Exception as exc:
-        return _result("ollama_reachable", False, str(exc)[:200], time.monotonic() - t0)
+        return _result("ollama_reachable", False, _exc_detail(exc), time.monotonic() - t0)
 
 
 async def test_configured_model_loaded() -> dict:
@@ -71,7 +96,7 @@ async def test_configured_model_loaded() -> dict:
             elapsed,
         )
     except Exception as exc:
-        return _result("configured_model_loaded", False, str(exc)[:200], time.monotonic() - t0)
+        return _result("configured_model_loaded", False, _exc_detail(exc), time.monotonic() - t0)
 
 
 async def test_llm_generates_response() -> dict:
@@ -91,14 +116,16 @@ async def test_llm_generates_response() -> dict:
                     "options": {"num_predict": 10},
                 },
             )
-            response_text = resp.json().get("response", "")
+            response_text, error = _generation_or_error(resp)
         elapsed = time.monotonic() - t0
+        if error:
+            return _result("llm_generates_response", False, error, elapsed)
         ok = len(response_text.strip()) > 0
         return _result(
             "llm_generates_response", ok, f"response_length={len(response_text)}", elapsed
         )
     except Exception as exc:
-        return _result("llm_generates_response", False, str(exc)[:200], time.monotonic() - t0)
+        return _result("llm_generates_response", False, _exc_detail(exc), time.monotonic() - t0)
 
 
 async def test_llm_json_output() -> dict:
@@ -123,7 +150,9 @@ async def test_llm_json_output() -> dict:
                     "options": {"num_predict": 100},
                 },
             )
-            raw = resp.json().get("response", "")
+            raw, error = _generation_or_error(resp)
+        if error:
+            return _result("llm_json_output", False, error, time.monotonic() - t0)
 
         # Try to parse JSON from the response (strip markdown fences if present)
         cleaned = raw.strip()
@@ -140,11 +169,11 @@ async def test_llm_json_output() -> dict:
         return _result(
             "llm_json_output",
             False,
-            f"JSON parse failed: {str(exc)[:100]}, raw: {raw[:100]}",
+            f"JSON parse failed: {_exc_detail(exc, 100)}, raw: {raw[:100]}",
             time.monotonic() - t0,
         )
     except Exception as exc:
-        return _result("llm_json_output", False, str(exc)[:200], time.monotonic() - t0)
+        return _result("llm_json_output", False, _exc_detail(exc), time.monotonic() - t0)
 
 
 # ---------------------------------------------------------------------------

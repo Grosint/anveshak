@@ -12,6 +12,11 @@ x-common-env: &common-env
   OLLAMA_BASE_URL: http://ollama:11434
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   ENVIRONMENT: ${ENVIRONMENT:-production}
+  # Tracing is opt-in. configure_tracing() is a no-op unless OTEL_ENABLED=true,
+  # and logs tracing.disabled with the reason when it is off.
+  OTEL_ENABLED: ${OTEL_ENABLED:-false}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318}
+  OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-0.1}
 
 x-vision-env: &vision-env
   <<: *common-env
@@ -35,6 +40,20 @@ x-healthcheck-defaults: &healthcheck-defaults
   interval: 30s
   timeout: 10s
   retries: 5
+  start_period: 30s
+
+# ARQ workers and the two scheduler loops. `docker exec` is scheduled inside the
+# container's own CPU quota, so on a worker at its `cpus:` cap a probe competes
+# with the work it is measuring. Measured on the web scraper at its cap: the old
+# `python -c 'import anveshak.scraper.jobs'` took 17.9s against a 10s timeout and
+# flapped the container to unhealthy purely from its own cost, a bare
+# `python -m` took 15.9s, and arq_health.sh takes 1.2s because it needs no
+# interpreter. 10s is ample for it; 3 retries reports a genuinely dead worker
+# within ~90s, against the 3600s ARQ default that preceded this.
+x-worker-healthcheck-defaults: &worker-healthcheck-defaults
+  interval: 30s
+  timeout: 10s
+  retries: 3
   start_period: 30s
 
 services:
@@ -147,8 +166,14 @@ services:
       <<: *common-env
       API_SECRET_KEY: ${API_SECRET_KEY}
       JWT_SECRET_KEY: ${API_SECRET_KEY}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-480}
       API_ALLOWED_ORIGINS: ${API_ALLOWED_ORIGINS:-http://localhost:3000}
       HSTS_ENABLED: ${HSTS_ENABLED:-false}
+      # Rule 1: standalone-first, the bridge stays off unless explicitly enabled.
+      ANVESHAK_DRISHTI_BRIDGE: ${ANVESHAK_DRISHTI_BRIDGE:-false}
+      DRISHTI_REDPANDA_BOOTSTRAP: ${DRISHTI_REDPANDA_BOOTSTRAP:-}
+      SIGNAL_WEBHOOK_ENABLED: ${SIGNAL_WEBHOOK_ENABLED:-false}
+      SIGNAL_WEBHOOK_URL: ${SIGNAL_WEBHOOK_URL:-}
       SCRAPER_SERVICE_URL: http://scrape-web-scheduler:8001
       SOCIAL_SERVICE_URL: http://scrape-social-scheduler:8002
       ANALYST_SERVICE_URL: http://analyse-scheduler:8007
@@ -212,8 +237,8 @@ services:
       tor-proxy:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
-      <<: *healthcheck-defaults
+      test: ["CMD", "bash", "/workspace/sdk/arq_health.sh", "anveshak:scheduler:scrape-web"]
+      <<: *worker-healthcheck-defaults
     networks:
       - anveshak-net
 
@@ -254,11 +279,8 @@ services:
       tor-proxy:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "python -c 'import arq; import anveshak.scraper.jobs'"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+      test: ["CMD", "bash", "/workspace/sdk/arq_health.sh", "arq:scraper"]
+      <<: *worker-healthcheck-defaults
     networks:
       - anveshak-net
     command: ["python", "-m", "arq", "anveshak.scraper.jobs.WorkerSettings"]
@@ -315,8 +337,8 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
-      <<: *healthcheck-defaults
+      test: ["CMD", "bash", "/workspace/sdk/arq_health.sh", "anveshak:scheduler:scrape-social"]
+      <<: *worker-healthcheck-defaults
     networks:
       - anveshak-net
 
@@ -349,6 +371,7 @@ services:
       INSTAGRAM_ADAPTER_ENABLED: ${INSTAGRAM_ADAPTER_ENABLED:-false}
       INSTAGRAM_USERNAME: ${INSTAGRAM_USERNAME:-}
       INSTAGRAM_PASSWORD: ${INSTAGRAM_PASSWORD:-}
+      INSTAGRAM_HOURLY_CALL_CAP: ${INSTAGRAM_HOURLY_CALL_CAP:-100}
       YOUTUBE_ADAPTER_ENABLED: ${YOUTUBE_ADAPTER_ENABLED:-false}
       YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
       YOUTUBE_DAILY_QUOTA_CAP: ${YOUTUBE_DAILY_QUOTA_CAP:-9000}
@@ -370,8 +393,8 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
-      <<: *healthcheck-defaults
+      test: ["CMD", "bash", "/workspace/sdk/arq_health.sh", "arq:social"]
+      <<: *worker-healthcheck-defaults
     networks:
       - anveshak-net
     command: ["python", "-m", "arq", "anveshak.social.jobs.WorkerSettings"]
@@ -402,7 +425,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:3002/health || exit 1"]
+      # The node:*-slim base has no wget or curl, so the previous
+      # `wget -q --spider` probe exited 127 every time and the container was
+      # permanently unhealthy while /health was returning 200. node is the one
+      # HTTP client guaranteed to be here.
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3002/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       <<: *healthcheck-defaults
     networks:
       - anveshak-net
@@ -419,6 +446,8 @@ services:
       <<: *common-env
       TRANSLATION_ENABLED: ${TRANSLATION_ENABLED:-true}
       TRANSLATION_MODEL: ${TRANSLATION_MODEL:-facebook/nllb-200-distilled-600M}
+      # Must match analyse-worker, or init pre-caches a model the worker never loads.
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
       HF_HOME: /app/models
     volumes:
       - analyst_models:/app/models
@@ -455,6 +484,8 @@ services:
       IDENTIFIER_EXTRACTION_ENABLED: ${IDENTIFIER_EXTRACTION_ENABLED:-true}
       TEMPLATE_MATCHING_ENABLED: ${TEMPLATE_MATCHING_ENABLED:-true}
       IDENTIFIER_CLUSTER_INTERVAL_S: ${IDENTIFIER_CLUSTER_INTERVAL_S:-300}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-384}
       HF_HOME: /app/models
     ports:
       - "8007:8007"
@@ -496,6 +527,19 @@ services:
       ENTITY_BLEND_WEIGHT: ${ENTITY_BLEND_WEIGHT:-0.3}
       IDENTIFIER_EXTRACTION_ENABLED: ${IDENTIFIER_EXTRACTION_ENABLED:-true}
       TEMPLATE_MATCHING_ENABLED: ${TEMPLATE_MATCHING_ENABLED:-true}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-384}
+      # Credibility auto-update. The drop/boost deltas must stay >= their
+      # matching MIN_AUTO_ threshold or the noise filter silently swallows every
+      # change and rule 8 never writes an audit row. See tests/unit/test_credibility_settings.py.
+      CREDIBILITY_DEEPFAKE_DROP: ${CREDIBILITY_DEEPFAKE_DROP:-1.0}
+      CREDIBILITY_MIN_AUTO_DROP: ${CREDIBILITY_MIN_AUTO_DROP:-1.0}
+      CREDIBILITY_HIGH_THRESHOLD: ${CREDIBILITY_HIGH_THRESHOLD:-60.0}
+      CREDIBILITY_CROSS_VERIFY_BOOST: ${CREDIBILITY_CROSS_VERIFY_BOOST:-5.0}
+      CREDIBILITY_MIN_AUTO_BOOST: ${CREDIBILITY_MIN_AUTO_BOOST:-1.0}
+      CREDIBILITY_CONTRADICTION_DROP: ${CREDIBILITY_CONTRADICTION_DROP:-5.0}
+      CREDIBILITY_NOISE_RATIO_THRESHOLD: ${CREDIBILITY_NOISE_RATIO_THRESHOLD:-0.6}
+      CREDIBILITY_CONTRADICTION_MIN_ITEMS: ${CREDIBILITY_CONTRADICTION_MIN_ITEMS:-5}
       HF_HOME: /app/models
     volumes:
       - analyst_models:/app/models
@@ -511,8 +555,8 @@ services:
       ollama:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
-      <<: *healthcheck-defaults
+      test: ["CMD", "bash", "/workspace/sdk/arq_health.sh", "arq:analyst"]
+      <<: *worker-healthcheck-defaults
       start_period: 120s
     networks:
       - anveshak-net
@@ -550,11 +594,8 @@ services:
       ollama:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "python -c 'import arq; import anveshak.reporter.worker'"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+      test: ["CMD", "bash", "/workspace/sdk/arq_health.sh", "arq:reporter"]
+      <<: *worker-healthcheck-defaults
     networks:
       - anveshak-net
     command: ["python", "-m", "arq", "anveshak.reporter.worker.WorkerSettings"]
@@ -602,11 +643,8 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "python -c 'import arq; import anveshak.vision.jobs'"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+      test: ["CMD", "bash", "/workspace/sdk/arq_health.sh", "arq:vision"]
+      <<: *worker-healthcheck-defaults
     networks:
       - anveshak-net
     command: ["python", "-m", "arq", "anveshak.vision.jobs.WorkerSettings"]

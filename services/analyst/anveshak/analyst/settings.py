@@ -54,7 +54,6 @@ class AnalystSettings(BaseSettings):
     label_staleness_change_threshold: float = 0.30  # re-label if >30% items changed
 
     # Credibility auto-update (deepfake drop — 7.3, 7.4)
-    credibility_update_interval_s: int = 86400  # 24h
     credibility_deepfake_drop: float = 1.0  # pts subtracted per high-risk deepfake item
     credibility_min_auto_drop: float = 1.0  # minimum drop delta to write audit log (noise filter)
 

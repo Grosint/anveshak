@@ -27,6 +27,7 @@ import asyncpg
 import structlog
 import uvicorn
 from anveshak.logging import configure_logging
+from anveshak.tracing import configure_tracing
 from arq import ArqRedis
 from arq import create_pool as create_redis_pool
 from arq.connections import RedisSettings
@@ -34,6 +35,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict
 
 configure_logging("analyst-scheduler")
+configure_tracing("analyst-scheduler")
 from prometheus_client import generate_latest
 
 from .clustering import run_clustering

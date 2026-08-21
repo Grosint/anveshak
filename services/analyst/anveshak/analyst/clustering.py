@@ -117,6 +117,35 @@ SQL_CLUSTER_CENTROIDS = """
     WHERE topic_id = $1 AND archived_at IS NULL
 """
 
+# Recompute a missing centroid from the cluster's own members.
+#
+# A cluster with a NULL embedding_centroid can never be matched by
+# assign_to_nearest_cluster, so new content only ever reaches it through a full
+# re-cluster. Members already carry embeddings, so the centroid the cluster was
+# meant to have is recoverable: it is the L2-normalised mean of those vectors,
+# which is exactly what compute_centroid() produces on the write path.
+#
+# updated_at is deliberately not touched. It drives cluster archival by
+# staleness, and backfilling a centroid is a repair, not new activity.
+SQL_BACKFILL_NULL_CENTROIDS = """
+    UPDATE narrative_clusters nc
+    SET embedding_centroid = sub.centroid
+    FROM (
+        SELECT ci.narrative_cluster_id AS cluster_id,
+               l2_normalize(AVG(ci.embedding)) AS centroid
+        FROM content_items ci
+        JOIN narrative_clusters c ON c.id = ci.narrative_cluster_id
+        WHERE c.topic_id = $1
+          AND c.archived_at IS NULL
+          AND c.embedding_centroid IS NULL
+          AND ci.embedding IS NOT NULL
+        GROUP BY ci.narrative_cluster_id
+    ) sub
+    WHERE nc.id = sub.cluster_id
+      AND nc.embedding_centroid IS NULL
+    RETURNING nc.id
+"""
+
 # Get distinct sources in a cluster (for ISC — counts independent sources, not platforms)
 SQL_CLUSTER_SOURCES = """
     SELECT DISTINCT ci.source_id
@@ -272,16 +301,48 @@ async def load_unclustered_embeddings(
     return _parse_embedding_rows(rows)
 
 
+async def backfill_missing_centroids(topic_id: str, pool: asyncpg.Pool) -> list[str]:
+    """Recompute centroids for clusters that have none but do have member embeddings.
+
+    Returns the ids repaired. A cluster whose members carry no embeddings cannot
+    be repaired here and is reported by load_cluster_centroids instead.
+    """
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(SQL_BACKFILL_NULL_CENTROIDS, topic_id)
+
+    repaired = [row["id"] for row in rows]
+    if repaired:
+        log.info(
+            "clustering.centroid_backfilled",
+            topic_id=topic_id,
+            count=len(repaired),
+            cluster_ids=repaired[:10],
+        )
+    return repaired
+
+
 async def load_cluster_centroids(
     topic_id: str,
     pool: asyncpg.Pool,
 ) -> list[ClusterCentroid]:
-    """Load existing cluster centroids for a topic."""
+    """Load existing cluster centroids for a topic.
+
+    A cluster with no centroid is skipped, since there is nothing to compare new
+    content against. That is reported separately from a centroid that fails to
+    parse: the first means the centroid was never computed and the cluster is
+    unreachable by incremental assignment, the second means the stored value is
+    corrupt. Both used to log clustering.bad_centroid, which read like corruption
+    in the far more common first case.
+    """
     async with pool.acquire() as conn:
         rows = await conn.fetch(SQL_CLUSTER_CENTROIDS, topic_id)
 
     result = []
+    missing: list[str] = []
     for row in rows:
+        if row["centroid_text"] is None:
+            missing.append(row["cluster_id"])
+            continue
         try:
             vec = _parse_pgvector(row["centroid_text"])
             result.append(
@@ -298,6 +359,20 @@ async def load_cluster_centroids(
                 cluster_id=row["cluster_id"],
                 error=str(exc),
             )
+
+    if missing:
+        # One line per cycle rather than one per cluster: on a topic carrying
+        # centroid-less seed data this fired on every pass.
+        log.warning(
+            "clustering.centroid_missing",
+            topic_id=topic_id,
+            count=len(missing),
+            cluster_ids=missing[:10],
+            hint=(
+                "these clusters have no member embeddings to rebuild from, so new "
+                "content can only reach them through a full re-cluster"
+            ),
+        )
     return result
 
 
@@ -612,7 +687,9 @@ async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
     if not new_rows:
         return []
 
-    # Step 2: Load existing cluster centroids
+    # Step 2: Load existing cluster centroids, repairing any that were never
+    # computed first, so those clusters stay reachable by incremental assignment.
+    await backfill_missing_centroids(topic_id, pool)
     centroids = await load_cluster_centroids(topic_id, pool)
     cluster_ids: list[str] = []
     assigned_count = 0

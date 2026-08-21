@@ -131,8 +131,26 @@ def translate_to_english(text: str, src_lang: str) -> str | None:
         # limit. Overrunning it does not raise: generation just never
         # terminates and pins the CPU indefinitely.
         tokenizer = pipe.tokenizer
+        if tokenizer is None:
+            # Fail closed. The clamp below is the only thing standing between a
+            # dense-script input and the non-terminating generation that wedged
+            # the analyst worker for 40 minutes. Translating without it is worse
+            # than not translating.
+            log.warning(
+                "translation.no_tokenizer",
+                lang=src_lang,
+                model=settings.translation_model,
+                reason="pipeline exposes no tokenizer, cannot clamp input tokens",
+            )
+            return None
+
         tokenizer.src_lang = nllb_src
-        token_ids = tokenizer(text, add_special_tokens=False)["input_ids"]
+        # transformers types __call__ as returning Encoding, which declares
+        # neither __len__ nor __getitem__. At runtime it is a BatchEncoding,
+        # which is a dict. The annotation is what len() and the slice below need.
+        token_ids: list[int] = tokenizer(text, add_special_tokens=False)[  # pyright: ignore[reportIndexIssue, reportAssignmentType]
+            "input_ids"
+        ]
         if len(token_ids) > settings.translation_max_input_tokens:
             text = tokenizer.decode(
                 token_ids[: settings.translation_max_input_tokens],

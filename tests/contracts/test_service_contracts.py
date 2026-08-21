@@ -269,3 +269,125 @@ class TestWorkerFunctionsImportable:
         assert not missing, "Non-callable entries in WorkerSettings.functions:\n" + "\n".join(
             missing
         )
+
+
+# ---------------------------------------------------------------------------
+# C6: every ARQ worker is health-checked against its own heartbeat
+# ---------------------------------------------------------------------------
+
+_COMPOSE = Path(__file__).resolve().parents[2] / "infra" / "compose.yml"
+_HEALTH_SCRIPT = Path(__file__).resolve().parents[2] / "sdk" / "arq_health.sh"
+
+
+class TestWorkerHealthchecks:
+    """A worker's container healthcheck must read that worker's ARQ health key.
+
+    `kill -0 1` only proves PID 1 exists, which is exactly what let a wedged
+    analyst worker report healthy for 40 minutes while its event loop was frozen.
+    ARQ expires its health key after health_check_interval + 1 seconds, so key
+    presence is the one liveness signal a frozen loop cannot fake.
+
+    See docs/venv_rebuild_plan.md item 9.
+    """
+
+    def test_health_script_exists(self):
+        """A typo'd path would make every healthcheck below fail closed at runtime."""
+        assert _HEALTH_SCRIPT.exists(), _HEALTH_SCRIPT
+
+    def test_every_worker_queue_has_a_healthcheck(self):
+        """Each WorkerSettings.queue_name is named by a compose healthcheck."""
+        workers = _load_worker_settings()
+        compose = _COMPOSE.read_text()
+
+        missing = [
+            queue
+            for queue in workers
+            if f'"/workspace/sdk/arq_health.sh", "{queue}"' not in compose
+        ]
+        assert not missing, (
+            f"queues with no arq_health.sh healthcheck in infra/compose.yml: {missing}. "
+            f"A worker without one is only checked for PID 1 being alive."
+        )
+
+    def test_no_worker_uses_an_import_probe(self):
+        """Only healthcheck `test:` lines are scanned, never the comments around them."""
+        probes = [
+            line.strip()
+            for line in _COMPOSE.read_text().splitlines()
+            if line.lstrip().startswith("test:")
+        ]
+        offenders = [p for p in probes if "python -c 'import anveshak" in p]
+        assert not offenders, (
+            f"an import-based healthcheck is back: {offenders}. Importing the job "
+            f"graph pulls in crawl4ai and torch; it was measured at 17.9s against a "
+            f"10s timeout and flapped the container to unhealthy on its own cost."
+        )
+
+    def test_every_worker_sets_health_check_interval(self):
+        """ARQ defaults to 3600s, so an unset interval means an hour-long blind spot."""
+        unset = []
+        for service, module_path in WORKER_MODULES.items():
+            mod = importlib.import_module(module_path)
+            interval = getattr(mod.WorkerSettings, "health_check_interval", None)
+            if interval is None or interval > 60:
+                unset.append(f"{service}={interval}")
+        assert not unset, (
+            f"WorkerSettings without a short health_check_interval: {unset}. "
+            f"The container healthcheck reads the key this writes, so the interval "
+            f"is the detection window for a frozen event loop."
+        )
+
+
+# Compose service name -> module holding that scheduler's HEARTBEAT_NAME.
+SCHEDULER_MODULES = {
+    "scrape-web-scheduler": "anveshak.scraper.main",
+    "scrape-social-scheduler": "anveshak.social.main",
+}
+
+
+class TestSchedulerHeartbeats:
+    """The two schedulers are plain asyncio loops, not ARQ workers.
+
+    Nothing wrote a health key for them, so their container healthcheck was
+    `kill -0 1`, which is the check item 9 removed everywhere else. They now beat
+    into `anveshak:scheduler:<name>:health-check` and are probed by the same
+    shell script. See docs/venv_rebuild_plan.md.
+    """
+
+    def test_no_service_uses_kill_0_1(self):
+        """The probe that cannot tell a wedged loop from a working one."""
+        probes = [
+            line.strip()
+            for line in _COMPOSE.read_text().splitlines()
+            if line.lstrip().startswith("test:")
+        ]
+        offenders = [p for p in probes if "kill -0 1" in p]
+        assert not offenders, (
+            f"a PID-1 healthcheck is back: {offenders}. It proves only that the "
+            f"process exists, which a frozen event loop also does."
+        )
+
+    @pytest.mark.parametrize("service,module_path", sorted(SCHEDULER_MODULES.items()))
+    def test_scheduler_healthcheck_matches_its_heartbeat_key(self, service, module_path):
+        """A rename on either side leaves the probe reading a key nobody writes."""
+        from anveshak.heartbeat import health_key
+
+        mod = importlib.import_module(module_path)
+        name = getattr(mod, "HEARTBEAT_NAME", None)
+        assert name, f"{module_path} defines no HEARTBEAT_NAME"
+
+        prefix = health_key(name).removesuffix(":health-check")
+        compose = _COMPOSE.read_text()
+        assert f'"/workspace/sdk/arq_health.sh", "{prefix}"' in compose, (
+            f"{service} has no healthcheck reading {prefix}:health-check, the key "
+            f"{module_path} writes."
+        )
+
+    @pytest.mark.parametrize("module_path", sorted(SCHEDULER_MODULES.values()))
+    def test_scheduler_sleeps_with_a_heartbeat(self, module_path):
+        """A bare asyncio.sleep between cycles lets the key expire mid-sleep."""
+        source = Path(importlib.import_module(module_path).__file__).read_text()
+        assert "sleep_with_heartbeat" in source, (
+            f"{module_path} sleeps without refreshing its health key; the container "
+            f"would report unhealthy while the loop is perfectly fine."
+        )

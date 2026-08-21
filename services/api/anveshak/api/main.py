@@ -6,8 +6,10 @@ from contextlib import asynccontextmanager
 import httpx
 import structlog
 from anveshak.logging import configure_logging
+from anveshak.tracing import configure_tracing
 
 configure_logging("api")
+configure_tracing("api")
 from arq import create_pool as arq_create_pool
 from arq.connections import RedisSettings
 from fastapi import FastAPI
