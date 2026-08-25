@@ -15,9 +15,12 @@ import asyncio
 from datetime import UTC, datetime
 
 import structlog
+from anveshak.heartbeat import beat, sleep_with_heartbeat
 from anveshak.logging import configure_logging
+from anveshak.tracing import configure_tracing
 
 configure_logging("social")
+configure_tracing("social")
 import asyncpg
 from arq import create_pool
 from arq.connections import RedisSettings
@@ -27,6 +30,10 @@ from .metrics import REGISTRY as SOCIAL_REGISTRY
 from .settings import settings
 
 log = structlog.get_logger(__name__)
+
+# Name under which this scheduler records liveness. The container healthcheck
+# reads anveshak:scheduler:scrape-social:health-check via sdk/arq_health.sh.
+HEARTBEAT_NAME = "scrape-social"
 
 SQL_GET_ACTIVE_TOPICS = "SELECT id FROM topics WHERE status = 'active'"
 
@@ -85,6 +92,7 @@ async def main() -> None:
 
     try:
         while True:
+            await beat(arq_pool, HEARTBEAT_NAME)
             now = datetime.now(UTC)
             x_due = settings.x_adapter_enabled and (
                 last_x_poll_at is None
@@ -101,7 +109,7 @@ async def main() -> None:
                     next_in_s=settings.x_poll_interval_s,
                 )
 
-            await asyncio.sleep(settings.poll_interval_s)
+            await sleep_with_heartbeat(arq_pool, HEARTBEAT_NAME, settings.poll_interval_s)
     finally:
         await db_pool.close()
         await arq_pool.aclose()

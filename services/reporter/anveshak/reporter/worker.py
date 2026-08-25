@@ -23,10 +23,12 @@ import arq
 import structlog
 from anveshak.logging import configure_logging
 from anveshak.models import Labels
+from anveshak.tracing import configure_tracing
 from arq.connections import RedisSettings
 from croniter import croniter
 
 configure_logging("reporter")
+configure_tracing("reporter")
 
 from . import db as db
 from .geocoder import build_geojson, extract_locations_from_text, geocode_locations
@@ -873,3 +875,7 @@ class WorkerSettings:
     on_job_result = on_job_result
     job_timeout = 600  # 8C.4 — Ollama report generation ceiling (600s for CPU inference)
     keep_result = 3600  # 8C.6 — keep results 1h for UI polling
+    # ARQ's default is 3600s, so a wedged worker stays "healthy" for an hour.
+    # The container healthcheck reads this key's presence, so the interval is
+    # also the detection window for a frozen event loop.
+    health_check_interval = 30

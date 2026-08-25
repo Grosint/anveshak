@@ -83,14 +83,22 @@ def _run_docker_exec(container: str, script_path: str, timeout: int = 300) -> li
 
         return json.loads(stdout[json_start:])
 
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        # The in-container scripts write `[progress] ...` to stderr precisely so a
+        # killed run is diagnosable. TimeoutExpired carries what was read before
+        # the kill, so report the last progress line rather than a bare timeout.
+        captured = exc.stderr or b""
+        if isinstance(captured, bytes):
+            captured = captured.decode("utf-8", "replace")
+        progress = [ln for ln in captured.splitlines() if ln.startswith("[progress]")]
+        where = f", last: {progress[-1][len('[progress] ') :]}" if progress else ""
         return [
             {
                 "type": "error",
                 "name": container,
                 "status": "FAIL",
                 "chars": 0,
-                "reason": f"Timeout ({timeout}s)",
+                "reason": f"Timeout ({timeout}s){where}",
                 "elapsed_s": timeout,
             }
         ]
@@ -162,9 +170,12 @@ def _print_table(results: list[dict]) -> None:
         if len(name) > name_w:
             name = name[: name_w - 3] + "..."
 
-        # Color status
+        # Color status. SKIP is its own state: an adapter that is switched off has
+        # not been tested, and calling that a failure makes a stock config red.
         if status == "PASS":
             status_str = f"{_GRN}✓ PASS{_RST}"
+        elif status == "SKIP":
+            status_str = f"{_DIM}- SKIP{_RST}"
         else:
             status_str = f"{_RED}✗ FAIL{_RST}"
 
@@ -191,13 +202,19 @@ def _print_table(results: list[dict]) -> None:
     # Summary
     total = len(results)
     passed = sum(1 for r in results if r.get("status") == "PASS")
-    failed = total - passed
+    skipped = sum(1 for r in results if r.get("status") == "SKIP")
+    failed = total - passed - skipped
+    tested = total - skipped
 
+    skip_note = f", {skipped} skipped" if skipped else ""
     print()
     if failed == 0:
-        print(f"  {_GRN}{_BOLD}SUMMARY: {passed}/{total} passed{_RST}")
+        print(f"  {_GRN}{_BOLD}SUMMARY: {passed}/{tested} passed{skip_note}{_RST}")
     else:
-        print(f"  {_YEL}{_BOLD}SUMMARY: {passed}/{total} passed, {failed}/{total} failed{_RST}")
+        print(
+            f"  {_YEL}{_BOLD}SUMMARY: {passed}/{tested} passed, "
+            f"{failed}/{tested} failed{skip_note}{_RST}"
+        )
     print()
 
 
@@ -228,10 +245,15 @@ def main() -> int:
         print(
             f"  {_DIM}Running scraper tests (RSS, web, onion) — this may take a few minutes...{_RST}"
         )
+        # Measured end to end on 2026-08-21: 1330s, of which the ten RSS feeds are
+        # 1128s. Live feeds are fetched at production's per-domain rate limit, so
+        # this is inherent rather than a stall. At the old 600s budget the run was
+        # killed mid-RSS every time and every partial result was discarded, which
+        # is how a healthy scraper reported as one `Timeout (600s)` row.
         scraper_results = _run_docker_exec(
             "anveshak-scrape-web-scheduler-1",
             "/tmp/test_scrape_sources.py",
-            timeout=600,
+            timeout=1800,
         )
         results.extend(scraper_results)
     else:
@@ -269,8 +291,8 @@ def main() -> int:
 
     _print_table(results)
 
-    # Exit code: 0 if all pass, 1 if any fail
-    any_failed = any(r.get("status") != "PASS" for r in results)
+    # Exit code: 0 if nothing failed. A SKIP is a disabled adapter, not a failure.
+    any_failed = any(r.get("status") == "FAIL" for r in results)
     return 1 if any_failed else 0
 
 

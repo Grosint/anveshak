@@ -28,6 +28,17 @@ def _result(test: str, passed: bool, detail: str, elapsed: float) -> dict[str, A
     }
 
 
+def _exc_detail(exc: BaseException, limit: int = 200) -> str:
+    """Format an exception as type plus message.
+
+    Many exceptions stringify to nothing: httpx.ReadTimeout is the one that cost
+    time here, since a timed-out Ollama call was reported as `"detail": ""`, with
+    only the elapsed_s hinting at what happened. The type alone is diagnostic.
+    """
+    message = str(exc).strip()
+    return f"{type(exc).__name__}: {message}"[:limit] if message else type(exc).__name__
+
+
 def _make_test_image() -> bytes:
     """Generate a minimal valid JPEG image for testing."""
     try:
@@ -75,7 +86,7 @@ def test_yolo_loads() -> dict:
             elapsed,
         )
     except Exception as exc:
-        return _result("yolo_load_and_detect", False, str(exc)[:200], time.monotonic() - t0)
+        return _result("yolo_load_and_detect", False, _exc_detail(exc), time.monotonic() - t0)
 
 
 def test_clip_loads() -> dict:
@@ -96,7 +107,7 @@ def test_clip_loads() -> dict:
             elapsed,
         )
     except Exception as exc:
-        return _result("clip_load_and_classify", False, str(exc)[:200], time.monotonic() - t0)
+        return _result("clip_load_and_classify", False, _exc_detail(exc), time.monotonic() - t0)
 
 
 def test_deepfake_image_score() -> dict:
@@ -117,7 +128,7 @@ def test_deepfake_image_score() -> dict:
             "deepfake_image_score", ok, f"score={score:.4f}, type={type(score).__name__}", elapsed
         )
     except Exception as exc:
-        return _result("deepfake_image_score", False, str(exc)[:200], time.monotonic() - t0)
+        return _result("deepfake_image_score", False, _exc_detail(exc), time.monotonic() - t0)
 
 
 def test_deepfake_video_score() -> dict:
@@ -138,7 +149,7 @@ def test_deepfake_video_score() -> dict:
             "deepfake_video_score", ok, f"score={score:.4f}, type={type(score).__name__}", elapsed
         )
     except Exception as exc:
-        return _result("deepfake_video_score", False, str(exc)[:200], time.monotonic() - t0)
+        return _result("deepfake_video_score", False, _exc_detail(exc), time.monotonic() - t0)
 
 
 def test_deepfake_score_not_bool() -> dict:
@@ -158,7 +169,7 @@ def test_deepfake_score_not_bool() -> dict:
             "deepfake_not_bool", ok, f"type={type(score).__name__}, value={score}", elapsed
         )
     except Exception as exc:
-        return _result("deepfake_not_bool", False, str(exc)[:200], time.monotonic() - t0)
+        return _result("deepfake_not_bool", False, _exc_detail(exc), time.monotonic() - t0)
 
 
 # ---------------------------------------------------------------------------

@@ -288,6 +288,7 @@ class TestRunClustering:
 
         with (
             patch(f"{_CLUST_MOD}.load_unclustered_embeddings", return_value=new_items),
+            patch(f"{_CLUST_MOD}.backfill_missing_centroids", return_value=[]),
             patch(f"{_CLUST_MOD}.load_cluster_centroids", return_value=existing_centroids),
             patch(f"{_CLUST_MOD}.assign_to_nearest_cluster") as mock_assign,
             patch(f"{_CLUST_MOD}.update_cluster_with_assignments", return_value=3) as mock_update,
@@ -325,6 +326,7 @@ class TestRunClustering:
 
         with (
             patch(f"{_CLUST_MOD}.load_unclustered_embeddings", return_value=new_items),
+            patch(f"{_CLUST_MOD}.backfill_missing_centroids", return_value=[]),
             patch(f"{_CLUST_MOD}.load_cluster_centroids", return_value=[]),  # no existing
             patch(f"{_CLUST_MOD}.assign_to_nearest_cluster") as mock_assign,
             patch(
@@ -339,3 +341,133 @@ class TestRunClustering:
         mock_assign.assert_not_called()
         mock_leiden.assert_called_once()
         assert result == ["new-cluster-1"]
+
+
+# ---------------------------------------------------------------------------
+# Missing centroids (docs/venv_rebuild_plan.md, open finding on NULL centroids)
+# ---------------------------------------------------------------------------
+
+
+def _centroid_row(cluster_id: str, centroid_text: str | None) -> dict:
+    return {
+        "cluster_id": cluster_id,
+        "centroid_text": centroid_text,
+        "independent_source_count": 2,
+        "item_count": 5,
+    }
+
+
+def _pool_returning(rows: list) -> AsyncMock:
+    """Mock pool whose one connection returns `rows` from fetch()."""
+    pool = AsyncMock()
+    conn = AsyncMock()
+    conn.fetch = AsyncMock(return_value=rows)
+    conn.fetchval = AsyncMock(return_value=None)
+    acq = AsyncMock()
+    acq.__aenter__ = AsyncMock(return_value=conn)
+    acq.__aexit__ = AsyncMock(return_value=False)
+    pool.acquire = MagicMock(return_value=acq)
+    pool._conn = conn
+    return pool
+
+
+@pytest.mark.unit
+class TestMissingCentroids:
+    """A NULL embedding_centroid is a cluster that was never given one.
+
+    It used to reach _parse_pgvector(None), raise inside the per-row try, and log
+    clustering.bad_centroid, which reads like corruption. 40 of 305 active
+    clusters were in that state and were silently skipped by incremental
+    assignment on every cycle.
+    """
+
+    @pytest.mark.asyncio
+    async def test_null_centroid_is_skipped_not_reported_as_corrupt(self):
+        from anveshak.analyst import clustering
+
+        pool = _pool_returning(
+            [_centroid_row("c-good", "[1.0,0.0]"), _centroid_row("c-null", None)]
+        )
+
+        with patch.object(clustering.log, "warning") as mock_warn:
+            result = await clustering.load_cluster_centroids("topic-1", pool)
+
+        assert [c.cluster_id for c in result] == ["c-good"]
+        events = [call.args[0] for call in mock_warn.call_args_list]
+        assert "clustering.centroid_missing" in events
+        assert "clustering.bad_centroid" not in events
+
+    @pytest.mark.asyncio
+    async def test_missing_centroids_logged_once_per_cycle(self):
+        """One line carrying a count, not one line per cluster."""
+        from anveshak.analyst import clustering
+
+        pool = _pool_returning([_centroid_row(f"c-{i}", None) for i in range(40)])
+
+        with patch.object(clustering.log, "warning") as mock_warn:
+            await clustering.load_cluster_centroids("topic-1", pool)
+
+        missing_calls = [
+            call
+            for call in mock_warn.call_args_list
+            if call.args[0] == "clustering.centroid_missing"
+        ]
+        assert len(missing_calls) == 1
+        assert missing_calls[0].kwargs["count"] == 40
+
+    @pytest.mark.asyncio
+    async def test_corrupt_centroid_still_reported_as_corrupt(self):
+        """The parse failure path must survive the NULL handling added around it."""
+        from anveshak.analyst import clustering
+
+        pool = _pool_returning([_centroid_row("c-bad", object())])  # type: ignore[arg-type]
+
+        with patch.object(clustering.log, "warning") as mock_warn:
+            result = await clustering.load_cluster_centroids("topic-1", pool)
+
+        assert result == []
+        events = [call.args[0] for call in mock_warn.call_args_list]
+        assert "clustering.bad_centroid" in events
+
+    @pytest.mark.asyncio
+    async def test_backfill_returns_repaired_ids(self):
+        from anveshak.analyst import clustering
+
+        pool = _pool_returning([{"id": "c-1"}, {"id": "c-2"}])
+
+        repaired = await clustering.backfill_missing_centroids("topic-1", pool)
+
+        assert repaired == ["c-1", "c-2"]
+        sql = pool._conn.fetch.call_args.args[0]
+        assert "l2_normalize" in sql, "centroid must be unit length, as compute_centroid makes it"
+        assert "embedding_centroid IS NULL" in sql, "must never overwrite a live centroid"
+        assert "updated_at" not in sql, "a repair is not activity; it must not defer archival"
+
+    @pytest.mark.asyncio
+    async def test_backfill_runs_before_centroids_are_loaded(self):
+        """Repair then read, or the repaired clusters are missed for a whole cycle."""
+        from anveshak.analyst import clustering
+
+        calls: list[str] = []
+        pool = _pool_returning([])
+
+        async def _backfill(topic_id, pool):
+            calls.append("backfill")
+            return []
+
+        async def _load(topic_id, pool):
+            calls.append("load")
+            return []
+
+        with (
+            patch(
+                f"{_CLUST_MOD}.load_unclustered_embeddings",
+                return_value=[_make_row("item-1", _random_unit_vector())],
+            ),
+            patch(f"{_CLUST_MOD}.backfill_missing_centroids", side_effect=_backfill),
+            patch(f"{_CLUST_MOD}.load_cluster_centroids", side_effect=_load),
+            patch(f"{_CLUST_MOD}._leiden_and_persist", return_value=[]),
+        ):
+            await clustering.run_clustering("topic-1", pool)
+
+        assert calls == ["backfill", "load"]

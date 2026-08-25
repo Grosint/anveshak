@@ -4,9 +4,12 @@ import asyncio
 
 import asyncpg
 import structlog
+from anveshak.heartbeat import beat, sleep_with_heartbeat
 from anveshak.logging import configure_logging
+from anveshak.tracing import configure_tracing
 
 configure_logging("scraper")
+configure_tracing("scraper")
 from arq import create_pool as arq_create_pool
 from arq.connections import RedisSettings
 from prometheus_client import start_http_server
@@ -15,6 +18,10 @@ from .metrics import REGISTRY as SCRAPER_REGISTRY
 from .settings import settings
 
 log = structlog.get_logger(__name__)
+
+# Name under which this scheduler records liveness. The container healthcheck
+# reads anveshak:scheduler:scrape-web:health-check via sdk/arq_health.sh.
+HEARTBEAT_NAME = "scrape-web"
 
 
 async def main():
@@ -37,8 +44,9 @@ async def main():
 
     try:
         while True:
+            await beat(redis, HEARTBEAT_NAME)
             await _enqueue_active_topics(db_pool, redis)
-            await asyncio.sleep(settings.scraper_poll_interval_s)
+            await sleep_with_heartbeat(redis, HEARTBEAT_NAME, settings.scraper_poll_interval_s)
     finally:
         await db_pool.close()
 

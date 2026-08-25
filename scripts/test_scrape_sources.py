@@ -77,6 +77,18 @@ def _result(
     }
 
 
+def _progress(message: str) -> None:
+    """Write progress to the real stderr, which the host orchestrator captures.
+
+    stderr is pointed at /dev/null in __main__ to keep library log noise out of
+    the JSON on stdout, and that redirect is why a run killed by the host timeout
+    produced a bare `Timeout (600s)` row with nothing to act on. Writing to the
+    original fd 2 means a killed run still says which source it was on.
+    """
+    sys.__stderr__.write(f"[progress] {message}\n")
+    sys.__stderr__.flush()
+
+
 # ---------------------------------------------------------------------------
 # RSS tests — uses real fetch_rss_items()
 # ---------------------------------------------------------------------------
@@ -118,6 +130,7 @@ async def test_web_all(sources: list[tuple[str, str]]) -> list[dict]:
     try:
         async with create_shared_crawler() as (crawler, run_cfg):
             for name, url in sources:
+                _progress(f"web: {name}")
                 t0 = time.monotonic()
                 try:
                     text = await fetch_url_with_crawler(url, crawler, run_cfg)
@@ -216,6 +229,7 @@ async def test_onion_all(sources: list[tuple[str, str]]) -> list[dict]:
     try:
         async with create_tor_crawler() as (crawler, run_cfg):
             for name, url in sources:
+                _progress(f"onion: {name}")
                 t0 = time.monotonic()
                 try:
                     validate_onion_url(url)
@@ -278,17 +292,23 @@ async def test_onion_all(sources: list[tuple[str, str]]) -> list[dict]:
 
 async def main() -> list[dict]:
     results: list[dict] = []
+    t0 = time.monotonic()
 
     # RSS — sequential, each creates its own httpx client (same as production)
+    _progress(f"phase rss: {len(RSS_SOURCES)} sources")
     for name, url in RSS_SOURCES:
+        _progress(f"rss: {name}")
         results.append(await test_rss(name, url))
 
     # Web — shared browser (same as production scrape_topic job)
+    _progress(f"phase web: {len(WEB_SOURCES)} sources, elapsed {time.monotonic() - t0:.0f}s")
     results.extend(await test_web_all(WEB_SOURCES))
 
     # Onion — shared Tor browser (same as production scrape_darkweb_topic job)
+    _progress(f"phase onion: {len(ONION_SOURCES)} sources, elapsed {time.monotonic() - t0:.0f}s")
     results.extend(await test_onion_all(ONION_SOURCES))
 
+    _progress(f"done in {time.monotonic() - t0:.0f}s")
     return results
 
 

@@ -40,6 +40,23 @@ def _result(
     }
 
 
+def _skipped(source_type: str, reason: str) -> dict[str, Any]:
+    """An adapter that is switched off is not a failure.
+
+    Every adapter starts disabled by design (architectural rule 1, standalone
+    first), so reporting a disabled adapter as FAIL made `make test-scrape` red
+    for a stock configuration and buried the failures that matter.
+    """
+    return {
+        "type": source_type,
+        "name": "(disabled)",
+        "status": "SKIP",
+        "chars": 0,
+        "reason": reason,
+        "elapsed_s": 0,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Telegram test — uses real TelegramAdapter.authenticate() + collect()
 # ---------------------------------------------------------------------------
@@ -49,7 +66,7 @@ async def test_telegram() -> list[dict]:
     from anveshak.social.settings import settings
 
     if not settings.telegram_adapter_enabled:
-        return [_result("telegram", "(disabled)", False, 0, "TELEGRAM_ADAPTER_ENABLED=false", 0)]
+        return [_skipped("telegram", "TELEGRAM_ADAPTER_ENABLED=false")]
 
     from anveshak.social.adapters.base import AdapterAuthError
     from anveshak.social.adapters.telegram import TelegramAdapter
@@ -138,7 +155,7 @@ async def test_x() -> list[dict]:
     from anveshak.social.settings import settings
 
     if not settings.x_adapter_enabled:
-        return [_result("x", "(disabled)", False, 0, "X_ADAPTER_ENABLED=false", 0)]
+        return [_skipped("x", "X_ADAPTER_ENABLED=false")]
 
     if not settings.x_bearer_token:
         return [_result("x", "(no token)", False, 0, "X_BEARER_TOKEN not set", 0)]
@@ -241,7 +258,7 @@ async def test_reddit() -> list[dict]:
     from anveshak.social.settings import settings
 
     if not settings.reddit_adapter_enabled:
-        return [_result("reddit", "(disabled)", False, 0, "REDDIT_ADAPTER_ENABLED=false", 0)]
+        return [_skipped("reddit", "REDDIT_ADAPTER_ENABLED=false")]
 
     if not settings.reddit_client_id or not settings.reddit_client_secret:
         return [

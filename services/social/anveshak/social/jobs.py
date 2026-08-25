@@ -13,6 +13,11 @@ from datetime import UTC, datetime
 
 import asyncpg
 import structlog
+from anveshak.logging import configure_logging
+from anveshak.tracing import configure_tracing
+
+configure_logging("social-worker")
+configure_tracing("social-worker")
 from arq import ArqRedis
 from arq.connections import RedisSettings
 
@@ -448,3 +453,7 @@ class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
     max_jobs = 10
     job_timeout = 300
+    # ARQ's default is 3600s, so a wedged worker stays "healthy" for an hour.
+    # The container healthcheck reads this key's presence, so the interval is
+    # also the detection window for a frozen event loop.
+    health_check_interval = 30

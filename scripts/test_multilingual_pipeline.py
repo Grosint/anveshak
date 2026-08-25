@@ -38,6 +38,17 @@ def _result(test: str, passed: bool, detail: str, elapsed: float) -> dict[str, A
     }
 
 
+def _exc_detail(exc: BaseException, limit: int = 200) -> str:
+    """Format an exception as type plus message.
+
+    Many exceptions stringify to nothing: httpx.ReadTimeout is the one that cost
+    time here, since a timed-out Ollama call was reported as `"detail": ""`, with
+    only the elapsed_s hinting at what happened. The type alone is diagnostic.
+    """
+    message = str(exc).strip()
+    return f"{type(exc).__name__}: {message}"[:limit] if message else type(exc).__name__
+
+
 # ---------------------------------------------------------------------------
 # Golden test data — 2 narratives × multiple languages
 # ---------------------------------------------------------------------------
@@ -262,7 +273,7 @@ async def test_translation_chinese(pool) -> tuple[dict, str | None]:
             "translation_zh", ok, f"{detail} | output: {translated[:150]}", elapsed
         ), None
     except Exception as exc:
-        return _result("translation_zh", False, str(exc)[:200], time.monotonic() - t0), None
+        return _result("translation_zh", False, _exc_detail(exc), time.monotonic() - t0), None
 
 
 async def test_translation_russian(pool) -> tuple[dict, str | None]:
@@ -290,7 +301,7 @@ async def test_translation_russian(pool) -> tuple[dict, str | None]:
             "translation_ru", ok, f"{detail} | output: {translated[:150]}", elapsed
         ), None
     except Exception as exc:
-        return _result("translation_ru", False, str(exc)[:200], time.monotonic() - t0), None
+        return _result("translation_ru", False, _exc_detail(exc), time.monotonic() - t0), None
 
 
 async def test_translation_hindi(pool) -> tuple[dict, str | None]:
@@ -318,7 +329,7 @@ async def test_translation_hindi(pool) -> tuple[dict, str | None]:
             "translation_hi", ok, f"{detail} | output: {translated[:150]}", elapsed
         ), None
     except Exception as exc:
-        return _result("translation_hi", False, str(exc)[:200], time.monotonic() - t0), None
+        return _result("translation_hi", False, _exc_detail(exc), time.monotonic() - t0), None
 
 
 async def test_translation_bengali(pool) -> tuple[dict, str | None]:
@@ -346,7 +357,7 @@ async def test_translation_bengali(pool) -> tuple[dict, str | None]:
             "translation_bn", ok, f"{detail} | output: {translated[:150]}", elapsed
         ), None
     except Exception as exc:
-        return _result("translation_bn", False, str(exc)[:200], time.monotonic() - t0), None
+        return _result("translation_bn", False, _exc_detail(exc), time.monotonic() - t0), None
 
 
 # ---------------------------------------------------------------------------
@@ -454,7 +465,7 @@ async def test_yake_on_translated(pool) -> tuple[dict, str | None]:
         return _result("yake_on_translated", ok, detail, elapsed), None
 
     except Exception as exc:
-        return _result("yake_on_translated", False, str(exc)[:200], time.monotonic() - t0), None
+        return _result("yake_on_translated", False, _exc_detail(exc), time.monotonic() - t0), None
 
 
 # ---------------------------------------------------------------------------

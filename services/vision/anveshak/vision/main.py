@@ -15,12 +15,14 @@ from contextlib import asynccontextmanager
 
 import structlog
 from anveshak.logging import configure_logging
+from anveshak.tracing import configure_tracing
 from arq import create_pool as arq_create_pool
 from arq.connections import RedisSettings
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from prometheus_client import make_asgi_app
 
 configure_logging("vision")
+configure_tracing("vision")
 
 from .db import create_pool
 from .metrics import REGISTRY as VISION_REGISTRY

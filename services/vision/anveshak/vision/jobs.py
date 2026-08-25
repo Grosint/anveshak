@@ -19,6 +19,11 @@ from typing import Any, Optional
 import arq
 import asyncpg
 import structlog
+from anveshak.logging import configure_logging
+from anveshak.tracing import configure_tracing
+
+configure_logging("vision-worker")
+configure_tracing("vision-worker")
 from arq.connections import RedisSettings
 
 from .db import (
@@ -709,3 +714,7 @@ class WorkerSettings:
     max_jobs = 2  # vision is CPU-heavy — limit concurrency to avoid OOM
     job_timeout = 300  # 5 minutes max per job (handles slow CPU deepfake)
     keep_result = 3600  # 8C.6 — keep results 1h for UI polling
+    # ARQ's default is 3600s, so a wedged worker stays "healthy" for an hour.
+    # The container healthcheck reads this key's presence, so the interval is
+    # also the detection window for a frozen event loop.
+    health_check_interval = 30

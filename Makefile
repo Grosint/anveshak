@@ -95,7 +95,7 @@ _WORK  := $(_CYN)⟳$(_RST)
         demo-check validate validate-vision health syscheck \
         lint format typecheck security-scan \
         clean clean-containers clean-volumes clean-cache purge nuke \
-        verify-labels verify-reports shell-% \
+        verify-labels verify-reports verify-env check-env-sync shell-% \
         benchmark benchmark-clean benchmark-skip-analyse \
         validate-vision-full \
         agents-sync agents-check venv-check \
@@ -648,6 +648,11 @@ verify-labels:
 # Check .env is in sync with .env.example (no missing keys)
 check-env-sync:
 	@bash scripts/check_env_sync.sh
+
+# Verify every .env.example var is forwarded by compose to a service that reads it
+verify-env:
+	$(call header,Verifying Env Forwarding)
+	@$(UV) python scripts/verify_env_forwarding.py
 
 # Verify report immutability constraints
 verify-reports:

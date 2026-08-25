@@ -7,7 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
+# asyncio_mode = "auto" in pyproject.toml already marks the async tests here.
+# An explicit asyncio mark also lands on the sync ones and emits a PytestWarning.
+pytestmark = pytest.mark.unit
 
 
 VALID_LLM_RESPONSE = json.dumps(

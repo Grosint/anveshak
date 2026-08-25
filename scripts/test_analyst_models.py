@@ -33,6 +33,17 @@ def _result(test: str, passed: bool, detail: str, elapsed: float) -> dict[str, A
     }
 
 
+def _exc_detail(exc: BaseException, limit: int = 200) -> str:
+    """Format an exception as type plus message.
+
+    Many exceptions stringify to nothing: httpx.ReadTimeout is the one that cost
+    time here, since a timed-out Ollama call was reported as `"detail": ""`, with
+    only the elapsed_s hinting at what happened. The type alone is diagnostic.
+    """
+    message = str(exc).strip()
+    return f"{type(exc).__name__}: {message}"[:limit] if message else type(exc).__name__
+
+
 # ---------------------------------------------------------------------------
 # Test helpers
 # ---------------------------------------------------------------------------
@@ -173,7 +184,7 @@ async def test_spacy_ner(pool) -> tuple[dict, str]:
             elapsed,
         ), item_id
     except Exception as exc:
-        return _result("spacy_ner", False, str(exc)[:200], time.monotonic() - t0), item_id
+        return _result("spacy_ner", False, _exc_detail(exc), time.monotonic() - t0), item_id
 
 
 async def test_embedding(pool) -> tuple[dict, str]:
@@ -201,7 +212,7 @@ async def test_embedding(pool) -> tuple[dict, str]:
             elapsed,
         ), item_id
     except Exception as exc:
-        return _result("embedding", False, str(exc)[:200], time.monotonic() - t0), item_id
+        return _result("embedding", False, _exc_detail(exc), time.monotonic() - t0), item_id
 
 
 async def test_sentiment(pool) -> tuple[dict, str]:
@@ -231,7 +242,7 @@ async def test_sentiment(pool) -> tuple[dict, str]:
             elapsed,
         ), item_id
     except Exception as exc:
-        return _result("vader_sentiment", False, str(exc)[:200], time.monotonic() - t0), item_id
+        return _result("vader_sentiment", False, _exc_detail(exc), time.monotonic() - t0), item_id
 
 
 async def test_language_detection(pool) -> tuple[dict, str]:
@@ -256,7 +267,9 @@ async def test_language_detection(pool) -> tuple[dict, str]:
             "language_detection", ok, f"language={lang}" if ok else f"language={lang!r}", elapsed
         ), item_id
     except Exception as exc:
-        return _result("language_detection", False, str(exc)[:200], time.monotonic() - t0), item_id
+        return _result(
+            "language_detection", False, _exc_detail(exc), time.monotonic() - t0
+        ), item_id
 
 
 # ---------------------------------------------------------------------------
