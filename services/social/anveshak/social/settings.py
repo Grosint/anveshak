@@ -38,6 +38,14 @@ class SocialSettings(BaseSettings):
     x_adapter_mode: str = "polling"  # polling | stream (stream requires Enterprise)
     x_monthly_read_cap: int = 40000  # $200/month budget cap at $0.005/read
     x_poll_interval_s: int = 900  # 15 minutes
+    # Items per recent-search call. 100 is the platform maximum. Cost is per
+    # item, so a wider call is ten times the depth for the same spend, and the
+    # monthly cap still bounds total reads.
+    x_max_results: int = 100
+    # Languages the recent-search query filters on. Empty list means no filter.
+    # The search window reaches back seven days, so any language left out here
+    # is permanently missing from the historical timeline.
+    x_search_languages: list[str] = ["en", "hi"]
 
     # YouTube — Data API v3 (free tier: 10K units/day)
     youtube_api_key: Optional[str] = None

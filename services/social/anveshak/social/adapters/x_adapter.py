@@ -190,6 +190,15 @@ class XPollingAdapter(SourceAdapterBase):
         if not query:
             return
 
+        # Language filter comes from settings. A hardcoded lang:en drops the
+        # Hindi half of the discourse, and the seven-day search window makes
+        # that loss permanent rather than recoverable by a later backfill.
+        languages = [code for code in settings.x_search_languages if code]
+        lang_filter = ""
+        if languages:
+            lang_clause = " OR ".join(f"lang:{code}" for code in languages)
+            lang_filter = f" ({lang_clause})" if len(languages) > 1 else f" {lang_clause}"
+
         # SPEND GUARD — must check before every API call (criteria 3.22, 3.30)
         allowed = await self._spend_guard.check_and_increment()
         if not allowed:
@@ -197,8 +206,8 @@ class XPollingAdapter(SourceAdapterBase):
 
         try:
             response = await self._client.search_recent_tweets(
-                query=f"{query} -is:retweet lang:en",
-                max_results=10,
+                query=f"{query} -is:retweet{lang_filter}",
+                max_results=settings.x_max_results,
                 tweet_fields=["created_at", "lang", "author_id", "public_metrics"],
             )
         except tweepy.TooManyRequests as exc:
