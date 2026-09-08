@@ -49,6 +49,9 @@ COPY services/api/alembic.ini alembic.ini
 
 # Geocoder custom locations (Indian states, defence locations, localities)
 COPY infra/configs/geocoder/custom_locations.json /workspace/infra/configs/geocoder/custom_locations.json
+# Concern taxonomy (#36). The analyst scores against it and the API
+# filters by it, so both images carry it.
+COPY infra/configs/taxonomies/concern.yaml /workspace/infra/configs/taxonomies/concern.yaml
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1

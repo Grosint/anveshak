@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { ConcernFilter } from './ConcernFilter'
 import type { IntelCluster } from '../../api/intelligence'
 import { Badge } from '../ui/Badge'
 import { deepfakeLabel } from '../../lib/domain'
@@ -27,15 +28,26 @@ interface NarrativeCardsProps {
 
 export function NarrativeCards({ clusters, onSelect, onShowAll, totalCount }: NarrativeCardsProps) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [concernFilter, setConcernFilter] = useState<string[]>([])
 
   // A cluster is "open" if it has recent growth (growth_24h > 0 or growth_rate > 0)
   const isOpen = (c: IntelCluster) => (c.growth_24h ?? 0) > 0 || (c.growth_rate ?? 0) > 0
 
   const filtered = useMemo(() => {
-    if (statusFilter === 'all') return clusters
-    if (statusFilter === 'open') return clusters.filter(isOpen)
-    return clusters.filter((c) => !isOpen(c))
-  }, [clusters, statusFilter])
+    let list = clusters
+    if (statusFilter === 'open') list = list.filter(isOpen)
+    else if (statusFilter === 'closed') list = list.filter((c) => !isOpen(c))
+
+    // Concern is a membership filter. It removes; it never reorders, so the
+    // list stays in the propagation order it arrived in. ADR 0001.
+    if (concernFilter.length > 0) {
+      list = list.filter((c) => {
+        const concern = (c as { concern?: Record<string, number> }).concern ?? {}
+        return concernFilter.some((category) => category in concern)
+      })
+    }
+    return list
+  }, [clusters, statusFilter, concernFilter])
 
   const openCount = useMemo(() => clusters.filter(isOpen).length, [clusters])
   const closedCount = clusters.length - openCount
@@ -51,6 +63,7 @@ export function NarrativeCards({ clusters, onSelect, onShowAll, totalCount }: Na
         <h2 className="text-[11px] font-bold text-text-muted uppercase tracking-widest">
           Narratives
         </h2>
+        <ConcernFilter selected={concernFilter} onChange={setConcernFilter} />
       </div>
 
       {/* Filter chips */}

@@ -22,6 +22,7 @@ from arq.connections import RedisSettings
 
 from .backfill import backfill_topic as _backfill_topic
 from .clustering import run_clustering as _run_clustering
+from .concern import score_against_taxonomy
 from .content_quality import is_quality_content
 from .credibility import (
     run_contradiction_update,
@@ -283,6 +284,23 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
             },
             "keywords": [kw.keyword for kw in kw_results],
         }
+
+        # --- Concern taxonomy (#36) ---
+        # A filter facet, never an ordering key. Stored in labels because it
+        # is read one row at a time alongside that row's other metadata,
+        # which is the criterion for labels rather than a column.
+        # Enrichment: a failure here must not lose the analysed item.
+        try:
+            concern_scores = score_against_taxonomy(work_text)
+            if concern_scores:
+                labels_dict["concern"] = concern_scores
+        except Exception as exc:
+            log.warning(
+                "analyse.concern_scoring_failed",
+                content_item_id=content_item_id,
+                error=str(exc),
+            )
+
         now = datetime.now(UTC)
 
         # --- Step 4c: Entity MinHash fingerprint for clustering boost ---

@@ -58,6 +58,9 @@ COPY infra/configs/geocoder/custom_locations.json /workspace/infra/configs/geoco
 # Mobilization lexicon (#33). Copied rather than mounted, matching the
 # geocoder convention, so the image is self-contained.
 COPY infra/configs/lexicons/mobilization.yaml /workspace/infra/configs/lexicons/mobilization.yaml
+# Concern taxonomy (#36). The analyst scores against it and the API
+# filters by it, so both images carry it.
+COPY infra/configs/taxonomies/concern.yaml /workspace/infra/configs/taxonomies/concern.yaml
 
 WORKDIR /workspace/services/analyst
 

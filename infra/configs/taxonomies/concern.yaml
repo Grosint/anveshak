@@ -1,0 +1,88 @@
+# Concern taxonomy — issue #36.
+#
+# A starter taxonomy, drafted here and handed to the customer to own, edit
+# and version thereafter. It encodes a definition of what counts as
+# concerning, and that definition should belong to the agency accountable
+# for it rather than to the vendor.
+#
+# Two rules govern every category in this file.
+#
+# 1. A category is defined by BEHAVIOUR or HARM, never by viewpoint or
+#    political position. A viewpoint-based category turns this system into a
+#    dissent detector, which is both less defensible and less accurate: the
+#    patterns worth finding are identifiable behaviourally.
+#
+# 2. A category is a FILTER the analyst chooses to apply. It orders nothing,
+#    anywhere, and the system never surfaces one unprompted. A future reader
+#    will notice that concern scores sort no list; that is deliberate.
+#    See docs/adr/0001-ranking-by-propagation-not-concern.md.
+
+version: 1
+updated: 2026-09-08
+owner: customer
+
+categories:
+  - id: incitement_to_violence
+    label: Incitement to violence
+    definition: >
+      Content that calls for, praises, or instructs physical harm against
+      identifiable people or property. Scored on the presence of the call,
+      not on the identity of who makes it or who it targets.
+    keywords:
+      - kill them
+      - burn their
+      - teach them a lesson
+      - break their
+      - मार डालो
+      - जला दो
+      - सबक सिखाओ
+
+  - id: communal_targeting
+    label: Communal targeting
+    definition: >
+      Content that assigns collective blame to a religious or caste group,
+      or calls for action against people because of that membership. The
+      behaviour scored is the collective attribution, not the grievance
+      behind it.
+    keywords:
+      - these people always
+      - their whole community
+      - boycott their shops
+      - इनकी पूरी कौम
+      - इनका बहिष्कार
+
+  - id: coordinated_inauthenticity
+    label: Coordinated inauthenticity
+    definition: >
+      Many accounts carrying near-identical text in a short window while
+      independent sourcing stays flat. Scored from propagation behaviour
+      alone; it says nothing about whether the claim is true.
+    keywords:
+      - copy paste this
+      - forward to all groups
+      - सभी ग्रुप में भेजें
+      - कॉपी पेस्ट करें
+
+  - id: cross_border_coordination
+    label: Cross-border coordination
+    definition: >
+      Content whose amplification originates predominantly outside the
+      jurisdiction it concerns. Scored on origin and routing, not on the
+      position taken.
+    keywords:
+      - handle abroad
+      - foreign funded
+      - विदेशी फंडिंग
+
+  - id: financial_fraud
+    label: Financial fraud
+    definition: >
+      Solicitation using payment identifiers, impersonated institutions, or
+      advance-fee patterns. The most behaviourally concrete category here.
+    keywords:
+      - send upi
+      - kyc expired
+      - lottery winner
+      - processing fee
+      - यूपीआई भेजें
+      - केवाईसी
