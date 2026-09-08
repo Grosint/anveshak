@@ -15,12 +15,20 @@ interface BadgeProps {
   variant?: Variant
   children: ReactNode
   className?: string
+  /** Screen-reader name, for a badge whose text alone is ambiguous. */
+  'aria-label'?: string
 }
 
-export function Badge({ variant = 'default', children, className = '' }: BadgeProps) {
+export function Badge({
+  variant = 'default',
+  children,
+  className = '',
+  'aria-label': ariaLabel,
+}: BadgeProps) {
   return (
     <span
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${variantClasses[variant]} ${className}`}
+      aria-label={ariaLabel}
     >
       {children}
     </span>

@@ -92,13 +92,15 @@ export function SignalCards({ signals, onSelect, onShowAll }: SignalCardsProps) 
           Signals
         </h2>
         <div className="flex items-center gap-2">
+          {/* Magnitude counts, not an alarm palette. ADR 0001: a badge is a
+              measurement of how a narrative spread, never an accusation. */}
           {severityCounts.HIGH > 0 && (
-            <span className="text-[10px] font-bold text-signal-high">
+            <span className="text-[10px] font-bold text-anveshak-accent">
               {severityCounts.HIGH} HIGH
             </span>
           )}
           {severityCounts.MEDIUM > 0 && (
-            <span className="text-[10px] font-bold text-signal-med">
+            <span className="text-[10px] font-bold text-text-secondary">
               {severityCounts.MEDIUM} MED
             </span>
           )}

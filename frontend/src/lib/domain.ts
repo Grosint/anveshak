@@ -34,8 +34,117 @@ export function inferSeverityFromISC(isc: number): SeverityLevel {
   return 'LOW'
 }
 
-export const SEVERITY_VARIANT: Record<string, 'danger' | 'warning' | 'success' | 'default'> = {
-  HIGH: 'danger', MEDIUM: 'warning', LOW: 'success',
+/**
+ * Severity is a magnitude, not an alarm. See ADR 0001.
+ *
+ * It is computed from propagation facts rather than from content, so the
+ * definition is sound. A red badge on a narrative about a political group
+ * reads as a verdict, and this system does not issue verdicts, so no level
+ * renders in the danger colour. The three levels differ in weight, not in
+ * temperature.
+ */
+export const SEVERITY_VARIANT: Record<string, 'danger' | 'warning' | 'success' | 'default' | 'accent' | 'ghost'> = {
+  HIGH: 'accent', MEDIUM: 'default', LOW: 'ghost',
+}
+
+// ── Severity as an auditable measurement ────────────────────────────────
+
+export interface SeverityMeasurement {
+  level: SeverityLevel
+  /** What was counted. */
+  value: number
+  /** The threshold this measurement crossed. */
+  threshold: number
+  /** The arithmetic, written out for the analyst to check. */
+  statement: string
+}
+
+/**
+ * The arithmetic behind a severity badge.
+ *
+ * An analyst sees why rather than only how loud, and can recompute it from
+ * rows in the database.
+ */
+export function severityMeasurement(signal: Signal): SeverityMeasurement {
+  const isc = signal.independent_source_count ?? 0
+  const level = inferSeverityFromISC(isc)
+  const threshold = level === 'HIGH' ? 3 : 2
+  return {
+    level,
+    value: isc,
+    threshold,
+    statement: `${isc} of ${threshold} independent sources, threshold ${threshold}`,
+  }
+}
+
+// ── Signal titles ───────────────────────────────────────────────────────
+
+/**
+ * A title states what was measured, never what it means. See ADR 0001.
+ *
+ * No title asserts that a narrative is false, that content is dangerous, or
+ * that an event will occur. Wording that survives scrutiny is wording an
+ * analyst can check against the evidence on the card.
+ */
+export function signalTitle(signal: Signal): string {
+  const evidence = (signal.evidence ?? {}) as Record<string, unknown>
+  const num = (key: string): number | null => {
+    const value = evidence[key]
+    return typeof value === 'number' ? value : null
+  }
+  const isc = signal.independent_source_count ?? num('independent_source_count') ?? 0
+
+  switch (signal.signal_type) {
+    case 'multi_source_convergence':
+    case 'threshold_crossed':
+      return `${isc} independent sources carrying one narrative`
+
+    case 'cross_topic_convergence':
+      return 'Narrative matched across two topics'
+
+    case 'new_cluster':
+      return `New cluster of ${signal.cluster_item_count ?? 0} items`
+
+    case 'hostility_shift': {
+      const drop = num('drop')
+      const hours = num('window_hours')
+      const delta = drop === null ? '' : ` by ${Math.abs(drop).toFixed(2)}`
+      const window = hours === null ? '' : ` over ${hours}h`
+      return `Mean hostility changed${delta}${window}`
+    }
+
+    case 'sentiment_shift': {
+      const drop = num('drop')
+      const hours = num('window_hours')
+      const delta = drop === null ? '' : ` by ${Math.abs(drop).toFixed(2)}`
+      const window = hours === null ? '' : ` over ${hours}h`
+      return `Mean sentiment changed${delta}${window}`
+    }
+
+    case 'manufactured_narrative': {
+      const items = num('item_count')
+      const accounts = num('account_count')
+      const counts = items !== null && accounts !== null
+        ? `${items} items from ${accounts} accounts`
+        : 'Item and account counts rose'
+      return `${counts}, independent sources flat at ${num('independent_source_count') ?? isc}`
+    }
+
+    case 'mobilization_call': {
+      const items = num('item_count')
+      const count = items === null ? '' : ` in ${items} posts`
+      return `Public call to assemble found${count}`
+    }
+
+    case 'identifier_convergence':
+      return `Identifier seen in ${num('topic_count') ?? 2} topics`
+
+    case 'scam_template_match':
+      return `Content matched a known template in ${num('match_count') ?? 1} items`
+
+    default:
+      return signal.signal_type.replace(/_/g, ' ')
+  }
 }
 
 // ── Confidence badge ────────────────────────────────────────────────────

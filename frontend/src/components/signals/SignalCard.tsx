@@ -2,15 +2,8 @@ import { useNavigate } from 'react-router-dom'
 import { Signal, SignalSource } from '../../api/signals'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
-import { inferSeverity } from '../../lib/domain'
+import { severityMeasurement, signalTitle, SEVERITY_VARIANT } from '../../lib/domain'
 import { formatDistanceToNow } from 'date-fns'
-
-const severityVariantMap: Record<string, 'danger' | 'warning' | 'success' | 'default'> = {
-  HIGH:   'danger',
-  MEDIUM: 'warning',
-  MED:    'warning',
-  LOW:    'success',
-}
 
 const platformIcons: Record<string, string> = {
   web: 'WEB',
@@ -19,6 +12,18 @@ const platformIcons: Record<string, string> = {
   reddit: 'RDT',
   bluesky: 'BSK',
   x: 'X',
+}
+
+/**
+ * Shorten a source name for a chip.
+ *
+ * Only a URL is reduced to its host. A handle such as "r/india" is left
+ * alone: splitting it on "/" left the chip reading "r", which is evidence
+ * the analyst cannot check.
+ */
+function displaySourceName(name: string): string {
+  if (!/^https?:\/\//i.test(name)) return name
+  return name.replace(/^https?:\/\/(www\.)?/i, '').split('/')[0]
 }
 
 function SourceChip({ source }: { source: SignalSource }) {
@@ -33,7 +38,7 @@ function SourceChip({ source }: { source: SignalSource }) {
         {platformIcons[source.platform] ?? source.platform.toUpperCase()}
       </span>
       <span className="text-text-muted truncate max-w-[120px]" title={source.source_name}>
-        {source.source_name.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
+        {displaySourceName(source.source_name)}
       </span>
       <span className={`font-mono font-semibold ${credColor}`}>
         {Math.round(source.credibility_score)}
@@ -51,8 +56,9 @@ interface SignalCardProps {
 
 export function SignalCard({ signal, onAcknowledge, onDismiss, isActioning }: SignalCardProps) {
   const navigate = useNavigate()
-  const severity = inferSeverity(signal)
-  const severityVariant = severityVariantMap[severity] ?? 'default'
+  const measurement = severityMeasurement(signal)
+  const severityVariant = SEVERITY_VARIANT[measurement.level] ?? 'ghost'
+  const title = signalTitle(signal)
   const isNew = signal.status === 'new'
   const sources = signal.sources ?? []
   const itemCount = signal.cluster_item_count ?? 0
@@ -88,7 +94,6 @@ export function SignalCard({ signal, onAcknowledge, onDismiss, isActioning }: Si
       <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           {isNew && <span className="w-2 h-2 rounded-full bg-anveshak-accent shrink-0" aria-label="Unread" />}
-          <Badge variant={severityVariant}>{severity}</Badge>
           <Badge variant="ghost">{signal.signal_type.replace(/_/g, ' ')}</Badge>
           {signal.status !== 'new' && (
             <Badge variant="default">{signal.status}</Badge>
@@ -127,11 +132,14 @@ export function SignalCard({ signal, onAcknowledge, onDismiss, isActioning }: Si
         )}
       </div>
 
-      {/* Narrative label — the headline the analyst scans */}
+      {/* Evidence leads: the narrative the analyst reads, then what was
+          measured about it. ADR 0001 — a title states what was measured,
+          never what it means, and any score is secondary. */}
       <div className="px-4 pb-1">
         <p className="text-sm text-text-primary font-medium leading-snug">
-          {signal.cluster_label || signal.description || 'Signal triggered — review cluster for details.'}
+          {signal.cluster_label || signal.description || 'Cluster under review'}
         </p>
+        <p className="text-xs text-text-secondary mt-0.5 leading-snug">{title}</p>
       </div>
 
       {/* Executive summary — the key intelligence */}
@@ -167,9 +175,19 @@ export function SignalCard({ signal, onAcknowledge, onDismiss, isActioning }: Si
             </span>
           )}
         </div>
-        <span className="text-[11px] text-text-muted">
-          {formatDistanceToNow(new Date(signal.created_at), { addSuffix: true })}
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-[11px] text-text-muted">{measurement.statement}</span>
+          <Badge
+            variant={severityVariant}
+            className="font-mono"
+            aria-label={`Magnitude ${measurement.level}`}
+          >
+            {measurement.level}
+          </Badge>
+          <span className="text-[11px] text-text-muted">
+            {formatDistanceToNow(new Date(signal.created_at), { addSuffix: true })}
+          </span>
+        </div>
       </div>
     </article>
   )

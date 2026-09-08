@@ -5,13 +5,9 @@ import { useProvenance } from '../../contexts/ProvenanceContext'
 import { Spinner } from '../ui/Spinner'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
-import { inferSeverity } from '../../lib/domain'
+import { severityMeasurement, signalTitle, SEVERITY_VARIANT } from '../../lib/domain'
 import { formatDistanceToNow, format } from 'date-fns'
 import { TimelineItems } from './TimelineItems'
-
-const severityVariant: Record<string, 'danger' | 'warning' | 'success' | 'default'> = {
-  HIGH: 'danger', MEDIUM: 'warning', LOW: 'success',
-}
 
 interface SignalDetailProps {
   signalId: string
@@ -54,7 +50,8 @@ export default function SignalDetail({ signalId, topicId }: SignalDetailProps) {
   if (isLoading) return <div className="p-4"><Spinner label="Loading signal..." /></div>
   if (isError || !signal) return <div className="p-4 text-text-muted text-xs">Signal not found</div>
 
-  const sev = inferSeverity(signal)
+  const measurement = severityMeasurement(signal)
+  const title = signalTitle(signal)
   const sources = signal.sources ?? []
 
   // Derive enrichment from cluster data
@@ -68,14 +65,26 @@ export default function SignalDetail({ signalId, topicId }: SignalDetailProps) {
       {/* Header */}
       <div className="px-4 py-3">
         <div className="flex items-center gap-2 flex-wrap mb-2">
-          <Badge variant={severityVariant[sev] ?? 'default'}>{sev}</Badge>
           <Badge variant="ghost">{signal.signal_type.replace(/_/g, ' ')}</Badge>
           <Badge variant="default">{signal.status}</Badge>
         </div>
 
+        {/* Evidence leads, measurement follows. ADR 0001. */}
         <h3 className="text-sm font-semibold text-text-primary">
           {signal.cluster_label || signal.description}
         </h3>
+        <p className="text-[11px] text-text-secondary mt-1">{title}</p>
+
+        <div className="flex items-center gap-2 mt-2">
+          <span className="text-[10px] text-text-muted">{measurement.statement}</span>
+          <Badge
+            variant={SEVERITY_VARIANT[measurement.level] ?? 'ghost'}
+            className="font-mono"
+            aria-label={`Magnitude ${measurement.level}`}
+          >
+            {measurement.level}
+          </Badge>
+        </div>
 
         {signal.executive_summary && (
           <p className="text-[11px] text-text-secondary leading-relaxed mt-2">{signal.executive_summary}</p>
