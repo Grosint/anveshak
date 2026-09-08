@@ -5,6 +5,7 @@ import { Button } from '../ui/Button'
 import { severityMeasurement, signalTitle, SEVERITY_VARIANT } from '../../lib/domain'
 import { formatDistanceToNow } from 'date-fns'
 import { ManufacturedNarrativeBody, type ManufacturedEvidence } from './ManufacturedNarrativeBody'
+import { MobilizationBody, type MobilizationEvidence } from './MobilizationBody'
 
 const platformIcons: Record<string, string> = {
   web: 'WEB',
@@ -149,6 +150,10 @@ export function SignalCard({ signal, onAcknowledge, onDismiss, isActioning }: Si
         <ManufacturedNarrativeBody
           evidence={signal.evidence as ManufacturedEvidence | null}
         />
+      )}
+
+      {signal.signal_type === 'mobilization_call' && (
+        <MobilizationBody evidence={signal.evidence as MobilizationEvidence | null} />
       )}
 
       {/* Executive summary — the key intelligence */}

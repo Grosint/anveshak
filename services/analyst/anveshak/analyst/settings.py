@@ -129,6 +129,15 @@ class AnalystSettings(BaseSettings):
     # because the card shows a sentence, not the whole cluster.
     manufactured_claim_sample_size: int = 25
 
+    # Mobilization lexicon — issue #33. A versioned file rather than
+    # patterns in code, because the customer owns this vocabulary and an
+    # analyst must be able to read exactly what fired a signal.
+    mobilization_lexicon_path: str = "/workspace/infra/configs/lexicons/mobilization.yaml"
+    mobilization_min_items: int = 2  # items in a cluster carrying a call
+    mobilization_check_interval_s: int = 900
+    mobilization_window_days: int = 7  # how far back a pass looks
+    mobilization_max_items_per_pass: int = 2000
+
     # Label staleness detection
     label_staleness_change_threshold: float = 0.30  # re-label if >30% items changed
 

@@ -404,6 +404,10 @@ async def signal_engine_loop(pool: asyncpg.Pool, broadcast: BroadcastFn) -> None
             from .manufactured import check_manufactured_narratives
 
             manufactured_fired = await check_manufactured_narratives(pool, broadcast)
+
+            from .mobilization import check_mobilization_calls
+
+            mobilization_fired = await check_mobilization_calls(pool, broadcast)
             total = fired + hostility_fired + identifier_fired + template_fired + manufactured_fired
             if total:
                 log.info(
@@ -413,6 +417,7 @@ async def signal_engine_loop(pool: asyncpg.Pool, broadcast: BroadcastFn) -> None
                     identifier_signals=identifier_fired,
                     template_signals=template_fired,
                     manufactured_signals=manufactured_fired,
+                    mobilization_signals=mobilization_fired,
                 )
         except Exception as exc:
             log.error("signal_engine.cycle_error", error=str(exc))

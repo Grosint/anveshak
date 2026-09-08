@@ -55,6 +55,9 @@ COPY --from=builder /workspace/services/analyst /workspace/services/analyst
 
 # Geocoder custom locations overlay (shared with reporter service)
 COPY infra/configs/geocoder/custom_locations.json /workspace/infra/configs/geocoder/custom_locations.json
+# Mobilization lexicon (#33). Copied rather than mounted, matching the
+# geocoder convention, so the image is self-contained.
+COPY infra/configs/lexicons/mobilization.yaml /workspace/infra/configs/lexicons/mobilization.yaml
 
 WORKDIR /workspace/services/analyst
 
