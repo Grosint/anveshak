@@ -104,10 +104,21 @@ class TestPercentageView:
         ]
         assert to_percentages(buckets)[0]["mean_hostility"] == pytest.approx(0.4)
 
-    def test_the_original_counts_are_kept(self):
-        """Absolute is the default view, so a volume explosion is never hidden."""
-        buckets = [{"bucket": "2026-03-01", "supporting": 30, "opposing": 10, "neutral": 10}]
-        assert to_percentages(buckets)[0]["total"] == 50
+    def test_the_absolute_total_survives_the_conversion(self):
+        """A bucket that is mostly unscored must not read as fully scored."""
+        buckets = [
+            {
+                "bucket": "2026-03-01",
+                "supporting": 30,
+                "opposing": 10,
+                "neutral": 10,
+                "unscored": 200,
+                "total": 250,
+            }
+        ]
+        result = to_percentages(buckets)[0]
+        assert result["total"] == 250
+        assert result["scored_total"] == 50
 
 
 class TestOrgScoping:
@@ -132,6 +143,23 @@ class TestDataAvailabilityLabelling:
     def test_the_platform_window_query_reports_earliest_publication_per_platform(self):
         assert "MIN" in SQL_TIMELINE_PLATFORM_WINDOWS
         assert "platform" in SQL_TIMELINE_PLATFORM_WINDOWS
+
+    def test_the_platform_filter_happens_in_sql(self):
+        """Filtering in Python meant scanning a Topic's whole history to
+        compute a MIN per platform and discarding all but two rows."""
+        assert "s.platform = ANY(" in SQL_TIMELINE_PLATFORM_WINDOWS
+
+
+class TestTheIndexIsUsable:
+    def test_no_query_uses_an_or_over_the_link_table(self):
+        """idx_content_items_published covers only the topic_id branch. An
+        OR with an IN subquery degrades toward a sequential scan, which is
+        worst for exactly the accepted Candidate Topics that get their
+        content through topic_content_items."""
+        for sql in TIMELINE_SQL:
+            assert "OR ci.id IN (SELECT" not in sql
+            if "topic_content_items" in sql:
+                assert "EXISTS (" in sql
 
     def test_the_constrained_platforms_are_a_setting(self):
         from anveshak.api.settings import settings

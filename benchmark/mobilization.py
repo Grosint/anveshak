@@ -113,7 +113,7 @@ def load_labelled_set(path: Path) -> dict[str, Any]:
 async def _predict(examples: list[dict[str, Any]], *, use_cloud: bool) -> list[dict[str, Any]]:
     """Run the confirmation prompt over the labelled set."""
     from anveshak.analyst.mobilization_confirm import (
-        CONFIRMATION_PROMPT,
+        build_confirmation_prompt,
         parse_confirmation,
     )
     from anveshak.analyst.settings import settings
@@ -125,7 +125,9 @@ async def _predict(examples: list[dict[str, Any]], *, use_cloud: bool) -> list[d
 
     predictions: list[dict[str, Any]] = []
     for example in examples:
-        prompt = CONFIRMATION_PROMPT.format(text=example["text"])
+        # The same builder production uses, fencing included. Measuring an
+        # unhardened prompt would not describe production behaviour.
+        prompt = build_confirmation_prompt(example["text"])
         try:
             raw = await generate(
                 prompt,

@@ -477,7 +477,11 @@ PDF_TEMPLATE_V2 = (
 
 <div class="bluf-box">
   <div class="bluf-label">Bottom-Line Judgement</div>
-  <p>{{ rd.get('bluf', rd.get('executive_summary', 'No summary available.')) | safe }}</p>
+  {# No | safe. This is the one LLM string most directly steered by RAG
+     context, and it lands on a report rule 4 defines as an immutable
+     snapshot, on the artefact most likely to leave the platform.
+     Injected markup could forge a classification banner or hide text. #}
+  <p>{{ rd.get('bluf', rd.get('executive_summary', 'No summary available.')) }}</p>
 </div>
 
 <!-- ══ PART I: DATA SHEET ══ -->

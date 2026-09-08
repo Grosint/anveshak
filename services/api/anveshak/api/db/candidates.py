@@ -81,6 +81,8 @@ SQL_CLUSTER_CONTENT_IDS = """
     WHERE ci.narrative_cluster_id = $1
       AND ci.org_id = $2
       AND (ci.content_quality IS NULL OR ci.content_quality != 'low_quality')
+    ORDER BY COALESCE(ci.published_at, ci.captured_at) DESC
+    LIMIT $3
 """
 
 SQL_LINK_CONTENT_TO_TOPIC = """
@@ -127,9 +129,15 @@ async def set_candidate_status(
     return dict(row) if row else None
 
 
-async def cluster_content_ids(conn: DBConnection, cluster_id: str, *, org_id: str) -> list[str]:
-    """Content already collected for this cluster."""
-    rows = await conn.fetch(SQL_CLUSTER_CONTENT_IDS, cluster_id, org_id)
+async def cluster_content_ids(
+    conn: DBConnection, cluster_id: str, *, org_id: str, limit: int = 5000
+) -> list[str]:
+    """Content already collected for this cluster.
+
+    Bounded: the whole result becomes one unnest() array parameter, and the
+    most recent content is what makes an accepted Topic immediately usable.
+    """
+    rows = await conn.fetch(SQL_CLUSTER_CONTENT_IDS, cluster_id, org_id, limit)
     return [r["id"] for r in rows]
 
 

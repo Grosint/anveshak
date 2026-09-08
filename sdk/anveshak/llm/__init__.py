@@ -17,13 +17,18 @@ from .provider import (
     payload_hash,
     resolve_provider,
 )
+from .sanitise import FENCE_CLOSE, FENCE_OPEN, fence, neutralise
 
 __all__ = [
+    "FENCE_CLOSE",
+    "FENCE_OPEN",
     "CloudProviderRefusedError",
     "LLMProviderSettings",
     "describe_provider",
     "generate",
     "log_provider_startup",
+    "fence",
+    "neutralise",
     "payload_hash",
     "resolve_provider",
 ]

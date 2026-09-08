@@ -116,6 +116,9 @@ class AnalystSettings(BaseSettings):
     promotion_max_similarity_to_existing: float = 0.80
     # Persistence across clustering runs. Below two, a single spike promotes.
     promotion_min_runs: int = 2
+    # Bounds one detection pass. The loop issues two further queries
+    # per cluster, one of them a pgvector scan.
+    detection_max_clusters_per_pass: int = 500
 
     # Manufactured Narrative signal — issue #32. The inverse of the existing
     # convergence rule: item and account counts climb while independent
@@ -128,15 +131,23 @@ class AnalystSettings(BaseSettings):
     # Items sampled to show the repeated claim across accounts. Bounded
     # because the card shows a sentence, not the whole cluster.
     manufactured_claim_sample_size: int = 25
+    # Bounds one pass. Unbounded, this is a GROUP BY join across every
+    # active cluster and all of its content, every signal cycle.
+    manufactured_max_clusters_per_pass: int = 500
 
     # Mobilization lexicon — issue #33. A versioned file rather than
     # patterns in code, because the customer owns this vocabulary and an
     # analyst must be able to read exactly what fired a signal.
     mobilization_lexicon_path: str = "/workspace/infra/configs/lexicons/mobilization.yaml"
     mobilization_min_items: int = 2  # items in a cluster carrying a call
-    mobilization_check_interval_s: int = 900
     mobilization_window_days: int = 7  # how far back a pass looks
-    mobilization_max_items_per_pass: int = 2000
+    # Per topic, not global. A global cap ordered by cluster UUID
+    # starved every organisation whose UUIDs sorted late.
+    mobilization_max_items_per_topic: int = 500
+    # Hard cap on text handed to the lexicon. The patterns come from a
+    # file the customer edits, so an unbounded input is an unbounded
+    # regex run on the scheduler's event loop.
+    mobilization_max_text_chars: int = 20000
     # Model confirmation of lexicon candidates — issue #34. Off until
     # both acceptance bars are measured on a labelled set drawn from
     # public reporting. The lexicon runs alone meanwhile, which still

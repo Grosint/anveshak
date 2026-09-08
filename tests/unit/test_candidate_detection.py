@@ -15,11 +15,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from anveshak.analyst.detection import (
-    GateResult,
-    evaluate_gates,
-    order_candidates,
-)
+from anveshak.analyst.detection import GateResult, evaluate_gates
 from anveshak.analyst.settings import settings
 
 pytestmark = pytest.mark.unit
@@ -105,31 +101,28 @@ class TestAllFourGatesMustPass:
 
 
 class TestOrderingIsByPropagation:
-    """ADR 0001: ordering is a measurement an analyst can recompute."""
+    """ADR 0001: ordering is a measurement an analyst can recompute.
 
-    def test_ordered_by_independent_sources_then_items(self):
-        candidates = [
-            {"cluster_id": "a", "independent_source_count": 3, "item_count": 10},
-            {"cluster_id": "b", "independent_source_count": 5, "item_count": 10},
-            {"cluster_id": "c", "independent_source_count": 5, "item_count": 40},
-        ]
-        assert [c["cluster_id"] for c in order_candidates(candidates)] == ["c", "b", "a"]
+    The ordering lives in SQL. A second implementation in Python would be a
+    place for the two to disagree, so there is not one.
+    """
+
+    def test_the_inbox_query_orders_by_propagation(self):
+        from anveshak.api.db.candidates import SQL_LIST_CANDIDATES
+
+        order = SQL_LIST_CANDIDATES.split("ORDER BY", 1)[1]
+        assert "independent_source_count DESC" in order
+        assert "item_count DESC" in order
 
     def test_no_concern_score_participates_in_the_order(self):
-        """A concern score is a filter, never a sort key. ADR 0001."""
-        from pathlib import Path
+        from anveshak.api.db.candidates import SQL_LIST_CANDIDATES
 
-        source = Path("services/analyst/anveshak/analyst/detection.py").read_text().lower()
-        order_section = source[source.find("def order_candidates") :]
-        order_section = order_section[: order_section.find("\ndef ")]
-        assert "concern" not in order_section
+        assert "concern" not in SQL_LIST_CANDIDATES.lower()
 
-    def test_ordering_is_stable_for_equal_measurements(self):
-        candidates = [
-            {"cluster_id": "a", "independent_source_count": 3, "item_count": 10},
-            {"cluster_id": "b", "independent_source_count": 3, "item_count": 10},
-        ]
-        assert [c["cluster_id"] for c in order_candidates(candidates)] == ["a", "b"]
+    def test_the_inbox_reads_pending_only(self):
+        from anveshak.api.db.candidates import SQL_LIST_CANDIDATES
+
+        assert "ct.status = $2" in SQL_LIST_CANDIDATES
 
 
 class TestDetectionRun:
@@ -155,20 +148,26 @@ class TestDetectionRun:
                 if "candidate_topics" in sql or "topics" in sql:
                     assert "org_id" in sql, name
 
-    async def test_a_dismissed_candidate_is_not_reproposed(self):
+    async def test_a_decided_candidate_keeps_its_decision(self):
         from anveshak.analyst.detection import SQL_UPSERT_CANDIDATE
 
         # One row per cluster: a persisting cluster bumps run_count rather
         # than producing a second inbox row. The conflict branch must never
-        # reset status, or a dismissal is undone on the next detection pass.
+        # overwrite a triage decision, or a dismissal is undone on the next
+        # detection pass.
         assert "ON CONFLICT" in SQL_UPSERT_CANDIDATE
         update_branch = SQL_UPSERT_CANDIDATE.split("DO UPDATE SET", 1)[1]
-        assigned = {
-            line.split("=", 1)[0].strip()
-            for line in update_branch.splitlines()
-            if "=" in line and not line.strip().startswith("RETURNING")
-        }
-        assert "status" not in assigned
+        assert "'accepted', 'dismissed'" in update_branch
+        assert "THEN candidate_topics.status" in update_branch
+
+    async def test_a_cluster_below_the_gates_is_not_written_as_pending(self):
+        """The inbox reads pending only. Writing every cluster as pending
+        defeated the novelty and persistence gates entirely."""
+        from anveshak.analyst.detection import SQL_UPSERT_CANDIDATE
+
+        values = SQL_UPSERT_CANDIDATE.split("VALUES", 1)[1].split("ON CONFLICT", 1)[0]
+        assert "'pending'" not in values
+        assert "$11" in values
 
     async def test_run_count_increments_across_runs(self):
         from anveshak.analyst.detection import SQL_UPSERT_CANDIDATE

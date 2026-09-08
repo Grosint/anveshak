@@ -258,6 +258,125 @@ class TestPromotionGating:
         assert "novelty" in gates.failed_gates
 
 
+class TestOnlyQualifyingClustersReachTheInbox:
+    """The gates are only real if the inbox reads what they decided.
+
+    Every cluster above the size gate is recorded so its persistence
+    history accrues, but the inbox lists 'pending' only. Writing them all as
+    'pending' defeated the novelty and persistence gates entirely.
+    """
+
+    async def test_a_cluster_below_the_gates_is_recorded_not_pending(
+        self, db_pool, watch_space, make_source
+    ):
+        from anveshak.analyst.detection import detect_candidate_topics
+
+        source = await make_source(name="Test Source recorded")
+        cluster_id, _ = await _make_cluster(
+            db_pool,
+            watch_space,
+            seed=1113,
+            item_count=settings.promotion_min_item_count + 2,
+            source_ids=[source],  # one source: fails the independent-source gate
+        )
+
+        await detect_candidate_topics(db_pool)
+        await detect_candidate_topics(db_pool)
+
+        async with db_pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT status, run_count FROM candidate_topics WHERE cluster_id = $1",
+                cluster_id,
+            )
+        assert row["status"] == "recorded"
+        # Recorded, so the persistence history is there if it later qualifies.
+        assert row["run_count"] == 2
+
+    async def test_a_recorded_cluster_is_not_in_the_inbox(self, db_pool, watch_space, make_source):
+        from anveshak.analyst.detection import detect_candidate_topics
+        from anveshak.api.db.candidates import list_candidates
+
+        source = await make_source(name="Test Source recorded inbox")
+        await _make_cluster(
+            db_pool,
+            watch_space,
+            seed=1114,
+            item_count=settings.promotion_min_item_count + 2,
+            source_ids=[source],
+        )
+        await detect_candidate_topics(db_pool)
+        await detect_candidate_topics(db_pool)
+
+        async with db_pool.acquire() as conn:
+            listed = await list_candidates(conn, org_id=TEST_ORG_ID)
+
+        assert listed == []
+
+    async def test_a_recorded_cluster_is_promoted_when_it_qualifies(
+        self, db_pool, watch_space, make_source
+    ):
+        """A slow-growing narrative arrives at the gates with its history."""
+        from anveshak.analyst.detection import detect_candidate_topics
+
+        source = await make_source(name="Test Source grows")
+        cluster_id, _ = await _make_cluster(
+            db_pool,
+            watch_space,
+            seed=1115,
+            item_count=settings.promotion_min_item_count + 2,
+            source_ids=[source],
+        )
+        await detect_candidate_topics(db_pool)
+        await detect_candidate_topics(db_pool)
+
+        # More independent sources arrive.
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE narrative_clusters SET independent_source_count = $2 WHERE id = $1",
+                cluster_id,
+                settings.promotion_min_independent_sources,
+            )
+
+        await detect_candidate_topics(db_pool)
+
+        async with db_pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT status, run_count FROM candidate_topics WHERE cluster_id = $1",
+                cluster_id,
+            )
+        assert row["status"] == "pending"
+        assert row["run_count"] == 3
+
+    async def test_an_accepted_cluster_is_never_demoted(self, db_pool, watch_space, make_source):
+        from anveshak.analyst.detection import detect_candidate_topics
+        from anveshak.api.db.candidates import set_candidate_status
+
+        sources = [await make_source(name=f"Test Source accepted {i}") for i in range(3)]
+        cluster_id, _ = await _make_cluster(
+            db_pool,
+            watch_space,
+            seed=1116,
+            item_count=settings.promotion_min_item_count + 5,
+            source_ids=sources,
+        )
+        await detect_candidate_topics(db_pool)
+        await detect_candidate_topics(db_pool)
+
+        async with db_pool.acquire() as conn:
+            candidate_id = await conn.fetchval(
+                "SELECT id FROM candidate_topics WHERE cluster_id = $1", cluster_id
+            )
+            await set_candidate_status(conn, candidate_id, org_id=TEST_ORG_ID, status="accepted")
+
+        await detect_candidate_topics(db_pool)
+
+        async with db_pool.acquire() as conn:
+            status = await conn.fetchval(
+                "SELECT status FROM candidate_topics WHERE id = $1", candidate_id
+            )
+        assert status == "accepted"
+
+
 class TestDecisionsPersist:
     async def test_a_dismissed_candidate_is_not_reproposed(self, db_pool, watch_space, make_source):
         from anveshak.analyst.detection import detect_candidate_topics

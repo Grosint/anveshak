@@ -46,6 +46,7 @@ async def get_taxonomy(
 async def list_clusters_by_concern(
     topic_id: str,
     categories: list[str] = Query(default=[]),
+    limit: int = Query(200, ge=1, le=500),
     db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin", "viewer")),
 ) -> list[dict[str, Any]]:
@@ -62,5 +63,5 @@ async def list_clusters_by_concern(
         raise HTTPException(status_code=404, detail="Topic not found")
 
     return await concern_db.list_clusters_by_concern(
-        db, topic_id, org_id=org_row["org_id"], categories=categories
+        db, topic_id, org_id=org_row["org_id"], categories=categories, limit=limit
     )

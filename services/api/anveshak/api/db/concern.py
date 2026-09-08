@@ -30,11 +30,22 @@ SQL_CLUSTERS_WITH_CONCERN = """
     FROM narrative_clusters nc
     JOIN topics t ON t.id = nc.topic_id
     LEFT JOIN LATERAL (
-        SELECT kv.key, SUM((kv.value)::int) AS total
+        -- labels is a merge target for several writers and nothing
+        -- constrains the shape of labels->'concern'. jsonb_each raises on a
+        -- scalar and the ::int cast raises on a non-numeric value, either of
+        -- which turns this endpoint into a 500 for the whole topic.
+        SELECT kv.key, SUM(kv.value::int) AS total
         FROM content_items ci
-        CROSS JOIN LATERAL jsonb_each(COALESCE(ci.labels->'concern', '{}'::jsonb)) AS kv
+        CROSS JOIN LATERAL jsonb_each(
+            CASE
+                WHEN jsonb_typeof(ci.labels->'concern') = 'object'
+                    THEN ci.labels->'concern'
+                ELSE '{}'::jsonb
+            END
+        ) AS kv
         WHERE ci.narrative_cluster_id = nc.id
           AND ci.org_id = $2
+          AND jsonb_typeof(kv.value) = 'number'
           AND (ci.content_quality IS NULL OR ci.content_quality != 'low_quality')
         GROUP BY kv.key
     ) AS concern ON TRUE
@@ -43,6 +54,7 @@ SQL_CLUSTERS_WITH_CONCERN = """
       AND nc.archived_at IS NULL
     GROUP BY nc.id, nc.label, nc.item_count, nc.independent_source_count, nc.created_at
     ORDER BY nc.independent_source_count DESC, nc.item_count DESC, nc.created_at DESC
+    LIMIT $3
 """
 
 
@@ -73,13 +85,14 @@ async def list_clusters_by_concern(
     *,
     org_id: str,
     categories: list[str],
+    limit: int = 200,
 ) -> list[dict[str, Any]]:
     """Clusters carrying any of the chosen categories, in propagation order.
 
     The SQL orders. The filter only removes. Swapping those two would make
     this a concern ranking, which ADR 0001 forbids.
     """
-    rows = await conn.fetch(SQL_CLUSTERS_WITH_CONCERN, topic_id, org_id)
+    rows = await conn.fetch(SQL_CLUSTERS_WITH_CONCERN, topic_id, org_id, limit)
 
     clusters: list[dict[str, Any]] = []
     for row in rows:

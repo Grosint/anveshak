@@ -49,6 +49,8 @@ class TestSignalEngineLoopCallsIdentifierSignals:
                 f"{_MOD}.check_identifier_signals", new_callable=AsyncMock, return_value=2
             ) as mock_id_signals,
             patch(f"{_MOD}.check_template_signals", new_callable=AsyncMock, return_value=0),
+            patch(f"{_MOD}.check_manufactured_narratives", new_callable=AsyncMock, return_value=0),
+            patch(f"{_MOD}.check_mobilization_calls", new_callable=AsyncMock, return_value=0),
             patch(f"{_MOD}.settings") as mock_settings,
         ):
             mock_settings.signal_check_interval_s = 0.01
@@ -82,6 +84,59 @@ class TestSignalEngineLoopCallsTemplateSignals:
 
 
 @pytest.mark.unit
+class TestSignalEngineLoopCallsEveryDetector:
+    """Every detector runs each cycle.
+
+    The two newest were unreachable to patch while they were imported inside
+    the loop body, which is how a missing term in the cycle total shipped.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "detector",
+        [
+            "check_signals",
+            "check_hostility_shifts",
+            "check_identifier_signals",
+            "check_template_signals",
+            "check_manufactured_narratives",
+            "check_mobilization_calls",
+        ],
+    )
+    async def test_detector_is_called(self, detector):
+        mock_pool = MagicMock()
+        mock_broadcast = AsyncMock()
+        others = [
+            name
+            for name in (
+                "check_signals",
+                "check_hostility_shifts",
+                "check_identifier_signals",
+                "check_template_signals",
+                "check_manufactured_narratives",
+                "check_mobilization_calls",
+            )
+            if name != detector
+        ]
+
+        with (
+            patch(f"{_MOD}.{detector}", new_callable=AsyncMock, return_value=1) as target,
+            patch(f"{_MOD}.settings") as mock_settings,
+        ):
+            for name in others:
+                patcher = patch(f"{_MOD}.{name}", new_callable=AsyncMock, return_value=0)
+                patcher.start()
+                self.addCleanup = getattr(self, "addCleanup", None)
+            mock_settings.signal_check_interval_s = 0.01
+            try:
+                await _run_one_cycle(mock_pool, mock_broadcast, {})
+            finally:
+                patch.stopall()
+
+        target.assert_called_with(mock_pool, mock_broadcast)
+
+
+@pytest.mark.unit
 class TestSignalEngineLoopCountsAllSignalTypes:
     """Log output must include identifier + template signal counts."""
 
@@ -95,6 +150,8 @@ class TestSignalEngineLoopCountsAllSignalTypes:
             patch(f"{_MOD}.check_hostility_shifts", new_callable=AsyncMock, return_value=1),
             patch(f"{_MOD}.check_identifier_signals", new_callable=AsyncMock, return_value=2),
             patch(f"{_MOD}.check_template_signals", new_callable=AsyncMock, return_value=3),
+            patch(f"{_MOD}.check_manufactured_narratives", new_callable=AsyncMock, return_value=4),
+            patch(f"{_MOD}.check_mobilization_calls", new_callable=AsyncMock, return_value=5),
             patch(f"{_MOD}.settings") as mock_settings,
             patch(f"{_MOD}.log") as mock_log,
         ):
@@ -115,6 +172,38 @@ class TestSignalEngineLoopCountsAllSignalTypes:
         assert kwargs.get("template_signals") == 3, (
             f"template_signals count missing or wrong: {kwargs}"
         )
+        assert kwargs.get("manufactured_signals") == 4, (
+            f"manufactured_signals count missing or wrong: {kwargs}"
+        )
+        assert kwargs.get("mobilization_signals") == 5, (
+            f"mobilization_signals count missing or wrong: {kwargs}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_cycle_of_only_mobilization_signals_is_still_logged(self):
+        """The total decides whether anything is logged at all, so a detector
+        missing from the sum makes its whole feature invisible."""
+        mock_pool = MagicMock()
+        mock_broadcast = AsyncMock()
+
+        with (
+            patch(f"{_MOD}.check_signals", new_callable=AsyncMock, return_value=0),
+            patch(f"{_MOD}.check_hostility_shifts", new_callable=AsyncMock, return_value=0),
+            patch(f"{_MOD}.check_identifier_signals", new_callable=AsyncMock, return_value=0),
+            patch(f"{_MOD}.check_template_signals", new_callable=AsyncMock, return_value=0),
+            patch(f"{_MOD}.check_manufactured_narratives", new_callable=AsyncMock, return_value=0),
+            patch(f"{_MOD}.check_mobilization_calls", new_callable=AsyncMock, return_value=7),
+            patch(f"{_MOD}.settings") as mock_settings,
+            patch(f"{_MOD}.log") as mock_log,
+        ):
+            mock_settings.signal_check_interval_s = 0.01
+            await _run_one_cycle(mock_pool, mock_broadcast, {})
+
+        cycle_calls = [
+            c for c in mock_log.info.call_args_list if c.args and "cycle_complete" in str(c.args[0])
+        ]
+        assert cycle_calls, "a cycle that fired only mobilization signals logged nothing"
+        assert cycle_calls[0].kwargs.get("mobilization_signals") == 7
 
 
 @pytest.mark.unit

@@ -248,3 +248,43 @@ class TestNoProviderNameInServiceCode:
             text=True,
         )
         assert result.stdout == ""
+
+
+class TestLocalHostStaysOnTheDeploymentBoundary:
+    """Rule 10 is only enforced if something checks.
+
+    OLLAMA_HOST is an environment variable, so an unvalidated one turns
+    "local inference" into an arbitrary outbound POST of collected intel,
+    past the cloud guard entirely.
+    """
+
+    @pytest.mark.parametrize(
+        "host",
+        [
+            "http://localhost:11434",
+            "http://127.0.0.1:11434",
+            "http://ollama:11434",
+            "http://ollama.internal:11434",
+            "http://gpu-box.local:11434",
+        ],
+    )
+    async def test_a_boundary_host_is_permitted(self, host):
+        from anveshak.llm.provider import _assert_local_host
+
+        _assert_local_host(host)
+
+    @pytest.mark.parametrize(
+        "host",
+        [
+            "https://api.openai.com",
+            "http://attacker.example.com:11434",
+            "http://198.51.100.7:11434",
+            "not-a-url",
+            "",
+        ],
+    )
+    async def test_a_host_off_the_boundary_is_refused(self, host):
+        from anveshak.llm.provider import _assert_local_host
+
+        with pytest.raises(CloudProviderRefusedError):
+            _assert_local_host(host)

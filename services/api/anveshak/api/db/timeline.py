@@ -39,8 +39,13 @@ SQL_TIMELINE_BUCKETS = """
         AVG(ci.hostility) FILTER (WHERE ci.hostility IS NOT NULL) AS mean_hostility,
         COUNT(*) FILTER (WHERE ci.hostility IS NOT NULL)          AS hostility_sample_count
     FROM content_items ci
-    WHERE (ci.topic_id = $1
-       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
+    WHERE (
+        ci.topic_id = $1
+        OR EXISTS (
+            SELECT 1 FROM topic_content_items tci
+            WHERE tci.topic_id = $1 AND tci.content_item_id = ci.id
+        )
+      )
       AND ci.org_id = $2
       AND ci.published_at IS NOT NULL
       AND ci.published_at >= NOW() - make_interval(days => $3)
@@ -54,8 +59,13 @@ SQL_TIMELINE_BUCKETS = """
 SQL_TIMELINE_EXCLUDED_COUNT = """
     SELECT COUNT(*) AS excluded_count
     FROM content_items ci
-    WHERE (ci.topic_id = $1
-       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
+    WHERE (
+        ci.topic_id = $1
+        OR EXISTS (
+            SELECT 1 FROM topic_content_items tci
+            WHERE tci.topic_id = $1 AND tci.content_item_id = ci.id
+        )
+      )
       AND ci.org_id = $2
       AND ci.published_at IS NULL
       AND ci.captured_at >= NOW() - make_interval(days => $3)
@@ -65,16 +75,26 @@ SQL_TIMELINE_EXCLUDED_COUNT = """
 # Earliest publication time held per platform. Where a platform exposes only
 # a recent search window, the chart before that point is a data gap rather
 # than silence, and the analyst has to be told which is which.
+# Bounded and filtered in SQL. Without the platform predicate this scanned
+# a Topic's entire history on every chart load to compute a MIN per platform,
+# then threw all but two rows away in Python. It is the one query here that
+# grows without bound for the life of a Topic.
 SQL_TIMELINE_PLATFORM_WINDOWS = """
     SELECT s.platform,
            MIN(ci.published_at) AS earliest_published_at,
            COUNT(*)             AS item_count
     FROM content_items ci
     JOIN sources s ON s.id = ci.source_id
-    WHERE (ci.topic_id = $1
-       OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
+    WHERE (
+        ci.topic_id = $1
+        OR EXISTS (
+            SELECT 1 FROM topic_content_items tci
+            WHERE tci.topic_id = $1 AND tci.content_item_id = ci.id
+        )
+      )
       AND ci.org_id = $2
       AND ci.published_at IS NOT NULL
+      AND s.platform = ANY($3::text[])
     GROUP BY s.platform
 """
 
@@ -104,7 +124,10 @@ def to_percentages(buckets: list[dict[str, Any]]) -> list[dict[str, Any]]:
             for key in ("supporting", "opposing", "neutral", "unsupported_language")
         )
         row = dict(bucket)
-        row["total"] = counted
+        # total stays the SQL COUNT(*). Overwriting it with the scored sum
+        # hid unscored volume: a bucket that is 90 percent unscored read
+        # identically to one fully scored.
+        row["scored_total"] = counted
         for key in ("supporting", "opposing", "neutral", "unsupported_language"):
             if key not in bucket:
                 continue
@@ -132,7 +155,12 @@ async def get_timeline(
     buckets = [dict(r) for r in rows]
 
     excluded = await conn.fetchval(SQL_TIMELINE_EXCLUDED_COUNT, topic_id, org_id, days)
-    windows = await conn.fetch(SQL_TIMELINE_PLATFORM_WINDOWS, topic_id, org_id)
+    windows = await conn.fetch(
+        SQL_TIMELINE_PLATFORM_WINDOWS,
+        topic_id,
+        org_id,
+        settings.timeline_constrained_platforms,
+    )
 
     constrained = [
         {
@@ -141,7 +169,6 @@ async def get_timeline(
             "item_count": row["item_count"],
         }
         for row in windows
-        if row["platform"] in settings.timeline_constrained_platforms
     ]
 
     return {

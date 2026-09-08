@@ -58,6 +58,10 @@ SQL_WATCH_SPACE_CLUSTERS = """
            (SELECT COUNT(DISTINCT ci.labels->>'author_handle')
               FROM content_items ci
              WHERE ci.narrative_cluster_id = nc.id
+               -- Defense in depth. "one cluster, one topic, one org" is not
+               -- enforced by any constraint, and topic_content_items carries
+               -- no org_id, so the invariant rests on every writer.
+               AND ci.org_id = t.org_id
                AND ci.labels->>'author_handle' IS NOT NULL) AS contributing_account_count
     FROM narrative_clusters nc
     JOIN topics t ON t.id = nc.topic_id
@@ -66,6 +70,10 @@ SQL_WATCH_SPACE_CLUSTERS = """
       AND nc.archived_at IS NULL
       AND nc.embedding_centroid IS NOT NULL
       AND nc.item_count >= $1
+    -- Bounded: the loop issues two more queries per row, one of them a
+    -- pgvector scan, so an unbounded result is an unbounded N+1.
+    ORDER BY nc.item_count DESC
+    LIMIT $2
 """
 
 # Closest existing Topic to a cluster centroid, within the same organisation.
@@ -86,14 +94,23 @@ SQL_NEAREST_EXISTING_TOPIC = """
 
 # One row per cluster. A cluster that persists across runs bumps run_count
 # rather than producing a second inbox row, which is what makes a dismissal
-# survive the next detection pass: the conflict branch never resets status.
+# survive the next detection pass.
+#
+# status is a parameter, not a literal. A cluster below the gates is written
+# 'recorded' so its persistence history accumulates without it appearing in
+# the analyst's inbox, which reads 'pending' only. Writing every cluster as
+# 'pending' defeated the novelty and persistence gates entirely.
+#
+# The conflict branch promotes 'recorded' to 'pending' when the gates come to
+# pass, and never touches 'accepted' or 'dismissed': a triage decision is
+# final however much the cluster grows.
 SQL_UPSERT_CANDIDATE = """
     INSERT INTO candidate_topics (
         id, cluster_id, watch_space_id, org_id, status,
         independent_source_count, item_count, contributing_account_count,
         novelty_score, run_count, evidence, labels, created_at, updated_at
     )
-    VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, 1, $9::jsonb, $10::jsonb,
+    VALUES ($1, $2, $3, $4, $11, $5, $6, $7, $8, 1, $9::jsonb, $10::jsonb,
             NOW(), NOW())
     ON CONFLICT (cluster_id) DO UPDATE SET
         independent_source_count   = EXCLUDED.independent_source_count,
@@ -102,7 +119,12 @@ SQL_UPSERT_CANDIDATE = """
         novelty_score              = EXCLUDED.novelty_score,
         run_count                  = candidate_topics.run_count + 1,
         evidence                   = EXCLUDED.evidence,
-        updated_at                 = NOW()
+        updated_at                 = NOW(),
+        status = CASE
+            WHEN candidate_topics.status IN ('accepted', 'dismissed')
+                THEN candidate_topics.status
+            ELSE EXCLUDED.status
+        END
     RETURNING id, run_count, status
 """
 
@@ -114,24 +136,6 @@ SQL_EXISTING_CANDIDATE = """
     WHERE ct.cluster_id = $1
       AND t.org_id = $2
 """
-
-SQL_PENDING_CANDIDATES = """
-    SELECT ct.id, ct.cluster_id, ct.watch_space_id, ct.org_id,
-           ct.independent_source_count, ct.item_count,
-           ct.contributing_account_count, ct.novelty_score, ct.run_count,
-           ct.evidence, ct.created_at,
-           nc.label AS cluster_label,
-           t.name   AS watch_space_name
-    FROM candidate_topics ct
-    JOIN narrative_clusters nc ON nc.id = ct.cluster_id
-    JOIN topics t ON t.id = ct.watch_space_id
-    WHERE ct.status = 'pending'
-      AND ct.org_id = $1
-    ORDER BY ct.independent_source_count DESC,
-             ct.item_count DESC,
-             ct.created_at DESC
-"""
-
 
 # ---------------------------------------------------------------------------
 # Gates
@@ -195,22 +199,6 @@ def evaluate_gates(
     )
 
 
-def order_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Order by how a narrative is spreading. See ADR 0001.
-
-    Independent source count first, then item count. Both are counts over rows
-    an analyst can open and recount, which is the property that makes the
-    ordering defensible. Nothing here reads a judgement about content.
-    """
-    return sorted(
-        candidates,
-        key=lambda c: (
-            -(c.get("independent_source_count") or 0),
-            -(c.get("item_count") or 0),
-        ),
-    )
-
-
 # ---------------------------------------------------------------------------
 # Detection run
 # ---------------------------------------------------------------------------
@@ -240,7 +228,20 @@ async def detect_candidate_topics(pool: asyncpg.Pool) -> int:
     written = 0
 
     async with pool.acquire() as conn:
-        clusters = await conn.fetch(SQL_WATCH_SPACE_CLUSTERS, settings.promotion_min_item_count)
+        clusters = await conn.fetch(
+            SQL_WATCH_SPACE_CLUSTERS,
+            settings.promotion_min_item_count,
+            settings.detection_max_clusters_per_pass,
+        )
+        if len(clusters) == settings.detection_max_clusters_per_pass:
+            log.warning(
+                "detection.pass_truncated",
+                limit=settings.detection_max_clusters_per_pass,
+                reason=(
+                    "more clusters qualify than one pass examines, so the "
+                    "smallest are not evaluated this cycle"
+                ),
+            )
         if not clusters:
             log.info(
                 "detection.no_watch_space_clusters",
@@ -253,9 +254,10 @@ async def detect_candidate_topics(pool: asyncpg.Pool) -> int:
             novelty = await _novelty_score(conn, row["centroid_text"], org_id)
 
             existing = await conn.fetchrow(SQL_EXISTING_CANDIDATE, row["cluster_id"], org_id)
-            if existing and existing["status"] == "dismissed":
+            if existing and existing["status"] in ("dismissed", "accepted"):
                 # Triage decisions persist. A dismissed cluster is never
-                # re-proposed, however much it grows.
+                # re-proposed and an accepted one is already a Topic, however
+                # much either grows.
                 continue
 
             # run_count after this pass: the upsert increments an existing row.
@@ -269,10 +271,11 @@ async def detect_candidate_topics(pool: asyncpg.Pool) -> int:
                 run_count=run_count,
             )
 
-            if not gates.passed and not existing:
-                # Nothing recorded yet and it does not qualify. Recording it
-                # anyway is what gives a slow-growing narrative the
-                # persistence history it will need later.
+            # A cluster below the gates is still recorded, so a slow-growing
+            # narrative arrives at the gates with its persistence history
+            # already accrued. It is not shown to the analyst until it passes.
+            status = "pending" if gates.passed else "recorded"
+            if not gates.passed:
                 log.debug(
                     "detection.gates_failed",
                     cluster_id=row["cluster_id"],
@@ -297,6 +300,7 @@ async def detect_candidate_topics(pool: asyncpg.Pool) -> int:
                 novelty,
                 json.dumps(evidence),
                 LABELS_JSON,
+                status,
             )
 
             if gates.passed and result is not None:
@@ -313,9 +317,3 @@ async def detect_candidate_topics(pool: asyncpg.Pool) -> int:
 
     log.info("detection.pass_complete", candidates_passing_all_gates=written)
     return written
-
-
-async def list_pending_candidates(conn: DBConnection, org_id: str) -> list[dict[str, Any]]:
-    """Pending candidates for one organisation, ordered by propagation."""
-    rows = await conn.fetch(SQL_PENDING_CANDIDATES, org_id)
-    return [dict(r) for r in rows]

@@ -40,8 +40,17 @@ scripts/
 benchmarks/
 
 # Docker / Infra configs (not needed inside containers)
+#
+# Blanket-exclude then re-include, so a new config directory a Dockerfile
+# COPYs is invisible to the build context until it is named here. That is
+# the .gitignore blanket-pattern trap in its .dockerignore form: the build
+# fails with "file not found in build context", and if the COPY were merely
+# dropped the services would fall back to an empty lexicon and taxonomy with
+# only a log warning.
 infra/configs/
 !infra/configs/geocoder/
+!infra/configs/lexicons/
+!infra/configs/taxonomies/
 infra/compose*.yml
 
 # Models (downloaded at runtime, not baked in)

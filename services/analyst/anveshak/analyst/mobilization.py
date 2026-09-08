@@ -17,17 +17,23 @@ issue #34 and ships disabled unless it clears its acceptance bar.
 
 from __future__ import annotations
 
+import json
 import re
+import uuid
+from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Optional
 
+import asyncpg
 import structlog
 import yaml
 
+from .metrics import analyst_signals_fired_total
 from .settings import settings
+from .signal_writer import SQL_INSERT_SIGNAL, BroadcastFn, is_duplicate_signal
 
 log = structlog.get_logger(__name__)
 
@@ -143,6 +149,11 @@ def find_calls_to_assemble(text: str, *, language: Optional[str]) -> list[Match]
     """
     if not text or not text.strip():
         return []
+
+    # The patterns come from a file the design hands to the customer to edit.
+    # An unbounded input turns one badly written pattern into a stalled
+    # signal engine, since these run synchronously on its event loop.
+    text = text[: settings.mobilization_max_text_chars]
 
     lexicon = load_lexicon()
     candidates = [
@@ -286,24 +297,27 @@ def extract_place(text: str, *, language: Optional[str]) -> Optional[str]:
     if not text:
         return None
 
+    text = text[: settings.mobilization_max_text_chars]
     lexicon = load_lexicon()
     markers = lexicon.place_markers.get((language or "en").lower(), [])
     if not markers:
         markers = [m for group in lexicon.place_markers.values() for m in group]
 
     for marker in sorted(markers, key=len, reverse=True):
-        pattern = re.compile(
-            r"\b" + re.escape(marker) + r"\s+((?:[A-Z][\w'-]*\s?){1,4})"
-            if marker.isascii()
-            else re.escape(marker) + r"\s*([^\s।.,]+(?:\s+[^\s।.,]+)?)",
-            re.UNICODE,
-        )
-        found = pattern.search(text)
+        found = _place_pattern(marker).search(text)
         if found:
             place = found.group(1).strip(" .,।")
             if place:
                 return place
     return None
+
+
+@lru_cache(maxsize=64)
+def _place_pattern(marker: str) -> re.Pattern[str]:
+    """Compile a place marker once rather than on every call."""
+    if marker.isascii():
+        return re.compile(r"\b" + re.escape(marker) + r"\s+((?:[A-Z][\w'-]*\s?){1,4})", re.UNICODE)
+    return re.compile(re.escape(marker) + r"\s*([^\s।.,]+(?:\s+[^\s।.,]+)?)", re.UNICODE)
 
 
 def build_description(
@@ -334,6 +348,18 @@ def build_description(
 # Signal check
 # ---------------------------------------------------------------------------
 
+SQL_ACTIVE_TOPIC_IDS = """
+    SELECT id FROM topics WHERE status = 'active' ORDER BY id
+"""
+
+# Scanned per topic rather than globally.
+#
+# A single global LIMIT ordered by cluster UUID cut the corpus at an
+# arbitrary but stable point: once one organisation's volume filled the
+# window, organisations whose cluster UUIDs sorted later never had their
+# content examined, on every pass, with no log. That is a cross-tenant
+# denial of detection rather than a leak, and it is exactly the silent
+# failure class this codebase is written against.
 SQL_UNCHECKED_CLUSTER_CONTENT = """
     SELECT nc.id                       AS cluster_id,
            nc.topic_id,
@@ -344,31 +370,25 @@ SQL_UNCHECKED_CLUSTER_CONTENT = """
     FROM narrative_clusters nc
     JOIN topics t ON t.id = nc.topic_id
     JOIN content_items ci ON ci.narrative_cluster_id = nc.id
-    WHERE t.status = 'active'
+    WHERE nc.topic_id = $1
+      AND t.status = 'active'
       AND nc.archived_at IS NULL
-      AND ci.captured_at >= NOW() - make_interval(days => $1)
+      AND ci.org_id = t.org_id
+      AND ci.captured_at >= NOW() - make_interval(days => $2)
       AND (ci.content_quality IS NULL OR ci.content_quality != 'low_quality')
-    ORDER BY nc.id, ci.captured_at DESC
-    LIMIT $2
+    ORDER BY ci.captured_at DESC
+    LIMIT $3
 """
 
 _SIGNAL_TYPE_MOBILIZATION = "mobilization_call"
 
 
-async def check_mobilization_calls(pool: Any, broadcast: Any) -> int:
+async def check_mobilization_calls(pool: asyncpg.Pool, broadcast: BroadcastFn) -> int:
     """One pass over recent clustered content. Returns count of signals fired.
 
     Groups hits by cluster and fires once per cluster, deduplicated by the
     same 24h window every other signal uses.
     """
-    import json
-    import uuid
-    from collections import defaultdict
-    from datetime import UTC, datetime
-
-    from .metrics import analyst_signals_fired_total
-    from .signal_engine import SQL_INSERT_SIGNAL, is_duplicate_signal
-
     lexicon = load_lexicon()
     if not lexicon.patterns:
         log.info(
@@ -379,22 +399,40 @@ async def check_mobilization_calls(pool: Any, broadcast: Any) -> int:
 
     fired = 0
     async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            SQL_UNCHECKED_CLUSTER_CONTENT,
-            settings.mobilization_window_days,
-            settings.mobilization_max_items_per_pass,
-        )
+        topic_ids = [r["id"] for r in await conn.fetch(SQL_ACTIVE_TOPIC_IDS)]
 
         by_cluster: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for row in rows:
-            matches = find_calls_to_assemble(row["work_text"], language=row["language"])
-            if matches:
-                by_cluster[row["cluster_id"]].append(
-                    {
-                        "row": dict(row),
-                        "match": matches[0],
-                    }
+        for topic_id in topic_ids:
+            rows = await conn.fetch(
+                SQL_UNCHECKED_CLUSTER_CONTENT,
+                topic_id,
+                settings.mobilization_window_days,
+                settings.mobilization_max_items_per_topic,
+            )
+            if len(rows) == settings.mobilization_max_items_per_topic:
+                log.warning(
+                    "mobilization.topic_scan_truncated",
+                    topic_id=topic_id,
+                    limit=settings.mobilization_max_items_per_topic,
+                    reason="more recent content than one pass examines",
                 )
+            for row in rows:
+                matches = find_calls_to_assemble(row["work_text"], language=row["language"])
+                if matches:
+                    by_cluster[row["cluster_id"]].append({"row": dict(row), "match": matches[0]})
+
+        # One ARQ pool for the whole pass. Opening one per fired signal and
+        # never closing it leaked a pool for the lifetime of the process.
+        confirm_redis = None
+        if settings.mobilization_confirm_enabled and by_cluster:
+            try:
+                from arq import create_pool
+
+                from .jobs import WorkerSettings
+
+                confirm_redis = await create_pool(WorkerSettings.redis_settings)
+            except Exception as exc:
+                log.warning("mobilization.confirm_pool_failed", error=str(exc))
 
         for cluster_id, hits in by_cluster.items():
             if len(hits) < settings.mobilization_min_items:
@@ -460,14 +498,9 @@ async def check_mobilization_calls(pool: Any, broadcast: Any) -> int:
 
             # Confirmation runs only on the ids the lexicon flagged, as a
             # background job. A no-op while the flag is off (#34).
-            if settings.mobilization_confirm_enabled:
+            if confirm_redis is not None:
                 try:
-                    from arq import create_pool
-
-                    from .jobs import WorkerSettings
-
-                    redis = await create_pool(WorkerSettings.redis_settings)
-                    await redis.enqueue_job(
+                    await confirm_redis.enqueue_job(
                         "confirm_mobilization_job",
                         [h["row"]["content_item_id"] for h in hits],
                         _queue_name="arq:analyst",
@@ -488,5 +521,8 @@ async def check_mobilization_calls(pool: Any, broadcast: Any) -> int:
                 extracted_date=when.isoformat() if when else None,
             )
             fired += 1
+
+        if confirm_redis is not None:
+            await confirm_redis.close()
 
     return fired

@@ -19,7 +19,7 @@ from typing import Any, Optional
 import structlog
 from anveshak.db import DBConnection
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..auth.rbac import require_org_context, require_role
 from ..db import audit as audit_db
@@ -38,8 +38,9 @@ class AcceptCandidateRequest(BaseModel):
     model_config = ConfigDict(strict=True)
     # Defaults to the cluster label. The analyst names the subject they are
     # choosing to monitor, which is the point of the human decision.
-    name: Optional[str] = None
-    keywords: list[str] = []
+    # Bounded: this reaches topics.name, and nothing downstream truncates.
+    name: Optional[str] = Field(default=None, max_length=200)
+    keywords: list[str] = Field(default_factory=list, max_length=100)
 
 
 @router.get("")
@@ -85,37 +86,52 @@ async def accept_candidate(
     now = datetime.now(UTC)
     name = (req.name or candidate["cluster_label"] or "Promoted narrative").strip()
 
-    await topics_db.insert_topic(
-        db,
-        topic_id,
-        name,
-        req.keywords or [],
-        list(candidate["watch_space_languages"] or ["en"]),
-        30.0,
-        3,
-        [],
-        None,
-        None,
-        now,
-        _LABELS_JSON,
-        org_id=org_id,
-        # Lineage: the Watch Space that found it stays visible on the Topic.
-        parent_topic_id=candidate["watch_space_id"],
-    )
+    # An accepted Topic with no keywords collects nothing, so it inherits the
+    # Watch Space's keywords when the analyst names none.
+    keywords = req.keywords or list(candidate["watch_space_keywords"] or [])
 
-    # Populate from content already collected, so the Topic arrives with
-    # history rather than waiting for the next collection cycle.
-    content_ids = await candidates_db.cluster_content_ids(
-        db, candidate["cluster_id"], org_id=org_id
-    )
-    await candidates_db.link_content_to_topic(db, topic_id, content_ids)
+    # One transaction. Two concurrent accepts would otherwise both pass the
+    # status read above, both insert a Topic, and only then would one lose
+    # the guarded UPDATE, leaving a Topic with content attached that no
+    # candidate points at and a 409 suggesting nothing happened.
+    #
+    # The claim goes first, so nothing is built until this request owns the
+    # decision.
+    async with db.transaction():
+        decided = await candidates_db.set_candidate_status(
+            db,
+            candidate_id,
+            org_id=org_id,
+            status="accepted",
+            promoted_topic_id=topic_id,
+        )
+        if decided is None:
+            raise HTTPException(status_code=409, detail="Candidate topic already decided")
 
-    decided = await candidates_db.set_candidate_status(
-        db, candidate_id, org_id=org_id, status="accepted", promoted_topic_id=topic_id
-    )
-    if decided is None:
-        # Another request decided it between the read and the write.
-        raise HTTPException(status_code=409, detail="Candidate topic already decided")
+        await topics_db.insert_topic(
+            db,
+            topic_id,
+            name,
+            keywords,
+            list(candidate["watch_space_languages"] or ["en"]),
+            30.0,
+            3,
+            [],
+            None,
+            None,
+            now,
+            _LABELS_JSON,
+            org_id=org_id,
+            # Lineage: the Watch Space that found it stays visible on the Topic.
+            parent_topic_id=candidate["watch_space_id"],
+        )
+
+        # Populate from content already collected, so the Topic arrives with
+        # history rather than waiting for the next collection cycle.
+        content_ids = await candidates_db.cluster_content_ids(
+            db, candidate["cluster_id"], org_id=org_id
+        )
+        await candidates_db.link_content_to_topic(db, topic_id, content_ids)
 
     await audit_db.log_action(
         db,

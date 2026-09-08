@@ -16,7 +16,10 @@ export interface TimelineBucket {
   unsupported_language: number
   /** Content the scoring pass has not reached yet. */
   unscored: number
+  /** SQL COUNT(*) for the bucket. Unchanged by the percentage view. */
   total: number
+  /** Items carrying a stance. Present only in the percentage view. */
+  scored_total?: number
   mean_hostility: number | null
   hostility_sample_count: number
 }

@@ -13,15 +13,22 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import UTC, datetime
-from typing import Awaitable, Callable
 
 import asyncpg
 import structlog
 from anveshak.db import DBConnection
 
 from .identifier_signals import check_identifier_signals
+from .manufactured import check_manufactured_narratives
 from .metrics import analyst_signals_fired_total
+from .mobilization import check_mobilization_calls
 from .settings import settings
+from .signal_writer import (
+    SQL_DUPLICATE_TOPIC_SIGNAL_CHECK,
+    SQL_INSERT_SIGNAL,
+    BroadcastFn,
+    is_duplicate_signal,
+)
 from .template_signals import check_template_signals
 
 log = structlog.get_logger(__name__)
@@ -44,24 +51,6 @@ SQL_BREACHING_CLUSTERS = """
     WHERE nc.independent_source_count >= t.signal_threshold
       AND t.status = 'active'
       AND nc.archived_at IS NULL
-"""
-
-SQL_DUPLICATE_SIGNAL_CHECK = """
-    SELECT id FROM signals
-    WHERE cluster_id  = $1
-      AND signal_type = $2
-      AND created_at  > NOW() - INTERVAL '24 hours'
-    LIMIT 1
-"""
-
-SQL_INSERT_SIGNAL = """
-    INSERT INTO signals (
-        id, topic_id, cluster_id, signal_type, description, evidence,
-        status, created_at, updated_at, labels
-    )
-    VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'new', $7, $7,
-            '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'::jsonb)
-    RETURNING id
 """
 
 SQL_MISSED_SIGNALS = """
@@ -103,15 +92,6 @@ SQL_HOSTILITY_RECENT = """
       AND hostility IS NOT NULL
 """
 
-SQL_DUPLICATE_TOPIC_SIGNAL_CHECK = """
-    SELECT id FROM signals
-    WHERE topic_id = $1
-      AND signal_type = $2
-      AND created_at > NOW() - INTERVAL '24 hours'
-    LIMIT 1
-"""
-
-
 # ---------------------------------------------------------------------------
 # Core functions (all pure / injectable — unit-testable)
 # ---------------------------------------------------------------------------
@@ -139,16 +119,6 @@ def build_signal_payload(
         "severity": severity,
         "independent_source_count": independent_source_count,
     }
-
-
-async def is_duplicate_signal(
-    conn: DBConnection,
-    cluster_id: str,
-    signal_type: str,
-) -> bool:
-    """Return True if an identical signal was fired within the last 24h (criteria 2.13)."""
-    row = await conn.fetchrow(SQL_DUPLICATE_SIGNAL_CHECK, cluster_id, signal_type)
-    return row is not None
 
 
 async def fire_signal(
@@ -210,8 +180,6 @@ async def fire_signal(
 # ---------------------------------------------------------------------------
 # Check cycle (one pass — called by polling loop)
 # ---------------------------------------------------------------------------
-
-BroadcastFn = Callable[[dict], Awaitable[None]]
 
 
 async def check_signals(
@@ -398,17 +366,19 @@ async def signal_engine_loop(pool: asyncpg.Pool, broadcast: BroadcastFn) -> None
             hostility_fired = await check_hostility_shifts(pool, broadcast)
             identifier_fired = await check_identifier_signals(pool, broadcast)
             template_fired = await check_template_signals(pool, broadcast)
-            # Imported here rather than at module scope: manufactured.py
-            # imports SQL_INSERT_SIGNAL and is_duplicate_signal from this
-            # module, so a top-level import would be circular.
-            from .manufactured import check_manufactured_narratives
-
             manufactured_fired = await check_manufactured_narratives(pool, broadcast)
-
-            from .mobilization import check_mobilization_calls
-
             mobilization_fired = await check_mobilization_calls(pool, broadcast)
-            total = fired + hostility_fired + identifier_fired + template_fired + manufactured_fired
+            # Every detector's count. A term missing here makes that whole
+            # feature invisible: the total is what decides whether the cycle
+            # logs anything at all.
+            total = (
+                fired
+                + hostility_fired
+                + identifier_fired
+                + template_fired
+                + manufactured_fired
+                + mobilization_fired
+            )
             if total:
                 log.info(
                     "signal_engine.cycle_complete",

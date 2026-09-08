@@ -26,7 +26,7 @@ import structlog
 
 from .metrics import analyst_signals_fired_total
 from .settings import settings
-from .signal_engine import SQL_INSERT_SIGNAL, BroadcastFn, is_duplicate_signal
+from .signal_writer import SQL_INSERT_SIGNAL, BroadcastFn, is_duplicate_signal
 
 log = structlog.get_logger(__name__)
 
@@ -54,20 +54,30 @@ SQL_AMPLIFIED_CLUSTERS = """
       AND nc.independent_source_count <= $1
       AND nc.item_count >= $2
       AND ci.labels->>'author_handle' IS NOT NULL
+      AND ci.org_id = t.org_id
       AND (ci.content_quality IS NULL OR ci.content_quality != 'low_quality')
     GROUP BY nc.id, nc.topic_id, nc.label, nc.item_count, nc.independent_source_count
     HAVING COUNT(DISTINCT ci.labels->>'author_handle') >= $3
+    ORDER BY nc.item_count DESC
+    LIMIT $4
 """
 
 # The repeated claim, and the items an analyst opens to read it across
 # accounts. Ordered by account so the repetition is visible rather than
 # implied.
+# org_id is carried explicitly rather than inferred from the cluster. This
+# query puts up to 200 characters of raw scraped text into the signal card
+# via most_repeated_claim(), so it is the worst place to rely on an
+# invariant no constraint enforces.
 SQL_CLUSTER_CLAIM_SAMPLE = """
     SELECT ci.id,
            ci.labels->>'author_handle' AS author_handle,
            COALESCE(NULLIF(ci.clean_text, ''), ci.raw_text) AS work_text
     FROM content_items ci
+    JOIN narrative_clusters nc ON nc.id = ci.narrative_cluster_id
+    JOIN topics t ON t.id = nc.topic_id
     WHERE ci.narrative_cluster_id = $1
+      AND ci.org_id = t.org_id
       AND ci.labels->>'author_handle' IS NOT NULL
       AND (ci.content_quality IS NULL OR ci.content_quality != 'low_quality')
     ORDER BY ci.labels->>'author_handle', ci.captured_at
@@ -197,6 +207,7 @@ async def check_manufactured_narratives(
             settings.manufactured_max_independent_sources,
             settings.manufactured_min_item_count,
             settings.manufactured_min_account_count,
+            settings.manufactured_max_clusters_per_pass,
         )
 
         for row in clusters:

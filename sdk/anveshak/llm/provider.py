@@ -167,6 +167,31 @@ def log_provider_startup(settings: LLMProviderSettings, service: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+# Hosts the local path may reach. Rule 10 is a sovereignty requirement, and
+# it is only enforced if something checks: OLLAMA_HOST is an env var, so an
+# unvalidated one turns "local inference" into an arbitrary outbound POST of
+# collected intel, past the cloud guard entirely.
+_LOCAL_HOST_SUFFIXES = ("localhost", "127.0.0.1", "::1", "ollama", ".internal", ".local")
+
+
+def _assert_local_host(host: str) -> None:
+    """Refuse a local-inference host that is not on the deployment boundary."""
+    from urllib.parse import urlparse
+
+    hostname = (urlparse(host).hostname or "").strip().lower()
+    if not hostname:
+        raise CloudProviderRefusedError(f"Local inference host is not a URL: {host!r}")
+    if hostname in _LOCAL_HOST_SUFFIXES or any(
+        hostname.endswith(suffix) for suffix in _LOCAL_HOST_SUFFIXES if suffix.startswith(".")
+    ):
+        return
+    raise CloudProviderRefusedError(
+        f"Local inference host {hostname!r} is not localhost or an internal "
+        "Docker network name. Intel data never leaves the deployment "
+        "boundary, and this path is not the guarded cloud path. See rule 10."
+    )
+
+
 async def _generate_local(
     prompt: str,
     *,
@@ -176,6 +201,7 @@ async def _generate_local(
     options: dict[str, Any] | None = None,
 ) -> str:
     """POST to Ollama /api/generate. Rule 10: host is localhost or internal."""
+    _assert_local_host(host)
     payload: dict[str, Any] = {"model": model, "prompt": prompt, "stream": False}
     if options:
         payload["options"] = options
