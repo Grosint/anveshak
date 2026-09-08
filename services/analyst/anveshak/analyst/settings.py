@@ -125,6 +125,9 @@ class AnalystSettings(BaseSettings):
     manufactured_max_independent_sources: int = 2
     manufactured_min_item_count: int = 15
     manufactured_min_account_count: int = 5
+    # Items sampled to show the repeated claim across accounts. Bounded
+    # because the card shows a sentence, not the whole cluster.
+    manufactured_claim_sample_size: int = 25
 
     # Label staleness detection
     label_staleness_change_threshold: float = 0.30  # re-label if >30% items changed

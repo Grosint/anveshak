@@ -4,6 +4,7 @@ import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { severityMeasurement, signalTitle, SEVERITY_VARIANT } from '../../lib/domain'
 import { formatDistanceToNow } from 'date-fns'
+import { ManufacturedNarrativeBody, type ManufacturedEvidence } from './ManufacturedNarrativeBody'
 
 const platformIcons: Record<string, string> = {
   web: 'WEB',
@@ -141,6 +142,14 @@ export function SignalCard({ signal, onAcknowledge, onDismiss, isActioning }: Si
         </p>
         <p className="text-xs text-text-secondary mt-0.5 leading-snug">{title}</p>
       </div>
+
+      {/* Type-specific body. A timeline, an evidence list and an extracted
+          date cannot share one generic card. Issue #31. */}
+      {signal.signal_type === 'manufactured_narrative' && (
+        <ManufacturedNarrativeBody
+          evidence={signal.evidence as ManufacturedEvidence | null}
+        />
+      )}
 
       {/* Executive summary — the key intelligence */}
       {signal.executive_summary && (

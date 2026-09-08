@@ -398,7 +398,13 @@ async def signal_engine_loop(pool: asyncpg.Pool, broadcast: BroadcastFn) -> None
             hostility_fired = await check_hostility_shifts(pool, broadcast)
             identifier_fired = await check_identifier_signals(pool, broadcast)
             template_fired = await check_template_signals(pool, broadcast)
-            total = fired + hostility_fired + identifier_fired + template_fired
+            # Imported here rather than at module scope: manufactured.py
+            # imports SQL_INSERT_SIGNAL and is_duplicate_signal from this
+            # module, so a top-level import would be circular.
+            from .manufactured import check_manufactured_narratives
+
+            manufactured_fired = await check_manufactured_narratives(pool, broadcast)
+            total = fired + hostility_fired + identifier_fired + template_fired + manufactured_fired
             if total:
                 log.info(
                     "signal_engine.cycle_complete",
@@ -406,6 +412,7 @@ async def signal_engine_loop(pool: asyncpg.Pool, broadcast: BroadcastFn) -> None
                     hostility_signals=hostility_fired,
                     identifier_signals=identifier_fired,
                     template_signals=template_fired,
+                    manufactured_signals=manufactured_fired,
                 )
         except Exception as exc:
             log.error("signal_engine.cycle_error", error=str(exc))
