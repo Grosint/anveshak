@@ -4,6 +4,7 @@ import { topicsApi } from '../../api/topics'
 import { useProvenance } from '../../contexts/ProvenanceContext'
 import { SignalCards } from './SignalCards'
 import { NarrativeCards } from './NarrativeCards'
+import { SentimentTimeline } from './SentimentTimeline'
 import { IdentifierPills } from './IdentifierPills'
 import { LocationPills } from './LocationPills'
 import { RecentContent } from './RecentContent'
@@ -151,28 +152,32 @@ export function IntelligenceView({
         totalCount={intel?.stats?.total_clusters}
       />
 
-      {/* Section 3: Key Identifiers (inline limit) */}
+      {/* Section 3: Sentiment Timeline — how the narrative moved, and
+          whether it is getting uglier. Issue #29. */}
+      <SentimentTimeline topicId={topicId} />
+
+      {/* Section 4: Key Identifiers (inline limit) */}
       <IdentifierPills
         identifiers={intel?.identifiers ?? []}
         onSelect={handleSelectIdentifier}
         onShowAll={onShowAllIdentifiers}
       />
 
-      {/* Section 4: Location Pills */}
+      {/* Section 5: Location Pills */}
       <LocationPills
         locations={intel?.locations ?? []}
         onSelectLocation={handleSelectLocation}
         onOpenMap={onNavigateMap}
       />
 
-      {/* Section 5: Recent Content */}
+      {/* Section 6: Recent Content */}
       <RecentContent
         topicId={topicId}
         onSelectContent={handleSelectContent}
         onShowAll={onNavigateContent}
       />
 
-      {/* Section 6: Source Health Strip */}
+      {/* Section 7: Source Health Strip */}
       <SourceHealthStrip
         sources={intel?.source_health ?? []}
         onManage={onManageSources}

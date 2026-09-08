@@ -35,6 +35,7 @@ from .routes.provenance import router as provenance_router
 from .routes.reports import router as reports_router
 from .routes.system import router as system_router
 from .routes.templates import router as templates_router
+from .routes.timeline import router as timeline_router
 from .routes.tipline import router as tipline_router
 from .routes.trackers import router as trackers_router
 from .routes.users import router as users_router
@@ -142,6 +143,7 @@ app.include_router(
 app.include_router(provenance_router)  # Issue #7: intelligence view + provenance chains
 app.include_router(actors_router)  # Issue #35: Actor View, a query with no stored record
 app.include_router(candidates_router)  # Issues #26, #27: Candidate Topic inbox
+app.include_router(timeline_router)  # Issue #29: Sentiment Timeline
 
 # Prometheus metrics endpoint — uses isolated registry (API_REGISTRY) so custom
 # api_* metrics are exposed alongside default process metrics.

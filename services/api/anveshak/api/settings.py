@@ -20,6 +20,15 @@ class Settings(BaseSettings):
     ollama_keep_alive: str = "5m"  # see hardware.md
     llm_max_tokens: int = 2048
 
+    # Sentiment Timeline — issue #29.
+    # Daily buckets up to this range, weekly beyond it. A movement running
+    # for months is unreadable at daily resolution.
+    timeline_daily_bucket_max_days: int = 90
+    # Platforms whose search window bounds how far back the chart reaches.
+    # Before a constrained platform's earliest item, absence is a data gap
+    # rather than silence, and the chart says so.
+    timeline_constrained_platforms: list[str] = ["twitter", "instagram"]
+
     # JWT Auth
     jwt_secret_key: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
