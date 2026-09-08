@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
 import praw
 import praw.exceptions
@@ -191,7 +191,7 @@ class RedditAdapter(SourceAdapterBase):
                 )
 
     @staticmethod
-    def _published_at(post) -> datetime | None:
+    def _published_at(post: Any) -> datetime | None:
         """Reddit stamps every post with created_utc, so this is never a guess."""
         created = getattr(post, "created_utc", None)
         if created is None:

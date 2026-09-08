@@ -181,7 +181,10 @@ class TestScoringRunsAfterClustering:
             scored = await score_cluster(pool, "cluster-1")
 
         assert scored == 2
-        assert conn.execute.await_count == 2
+        # Written in one batch, outside the inference loop, so no pool
+        # connection is held across CPU-bound model calls.
+        conn.executemany.assert_awaited_once()
+        assert len(conn.executemany.await_args.args[1]) == 2
 
     async def test_a_scoring_failure_does_not_crash_the_pipeline(self):
         """Fail open: clustering to signals still produces valid output."""

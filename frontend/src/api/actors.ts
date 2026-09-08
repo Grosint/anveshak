@@ -35,6 +35,8 @@ export interface ActorContentItem {
   cluster_label: string | null
   narrative_cluster_id: string | null
   engagement: Record<string, number> | null
+  /** Classification marking, so content is never read unmarked. Rule 2. */
+  classification: string | null
 }
 
 export interface ActorActivityPoint {

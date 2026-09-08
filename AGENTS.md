@@ -33,8 +33,8 @@ Code comments and tests cite them by number, so never renumber them; append inst
 7. **Deepfake scores are probabilities, never booleans.** Return a float 0.0 to 1.0, never `is_deepfake: bool`. The analyst decides the threshold.
 8. **Credibility changes audit-logged.** Every `credibility_score` change MUST insert a row into `credibility_audit_log`. No silent updates.
 9. **LLM output validated before use.** All LLM responses are parsed through a Pydantic model before storage or display. Never trust a raw LLM string.
-10. **No cloud LLM with real data.** Ollama is localhost or the internal Docker network only. This is a sovereignty requirement: intel data never leaves the deployment boundary.
-11. **X/Twitter spend guard.** XAdapter checks the monthly read count against `X_MONTHLY_READ_CAP` before every API call. Never exceed the budget silently.
+10. **No cloud LLM with real data.** Ollama is localhost or the internal Docker network only. This is a sovereignty requirement: intel data never leaves the deployment boundary. A cloud provider is reachable only through the guard in `sdk/anveshak/llm/provider.py`: off by default, permitted only in an environment on `LLM_CLOUD_ALLOWED_ENVIRONMENTS`, refused outright everywhere else, and every call logged with a payload hash. See [ADR 0002](docs/adr/0002-cloud-model-guard.md).
+11. **X/Twitter spend guard.** XAdapter charges the monthly read counter against `X_MONTHLY_READ_CAP` before every API call, by the number of items the call requests rather than one per call, because X bills per item retrieved. Never exceed the budget silently.
 12. **Drishti bridge one-directional.** Anveshak emits entities TO Drishti via `source.envelopes.v1` and NEVER reads from Drishti. No circular dependency.
 
 ## Python coding style

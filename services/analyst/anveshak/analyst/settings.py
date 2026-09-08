@@ -35,7 +35,11 @@ class AnalystSettings(BaseSettings):
     # Single model handles cluster labelling. All input text is English (post-translation).
     # Upgrade path: qwen2.5:72b on RTX 4090 — see hardware.md
     ollama_model: str = "qwen2:7b"
-    llm_max_tokens: int = 512
+    # A cluster label is a short phrase. Named for the job rather than
+    # LLM_MAX_TOKENS, because reporter and api both define an unrelated
+    # llm_max_tokens of 2048 and one shared env var would silently cut
+    # report generation to 512 the moment it reached those containers.
+    llm_label_max_tokens: int = 512
     # Source-type suggestion returns a JSON list, so it needs a wider budget
     # than a cluster label. Separate setting, separate purpose.
     llm_discovery_max_tokens: int = 2048
@@ -112,6 +116,15 @@ class AnalystSettings(BaseSettings):
     promotion_max_similarity_to_existing: float = 0.80
     # Persistence across clustering runs. Below two, a single spike promotes.
     promotion_min_runs: int = 2
+
+    # Manufactured Narrative signal — issue #32. The inverse of the existing
+    # convergence rule: item and account counts climb while independent
+    # source count stays flat. The ceiling must sit strictly below
+    # promotion_min_independent_sources, or one cluster qualifies as both a
+    # promotion candidate and a manufactured narrative at the same time.
+    manufactured_max_independent_sources: int = 2
+    manufactured_min_item_count: int = 15
+    manufactured_min_account_count: int = 5
 
     # Label staleness detection
     label_staleness_change_threshold: float = 0.30  # re-label if >30% items changed

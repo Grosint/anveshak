@@ -145,6 +145,9 @@ export default function ActorDetail({ handle, topicId }: ActorDetailProps) {
                     </span>
                   )}
                   {item.stance && <Badge variant="ghost">{item.stance}</Badge>}
+                  {item.classification && item.classification !== 'OPEN' && (
+                    <Badge variant="accent">{item.classification}</Badge>
+                  )}
                 </div>
               </button>
             ))}

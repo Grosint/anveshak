@@ -61,11 +61,6 @@ class RawItem:
     platform: str  # web|telegram|twitter|reddit|bluesky|instagram|youtube|whatsapp
     captured_at: datetime  # timezone-aware UTC — when Anveshak collected it
     source_handle: str  # channel/subreddit/handle — matches sources.url_or_handle
-    # When the platform says the content was published. None means the platform
-    # gave no publication time, and it stays None: writing now() here is what
-    # made captured_at unusable for a timeline in the first place. Profile and
-    # biography items have no publication time by nature and are always None.
-    published_at: datetime | None = None
     media_urls: list[str] = field(default_factory=list)  # images/videos to download later (Phase 4)
     language: str | None = None  # ISO 639-1; None = detect in analyst pipeline
     forwarded_from_channel_id: str | None = (
@@ -82,6 +77,14 @@ class RawItem:
     # Set it only where the platform guarantees a stable ID whose *text* can
     # legitimately change; leave it None everywhere else. See content_hash().
     stable_id: str | None = None
+    # When the platform says the content was published. None means the platform
+    # gave no publication time, and it stays None: writing now() here is what
+    # made captured_at unusable for a timeline in the first place. Profile and
+    # biography items have no publication time by nature and are always None.
+    #
+    # Appended rather than inserted next to captured_at, so every existing
+    # positional slot in this dataclass keeps its meaning.
+    published_at: datetime | None = None
 
     def content_hash(self) -> str:
         """SHA-256 dedup key — architectural rule 3.

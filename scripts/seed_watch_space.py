@@ -27,7 +27,17 @@ from typing import Any
 import asyncpg
 import yaml
 
-LABELS_JSON = json.dumps({"classification": "OPEN", "domain": "osint", "owner_org": "anveshak"})
+
+def _labels_json(org_id: str) -> str:
+    """Classification labels for a seeded row.
+
+    owner_org tracks the org_id the row is actually written with. Pinning it
+    to a constant made the label disagree with the row for every org except
+    the default, so a classification-based check attributed the Watch Space
+    to the wrong organisation.
+    """
+    return json.dumps({"classification": "OPEN", "domain": "osint", "owner_org": org_id})
+
 
 SQL_FIND_TOPIC = "SELECT id FROM topics WHERE name = $1 AND org_id = $2"
 
@@ -44,7 +54,7 @@ SQL_UPDATE_TOPIC = """
     SET keywords = $2, languages = $3, credibility_min = $4,
         signal_threshold = $5, status = $6, is_watch_space = TRUE,
         updated_at = $7
-    WHERE id = $1
+    WHERE id = $1 AND org_id = $8
 """
 
 SQL_FIND_SOURCE = "SELECT id FROM sources WHERE url_or_handle = $1 AND platform = $2"
@@ -84,6 +94,7 @@ async def _upsert_topic(conn: asyncpg.Connection, spec: dict[str, Any], org_id: 
             int(spec.get("signal_threshold", 3)),
             spec.get("status", "active"),
             now,
+            org_id,
         )
         print(f"  [=] Watch Space already present, refreshed: {spec['name']}")
         return existing["id"]
@@ -100,7 +111,7 @@ async def _upsert_topic(conn: asyncpg.Connection, spec: dict[str, Any], org_id: 
         spec.get("status", "active"),
         org_id,
         now,
-        LABELS_JSON,
+        _labels_json(org_id),
     )
     print(f"  [+] Watch Space created: {spec['name']}")
     return topic_id
@@ -122,7 +133,7 @@ async def _upsert_source(conn: asyncpg.Connection, source: dict[str, Any], org_i
         float(source.get("credibility_score", 50.0)),
         org_id,
         datetime.now(UTC),
-        LABELS_JSON,
+        _labels_json(org_id),
     )
     return source_id
 
@@ -161,12 +172,22 @@ def main() -> int:
     )
     parser.add_argument(
         "--postgres-url",
-        default=os.getenv("POSTGRES_URL", "postgresql://anveshak:anveshak@localhost:5433/anveshak"),
+        default=os.getenv("POSTGRES_URL", ""),
+        help="Defaults to POSTGRES_URL. No credential default is built in.",
     )
     args = parser.parse_args()
 
     if not args.spec.exists():
         print(f"No such spec: {args.spec}", file=sys.stderr)
+        return 1
+
+    if not args.postgres_url:
+        print(
+            "Set POSTGRES_URL or pass --postgres-url. This script ships no "
+            "credential default, so it cannot silently target a database "
+            "nobody named.",
+            file=sys.stderr,
+        )
         return 1
 
     asyncio.run(seed(args.spec, args.postgres_url, args.org_id))

@@ -323,7 +323,7 @@ async def call_ollama_label(prompt: str) -> str:
         local_model=settings.ollama_model,
         local_host=settings.ollama_host,
         local_timeout_s=300,
-        local_options={"num_predict": settings.llm_max_tokens},
+        local_options={"num_predict": settings.llm_label_max_tokens},
     )
 
 

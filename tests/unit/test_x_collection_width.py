@@ -110,3 +110,36 @@ class TestLanguageFilter:
         adapter, client = _make_adapter()
         await _collect(adapter)
         assert "-is:retweet" in client.search_recent_tweets.await_args.kwargs["query"]
+
+
+class TestSpendGuardCountsItemsNotCalls:
+    """X charges per item retrieved, not per call.
+
+    Widening max_results from 10 to 100 multiplies the billable reads of a
+    single call by ten. A guard that increments by one per call would let
+    X_MONTHLY_READ_CAP=40000 permit 4,000,000 billable reads, which is rule
+    11 broken silently and expensively.
+    """
+
+    async def test_the_guard_is_charged_the_requested_width(self):
+        from anveshak.social.adapters.x_adapter import XSpendGuard
+
+        redis = MagicMock()
+        redis.eval = AsyncMock(return_value=100)
+        guard = XSpendGuard(redis, cap=40000)
+
+        assert await guard.check_and_increment(units=100) is True
+        args = redis.eval.await_args.args
+        assert "100" in args
+
+    async def test_the_adapter_charges_the_configured_width(self):
+        adapter, client = _make_adapter()
+        with patch.object(settings, "x_max_results", 100):
+            await _collect(adapter)
+        assert adapter._spend_guard.check_and_increment.await_args.kwargs["units"] == 100
+
+    async def test_a_narrower_call_is_charged_less(self):
+        adapter, client = _make_adapter()
+        with patch.object(settings, "x_max_results", 25):
+            await _collect(adapter)
+        assert adapter._spend_guard.check_and_increment.await_args.kwargs["units"] == 25

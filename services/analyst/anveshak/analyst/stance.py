@@ -20,6 +20,9 @@ Every model name, device string and batch size is a setting. See hardware.md.
 
 from __future__ import annotations
 
+import asyncio
+from typing import Any
+
 import asyncpg
 import structlog
 
@@ -60,7 +63,7 @@ SQL_CLUSTER_ITEMS_TO_SCORE = """
            ci.language
     FROM content_items ci
     WHERE ci.narrative_cluster_id = $1
-      AND ci.stance IS NULL
+      AND (ci.stance IS NULL OR ci.hostility IS NULL)
       AND (ci.content_quality IS NULL OR ci.content_quality != 'low_quality')
     LIMIT $2
 """
@@ -80,7 +83,7 @@ _stance_classifier = None
 _hostility_classifier = None
 
 
-def _get_stance_classifier():
+def _get_stance_classifier() -> Any:
     """Multilingual zero-shot NLI classifier. Loaded on first use."""
     global _stance_classifier
     if _stance_classifier is None:
@@ -101,7 +104,7 @@ def _get_stance_classifier():
     return _stance_classifier
 
 
-def _get_hostility_classifier():
+def _get_hostility_classifier() -> Any:
     """Multilingual toxicity classifier. Loaded on first use."""
     global _hostility_classifier
     if _hostility_classifier is None:
@@ -235,6 +238,16 @@ def score_hostility(text: str, *, language: str | None) -> float | None:
 # ---------------------------------------------------------------------------
 
 
+def _score_item(
+    text: str, cluster_label: str, language: str | None
+) -> tuple[str | None, float | None]:
+    """Score one item with both models. Runs in a worker thread."""
+    return (
+        score_stance(text, cluster_label, language=language),
+        score_hostility(text, language=language),
+    )
+
+
 async def score_cluster(pool: asyncpg.Pool, cluster_id: str) -> int:
     """Score every unscored item in a cluster. Returns the count scored.
 
@@ -266,30 +279,37 @@ async def score_cluster(pool: asyncpg.Pool, cluster_id: str) -> int:
             SQL_CLUSTER_ITEMS_TO_SCORE, cluster_id, settings.stance_max_items_per_cluster
         )
 
-        scored = 0
-        for row in rows:
-            try:
-                stance = score_stance(row["work_text"], label, language=row["language"])
-                hostility = score_hostility(row["work_text"], language=row["language"])
-            except Exception as exc:
-                log.warning(
-                    "stance.item_scoring_failed",
-                    cluster_id=cluster_id,
-                    content_item_id=row["id"],
-                    error=str(exc),
-                )
-                continue
+    # Inference runs off the event loop and outside the pool connection.
+    # Both models are synchronous and CPU-bound, and up to
+    # stance_max_items_per_cluster of them in a row would otherwise block
+    # every other job on this worker and hold a connection for the duration.
+    scored_rows: list[tuple[str, str | None, float | None]] = []
+    for row in rows:
+        try:
+            stance, hostility = await asyncio.to_thread(
+                _score_item, row["work_text"], label, row["language"]
+            )
+        except Exception as exc:
+            log.warning(
+                "stance.item_scoring_failed",
+                cluster_id=cluster_id,
+                content_item_id=row["id"],
+                error=str(exc),
+            )
+            continue
 
-            if stance is None and hostility is None:
-                continue
+        if stance is None and hostility is None:
+            continue
+        scored_rows.append((row["id"], stance, hostility))
 
-            await conn.execute(SQL_UPDATE_SCORES, row["id"], stance, hostility)
-            scored += 1
+    if scored_rows:
+        async with pool.acquire() as conn:
+            await conn.executemany(SQL_UPDATE_SCORES, scored_rows)
 
     log.info(
         "stance.cluster_scored",
         cluster_id=cluster_id,
-        items_scored=scored,
+        items_scored=len(scored_rows),
         candidates=len(rows),
     )
-    return scored
+    return len(scored_rows)

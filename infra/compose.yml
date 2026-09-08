@@ -17,15 +17,23 @@ x-common-env: &common-env
   OTEL_ENABLED: ${OTEL_ENABLED:-false}
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318}
   OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-0.1}
-  # Cloud inference is a development convenience and is off by default.
-  # ENVIRONMENT=production with LLM_CLOUD_ENABLED=true is a hard refusal,
-  # not a warning. See docs/adr/0002-cloud-model-guard.md.
+
+# Cloud inference is a development convenience, off by default, and refused
+# outside LLM_CLOUD_ALLOWED_ENVIRONMENTS. See docs/adr/0002-cloud-model-guard.md.
+#
+# Deliberately not in x-common-env: LLM_CLOUD_API_KEY would then reach the
+# scraper, social, vision and api containers, none of which call an LLM.
+x-llm-env: &llm-env
   LLM_CLOUD_ENABLED: ${LLM_CLOUD_ENABLED:-false}
   LLM_CLOUD_PROVIDER: ${LLM_CLOUD_PROVIDER:-}
   LLM_CLOUD_MODEL: ${LLM_CLOUD_MODEL:-}
   LLM_CLOUD_API_KEY: ${LLM_CLOUD_API_KEY:-}
   LLM_CLOUD_BASE_URL: ${LLM_CLOUD_BASE_URL:-}
   LLM_CLOUD_TIMEOUT_S: ${LLM_CLOUD_TIMEOUT_S:-120}
+  LLM_CLOUD_MAX_TOKENS: ${LLM_CLOUD_MAX_TOKENS:-2048}
+  LLM_CLOUD_AUTH_HEADER: ${LLM_CLOUD_AUTH_HEADER:-x-api-key}
+  LLM_CLOUD_EXTRA_HEADERS: ${LLM_CLOUD_EXTRA_HEADERS:-}
+  LLM_CLOUD_ALLOWED_ENVIRONMENTS: ${LLM_CLOUD_ALLOWED_ENVIRONMENTS:-["development","test","local"]}
 
 x-vision-env: &vision-env
   <<: *common-env
@@ -502,18 +510,6 @@ services:
       TEMPLATE_MATCHING_ENABLED: ${TEMPLATE_MATCHING_ENABLED:-true}
       IDENTIFIER_CLUSTER_INTERVAL_S: ${IDENTIFIER_CLUSTER_INTERVAL_S:-300}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
-      STANCE_MODEL: ${STANCE_MODEL:-MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7}
-      STANCE_DEVICE: ${STANCE_DEVICE:-cpu}
-      STANCE_BATCH_SIZE: ${STANCE_BATCH_SIZE:-8}
-      STANCE_MIN_CLUSTER_SIZE: ${STANCE_MIN_CLUSTER_SIZE:-5}
-      STANCE_CONFIDENCE_FLOOR: ${STANCE_CONFIDENCE_FLOOR:-0.45}
-      HOSTILITY_MODEL: ${HOSTILITY_MODEL:-textdetox/xlmr-large-toxicity-classifier}
-      HOSTILITY_DEVICE: ${HOSTILITY_DEVICE:-cpu}
-      HOSTILITY_BATCH_SIZE: ${HOSTILITY_BATCH_SIZE:-8}
-      PROMOTION_MIN_INDEPENDENT_SOURCES: ${PROMOTION_MIN_INDEPENDENT_SOURCES:-3}
-      PROMOTION_MIN_ITEM_COUNT: ${PROMOTION_MIN_ITEM_COUNT:-10}
-      PROMOTION_MAX_SIMILARITY_TO_EXISTING: ${PROMOTION_MAX_SIMILARITY_TO_EXISTING:-0.80}
-      PROMOTION_MIN_RUNS: ${PROMOTION_MIN_RUNS:-2}
       EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-384}
       HF_HOME: /app/models
     ports:
@@ -538,10 +534,10 @@ services:
     cpus: ${ANALYST_WORKER_CPUS:-4}
     command: ["python", "-m", "arq", "anveshak.analyst.jobs.WorkerSettings"]
     environment:
-      <<: *common-env
+      <<: [*common-env, *llm-env]
       SPACY_EN_MODEL: ${SPACY_EN_MODEL:-en_core_web_md}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2:7b}
-      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-512}
+      LLM_LABEL_MAX_TOKENS: ${LLM_LABEL_MAX_TOKENS:-512}
       LLM_DISCOVERY_MAX_TOKENS: ${LLM_DISCOVERY_MAX_TOKENS:-2048}
       TRANSLATION_ENABLED: ${TRANSLATION_ENABLED:-true}
       TRANSLATION_MODEL: ${TRANSLATION_MODEL:-facebook/nllb-200-distilled-600M}
@@ -563,10 +559,15 @@ services:
       STANCE_DEVICE: ${STANCE_DEVICE:-cpu}
       STANCE_BATCH_SIZE: ${STANCE_BATCH_SIZE:-8}
       STANCE_MIN_CLUSTER_SIZE: ${STANCE_MIN_CLUSTER_SIZE:-5}
+      STANCE_MAX_CHARS: ${STANCE_MAX_CHARS:-1000}
+      STANCE_MAX_ITEMS_PER_CLUSTER: ${STANCE_MAX_ITEMS_PER_CLUSTER:-500}
+      STANCE_SUPPORTED_LANGUAGES: ${STANCE_SUPPORTED_LANGUAGES:-["en","hi","bn","ta","te","mr","gu","kn","ml","pa","ur","ne","si","ar","fr","de","es","ru","zh","tr"]}
       STANCE_CONFIDENCE_FLOOR: ${STANCE_CONFIDENCE_FLOOR:-0.45}
       HOSTILITY_MODEL: ${HOSTILITY_MODEL:-textdetox/xlmr-large-toxicity-classifier}
       HOSTILITY_DEVICE: ${HOSTILITY_DEVICE:-cpu}
       HOSTILITY_BATCH_SIZE: ${HOSTILITY_BATCH_SIZE:-8}
+      HOSTILITY_MAX_CHARS: ${HOSTILITY_MAX_CHARS:-1000}
+      HOSTILITY_POSITIVE_LABELS: ${HOSTILITY_POSITIVE_LABELS:-["toxic","offensive","hate","label_1"]}
       PROMOTION_MIN_INDEPENDENT_SOURCES: ${PROMOTION_MIN_INDEPENDENT_SOURCES:-3}
       PROMOTION_MIN_ITEM_COUNT: ${PROMOTION_MIN_ITEM_COUNT:-10}
       PROMOTION_MAX_SIMILARITY_TO_EXISTING: ${PROMOTION_MAX_SIMILARITY_TO_EXISTING:-0.80}
@@ -615,7 +616,7 @@ services:
     restart: unless-stopped
     mem_limit: 1g
     environment:
-      <<: *common-env
+      <<: [*common-env, *llm-env]
       REPORT_OUTPUT_DIR: /app/reports
       REPORT_TEMPLATE_DIR: /app/templates
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2:7b}

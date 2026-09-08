@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 
 import asyncpg
 import structlog
-from anveshak.llm import generate
+from anveshak.llm import CloudProviderRefusedError, generate
 from anveshak.models.base import Labels
 from anveshak.models.catalog import SourceSuggestion
 from pydantic import ValidationError
@@ -168,6 +168,11 @@ async def suggest_source_types(
         # Call LLM
         try:
             raw_response = await call_ollama(prompt)
+        except CloudProviderRefusedError:
+            # A deterministic configuration error, not a transient LLM
+            # failure. Swallowing it returns zero suggestions and looks like
+            # a quiet model rather than a misconfiguration.
+            raise
         except Exception as exc:
             log.error("llm_discovery.ollama_error", error=str(exc))
             return 0

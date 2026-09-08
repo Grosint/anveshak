@@ -58,30 +58,37 @@ def _seconds_until_month_end() -> int:
 class XSpendGuard:
     """Atomic spend guard backed by Redis Lua script.
 
-    check_and_increment() must be called BEFORE every X API call.
-    Returns True  → under cap, call is permitted, counter incremented.
-    Returns False → at or above cap, call is BLOCKED, warning logged.
+    check_and_increment(units=N) must be called BEFORE every X API call.
+    Returns True  → under cap, call is permitted, counter incremented by N.
+    Returns False → the call would cross the cap, so it is BLOCKED entirely.
+
+    X charges per item retrieved, not per call, so ``units`` is the number of
+    items the call asks for. Incrementing by one per call would make the cap
+    meaningless the moment max_results moved off 1.
 
     Uses a Lua script for true atomicity — no race window between
-    INCR and cap check that could allow concurrent calls to overshoot.
+    INCRBY and cap check that could allow concurrent calls to overshoot.
     """
 
-    # Lua script: atomically check cap, increment if under, set TTL on first use.
-    # Returns new count on success, -1 if at/over cap.
+    # Lua script: atomically check cap, increment by units, set TTL on first
+    # use. Returns the new count on success, -1 when the call would cross the
+    # cap. A partial charge is never left behind: the whole increment is
+    # rolled back rather than the call being allowed to run half-paid.
     _LUA_CHECK_AND_INCREMENT = """\
 local key = KEYS[1]
 local cap = tonumber(ARGV[1])
 local ttl = tonumber(ARGV[2])
+local units = tonumber(ARGV[3])
 local current = tonumber(redis.call('GET', key) or '0')
-if current >= cap then
+if current + units > cap then
     return -1
 end
-local new_count = redis.call('INCR', key)
-if new_count == 1 then
+local new_count = redis.call('INCRBY', key, units)
+if new_count == units then
     redis.call('EXPIRE', key, ttl)
 end
 if new_count > cap then
-    redis.call('DECR', key)
+    redis.call('DECRBY', key, units)
     return -1
 end
 return new_count
@@ -91,14 +98,15 @@ return new_count
         self._redis = redis
         self._cap = cap
 
-    async def check_and_increment(self) -> bool:
-        """Atomically increment and check monthly cap via Lua script.
+    async def check_and_increment(self, units: int = 1) -> bool:
+        """Atomically charge ``units`` reads against the monthly cap.
 
         The entire check-increment-TTL sequence runs as a single atomic
         Redis operation. Concurrent calls cannot race past the cap.
         """
         key = _monthly_key()
         ttl = _seconds_until_month_end()
+        units = max(1, int(units))
 
         # redis-py declares keys_and_args as str, and the Lua calls tonumber()
         # on every ARGV, so pass strings rather than relying on client encoding.
@@ -106,7 +114,7 @@ return new_count
         # return. ArqRedis is async and awaits fine at runtime.
         result = int(
             await self._redis.eval(  # pyright: ignore[reportGeneralTypeIssues]
-                self._LUA_CHECK_AND_INCREMENT, 1, key, str(self._cap), str(ttl)
+                self._LUA_CHECK_AND_INCREMENT, 1, key, str(self._cap), str(ttl), str(units)
             )
         )
 
@@ -114,11 +122,12 @@ return new_count
             log.warning(
                 "x.spend_guard.cap_reached",
                 cap=self._cap,
+                units_requested=units,
                 key=key,
             )
             return False
 
-        if result == 1:
+        if result == units:
             log.info("x.spend_guard.month_started", cap=self._cap, ttl_seconds=ttl)
 
         log.debug("x.spend_guard.ok", monthly_reads=result, cap=self._cap)
@@ -200,7 +209,9 @@ class XPollingAdapter(SourceAdapterBase):
             lang_filter = f" ({lang_clause})" if len(languages) > 1 else f" {lang_clause}"
 
         # SPEND GUARD — must check before every API call (criteria 3.22, 3.30)
-        allowed = await self._spend_guard.check_and_increment()
+        # Charged per item, so the guard is charged the width this call asks
+        # for rather than one per call. Rule 11.
+        allowed = await self._spend_guard.check_and_increment(units=settings.x_max_results)
         if not allowed:
             return  # hard stop — no API call made (criteria 3.30)
 
@@ -247,8 +258,12 @@ class XPollingAdapter(SourceAdapterBase):
                 # created_at is requested in tweet_fields, so it is present
                 # unless the platform omitted it. None stays None.
                 published_at=tweet.created_at or None,
-                # authenticate() rejects a missing token, so this is set by now.
-                source_handle=(settings.x_bearer_token or "")[:8] + "...",  # anonymised
+                # X recent search is keyword-based rather than account-based,
+                # so there is no source handle to report. The adapter id names
+                # what collected the item. A bearer-token prefix used to go
+                # here, which put credential material in content_items and in
+                # every read path over it, including the Actor View.
+                source_handle=self.adapter_id,
                 language=tweet.lang if hasattr(tweet, "lang") else None,
                 engagement=engagement or None,
                 author_id=str(tweet.author_id) if getattr(tweet, "author_id", None) else None,

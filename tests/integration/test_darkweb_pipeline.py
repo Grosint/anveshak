@@ -128,6 +128,7 @@ class TestDarkwebContentDedup:
                 content_hash,
                 "Test",
                 "org-integration-test",
+                None,  # published_at — an onion page states none
             )
             # Second insert with same content_hash
             r2 = await conn.fetchrow(
@@ -149,6 +150,7 @@ class TestDarkwebContentDedup:
                 content_hash,
                 "Test",
                 "org-integration-test",
+                None,  # published_at — an onion page states none
             )
 
         assert r1 is not None  # first insert succeeds

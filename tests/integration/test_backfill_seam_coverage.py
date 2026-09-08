@@ -484,7 +484,8 @@ class TestScraperToAnalystSeam:
         emb = _random_embedding(seed=800)
         embedding_str = "[" + ",".join(f"{x:.8f}" for x in emb) + "]"
 
-        # Insert using scraper's exact SQL (17 params including content_quality, clean_hash, title, org_id)
+        # Insert using scraper's exact SQL (18 params: content_quality,
+        # clean_hash, title, org_id, published_at)
         async with db_pool.acquire() as conn:
             result = await conn.fetchrow(
                 SQL_INSERT_CONTENT,
@@ -505,6 +506,7 @@ class TestScraperToAnalystSeam:
                 clean_hash,  # $15: clean_hash
                 "Test Article",  # $16: title
                 "org-integration-test",  # $17: org_id
+                None,  # $18: published_at — a crawled page states none
             )
             assert result is not None, "Scraper INSERT returned nothing (content_hash conflict?)"
 
@@ -570,7 +572,8 @@ class TestSocialToAnalystSeam:
         emb = _random_embedding(seed=810)
         embedding_str = "[" + ",".join(f"{x:.8f}" for x in emb) + "]"
 
-        # Insert using social's exact SQL (16 params — includes forwarded_from + org_id)
+        # Insert using social's exact SQL (17 params — forwarded_from, org_id,
+        # published_at)
         async with db_pool.acquire() as conn:
             result = await conn.fetchrow(
                 SOCIAL_INSERT,
@@ -590,6 +593,7 @@ class TestSocialToAnalystSeam:
                 None,  # $14: forwarded_from_channel_id
                 None,  # $15: forwarded_from_channel_name
                 "org-integration-test",  # $16: org_id
+                None,  # $17: published_at — this fixture states none
             )
             assert result is not None, "Social INSERT returned nothing"
 

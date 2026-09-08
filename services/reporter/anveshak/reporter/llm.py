@@ -14,7 +14,7 @@ import re
 from typing import Any
 
 import structlog
-from anveshak.llm import generate
+from anveshak.llm import CloudProviderRefusedError, generate
 from anveshak.models.base import Labels
 from pydantic import BaseModel, ConfigDict
 
@@ -244,6 +244,11 @@ async def call_ollama_for_assessment(
             result = parse_assessment_response(raw)
             log.info("reporter.assessment_llm_success", attempt=attempt)
             return result
+        except CloudProviderRefusedError:
+            # A deterministic configuration error. Retrying it produces the
+            # same refusal three times and then a report with no LLM section,
+            # which is the silent degradation the guard exists to prevent.
+            raise
         except Exception as exc:
             log.warning(
                 "reporter.assessment_llm_failed",
@@ -317,6 +322,11 @@ async def call_ollama_for_bluf(
             result = parse_bluf_response(raw)
             log.info("reporter.bluf_llm_success", attempt=attempt)
             return result
+        except CloudProviderRefusedError:
+            # A deterministic configuration error. Retrying it produces the
+            # same refusal three times and then a report with no LLM section,
+            # which is the silent degradation the guard exists to prevent.
+            raise
         except Exception as exc:
             log.warning(
                 "reporter.bluf_llm_failed",
@@ -355,6 +365,11 @@ async def call_ollama_with_retry(
             result = parse_llm_response(raw)
             log.info("reporter.llm_success", attempt=attempt)
             return result
+        except CloudProviderRefusedError:
+            # A deterministic configuration error. Retrying it produces the
+            # same refusal three times and then a report with no LLM section,
+            # which is the silent degradation the guard exists to prevent.
+            raise
         except Exception as exc:
             log.warning(
                 "reporter.llm_attempt_failed",

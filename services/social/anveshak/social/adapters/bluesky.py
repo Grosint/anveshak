@@ -10,7 +10,7 @@ Mirrors XSpendGuard pattern — see learned/redis-atomic-budget-guard.md.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
 import structlog
 from arq import ArqRedis
@@ -289,7 +289,7 @@ class BlueskyAdapter(SourceAdapterBase):
             return datetime.now(UTC)
 
     @staticmethod
-    def _published_at(post) -> datetime | None:
+    def _published_at(post: Any) -> datetime | None:
         """Publication time is record.created_at, not indexed_at.
 
         indexed_at is when the relay saw the post, which for a backfilled

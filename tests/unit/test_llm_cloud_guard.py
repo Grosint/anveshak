@@ -26,10 +26,82 @@ def _settings(**overrides) -> LLMProviderSettings:
         "llm_cloud_provider": "",
         "llm_cloud_model": "",
         "llm_cloud_api_key": "",
-        "llm_cloud_base_url": "",
+        "llm_cloud_base_url": "https://provider.example/v1/messages",
     }
     base.update(overrides)
     return LLMProviderSettings(**base)
+
+
+class TestEnvironmentIsAnAllowlist:
+    """Deny by default. "prod", "staging" and "preprod" are all environments
+    a denylist of "production" would have let through."""
+
+    @pytest.mark.parametrize(
+        "environment", ["production", "prod", "staging", "preprod", "prod-dr", "uat", ""]
+    )
+    def test_an_environment_outside_the_allowlist_is_refused(self, environment):
+        with pytest.raises(CloudProviderRefusedError):
+            resolve_provider(
+                _settings(
+                    environment=environment,
+                    llm_cloud_enabled=True,
+                    llm_cloud_provider="someprovider",
+                    llm_cloud_model="somemodel",
+                    llm_cloud_api_key="key",
+                )
+            )
+
+    def test_the_allowlist_is_configuration(self):
+        provider = resolve_provider(
+            _settings(
+                environment="ci",
+                llm_cloud_allowed_environments=["ci"],
+                llm_cloud_enabled=True,
+                llm_cloud_provider="someprovider",
+                llm_cloud_model="somemodel",
+                llm_cloud_api_key="key",
+            )
+        )
+        assert provider == "cloud"
+
+
+class TestEndpointMustBeHttps:
+    def test_a_plaintext_endpoint_is_refused(self):
+        """The key travels in a request header."""
+        with pytest.raises(CloudProviderRefusedError):
+            resolve_provider(
+                _settings(
+                    llm_cloud_enabled=True,
+                    llm_cloud_provider="someprovider",
+                    llm_cloud_model="somemodel",
+                    llm_cloud_api_key="key",
+                    llm_cloud_base_url="http://provider.example/v1",
+                )
+            )
+
+    def test_a_missing_endpoint_is_refused(self):
+        with pytest.raises(CloudProviderRefusedError):
+            resolve_provider(
+                _settings(
+                    llm_cloud_enabled=True,
+                    llm_cloud_provider="someprovider",
+                    llm_cloud_model="somemodel",
+                    llm_cloud_api_key="key",
+                    llm_cloud_base_url="",
+                )
+            )
+
+
+class TestTheKeyIsNotPrintable:
+    def test_the_settings_repr_hides_the_key(self):
+        settings = _settings(
+            llm_cloud_enabled=True,
+            llm_cloud_provider="someprovider",
+            llm_cloud_model="somemodel",
+            llm_cloud_api_key="super-secret-key",
+        )
+        assert "super-secret-key" not in repr(settings)
+        assert "super-secret-key" not in str(settings)
 
 
 class TestDefaultsToLocal:
@@ -76,6 +148,7 @@ class TestProductionRefusal:
         message = str(exc.value)
         assert "production" in message
         assert "LLM_CLOUD_ENABLED" in message
+        assert "ADR 0002" in message
 
     def test_production_with_flag_off_is_permitted(self):
         assert resolve_provider(_settings(environment="production")) == "local"

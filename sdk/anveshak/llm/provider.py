@@ -16,10 +16,12 @@ into a deployment. It does that with three properties.
 from __future__ import annotations
 
 import hashlib
+import json
 from typing import Any
 
 import httpx
 import structlog
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings
 
 log = structlog.get_logger(__name__)
@@ -46,9 +48,23 @@ class LLMProviderSettings(BaseSettings):
     llm_cloud_enabled: bool = False
     llm_cloud_provider: str = ""
     llm_cloud_model: str = ""
-    llm_cloud_api_key: str = ""
+    # SecretStr so the key does not appear in a repr of this object. A
+    # structlog exception renderer, a pydantic ValidationError, or a later
+    # log.error(settings=...) would otherwise print it verbatim.
+    llm_cloud_api_key: SecretStr = SecretStr("")
     llm_cloud_base_url: str = ""
     llm_cloud_timeout_s: int = 120
+    llm_cloud_max_tokens: int = 2048
+    # Header the provider expects the key in, and any extra headers it
+    # requires, as a JSON object. Both are configuration so that no provider
+    # dialect is written into this module.
+    llm_cloud_auth_header: str = "x-api-key"
+    llm_cloud_extra_headers: str = ""
+
+    # Environments where cloud inference is permitted at all. An allowlist,
+    # never a denylist: "prod", "staging", "preprod" and "prod-dr" are all
+    # environments a denylist of "production" would have let through.
+    llm_cloud_allowed_environments: list[str] = ["development", "test", "local"]
 
     model_config = {"env_prefix": "", "case_sensitive": False, "extra": "ignore"}
 
@@ -65,20 +81,32 @@ def payload_hash(payload: str) -> str:
 def _refusal_reason(settings: LLMProviderSettings) -> str | None:
     """Return why cloud access is refused, or None when it is permitted.
 
-    Only called once the flag is on.
+    Only called once the flag is on. Deny by default at every step: an
+    unrecognised environment, an incomplete configuration, or a non-HTTPS
+    endpoint all refuse rather than proceed.
     """
-    if settings.environment.strip().lower() == "production":
+    environment = settings.environment.strip().lower()
+    allowed = {name.strip().lower() for name in settings.llm_cloud_allowed_environments}
+    if environment not in allowed:
         return (
-            "LLM_CLOUD_ENABLED is true in a production environment. "
-            "Cloud inference is a development-only convenience; intel data "
-            "never leaves the deployment boundary. See ADR 0002."
+            f"LLM_CLOUD_ENABLED is true in environment {environment!r}, which is "
+            f"not in LLM_CLOUD_ALLOWED_ENVIRONMENTS. Cloud inference is a "
+            "development-only convenience; intel data never leaves the "
+            "deployment boundary. See ADR 0002."
         )
     if not settings.llm_cloud_provider:
         return "LLM_CLOUD_ENABLED is true but LLM_CLOUD_PROVIDER is not set"
     if not settings.llm_cloud_model:
         return "LLM_CLOUD_ENABLED is true but LLM_CLOUD_MODEL is not set"
-    if not settings.llm_cloud_api_key:
+    if not settings.llm_cloud_api_key.get_secret_value():
         return "LLM_CLOUD_ENABLED is true but LLM_CLOUD_API_KEY is not set"
+    if not settings.llm_cloud_base_url:
+        return "LLM_CLOUD_ENABLED is true but LLM_CLOUD_BASE_URL is not set"
+    if not settings.llm_cloud_base_url.lower().startswith("https://"):
+        return (
+            "LLM_CLOUD_BASE_URL must be https. The API key travels in a "
+            "request header, and a plaintext endpoint puts it on the wire."
+        )
     return None
 
 
@@ -158,17 +186,16 @@ async def _generate_local(
     return data.get("response", "")
 
 
-async def _generate_cloud(prompt: str, settings: LLMProviderSettings) -> str:
+async def _generate_cloud(
+    prompt: str,
+    settings: LLMProviderSettings,
+    max_tokens: int | None = None,
+) -> str:
     """POST to the configured cloud provider.
 
-    The endpoint is ``LLM_CLOUD_BASE_URL``. It is not derived from the provider
-    name, so no provider URL is hardcoded here.
+    The endpoint, the auth header name and any extra headers are all
+    configuration, so no provider name, URL or dialect is written here.
     """
-    if not settings.llm_cloud_base_url:
-        raise CloudProviderRefusedError(
-            "LLM_CLOUD_ENABLED is true but LLM_CLOUD_BASE_URL is not set"
-        )
-
     digest = payload_hash(prompt)
     log.info(
         "llm.cloud_call",
@@ -178,15 +205,17 @@ async def _generate_cloud(prompt: str, settings: LLMProviderSettings) -> str:
         payload_chars=len(prompt),
     )
 
+    # One auth header, named by configuration. Sending the key in two
+    # headers doubles its exposure for no benefit.
     headers = {
-        "x-api-key": settings.llm_cloud_api_key,
-        "authorization": f"Bearer {settings.llm_cloud_api_key}",
         "content-type": "application/json",
-        "anthropic-version": "2023-06-01",
+        settings.llm_cloud_auth_header: settings.llm_cloud_api_key.get_secret_value(),
     }
+    headers.update(_extra_headers(settings))
+
     body = {
         "model": settings.llm_cloud_model,
-        "max_tokens": 2048,
+        "max_tokens": max_tokens or settings.llm_cloud_max_tokens,
         "messages": [{"role": "user", "content": prompt}],
     }
     async with httpx.AsyncClient(timeout=float(settings.llm_cloud_timeout_s)) as client:
@@ -201,6 +230,28 @@ async def _generate_cloud(prompt: str, settings: LLMProviderSettings) -> str:
         payload_sha256=digest,
     )
     return _extract_completion(data)
+
+
+def _extra_headers(settings: LLMProviderSettings) -> dict[str, str]:
+    """Parse LLM_CLOUD_EXTRA_HEADERS, a JSON object, into request headers.
+
+    A provider that needs an API version header states it here rather than
+    having its dialect hardcoded in this module. A malformed value is logged
+    and dropped rather than crashing the call, because the headers are
+    additive and the auth header is set separately.
+    """
+    raw = settings.llm_cloud_extra_headers.strip()
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        log.warning("llm.extra_headers_invalid", error=str(exc))
+        return {}
+    if not isinstance(parsed, dict):
+        log.warning("llm.extra_headers_not_an_object")
+        return {}
+    return {str(k): str(v) for k, v in parsed.items()}
 
 
 def _extract_completion(data: dict[str, Any]) -> str:
@@ -228,6 +279,7 @@ async def generate(
     local_host: str,
     local_timeout_s: int,
     local_options: dict[str, Any] | None = None,
+    max_tokens: int | None = None,
     settings: LLMProviderSettings | None = None,
 ) -> str:
     """Generate a completion from the resolved provider.
@@ -242,7 +294,13 @@ async def generate(
     provider = resolve_provider(effective)
 
     if provider == PROVIDER_CLOUD:
-        return await _generate_cloud(prompt, effective)
+        # The same job must not produce a 512-token answer locally and a
+        # 2048-token answer in cloud, so the caller's budget carries across.
+        budget = max_tokens
+        if budget is None and local_options:
+            raw_budget = local_options.get("num_predict")
+            budget = int(raw_budget) if isinstance(raw_budget, int) else None
+        return await _generate_cloud(prompt, effective, max_tokens=budget)
 
     return await _generate_local(
         prompt,

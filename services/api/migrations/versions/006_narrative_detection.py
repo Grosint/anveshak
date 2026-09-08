@@ -145,9 +145,17 @@ def upgrade() -> None:
         ON candidate_topics(watch_space_id)
     """)
 
-    # Row-level security as the secondary isolation layer. The primary layer
-    # is verify_topic_access() on every route.
+    # Row-level security, matching the policy shape the other org-scoped
+    # tables use.
+    #
+    # It is a safety net that is not yet armed: nothing in services/ executes
+    # SET LOCAL app.current_org, so current_setting returns '' and the policy
+    # passes everything through. Isolation on this table therefore rests on
+    # verify_topic_access() plus the explicit org_id in every query. The
+    # policy exists so that arming the request-scoped setting later covers
+    # candidate_topics without another migration.
     op.execute("ALTER TABLE candidate_topics ENABLE ROW LEVEL SECURITY")
+    op.execute("DROP POLICY IF EXISTS org_isolation_candidate_topics ON candidate_topics")
     op.execute("""
         CREATE POLICY org_isolation_candidate_topics ON candidate_topics
         USING (
@@ -156,9 +164,22 @@ def upgrade() -> None:
         )
     """)
 
+    # 001 granted on ALL TABLES once, at 001 time, and there is no ALTER
+    # DEFAULT PRIVILEGES anywhere, so a table created later is not covered.
+    # Background services connect as anveshak_worker (BYPASSRLS).
+    op.execute("GRANT ALL ON candidate_topics TO anveshak_worker")
+
 
 def downgrade() -> None:
-    op.execute("DROP POLICY IF EXISTS org_isolation_candidate_topics ON candidate_topics")
+    """Reverses the schema. Note the data this discards.
+
+    Dropping stance, hostility and published_at throws away every scored item
+    and every collected publication time. Re-upgrading gives back the columns
+    but not the values: the scoring pass has to be re-run, and publication
+    times are only recoverable for content collected after the re-upgrade.
+    """
+    # The table takes its policy with it, and DROP POLICY IF EXISTS still
+    # raises when the relation is absent, so the table goes first.
     op.execute("DROP TABLE IF EXISTS candidate_topics")
 
     op.execute("DROP INDEX IF EXISTS idx_topics_parent")

@@ -559,12 +559,15 @@ class YouTubeAdapter(SourceAdapterBase):
             if reply_count:
                 comment_engagement["replies"] = reply_count
 
+            comment_published_at = datetime.fromisoformat(
+                comment["publishedAt"].replace("Z", "+00:00")
+            )
             item = RawItem(
                 raw_text=comment.get("textDisplay", ""),
                 url=f"https://www.youtube.com/watch?v={video_id}&lc={comment_id}",
                 platform="youtube",
-                captured_at=datetime.fromisoformat(comment["publishedAt"].replace("Z", "+00:00")),
-                published_at=datetime.fromisoformat(comment["publishedAt"].replace("Z", "+00:00")),
+                captured_at=comment_published_at,
+                published_at=comment_published_at,
                 source_handle=handle,
                 engagement=comment_engagement or None,
                 author_id=comment.get("authorChannelId", {}).get("value", ""),

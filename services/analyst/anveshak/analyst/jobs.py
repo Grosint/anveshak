@@ -28,6 +28,7 @@ from .credibility import (
     run_credibility_update,
     run_cross_verification_update,
 )
+from .detection import detect_candidate_topics
 from .embeddings import encode_text, load_encoder
 from .entity_minhash import compute_entity_minhash
 from .geocoding import geocode_and_store
@@ -466,6 +467,18 @@ async def score_cluster_stance(ctx: dict, cluster_id: str) -> None:
     log.info("jobs.score_cluster_stance.done", cluster_id=cluster_id, items_scored=scored)
 
 
+async def detect_candidate_topics_job(ctx: dict) -> int:
+    """Surface narratives forming inside a Watch Space (#26).
+
+    Proposes only. Nothing is monitored until an analyst accepts, so this job
+    never creates a Topic.
+    """
+    db_pool: asyncpg.Pool = ctx["db_pool"]
+    written = await detect_candidate_topics(db_pool)
+    log.info("jobs.detect_candidate_topics.done", candidates=written)
+    return written
+
+
 async def generate_cluster_label(ctx: dict, cluster_id: str) -> None:
     """Generate and persist an Ollama-powered label for a cluster (criteria 2.6–2.8)."""
     db_pool: asyncpg.Pool = ctx["db_pool"]
@@ -659,6 +672,8 @@ class WorkerSettings:
         arq.func(generate_cluster_label, max_tries=3),
         # 8C.x — Stance and hostility: model inference may need warm-up
         arq.func(score_cluster_stance, max_tries=2),
+        # 8C.x — Candidate Topic detection: read-mostly, retry safe
+        arq.func(detect_candidate_topics_job, max_tries=2),
         update_source_credibility,
         backfill_topic_job,
         backfill_all_topics,
@@ -671,6 +686,10 @@ class WorkerSettings:
         arq.cron(run_contradiction_scoring, hour={2}),  # 7.2 — daily at 02:00 UTC
         arq.cron(update_source_credibility, hour={3}),  # 2.21 — daily at 03:00 UTC
         arq.cron(backfill_all_topics, hour={0, 6, 12, 18}),  # 2.9 — every 6 hours
+        # #26 — Candidate Topic detection. Hourly rather than per-clustering
+        # run, because the persistence gate counts detection passes and a
+        # per-run cadence would let a spike clear it within one busy hour.
+        arq.cron(detect_candidate_topics_job, minute={7}),
     ]
     on_startup = on_startup
     on_shutdown = on_shutdown

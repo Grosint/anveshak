@@ -89,6 +89,15 @@ description: "Content ingest quality and relevance filtering. Covers quality gat
   Post-process in Python to extract sentiment/keywords from labels dict
   See: `.agents/skills/learned/references/nlp-results-in-jsonb-labels.md`, `.agents/skills/learned/references/jsonb-labels-api-surfacing.md`
 
+- The criterion, when adding a new enrichment: how is it read?
+  Read one row at a time, alongside that row's other metadata, goes in `labels`.
+  Aggregated across the table (`GROUP BY` a day, `AVG` over a topic) goes in a column,
+  because per-row JSONB extraction cannot use a plain btree index and does not hold at that scale.
+- `content_items.stance` and `content_items.hostility` are the exception on record.
+  The Sentiment Timeline aggregates both per day across the whole content table.
+  Both are constrained in the schema: stance to a closed set, hostility to 0.0 through 1.0.
+  See migration `006_narrative_detection.py` and `docs/narrative_detection_plan.md`.
+
 ## Content Enrichment at Ingest Time
 
 - Detect language at scrape time (`detect_language(clean_text)`) — not hardcoded "en"

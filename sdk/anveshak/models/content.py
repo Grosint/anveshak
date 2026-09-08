@@ -42,4 +42,14 @@ class ContentItem(AuditedModel):
         None  # English translation of clean_text (None if original is English)
     )
     translation_model: Optional[str] = None  # model used for translation (audit trail)
+    # Publication time as the platform stated it. None means the platform gave
+    # none, and it stays None: captured_at is collection time, and conflating
+    # the two is what made a timeline built on captured_at untruthful.
+    published_at: Optional[datetime] = None
+    # Stance toward the item's narrative cluster and hostility intensity.
+    # Columns rather than labels metadata because the Sentiment Timeline
+    # aggregates them per day across the whole table. See migration 006.
+    # supporting | opposing | neutral | unsupported_language
+    stance: Optional[str] = None
+    hostility: Optional[float] = None  # 0.0 to 1.0, None when not measured
     # embedding stored in PostgreSQL directly as vector — not in this model

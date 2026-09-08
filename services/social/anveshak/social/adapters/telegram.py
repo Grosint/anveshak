@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
 import structlog
 from telethon import TelegramClient
@@ -302,7 +302,7 @@ class TelegramAdapter(SourceAdapterBase):
             return None
 
     @staticmethod
-    def _published_at(message) -> datetime | None:
+    def _published_at(message: Any) -> datetime | None:
         """Telethon stamps every message with its send time."""
         sent = getattr(message, "date", None)
         if not isinstance(sent, datetime):

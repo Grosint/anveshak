@@ -71,10 +71,34 @@ class TestOrgIsolation:
 
 
 class TestPublicContentOnly:
-    def test_queries_exclude_non_public_platforms(self):
-        """Collection posture is public sources; the view must match it."""
-        source = Path("services/api/anveshak/api/db/actors.py").read_text()
-        assert "tipline" in source.lower()
+    def test_every_query_uses_a_public_platform_allowlist(self):
+        """A denylist would let a new private-source adapter through silently."""
+        for sql in ACTOR_SQL:
+            assert "s.platform IN" in sql
+            assert "NOT IN" not in sql
+
+    def test_private_platforms_are_absent_from_the_allowlist(self):
+        from anveshak.api.db.actors import _PUBLIC_PLATFORMS
+
+        assert "tipline" not in _PUBLIC_PLATFORMS
+        # The WhatsApp adapter records every group member's display name as
+        # author_handle, so a WhatsApp actor view is a dossier on a private
+        # group participant.
+        assert "whatsapp" not in _PUBLIC_PLATFORMS
+        assert "instagram" not in _PUBLIC_PLATFORMS
+
+
+class TestQualityGateAtEveryConsumptionPoint:
+    def test_every_query_applies_the_quality_gate(self):
+        """Otherwise the post count includes items the content list hides."""
+        for sql in ACTOR_SQL:
+            assert "content_quality" in sql
+
+
+class TestClassificationCrossesTheBoundary:
+    def test_content_carries_its_classification(self):
+        """Rule 2: an analyst never reads intel content with no marking."""
+        assert "classification" in SQL_ACTOR_CONTENT
 
 
 class TestHandleNormalisation:

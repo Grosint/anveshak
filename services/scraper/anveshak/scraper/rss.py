@@ -11,8 +11,10 @@ Fetch strategy per entry:
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any
 
 import httpx
 import structlog
@@ -41,7 +43,7 @@ class RssItem:
     published_at: datetime | None = None
 
 
-def _entry_published_at(entry) -> datetime | None:
+def _entry_published_at(entry: Mapping[str, Any]) -> datetime | None:
     """Return the feed's stated publication time, or None.
 
     feedparser exposes ``published_parsed`` only when the entry carried a
