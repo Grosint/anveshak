@@ -1,0 +1,290 @@
+# Internal security tension — Watch Space seed. Issue #25.
+#
+# A Watch Space is an ordinary Topic with broad keywords and many sources.
+# It collects across a domain so that narrative detection has something to
+# detect within, rather than tracking a subject an analyst already named.
+#
+# The keywords below describe a domain. None of them names an organisation,
+# a party, or an individual. That constraint is load-bearing rather than
+# stylistic: the demonstration claims the system surfaced a narrative
+# unaided, and a target hidden in the keywords makes that claim false. The
+# first thing a customer will do is read this file.
+#
+# Enforced by tests/unit/test_watch_space.py.
+
+name: Internal Security Tension
+is_watch_space: true
+status: active
+
+# Both languages, because a signal drawn only from English discourse
+# describes the English-speaking part of a story rather than the story.
+languages:
+  - en
+  - hi
+
+# Broad, so an emerging narrative is not filtered out before clustering.
+credibility_min: 20.0
+signal_threshold: 3
+
+keywords:
+  # Public order vocabulary
+  - communal tension
+  - communal clash
+  - mob violence
+  - stone pelting
+  - arson attack
+  - curfew imposed
+  - prohibitory orders
+  - internet shutdown
+  - lathi charge
+  - preventive detention
+  - protest march
+  - road blockade
+  - shutdown call
+  - hunger strike
+  - police firing
+  # Speech and narrative vocabulary
+  - inflammatory speech
+  - hate speech
+  - provocative slogans
+  - religious procession
+  - forced conversion allegation
+  - cow vigilante
+  - fake video claim
+  - doctored video
+  - misinformation campaign
+  - rumour spread
+  # Hindi domain vocabulary
+  - सांप्रदायिक तनाव
+  - पथराव
+  - कर्फ्यू
+  - भड़काऊ भाषण
+  - विरोध प्रदर्शन
+  - इंटरनेट बंद
+  - अफवाह
+  - हिंसा भड़की
+  - जुलूस विवाद
+  - बंद का ऐलान
+
+# Roughly thirty to fifty sources spanning news feeds, video channels,
+# forums, public messaging channels and high-reach accounts. Breadth is the
+# point: a narrative confined to one platform is amplification, and the
+# Manufactured Narrative signal can only see that if the Watch Space is wide
+# enough to have missed it elsewhere.
+sources:
+  # --- National news feeds -------------------------------------------
+  - name: The Hindu National
+    url_or_handle: https://www.thehindu.com/news/national/feeder/default.rss
+    platform: rss
+    credibility_score: 80.0
+    language: en
+  - name: Indian Express India
+    url_or_handle: https://indianexpress.com/section/india/feed/
+    platform: rss
+    credibility_score: 78.0
+    language: en
+  - name: Hindustan Times India News
+    url_or_handle: https://www.hindustantimes.com/feeds/rss/india-news/rssfeed.xml
+    platform: rss
+    credibility_score: 74.0
+    language: en
+  - name: Times of India India
+    url_or_handle: https://timesofindia.indiatimes.com/rssfeeds/-2128936835.cms
+    platform: rss
+    credibility_score: 68.0
+    language: en
+  - name: NDTV India News
+    url_or_handle: https://feeds.feedburner.com/ndtvnews-india-news
+    platform: rss
+    credibility_score: 72.0
+    language: en
+  - name: Deccan Herald National
+    url_or_handle: https://www.deccanherald.com/rss/national.rss
+    platform: rss
+    credibility_score: 72.0
+    language: en
+  - name: Telegraph India
+    url_or_handle: https://www.telegraphindia.com/newsletter/rss/india
+    platform: rss
+    credibility_score: 70.0
+    language: en
+  - name: Deccan Chronicle Nation
+    url_or_handle: https://www.deccanchronicle.com/rss/nation.xml
+    platform: rss
+    credibility_score: 64.0
+    language: en
+
+  # --- Hindi language feeds ------------------------------------------
+  - name: BBC Hindi India
+    url_or_handle: https://feeds.bbci.co.uk/hindi/india/rss.xml
+    platform: rss
+    credibility_score: 80.0
+    language: hi
+  - name: Amar Ujala National
+    url_or_handle: https://www.amarujala.com/rss/india-news.xml
+    platform: rss
+    credibility_score: 64.0
+    language: hi
+  - name: Dainik Jagran National
+    url_or_handle: https://www.jagran.com/rss/news/national.xml
+    platform: rss
+    credibility_score: 62.0
+    language: hi
+  - name: Navbharat Times India
+    url_or_handle: https://navbharattimes.indiatimes.com/rssfeedsdefault.cms
+    platform: rss
+    credibility_score: 60.0
+    language: hi
+  - name: Aaj Tak Home
+    url_or_handle: https://www.aajtak.in/rssfeeds/?id=home
+    platform: rss
+    credibility_score: 58.0
+    language: hi
+
+  # --- Independent and long-form ------------------------------------
+  - name: Scroll.in Latest
+    url_or_handle: https://feeds.feedburner.com/ScrollinArticles.rss
+    platform: rss
+    credibility_score: 74.0
+    language: en
+  - name: The Wire
+    url_or_handle: https://thewire.in/rss
+    platform: rss
+    credibility_score: 70.0
+    language: en
+  - name: The Print
+    url_or_handle: https://theprint.in/feed/
+    platform: rss
+    credibility_score: 70.0
+    language: en
+  - name: Newslaundry
+    url_or_handle: https://www.newslaundry.com/stories.rss
+    platform: rss
+    credibility_score: 68.0
+    language: en
+  - name: The News Minute
+    url_or_handle: https://www.thenewsminute.com/feeds/default.rss
+    platform: rss
+    credibility_score: 68.0
+    language: en
+  - name: Article 14
+    url_or_handle: https://article-14.com/rss
+    platform: rss
+    credibility_score: 68.0
+    language: en
+
+  # --- Fact-check feeds ---------------------------------------------
+  # A manufactured narrative and its debunk usually arrive on different
+  # platforms, and the gap between them is itself a measurement.
+  - name: Alt News
+    url_or_handle: https://www.altnews.in/feed/
+    platform: rss
+    credibility_score: 76.0
+    language: en
+  - name: BOOM Live
+    url_or_handle: https://www.boomlive.in/feeds/rss
+    platform: rss
+    credibility_score: 74.0
+    language: en
+  - name: Factly
+    url_or_handle: https://factly.in/feed/
+    platform: rss
+    credibility_score: 72.0
+    language: en
+
+  # --- Wire services and official ------------------------------------
+  - name: Press Information Bureau
+    url_or_handle: https://www.pib.gov.in/RssMain.aspx?ModId=6&Lang=1&Regid=3
+    platform: rss
+    credibility_score: 78.0
+    language: en
+  - name: Reuters India
+    url_or_handle: https://www.reuters.com/world/india/
+    platform: web
+    credibility_score: 84.0
+    language: en
+  - name: Al Jazeera India
+    url_or_handle: https://www.aljazeera.com/where/india/
+    platform: web
+    credibility_score: 72.0
+    language: en
+
+  # --- Video channels -------------------------------------------------
+  - name: NDTV YouTube
+    url_or_handle: https://www.youtube.com/@ndtv
+    platform: youtube
+    credibility_score: 70.0
+    language: en
+  - name: The Quint YouTube
+    url_or_handle: https://www.youtube.com/@TheQuint
+    platform: youtube
+    credibility_score: 66.0
+    language: en
+  - name: Aaj Tak YouTube
+    url_or_handle: https://www.youtube.com/@aajtak
+    platform: youtube
+    credibility_score: 56.0
+    language: hi
+  - name: ABP News YouTube
+    url_or_handle: https://www.youtube.com/@abpnews
+    platform: youtube
+    credibility_score: 54.0
+    language: hi
+  - name: The Lallantop YouTube
+    url_or_handle: https://www.youtube.com/@thelallantop
+    platform: youtube
+    credibility_score: 58.0
+    language: hi
+
+  # --- Forums ---------------------------------------------------------
+  # Forum discourse is where a claim is repeated rather than reported,
+  # which is the behaviour the Manufactured Narrative signal reads.
+  - name: r/india
+    url_or_handle: india
+    platform: reddit
+    credibility_score: 40.0
+    language: en
+  - name: r/IndiaSpeaks
+    url_or_handle: IndiaSpeaks
+    platform: reddit
+    credibility_score: 35.0
+    language: en
+  - name: r/unitedstatesofindia
+    url_or_handle: unitedstatesofindia
+    platform: reddit
+    credibility_score: 35.0
+    language: en
+  - name: r/librandu
+    url_or_handle: librandu
+    platform: reddit
+    credibility_score: 32.0
+    language: en
+
+  # --- High-reach accounts -------------------------------------------
+  - name: ANI on X
+    url_or_handle: "@ANI"
+    platform: twitter
+    credibility_score: 55.0
+    language: en
+  - name: PTI on X
+    url_or_handle: "@PTI_News"
+    platform: twitter
+    credibility_score: 65.0
+    language: en
+  - name: Alt News on X
+    url_or_handle: "@AltNews"
+    platform: twitter
+    credibility_score: 72.0
+    language: en
+
+  # --- Public messaging channels --------------------------------------
+  - name: The Hindu Telegram
+    url_or_handle: "@the_hindu"
+    platform: telegram
+    credibility_score: 70.0
+    language: en
+  - name: NDTV Telegram
+    url_or_handle: "@ndtvnews"
+    platform: telegram
+    credibility_score: 66.0
+    language: en

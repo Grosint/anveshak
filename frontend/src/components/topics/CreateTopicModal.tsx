@@ -84,6 +84,7 @@ export function CreateTopicModal({ open, onClose, onSubmit }: CreateTopicModalPr
   const [threshold, setThreshold]     = useState(3)
   const [credMin, setCredMin]         = useState(30)
   const [clipCats, setClipCats]       = useState<string[]>([])
+  const [isWatchSpace, setIsWatchSpace] = useState(false)
   const [submitting, setSubmitting]   = useState(false)
   const [error, setError]             = useState('')
 
@@ -108,10 +109,11 @@ export function CreateTopicModal({ open, onClose, onSubmit }: CreateTopicModalPr
         signal_threshold: threshold,
         credibility_min: credMin,
         clip_categories: clipCats,
+        is_watch_space: isWatchSpace,
       })
       // Reset form
       setName(''); setKeywords([]); setLanguages(['en'])
-      setThreshold(3); setCredMin(30); setClipCats([])
+      setThreshold(3); setCredMin(30); setClipCats([]); setIsWatchSpace(false)
       onClose()
     } catch {
       setError('Failed to create topic. Try again.')
@@ -150,6 +152,32 @@ export function CreateTopicModal({ open, onClose, onSubmit }: CreateTopicModalPr
             className="w-full bg-anveshak-bg border border-anveshak-border rounded px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-anveshak-accent"
             placeholder="e.g. China Sea territorial disputes"
           />
+        </div>
+
+        {/* Watch Space */}
+        <div className="rounded border border-anveshak-border bg-anveshak-bg px-3 py-2.5">
+          <label htmlFor="is-watch-space" className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              id="is-watch-space"
+              type="checkbox"
+              checked={isWatchSpace}
+              onChange={(e) => setIsWatchSpace(e.target.checked)}
+              className="mt-0.5 accent-anveshak-accent"
+            />
+            <span>
+              <span className="block text-xs font-medium text-text-primary">Watch Space</span>
+              <span className="block text-[11px] text-text-muted mt-0.5">
+                Collect across a whole domain rather than one named subject. Narrative
+                detection proposes new topics from what forms inside it.
+              </span>
+            </span>
+          </label>
+          {isWatchSpace && (
+            <p className="text-[11px] text-signal-med mt-2 pl-6">
+              Keywords must describe the domain and name no specific organisation, party, or
+              individual. A named target means the system did not find the narrative unaided.
+            </p>
+          )}
         </div>
 
         {/* Keywords */}

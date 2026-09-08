@@ -36,6 +36,9 @@ class CreateTopicRequest(BaseModel):
     clip_categories: list[str] = []
     scheduled_report_cron: Optional[str] = None
     scheduled_report_type: Optional[str] = None
+    # A Watch Space collects across a domain rather than a named subject.
+    # Its keywords must name no specific organisation, party, or individual.
+    is_watch_space: bool = False
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -63,6 +66,7 @@ async def create_topic(
         _LABELS_JSON,
         org_id=org_id,
         identifier_signal_threshold=req.identifier_signal_threshold,
+        is_watch_space=req.is_watch_space,
     )
     enqueue_failed = False
     try:

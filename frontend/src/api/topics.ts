@@ -18,6 +18,10 @@ export interface Topic {
   clip_categories?: string[]
   scheduled_report_cron?: string | null
   scheduled_report_type?: string | null
+  /** A Watch Space collects across a domain rather than a named subject. */
+  is_watch_space?: boolean
+  /** Set on a Topic promoted from a Candidate Topic, pointing at its Watch Space. */
+  parent_topic_id?: string | null
 }
 
 export interface ClusterSource {
@@ -63,6 +67,7 @@ export interface CreateTopicPayload {
   clip_categories?: string[]
   scheduled_report_cron?: string | null
   scheduled_report_type?: string | null
+  is_watch_space?: boolean
 }
 
 export interface TopicSource {

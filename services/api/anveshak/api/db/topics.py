@@ -16,16 +16,18 @@ SQL_INSERT_TOPIC = """
     INSERT INTO topics (
         id, name, keywords, languages, credibility_min, signal_threshold,
         status, clip_categories, scheduled_report_cron, scheduled_report_type,
-        created_at, updated_at, labels, org_id, identifier_signal_threshold
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        created_at, updated_at, labels, org_id, identifier_signal_threshold,
+        is_watch_space, parent_topic_id
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
 """
 # Param order: topic_id, name, keywords, languages, credibility_min,
 # signal_threshold, status, clip_categories, scheduled_report_cron,
 # scheduled_report_type, created_at, updated_at, labels_json, org_id,
-# identifier_signal_threshold
+# identifier_signal_threshold, is_watch_space, parent_topic_id
 
 SQL_LIST_TOPICS = """
     SELECT t.id, t.name, t.status, t.signal_threshold, t.credibility_min, t.created_at,
+           t.is_watch_space, t.parent_topic_id,
            (SELECT COUNT(DISTINCT x.id) FROM (
                SELECT ci.id FROM content_items ci WHERE ci.topic_id = t.id
                UNION
@@ -69,6 +71,7 @@ SQL_LIST_TOPICS = """
 
 SQL_LIST_TOPICS_BY_ORG = """
     SELECT t.id, t.name, t.status, t.signal_threshold, t.credibility_min, t.created_at,
+           t.is_watch_space, t.parent_topic_id,
            (SELECT COUNT(DISTINCT x.id) FROM (
                SELECT ci.id FROM content_items ci WHERE ci.topic_id = t.id
                UNION
@@ -274,6 +277,8 @@ async def insert_topic(
     *,
     org_id: Optional[str] = None,
     identifier_signal_threshold: int = 2,
+    is_watch_space: bool = False,
+    parent_topic_id: Optional[str] = None,
 ) -> None:
     await conn.execute(
         SQL_INSERT_TOPIC,
@@ -292,6 +297,8 @@ async def insert_topic(
         labels_json,
         org_id,
         identifier_signal_threshold,
+        is_watch_space,
+        parent_topic_id,
     )
 
 

@@ -43,6 +43,9 @@ function TopicCard({
               {topic.name}
             </h3>
             <Badge variant={statusVariant}>{topic.status}</Badge>
+            {topic.is_watch_space && (
+              <Badge variant="accent" className="whitespace-nowrap">Watch Space</Badge>
+            )}
             <SignalBadge count={signalCount} />
             <NewContentBadge count={newContent} />
           </div>
