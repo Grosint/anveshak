@@ -1,0 +1,53 @@
+# Deferred scope register
+
+Work deliberately excluded from a shipped epic, with the reason it was excluded and the condition that would bring it back.
+A deferral recorded here is a decision, not an oversight.
+
+---
+
+## Epic #21 — Narrative detection, Sentiment Timeline, and Manufactured Narrative signals
+
+### Topic to Case promotion for long-running movements
+
+A movement that runs for months outgrows a Topic and belongs in a Case.
+Cases already exist and already span multiple topics, so the promotion path is a small piece of wiring.
+
+Deferred because no analyst has yet run a Watch Space long enough to hit the limit.
+Bring it back when a promoted Topic has been active for more than one month.
+
+### Production hardening
+
+Five items travel together: threshold calibration against real collected volume, per-Topic scrape budgets, expiry for Candidate Topics nobody triages, backfill performance at production scale, and per-language model evaluation.
+
+Deferred because every one of them needs production volume to tune against, and tuning them on seeded data would produce numbers that look authoritative and are not.
+Bring them back once the internal-security-tension Watch Space has collected for a full month.
+
+### Comment and reply collection
+
+Replies carry most of the stance signal on a public post, and the Sentiment Timeline would be sharper with them.
+
+Deferred because comment collection is thin and inconsistent across the current adapters.
+Doing it properly means a per-platform scoping pass.
+Bring it back as its own epic.
+
+### Open-web trend discovery
+
+Detection operates inside a Watch Space.
+The system does not go looking for subjects nobody configured.
+
+Deferred on purpose rather than for cost.
+A system that selects its own subjects from the open web has no human-defined collection boundary, which is the property that makes the current posture defensible.
+
+### Historical data beyond a platform search window
+
+Several platforms expose only a recent search window, seven days on X.
+Nothing recovers history from before collection started on those platforms.
+
+Deferred because no technique recovers it.
+The historical spine of the timeline comes from platforms with full history, and the constrained portion of the chart is labelled so an analyst never mistakes a data gap for silence.
+
+### A dedicated HTTP contract test seam
+
+The three existing seams cover this work: the analyst pipeline, the database repository, and the frontend integration seam.
+
+Deferred because adding a fourth seam adds maintenance without covering a failure the existing three miss.

@@ -227,7 +227,7 @@ class TestRSSEnqueuesAnalyse:
 
 class TestDarkwebEnqueuesAnalyse:
     @patch("anveshak.scraper.jobs.fetch_url_via_tor", new_callable=AsyncMock)
-    @patch("anveshak.scraper.jobs.create_shared_crawler")
+    @patch("anveshak.scraper.jobs.create_tor_crawler")
     async def test_enqueues_analyse_content_for_darkweb_item(
         self,
         mock_crawler,
@@ -236,7 +236,11 @@ class TestDarkwebEnqueuesAnalyse:
         """scrape_darkweb_topic must enqueue analyse_content for each new item."""
         from anveshak.scraper.jobs import scrape_darkweb_topic
 
-        mock_crawler.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
+        # scrape_darkweb_topic opens create_tor_crawler, not create_shared_crawler.
+        # Patching the wrong name let the job fall through to a real browser launch.
+        mock_crawler.return_value.__aenter__ = AsyncMock(
+            return_value=(MagicMock(), MagicMock())
+        )
         mock_crawler.return_value.__aexit__ = AsyncMock(return_value=False)
         mock_fetch_tor.return_value = "Dark web content extracted from onion site."
 
