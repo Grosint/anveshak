@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
@@ -43,6 +44,14 @@ class AnalystSettings(BaseSettings):
     # Source-type suggestion returns a JSON list, so it needs a wider budget
     # than a cluster label. Separate setting, separate purpose.
     llm_discovery_max_tokens: int = 2048
+    # Confidence stamped on a source the LLM suggested. The LLM returns no
+    # calibrated score, so this is an operator judgement about how far to
+    # trust a suggestion, and it is tuning rather than a constant. Distinct
+    # from templates._CONFIDENCE_THRESHOLD, which is an accept floor for a
+    # template match: same value today, different purpose.
+    # Bounded: an out-of-range env var would outrank every genuinely derived
+    # suggestion, so fail startup rather than corrupt the ranking silently.
+    llm_discovery_confidence: float = Field(default=0.5, ge=0.0, le=1.0)
 
     # Clustering — Leiden community detection on blended similarity graph
     clustering_similarity_threshold: float = (

@@ -200,7 +200,7 @@ async def suggest_source_types(
                 topic_id,
                 domain_handle,
                 ss.platform,
-                0.5,  # LLM suggestions get moderate confidence
+                settings.llm_discovery_confidence,
                 json.dumps(evidence),
                 now,
                 LABELS_JSON,
