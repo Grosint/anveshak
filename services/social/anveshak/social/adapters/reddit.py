@@ -182,12 +182,24 @@ class RedditAdapter(SourceAdapterBase):
                     url=f"https://www.reddit.com{post.permalink}",  # criteria 3.15
                     platform=self.platform,
                     captured_at=datetime.fromtimestamp(post.created_utc, tz=UTC),
+                    published_at=self._published_at(post),
                     source_handle=handle,
                     media_urls=self._extract_media_urls(post),
                     engagement=engagement or None,
                     author_id=author_name,
                     author_handle=author_name,
                 )
+
+    @staticmethod
+    def _published_at(post) -> datetime | None:
+        """Reddit stamps every post with created_utc, so this is never a guess."""
+        created = getattr(post, "created_utc", None)
+        if created is None:
+            return None
+        try:
+            return datetime.fromtimestamp(float(created), tz=UTC)
+        except (TypeError, ValueError, OSError):
+            return None
 
     def _fetch_feed(self, subreddit_name: str, feed_type: str) -> list:
         """Synchronous PRAW call — runs in asyncio.to_thread()."""

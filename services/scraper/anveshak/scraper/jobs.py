@@ -84,10 +84,10 @@ SQL_INSERT_CONTENT = """
         id, topic_id, source_id, raw_text, clean_text, language,
         content_hash, url, captured_at, credibility_score_at_capture,
         created_at, updated_at, labels,
-        content_quality, clean_hash, title, org_id
+        content_quality, clean_hash, title, org_id, published_at
     )
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-            $14, $15, $16, $17)
+            $14, $15, $16, $17, $18)
     ON CONFLICT(content_hash) DO NOTHING
     RETURNING id
 """
@@ -246,6 +246,9 @@ async def scrape_topic(ctx: dict, topic_id: str) -> int:
                 c_hash,
                 title,
                 topic["org_id"],
+                # A crawled web page carries no publication time we can trust,
+                # so this stays NULL rather than claiming the crawl date.
+                None,
             )
         if result is not None:
             content_item_id = result["id"]
@@ -454,7 +457,11 @@ async def poll_rss_sources(ctx: dict, topic_id: str) -> int:
                                 rss_language,  # language — detected at scrape time
                                 content_hash,
                                 item.url,
-                                item.published_at,  # captured_at = article publish time
+                                # captured_at keeps its existing meaning: the
+                                # feed's date when it gave one, collection time
+                                # otherwise. published_at stays NULL in the
+                                # second case rather than claiming today.
+                                item.published_at or now,
                                 float(source["credibility_score"]),
                                 now,  # created_at
                                 now,  # updated_at
@@ -463,6 +470,7 @@ async def poll_rss_sources(ctx: dict, topic_id: str) -> int:
                                 c_hash,
                                 title,
                                 topic["org_id"],
+                                item.published_at,  # published_at — NULL when unknown
                             )
 
                         if result is not None:
@@ -567,6 +575,8 @@ async def scrape_darkweb_topic(ctx: dict, topic_id: str) -> int:
                 c_hash,
                 title,
                 topic["org_id"],
+                # Onion pages carry no reliable publication time.
+                None,
             )
         if result is not None:
             content_item_id = result["id"]

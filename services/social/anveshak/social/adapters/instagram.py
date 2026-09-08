@@ -321,15 +321,14 @@ class InstagramAdapter(SourceAdapterBase):
 
         # Parse timestamp
         taken_at = media.taken_at if hasattr(media, "taken_at") else None
+        published_at: datetime | None = None
         if isinstance(taken_at, (int, float)):
-            captured_at = datetime.fromtimestamp(taken_at, tz=UTC)
+            published_at = datetime.fromtimestamp(taken_at, tz=UTC)
         elif isinstance(taken_at, datetime):
-            if taken_at.tzinfo is None:
-                captured_at = taken_at.replace(tzinfo=UTC)
-            else:
-                captured_at = taken_at
-        else:
-            captured_at = datetime.now(UTC)
+            published_at = taken_at.replace(tzinfo=UTC) if taken_at.tzinfo is None else taken_at
+        # captured_at keeps its existing meaning and its existing fallback.
+        # published_at stays None when the platform gave nothing.
+        captured_at = published_at or datetime.now(UTC)
 
         # Capture engagement metrics available from Instagrapi Media object
         engagement: dict[str, int | float] = {}
@@ -348,6 +347,7 @@ class InstagramAdapter(SourceAdapterBase):
             url=f"https://www.instagram.com/p/{shortcode}/",
             platform="instagram",
             captured_at=captured_at,
+            published_at=published_at,
             source_handle=source_handle,
             media_urls=InstagramAdapter._extract_media_urls(media),
             engagement=engagement or None,

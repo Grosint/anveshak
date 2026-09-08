@@ -241,7 +241,7 @@ class TestIngestRawItem:
 
     @pytest.mark.asyncio
     async def test_insert_sql_passes_org_id(self):
-        """SQL_INSERT_CONTENT has 16 params — org_id must be passed as $16."""
+        """SQL_INSERT_CONTENT has 17 params — org_id is $16, published_at is $17."""
         from anveshak.social.ingest import ingest_raw_item
 
         raw = _make_raw_item()
@@ -264,16 +264,16 @@ class TestIngestRawItem:
             org_id="org_cyber",
         )
         assert result is True
-        # Verify INSERT call received 16 args (SQL has $1-$16)
+        # Verify INSERT call received 17 args (SQL has $1-$17)
         insert_call = conn.fetchrow.call_args_list[1]
         insert_args = insert_call.args
         # First arg is SQL string, rest are positional params
-        assert len(insert_args) == 17  # SQL + 16 params
+        assert len(insert_args) == 18  # SQL + 17 params
         assert insert_args[16] == "org_cyber"  # $16 = org_id
 
     @pytest.mark.asyncio
     async def test_insert_sql_passes_none_org_id_by_default(self):
-        """When org_id not provided, $16 should be None."""
+        """When org_id is not provided, $16 is None."""
         from anveshak.social.ingest import ingest_raw_item
 
         raw = _make_raw_item()
@@ -291,8 +291,11 @@ class TestIngestRawItem:
         assert result is True
         insert_call = conn.fetchrow.call_args_list[1]
         insert_args = insert_call.args
-        assert len(insert_args) == 17  # SQL + 16 params
+        assert len(insert_args) == 18  # SQL + 17 params
         assert insert_args[16] is None  # $16 = org_id defaults to None
+        # $17 = published_at. The fixture RawItem sets none, so it stays NULL
+        # rather than inheriting the collection time.
+        assert insert_args[17] is None
 
     @pytest.mark.asyncio
     async def test_enqueues_vision_for_media(self):

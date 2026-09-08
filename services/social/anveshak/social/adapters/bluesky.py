@@ -234,6 +234,7 @@ class BlueskyAdapter(SourceAdapterBase):
                     url=url,  # criteria 3.19
                     platform=self.platform,
                     captured_at=self._parse_indexed_at(post.indexed_at),
+                    published_at=self._published_at(post),
                     # authenticate() rejects a missing handle, so this is set by now.
                     source_handle=settings.bluesky_handle or "",  # registered source handle
                     media_urls=self._extract_media_urls(post),
@@ -286,6 +287,22 @@ class BlueskyAdapter(SourceAdapterBase):
             return datetime.fromisoformat(indexed_at.replace("Z", "+00:00"))
         except (ValueError, AttributeError):
             return datetime.now(UTC)
+
+    @staticmethod
+    def _published_at(post) -> datetime | None:
+        """Publication time is record.created_at, not indexed_at.
+
+        indexed_at is when the relay saw the post, which for a backfilled
+        account can be months after the author wrote it.
+        """
+        record = getattr(post, "record", None)
+        created = getattr(record, "created_at", None)
+        if not isinstance(created, str):
+            return None
+        try:
+            return datetime.fromisoformat(created.replace("Z", "+00:00"))
+        except ValueError:
+            return None
 
     @staticmethod
     def _extract_media_urls(post) -> list[str]:

@@ -196,17 +196,15 @@ class WhatsAppAdapter(SourceAdapterBase):
             url = f"https://wa.me/g/{quote(group_num)}/{quote(msg_id)}"
 
             # Timestamp
-            captured_at = (
-                datetime.fromtimestamp(msg.timestamp, tz=UTC)
-                if msg.timestamp
-                else datetime.now(UTC)
-            )
+            published_at = datetime.fromtimestamp(msg.timestamp, tz=UTC) if msg.timestamp else None
+            captured_at = published_at or datetime.now(UTC)
 
             yield RawItem(
                 raw_text=raw_text,
                 url=url,
                 platform="whatsapp",
                 captured_at=captured_at,
+                published_at=published_at,
                 source_handle=msg.group_jid,
                 media_urls=media_urls,
                 language=None,

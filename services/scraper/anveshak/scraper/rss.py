@@ -35,7 +35,26 @@ class RssItem:
     url: str
     title: str
     raw_text: str  # summary or full article text
-    published_at: datetime  # always timezone-aware
+    # Publication time as the feed stated it, timezone-aware. None when the
+    # feed supplied none. This used to fall back to now(), which made a
+    # collection artefact indistinguishable from a real publication time.
+    published_at: datetime | None = None
+
+
+def _entry_published_at(entry) -> datetime | None:
+    """Return the feed's stated publication time, or None.
+
+    feedparser exposes ``published_parsed`` only when the entry carried a
+    parseable date. Absence means the feed said nothing, and that is what
+    gets stored.
+    """
+    published_parsed = entry.get("published_parsed")
+    if not published_parsed:
+        return None
+    try:
+        return datetime(*published_parsed[:6], tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return None
 
 
 def _parse_feed_sync(xml_bytes: bytes, feed_url: str) -> list[RssItem]:
@@ -60,20 +79,12 @@ def _parse_feed_sync(xml_bytes: bytes, feed_url: str) -> list[RssItem]:
             raw_summary = entry.get("summary", "")
         raw_summary = raw_summary.strip()
 
-        # Published datetime — fall back to now if unparseable
-        published_at: datetime
-        published_parsed = entry.get("published_parsed")
-        if published_parsed:
-            published_at = datetime(*published_parsed[:6], tzinfo=timezone.utc)
-        else:
-            published_at = datetime.now(timezone.utc)
-
         items.append(
             RssItem(
                 url=url,
                 title=title,
                 raw_text=raw_summary,
-                published_at=published_at,
+                published_at=_entry_published_at(entry),
             )
         )
 

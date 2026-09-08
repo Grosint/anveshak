@@ -244,6 +244,9 @@ class XPollingAdapter(SourceAdapterBase):
                 url=f"https://x.com/i/web/status/{tweet.id}",
                 platform=self.platform,
                 captured_at=tweet.created_at or datetime.now(UTC),
+                # created_at is requested in tweet_fields, so it is present
+                # unless the platform omitted it. None stays None.
+                published_at=tweet.created_at or None,
                 # authenticate() rejects a missing token, so this is set by now.
                 source_handle=(settings.x_bearer_token or "")[:8] + "...",  # anonymised
                 language=tweet.lang if hasattr(tweet, "lang") else None,

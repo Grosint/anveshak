@@ -236,6 +236,7 @@ class TelegramAdapter(SourceAdapterBase):
                     captured_at=message.date.replace(tzinfo=UTC)
                     if message.date.tzinfo is None
                     else message.date,
+                    published_at=self._published_at(message),
                     source_handle=handle,
                     media_urls=media_urls,
                     forwarded_from_channel_id=fwd_channel_id,
@@ -299,6 +300,14 @@ class TelegramAdapter(SourceAdapterBase):
         except Exception as exc:
             log.warning("telegram.media_download_failed", error=str(exc))
             return None
+
+    @staticmethod
+    def _published_at(message) -> datetime | None:
+        """Telethon stamps every message with its send time."""
+        sent = getattr(message, "date", None)
+        if not isinstance(sent, datetime):
+            return None
+        return sent.replace(tzinfo=UTC) if sent.tzinfo is None else sent
 
     @staticmethod
     def _normalise_handle(handle: str) -> str:
