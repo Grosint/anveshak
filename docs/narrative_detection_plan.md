@@ -151,6 +151,18 @@ Issue #34.
 Mobilization model confirmation and the local against cloud benchmark.
 Ships disabled if either acceptance bar is missed.
 
+**Status: shipped disabled.**
+The confirmation job, its validated output schema and the benchmark harness
+all exist.
+The labelled set does not: it must be 100 to 200 examples drawn from public
+reporting of past events, and assembling it is human work, because examples
+invented by a model would measure the model against its own priors.
+Until that set exists and both bars are measured against it,
+`MOBILIZATION_CONFIRM_ENABLED` stays `false` and the lexicon runs alone.
+The lexicon still cites the phrase that fired each signal, which is the
+property that makes the signal defensible.
+See `benchmark/corpus/mobilization/README.md`.
+
 ---
 
 ## Settings inventory
@@ -165,7 +177,7 @@ No model name, device string, batch size, or threshold is hardcoded in service c
 | `LLM_CLOUD_MODEL` | `""` | #22 |
 | `ENVIRONMENT` | `production` | #22 |
 | `X_MAX_RESULTS` | `100` | #23 |
-| `STANCE_MODEL` | `joeddav/xlm-roberta-large-xnli` | #28 |
+| `STANCE_MODEL` | `MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7` | #28 |
 | `STANCE_DEVICE` | `cpu` | #28 |
 | `STANCE_BATCH_SIZE` | `8` | #28 |
 | `STANCE_MIN_CLUSTER_SIZE` | `5` | #28 |
@@ -180,9 +192,9 @@ No model name, device string, batch size, or threshold is hardcoded in service c
 | `MANUFACTURED_MIN_ITEM_COUNT` | `15` | #32 |
 | `MANUFACTURED_MIN_ACCOUNT_COUNT` | `5` | #32 |
 | `HOSTILITY_SHIFT_THRESHOLD` | `0.15` | #30 |
-| `MOBILIZATION_LEXICON_PATH` | `/app/data/mobilization_lexicon.yaml` | #33 |
+| `MOBILIZATION_LEXICON_PATH` | `/workspace/infra/configs/lexicons/mobilization.yaml` | #33 |
 | `MOBILIZATION_CONFIRM_ENABLED` | `false` | #34 |
-| `CONCERN_TAXONOMY_PATH` | `/app/data/concern_taxonomy.yaml` | #36 |
+| `CONCERN_TAXONOMY_PATH` | `/workspace/infra/configs/taxonomies/concern.yaml` | #36 |
 
 ---
 

@@ -50,6 +50,7 @@ from .metrics import (
     analyst_template_matches_total,
     arq_jobs_failed_total,
 )
+from .mobilization_confirm import confirm_candidates, log_confirmation_startup
 from .nlp import detect_language, is_model_loaded, load_models, parse_entities
 from .relevance import build_topic_query_embedding, compute_topic_relevance
 from .sentiment import analyse_sentiment
@@ -497,6 +498,18 @@ async def detect_candidate_topics_job(ctx: dict) -> int:
     return written
 
 
+async def confirm_mobilization_job(ctx: dict, content_item_ids: list[str]) -> int:
+    """Confirm lexicon-flagged mobilization candidates (#34).
+
+    A background job by construction. Never called from a request path, and
+    a no-op while MOBILIZATION_CONFIRM_ENABLED is off.
+    """
+    db_pool: asyncpg.Pool = ctx["db_pool"]
+    confirmed = await confirm_candidates(db_pool, content_item_ids)
+    log.info("jobs.confirm_mobilization.done", confirmed=confirmed)
+    return confirmed
+
+
 async def generate_cluster_label(ctx: dict, cluster_id: str) -> None:
     """Generate and persist an Ollama-powered label for a cluster (criteria 2.6–2.8)."""
     db_pool: asyncpg.Pool = ctx["db_pool"]
@@ -659,6 +672,7 @@ async def on_startup(ctx: dict) -> None:
     # A disabled or degraded feature explains itself at startup. Without this,
     # local inference and a refused cloud configuration look identical.
     log_provider_startup(LLMProviderSettings(), service="analyst-worker")
+    log_confirmation_startup()
 
     log.info("analyst_worker.ready")
 
@@ -692,6 +706,8 @@ class WorkerSettings:
         arq.func(score_cluster_stance, max_tries=2),
         # 8C.x — Candidate Topic detection: read-mostly, retry safe
         arq.func(detect_candidate_topics_job, max_tries=2),
+        # 8C.x — Mobilization confirmation: bounded candidate set, retry safe
+        arq.func(confirm_mobilization_job, max_tries=2),
         update_source_credibility,
         backfill_topic_job,
         backfill_all_topics,

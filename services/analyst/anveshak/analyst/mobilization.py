@@ -458,6 +458,27 @@ async def check_mobilization_calls(pool: Any, broadcast: Any) -> int:
             except Exception as exc:
                 log.warning("mobilization.broadcast_failed", signal_id=signal_id, error=str(exc))
 
+            # Confirmation runs only on the ids the lexicon flagged, as a
+            # background job. A no-op while the flag is off (#34).
+            if settings.mobilization_confirm_enabled:
+                try:
+                    from arq import create_pool
+
+                    from .jobs import WorkerSettings
+
+                    redis = await create_pool(WorkerSettings.redis_settings)
+                    await redis.enqueue_job(
+                        "confirm_mobilization_job",
+                        [h["row"]["content_item_id"] for h in hits],
+                        _queue_name="arq:analyst",
+                    )
+                except Exception as exc:
+                    log.warning(
+                        "mobilization.confirm_enqueue_failed",
+                        cluster_id=cluster_id,
+                        error=str(exc),
+                    )
+
             log.info(
                 "mobilization.signal_fired",
                 signal_id=signal_id,

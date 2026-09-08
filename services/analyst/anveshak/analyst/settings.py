@@ -137,6 +137,14 @@ class AnalystSettings(BaseSettings):
     mobilization_check_interval_s: int = 900
     mobilization_window_days: int = 7  # how far back a pass looks
     mobilization_max_items_per_pass: int = 2000
+    # Model confirmation of lexicon candidates — issue #34. Off until
+    # both acceptance bars are measured on a labelled set drawn from
+    # public reporting. The lexicon runs alone meanwhile, which still
+    # produces a defensible signal because it cites its phrase.
+    mobilization_confirm_enabled: bool = False
+    mobilization_confirm_max_chars: int = 1500
+    mobilization_confirm_max_tokens: int = 256
+    mobilization_confirm_timeout_s: int = 120
 
     # Label staleness detection
     label_staleness_change_threshold: float = 0.30  # re-label if >30% items changed
