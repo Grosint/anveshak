@@ -25,7 +25,7 @@ Cloud provider access is a settings value, off by default, and refused outright 
    Swapping local for cloud is configuration, never a code change.
 2. `LLM_CLOUD_ENABLED` defaults to `false`.
    Nothing reaches a cloud provider unless it is explicitly set.
-3. `ANVESHAK_ENV=production` combined with `LLM_CLOUD_ENABLED=true` is a hard refusal at startup.
+3. `ENVIRONMENT=production` combined with `LLM_CLOUD_ENABLED=true` is a hard refusal at startup.
    The process raises rather than warns.
    A misconfiguration stops a deployment; it never degrades into a silent data leak.
 4. Every cloud call emits a structured log line carrying a SHA-256 hash of its payload.

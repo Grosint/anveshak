@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 import asyncpg
 import httpx
 import structlog
+from anveshak.llm import generate
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from .settings import settings
@@ -317,18 +318,13 @@ async def call_ollama_label(prompt: str) -> str:
     Model and host come from settings — never hardcoded (hardware rule).
     Timeout: 300s for cluster labelling.
     """
-    async with httpx.AsyncClient(timeout=300.0) as client:
-        resp = await client.post(
-            f"{settings.ollama_host}/api/generate",
-            json={
-                "model": settings.ollama_model,
-                "prompt": prompt,
-                "stream": False,
-                "options": {"num_predict": settings.llm_max_tokens},
-            },
-        )
-        resp.raise_for_status()
-        return resp.json()["response"]
+    return await generate(
+        prompt,
+        local_model=settings.ollama_model,
+        local_host=settings.ollama_host,
+        local_timeout_s=300,
+        local_options={"num_predict": settings.llm_max_tokens},
+    )
 
 
 # ---------------------------------------------------------------------------

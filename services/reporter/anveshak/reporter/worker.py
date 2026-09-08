@@ -21,6 +21,7 @@ from typing import Any
 
 import arq
 import structlog
+from anveshak.llm import LLMProviderSettings, log_provider_startup
 from anveshak.logging import configure_logging
 from anveshak.models import Labels
 from anveshak.tracing import configure_tracing
@@ -68,6 +69,11 @@ async def startup(ctx: dict) -> None:
 
     ctx["settings"] = _default_settings
     ctx["db"] = await db.get_pool(_default_settings.postgres_url)
+
+    # A disabled or degraded feature explains itself at startup. Without this,
+    # local inference and a refused cloud configuration look identical.
+    log_provider_startup(LLMProviderSettings(), service="reporter-worker")
+
     log.info("reporter.worker_started")
 
 

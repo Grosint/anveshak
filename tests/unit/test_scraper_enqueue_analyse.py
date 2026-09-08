@@ -238,9 +238,7 @@ class TestDarkwebEnqueuesAnalyse:
 
         # scrape_darkweb_topic opens create_tor_crawler, not create_shared_crawler.
         # Patching the wrong name let the job fall through to a real browser launch.
-        mock_crawler.return_value.__aenter__ = AsyncMock(
-            return_value=(MagicMock(), MagicMock())
-        )
+        mock_crawler.return_value.__aenter__ = AsyncMock(return_value=(MagicMock(), MagicMock()))
         mock_crawler.return_value.__aexit__ = AsyncMock(return_value=False)
         mock_fetch_tor.return_value = "Dark web content extracted from onion site."
 

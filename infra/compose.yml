@@ -17,6 +17,15 @@ x-common-env: &common-env
   OTEL_ENABLED: ${OTEL_ENABLED:-false}
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318}
   OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-0.1}
+  # Cloud inference is a development convenience and is off by default.
+  # ENVIRONMENT=production with LLM_CLOUD_ENABLED=true is a hard refusal,
+  # not a warning. See docs/adr/0002-cloud-model-guard.md.
+  LLM_CLOUD_ENABLED: ${LLM_CLOUD_ENABLED:-false}
+  LLM_CLOUD_PROVIDER: ${LLM_CLOUD_PROVIDER:-}
+  LLM_CLOUD_MODEL: ${LLM_CLOUD_MODEL:-}
+  LLM_CLOUD_API_KEY: ${LLM_CLOUD_API_KEY:-}
+  LLM_CLOUD_BASE_URL: ${LLM_CLOUD_BASE_URL:-}
+  LLM_CLOUD_TIMEOUT_S: ${LLM_CLOUD_TIMEOUT_S:-120}
 
 x-vision-env: &vision-env
   <<: *common-env
@@ -512,6 +521,8 @@ services:
       <<: *common-env
       SPACY_EN_MODEL: ${SPACY_EN_MODEL:-en_core_web_md}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2:7b}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-512}
+      LLM_DISCOVERY_MAX_TOKENS: ${LLM_DISCOVERY_MAX_TOKENS:-2048}
       TRANSLATION_ENABLED: ${TRANSLATION_ENABLED:-true}
       TRANSLATION_MODEL: ${TRANSLATION_MODEL:-facebook/nllb-200-distilled-600M}
       TRANSLATION_MAX_CHARS: ${TRANSLATION_MAX_CHARS:-1500}

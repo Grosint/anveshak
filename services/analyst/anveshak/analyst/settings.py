@@ -36,6 +36,9 @@ class AnalystSettings(BaseSettings):
     # Upgrade path: qwen2.5:72b on RTX 4090 — see hardware.md
     ollama_model: str = "qwen2:7b"
     llm_max_tokens: int = 512
+    # Source-type suggestion returns a JSON list, so it needs a wider budget
+    # than a cluster label. Separate setting, separate purpose.
+    llm_discovery_max_tokens: int = 2048
 
     # Clustering — Leiden community detection on blended similarity graph
     clustering_similarity_threshold: float = (

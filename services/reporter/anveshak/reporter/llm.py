@@ -3,7 +3,7 @@
 AGENTS.md rules enforced:
 - Rule 5: All LLM calls are async (httpx.AsyncClient).
 - Rule 9: LLM output is parsed through Pydantic (ReportContent) before use.
-- Rule 10: Ollama only — no cloud LLM.
+- Rule 10: local inference by default; cloud is guarded by ADR 0002.
 - Rule 2: ReportContent carries mandatory labels field.
 """
 
@@ -13,8 +13,8 @@ import json
 import re
 from typing import Any
 
-import httpx
 import structlog
+from anveshak.llm import generate
 from anveshak.models.base import Labels
 from pydantic import BaseModel, ConfigDict
 
@@ -160,17 +160,21 @@ async def call_ollama(
     host: str,
     timeout: int,
 ) -> str:
-    """POST to Ollama /api/generate and return the response string.
+    """Generate a completion from the resolved provider.
 
-    Uses httpx.AsyncClient — never blocks the event loop.
-    AGENTS.md rule 10: host must be internal Docker network.
+    Routes through the SDK provider abstraction rather than calling Ollama
+    directly, so swapping local for cloud is configuration. The default
+    resolution is local, and a production environment refuses cloud outright.
+    See ADR 0002.
+
+    AGENTS.md rule 10 still holds: the local host is the internal network.
     """
-    payload = {"model": model, "prompt": prompt, "stream": False}
-    async with httpx.AsyncClient(timeout=float(timeout)) as client:
-        response = await client.post(f"{host}/api/generate", json=payload)
-        response.raise_for_status()
-        data = response.json()
-    return data.get("response", "")
+    return await generate(
+        prompt,
+        local_model=model,
+        local_host=host,
+        local_timeout_s=timeout,
+    )
 
 
 # ---------------------------------------------------------------------------

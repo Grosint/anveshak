@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 import arq
 import asyncpg
 import structlog
+from anveshak.llm import LLMProviderSettings, log_provider_startup
 from anveshak.logging import configure_logging
 from anveshak.tracing import configure_tracing
 
@@ -601,6 +602,11 @@ async def on_startup(ctx: dict) -> None:
     # criteria 1.17, 1.18: models loaded ONCE at startup
     load_models()
     load_encoder()
+
+    # A disabled or degraded feature explains itself at startup. Without this,
+    # local inference and a refused cloud configuration look identical.
+    log_provider_startup(LLMProviderSettings(), service="analyst-worker")
+
     log.info("analyst_worker.ready")
 
 

@@ -12,8 +12,8 @@ import uuid
 from datetime import UTC, datetime
 
 import asyncpg
-import httpx
 import structlog
+from anveshak.llm import generate
 from anveshak.models.base import Labels
 from anveshak.models.catalog import SourceSuggestion
 from pydantic import ValidationError
@@ -124,18 +124,13 @@ def parse_llm_suggestions(raw_response: str) -> list[SourceSuggestion] | None:
 
 async def call_ollama(prompt: str) -> str:
     """Call local Ollama for LLM inference (AGENTS.md rule 10: localhost only)."""
-    async with httpx.AsyncClient(timeout=300) as client:
-        resp = await client.post(
-            f"{settings.ollama_host}/api/generate",
-            json={
-                "model": settings.ollama_model,
-                "prompt": prompt,
-                "stream": False,
-                "options": {"num_predict": 2048},
-            },
-        )
-        resp.raise_for_status()
-        return resp.json()["response"]
+    return await generate(
+        prompt,
+        local_model=settings.ollama_model,
+        local_host=settings.ollama_host,
+        local_timeout_s=300,
+        local_options={"num_predict": settings.llm_discovery_max_tokens},
+    )
 
 
 async def suggest_source_types_job(ctx: dict, topic_id: str) -> int:

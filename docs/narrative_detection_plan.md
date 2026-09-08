@@ -163,7 +163,7 @@ No model name, device string, batch size, or threshold is hardcoded in service c
 | `LLM_CLOUD_ENABLED` | `false` | #22 |
 | `LLM_CLOUD_PROVIDER` | `""` | #22 |
 | `LLM_CLOUD_MODEL` | `""` | #22 |
-| `ANVESHAK_ENV` | `development` | #22 |
+| `ENVIRONMENT` | `production` | #22 |
 | `X_MAX_RESULTS` | `100` | #23 |
 | `STANCE_MODEL` | `joeddav/xlm-roberta-large-xnli` | #28 |
 | `STANCE_DEVICE` | `cpu` | #28 |
