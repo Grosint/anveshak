@@ -505,6 +505,44 @@ a DistilBERT classifier on labelled OSINT data when GPU available.
 
 ---
 
+## Stance and Hostility — `analyst-worker` service
+
+Added for issue #28. Two models, because the measures are independent: stance is
+direction toward a narrative, hostility is intensity, and neither predicts the
+other. A furious post supporting a narrative and a calm post opposing it are
+opposite in stance and indistinguishable to any single sentiment score.
+
+Both are multilingual, so content is read in its own language rather than
+through a translation. The existing VADER score stays as a content filter,
+where a rough English-only value is acceptable because nothing alerts on it.
+
+**Current implementation:**
+- Stance: `MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7`, zero-shot NLI, ~560 MB, CPU
+- Hostility: `textdetox/xlmr-large-toxicity-classifier`, text classification, ~2.2 GB, CPU
+- Batch size: 8 each
+- Speed on CPU: roughly 300 to 800ms per item for the pair
+- Output: `content_items.stance` and `content_items.hostility` columns
+
+Cost is bounded by `STANCE_MIN_CLUSTER_SIZE`: only clusters at or above it are
+scored, because a timeline is only drawn where there is something to draw.
+`STANCE_MIN_CLUSTER_SIZE` must stay at or below `PROMOTION_MIN_ITEM_COUNT`, or a
+promoted Topic arrives with no stance data and its timeline renders empty. That
+is an invariant test rather than a note.
+
+**Upgrade path (GPU):**
+- `STANCE_DEVICE=cuda`, `HOSTILITY_DEVICE=cuda`
+- `STANCE_BATCH_SIZE=32`, `HOSTILITY_BATCH_SIZE=32`
+- `STANCE_MODEL=MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7` still
+  fits comfortably; on a 24 GB card `joeddav/xlm-roberta-large-xnli` is the
+  quality step up
+- `STANCE_MIN_CLUSTER_SIZE` can drop to 2 once inference is cheap, which
+  extends the timeline to smaller narratives
+
+**Config change:** env vars only.
+**Code change:** None.
+
+---
+
 ## Summary Upgrade Checklist
 
 When production hardware (RTX 3080+, 32GB RAM) is available, update these env vars in .env:
@@ -527,6 +565,14 @@ VISION_DEVICE=cuda
 YOLO_MODEL_SIZE=xlarge
 VISION_DEEPFAKE_VIDEO_MODEL=dire
 CLIP_MODEL_NAME=openai/clip-vit-large-patch14
+
+# Stance and hostility — enable GPU
+STANCE_DEVICE=cuda
+STANCE_BATCH_SIZE=32
+HOSTILITY_DEVICE=cuda
+HOSTILITY_BATCH_SIZE=32
+# Cheap inference lets the timeline cover smaller narratives
+STANCE_MIN_CLUSTER_SIZE=2
 
 # Embeddings — upgrade (requires re-embedding migration)
 EMBEDDING_MODEL=BAAI/bge-large-en-v1.5

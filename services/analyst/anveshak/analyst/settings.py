@@ -53,6 +53,66 @@ class AnalystSettings(BaseSettings):
     )
     minhash_num_perm: int = 128  # MinHash permutations (higher=more accurate, slower)
 
+    # Stance and hostility — hardware-controlled, see hardware.md
+    # Two models because the measures are independent: stance is direction
+    # toward a narrative, hostility is intensity, and neither predicts the
+    # other. Both are multilingual so content is read in its own language
+    # rather than through a translation.
+    # Upgrade: stance_device=cuda and larger batch sizes on GPU.
+    stance_model: str = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
+    stance_device: str = "cpu"
+    stance_batch_size: int = 8
+    stance_max_chars: int = 1000  # truncate before inference
+    # Below this the zero-shot model is guessing between three hypotheses,
+    # so the result is recorded as neutral rather than as a direction.
+    stance_confidence_floor: float = 0.45
+    # Clusters smaller than this are not scored. A timeline is only drawn
+    # where there is something to draw, and inference is expensive on CPU.
+    stance_min_cluster_size: int = 5
+    stance_max_items_per_cluster: int = 500
+    # Languages both models read well enough to trust. Content outside this
+    # set is marked unsupported_language rather than silently scored.
+    stance_supported_languages: list[str] = [
+        "en",
+        "hi",
+        "bn",
+        "ta",
+        "te",
+        "mr",
+        "gu",
+        "kn",
+        "ml",
+        "pa",
+        "ur",
+        "ne",
+        "si",
+        "ar",
+        "fr",
+        "de",
+        "es",
+        "ru",
+        "zh",
+        "tr",
+    ]
+
+    hostility_model: str = "textdetox/xlmr-large-toxicity-classifier"
+    hostility_device: str = "cpu"
+    hostility_batch_size: int = 8
+    hostility_max_chars: int = 1000
+    # Label fragments the toxicity head uses for its hostile class. The head
+    # reports the winning class, which may be the benign one, so a confident
+    # benign label inverts to a low hostility rather than a high one.
+    hostility_positive_labels: list[str] = ["toxic", "offensive", "hate", "label_1"]
+
+    # Candidate Topic promotion gates — issue #26. All four must pass.
+    promotion_min_independent_sources: int = 3
+    promotion_min_item_count: int = 10
+    # Novelty: a cluster closer than this to an existing Topic centroid is a
+    # rediscovery, and the inbox fills with them if this gate is omitted.
+    promotion_max_similarity_to_existing: float = 0.80
+    # Persistence across clustering runs. Below two, a single spike promotes.
+    promotion_min_runs: int = 2
+
     # Label staleness detection
     label_staleness_change_threshold: float = 0.30  # re-label if >30% items changed
 

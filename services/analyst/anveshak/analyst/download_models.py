@@ -5,6 +5,7 @@ Run as: python -m anveshak.analyst.download_models
 Downloads:
   - sentence-transformers embedding model (~22 MB)
   - NLLB translation model (~2.4 GB)
+  - multilingual stance and hostility models (#28)
 
 Verifies:
   - spaCy English model (baked into image via Dockerfile)
@@ -57,6 +58,28 @@ def main() -> None:
         log.info("download_models.translation_done")
     else:
         log.info("download_models.translation_skipped", reason="disabled")
+
+    # 4. Stance and hostility models (#28). Pre-cached here for the same
+    #    reason as the others: a volume-mounted model directory starts empty,
+    #    and a first inference that downloads a model inside a job looks like
+    #    a hang rather than a download.
+    from transformers import pipeline
+
+    log.info("download_models.stance", model=settings.stance_model)
+    pipeline(
+        "zero-shot-classification",
+        model=settings.stance_model,
+        device=settings.stance_device,
+    )
+    log.info("download_models.stance_done")
+
+    log.info("download_models.hostility", model=settings.hostility_model)
+    pipeline(
+        "text-classification",
+        model=settings.hostility_model,
+        device=settings.hostility_device,
+    )
+    log.info("download_models.hostility_done")
 
     log.info("download_models.complete")
 

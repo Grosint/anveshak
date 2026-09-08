@@ -52,6 +52,7 @@ from .nlp import detect_language, is_model_loaded, load_models, parse_entities
 from .relevance import build_topic_query_embedding, compute_topic_relevance
 from .sentiment import analyse_sentiment
 from .settings import settings
+from .stance import score_cluster
 from .templates import BUILTIN_TEMPLATES, ScamTemplate, match_templates
 from .translation import needs_translation, translate_to_english
 
@@ -436,12 +437,33 @@ async def run_clustering(ctx: dict, topic_id: str) -> None:
         if await check_label_staleness(cluster_id, db_pool):
             await redis.enqueue_job("generate_cluster_label", cluster_id, _queue_name="arq:analyst")
 
+    # Stance and hostility (#28). Chained here rather than run at ingest,
+    # because stance needs a target and the target is the cluster label,
+    # which does not exist until this job has run.
+    for cluster_id in cluster_ids:
+        await redis.enqueue_job("score_cluster_stance", cluster_id, _queue_name="arq:analyst")
+
     # Enqueue cross-verification boost for this topic (7.1)
     if cluster_ids:
         await redis.enqueue_job("run_cross_verification", topic_id, _queue_name="arq:analyst")
 
     analyst_clusters_created_total.labels(topic_id=topic_id).inc(len(cluster_ids))
     log.info("jobs.run_clustering.done", topic_id=topic_id, clusters=len(cluster_ids))
+
+
+async def score_cluster_stance(ctx: dict, cluster_id: str) -> None:
+    """Score stance and hostility for one cluster (#28).
+
+    Additive enrichment: a failure here leaves the cluster and its signals
+    intact and the timeline simply has less to draw, so it never propagates.
+    """
+    db_pool: asyncpg.Pool = ctx["db_pool"]
+    try:
+        scored = await score_cluster(db_pool, cluster_id)
+    except Exception as exc:
+        log.warning("jobs.score_cluster_stance.failed", cluster_id=cluster_id, error=str(exc))
+        return
+    log.info("jobs.score_cluster_stance.done", cluster_id=cluster_id, items_scored=scored)
 
 
 async def generate_cluster_label(ctx: dict, cluster_id: str) -> None:
@@ -635,6 +657,8 @@ class WorkerSettings:
         arq.func(run_clustering, max_tries=2),
         # 8C.3 — Label generation: Ollama may need warm-up; allow 3 attempts
         arq.func(generate_cluster_label, max_tries=3),
+        # 8C.x — Stance and hostility: model inference may need warm-up
+        arq.func(score_cluster_stance, max_tries=2),
         update_source_credibility,
         backfill_topic_job,
         backfill_all_topics,
