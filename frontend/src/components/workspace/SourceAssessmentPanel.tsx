@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeSanitize from 'rehype-sanitize'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   AreaChart, Area, PieChart, Pie, Cell,
@@ -324,7 +325,9 @@ function AssessmentBriefSection({
     return (
       <Section title="AI Assessment Brief">
         <div className="prose prose-sm prose-anveshak max-w-none text-text-primary">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{finalBrief}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
+            {finalBrief}
+          </ReactMarkdown>
         </div>
         {polledAssessment?.confidence_score != null && (
           <p className="text-xs text-text-muted mt-2">
