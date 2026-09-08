@@ -8,6 +8,7 @@ const ContentDetailView = lazy(() => import('./ContentDetailView'))
 const SourceDetail = lazy(() => import('./SourceDetail'))
 const ClusterDetail = lazy(() => import('./ClusterDetail'))
 const SignalDetail = lazy(() => import('./SignalDetail'))
+const ActorDetail = lazy(() => import('./ActorDetail'))
 
 export function ProvenancePanel() {
   const { stack, isOpen, current, pop, close, jumpTo } = useProvenance()
@@ -75,6 +76,12 @@ export function ProvenancePanel() {
             )}
             {current.entityType === 'content' && (
               <ContentDetailView contentId={current.entityId} />
+            )}
+            {current.entityType === 'actor' && (
+              <ActorDetail
+                handle={current.entityId}
+                topicId={current.topicId ?? ''}
+              />
             )}
             {current.entityType === 'source' && (
               <SourceDetail

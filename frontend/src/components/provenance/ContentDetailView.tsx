@@ -3,6 +3,7 @@ import { provenanceApi } from '../../api/provenance'
 import { useProvenance } from '../../contexts/ProvenanceContext'
 import { Spinner } from '../ui/Spinner'
 import { Badge } from '../ui/Badge'
+import { isHandleIdentifier } from '../../lib/domain'
 import { EmptyState } from '../ui/EmptyState'
 import { CredibilityBadge } from '../content/CredibilityBadge'
 import { PlatformBadge } from '../content/PlatformBadge'
@@ -116,7 +117,20 @@ export default function ContentDetailView({ contentId }: ContentDetailViewProps)
               <button
                 key={i}
                 className="text-[10px] font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-md px-2 py-0.5 hover:bg-amber-500/20 transition-colors"
-                onClick={() => push({ entityType: 'identifier', entityId: id.entity_text, topicId, label: id.entity_text })}
+                onClick={() =>
+                  push(
+                    isHandleIdentifier(id.entity_type)
+                      ? {
+                          // A handle names an account, so the trail continues
+                          // into that account's public content. #35.
+                          entityType: 'actor',
+                          entityId: id.entity_text,
+                          topicId,
+                          label: id.entity_text,
+                        }
+                      : { entityType: 'identifier', entityId: id.entity_text, topicId, label: id.entity_text },
+                  )
+                }
               >
                 <span className="text-[8px] text-text-muted mr-1">{id.entity_type}</span>
                 {id.entity_text}

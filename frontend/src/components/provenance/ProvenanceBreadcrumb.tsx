@@ -6,6 +6,7 @@ const TYPE_LABELS: Record<ProvenanceEntityType, string> = {
   source: 'Source',
   cluster: 'Cluster',
   signal: 'Signal',
+  actor: 'Actor',
 }
 
 const TYPE_COLORS: Record<ProvenanceEntityType, string> = {
@@ -14,6 +15,7 @@ const TYPE_COLORS: Record<ProvenanceEntityType, string> = {
   source: 'text-green-400',
   cluster: 'text-purple-400',
   signal: 'text-red-400',
+  actor: 'text-amber-400',
 }
 
 interface ProvenanceBreadcrumbProps {

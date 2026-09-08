@@ -21,6 +21,7 @@ from .metrics import REGISTRY as API_REGISTRY
 from .middleware.rate_limit import RateLimitMiddleware
 from .middleware.security import SecurityHeadersMiddleware
 from .routes import auth, content, health, signals, sources, topics
+from .routes.actors import router as actors_router
 from .routes.alerts import router as alerts_router
 from .routes.assessments import router as assessments_router
 from .routes.catalog import router as catalog_router
@@ -138,6 +139,7 @@ app.include_router(
     geocoded_locations_router
 )  # Phase 1 map upgrade: geocoded locations + analyst override
 app.include_router(provenance_router)  # Issue #7: intelligence view + provenance chains
+app.include_router(actors_router)  # Issue #35: Actor View, a query with no stored record
 
 # Prometheus metrics endpoint — uses isolated registry (API_REGISTRY) so custom
 # api_* metrics are exposed alongside default process metrics.

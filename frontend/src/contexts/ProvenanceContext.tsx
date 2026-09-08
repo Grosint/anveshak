@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
 
-export type ProvenanceEntityType = 'identifier' | 'content' | 'source' | 'cluster' | 'signal'
+export type ProvenanceEntityType = 'identifier' | 'content' | 'source' | 'cluster' | 'signal' | 'actor'
 
 export interface ProvenanceStackEntry {
   entityType: ProvenanceEntityType

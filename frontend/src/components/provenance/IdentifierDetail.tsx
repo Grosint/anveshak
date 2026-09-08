@@ -6,6 +6,14 @@ import { Badge } from '../ui/Badge'
 import { EmptyState } from '../ui/EmptyState'
 import { formatDistanceToNow } from 'date-fns'
 
+/**
+ * A handle names an account and has authored content to aggregate; a phone
+ * number or a UPI ID does not. #35.
+ */
+function looksLikeHandle(value: string): boolean {
+  return /^@[A-Za-z][A-Za-z0-9_]{2,}$/.test(value.trim())
+}
+
 interface IdentifierDetailProps {
   identifierValue: string
   topicId: string
@@ -29,6 +37,21 @@ export default function IdentifierDetail({ identifierValue, topicId }: Identifie
       <div className="px-4 py-3">
         <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1">Identifier</p>
         <p className="text-sm font-mono font-semibold text-amber-400 break-all">{identifierValue}</p>
+        {looksLikeHandle(identifierValue) && (
+          <button
+            className="mt-2 text-[10px] text-anveshak-accent hover:underline"
+            onClick={() =>
+              push({
+                entityType: 'actor',
+                entityId: identifierValue,
+                topicId,
+                label: identifierValue,
+              })
+            }
+          >
+            Open actor view
+          </button>
+        )}
       </div>
 
       {/* Found In — content items with snippet */}

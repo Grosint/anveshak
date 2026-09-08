@@ -9,7 +9,26 @@ import type { Signal } from '../api/signals'
 import type { ContentItem, ContentFilters } from '../api/content'
 import type { Topic } from '../api/topics'
 
-// ── Signal severity ─────────────────────────────────────────────────────
+// ── Actor View ──────────────────────────────────────────────────────────
+
+/**
+ * Identifier types that name an account rather than a value.
+ *
+ * Only these open an Actor View, because a phone number or a UPI ID has no
+ * authored content to aggregate.
+ */
+const HANDLE_IDENTIFIER_TYPES = new Set([
+  'telegram_handle',
+  'instagram_handle',
+  'twitter_handle',
+  'social_handle',
+])
+
+export function isHandleIdentifier(entityType: string): boolean {
+  return HANDLE_IDENTIFIER_TYPES.has(entityType.toLowerCase())
+}
+
+// ── Signal severity ───────────────────────────────────────────────────────────────
 
 export function inferSeverity(signal: Signal): string {
   const isc = signal.independent_source_count ?? 0
