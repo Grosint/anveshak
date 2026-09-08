@@ -9,6 +9,7 @@ import TopicsDashboard from './pages/TopicsDashboard'
 import TopicWorkspace from './pages/TopicWorkspace'
 import ImageAnalysis from './pages/ImageAnalysis'
 import SignalsInbox from './pages/SignalsInbox'
+import CandidateInbox from './pages/CandidateInbox'
 import Settings from './pages/Settings'
 import Cases from './pages/Trackers'
 import CaseDetail from './pages/TrackerDetail'
@@ -95,6 +96,9 @@ export default function App() {
           <Route path="/topics/:topicId/map" element={<TopicWorkspace />} />
           <Route path="/vision" element={<ImageAnalysis />} />
           <Route path="/signals" element={<SignalsInbox />} />
+          {/* Triage is a different task from monitoring, so the inbox is
+              its own top-level page rather than a tab. Issue #26. */}
+          <Route path="/candidates" element={<CandidateInbox />} />
           <Route path="/cases" element={<Cases />} />
           <Route path="/cases/:caseId" element={<CaseDetail />} />
           {/* Legacy redirects: Trackers → Cases */}

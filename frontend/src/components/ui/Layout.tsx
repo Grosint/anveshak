@@ -10,6 +10,7 @@ import IdentifierSearch from '../search/IdentifierSearch'
 const primaryNav = [
   { to: '/topics',      label: 'Topics',      icon: <TargetIcon /> },
   { to: '/signals',     label: 'Signals',     icon: <ZapIcon /> },
+  { to: '/candidates',  label: 'Candidates',  icon: <InboxIcon /> },
   { to: '/cases',       label: 'Cases',       icon: <TrackerIcon /> },
   { to: '/vision',      label: 'Vision',      icon: <EyeIcon /> },
 ]
@@ -226,6 +227,13 @@ function TargetIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
       <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+    </svg>
+  )
+}
+function InboxIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
+      <path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/>
     </svg>
   )
 }
