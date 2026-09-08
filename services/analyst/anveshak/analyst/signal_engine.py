@@ -75,26 +75,32 @@ SQL_MISSED_SIGNALS = """
 
 _SIGNAL_TYPE_MULTI_SOURCE = "multi_source_convergence"
 _SIGNAL_TYPE_CROSS_TOPIC = "cross_topic_convergence"
-_SIGNAL_TYPE_SENTIMENT_SHIFT = "sentiment_shift"
+# Named for what it measures. The old name described a proxy.
+_SIGNAL_TYPE_HOSTILITY_SHIFT = "hostility_shift"
 
 SQL_ACTIVE_TOPICS = "SELECT id FROM topics WHERE status = 'active'"
 
-SQL_SENTIMENT_BASELINE = """
-    SELECT AVG((labels->'sentiment'->>'compound')::float) AS baseline_avg
+# Hostility rather than the English lexicon score. NULL means the item was
+# not measured, and averaging it as 0.0 would invent calm that was never
+# observed, so it is excluded rather than coalesced.
+SQL_HOSTILITY_BASELINE = """
+    SELECT AVG(hostility)::float AS baseline_avg,
+           COUNT(*)              AS sample_count
     FROM content_items
     WHERE (topic_id = $1
        OR id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND captured_at >= NOW() - make_interval(days => $2)
-      AND labels->'sentiment' IS NOT NULL
+      AND hostility IS NOT NULL
 """
 
-SQL_SENTIMENT_RECENT = """
-    SELECT AVG((labels->'sentiment'->>'compound')::float) AS recent_avg
+SQL_HOSTILITY_RECENT = """
+    SELECT AVG(hostility)::float AS recent_avg,
+           COUNT(*)              AS sample_count
     FROM content_items
     WHERE (topic_id = $1
        OR id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND captured_at >= NOW() - make_interval(hours => $2)
-      AND labels->'sentiment' IS NOT NULL
+      AND hostility IS NOT NULL
 """
 
 SQL_DUPLICATE_TOPIC_SIGNAL_CHECK = """
@@ -257,35 +263,49 @@ async def check_signals(
 # ---------------------------------------------------------------------------
 
 
-async def check_sentiment_shifts(
+def hostility_shift_delta(*, baseline: float, recent: float) -> float:
+    """Signed change in mean hostility. Positive means escalation.
+
+    Written out as a named function because the direction is the whole point:
+    the old signal fired when a sentiment score dropped, and the replacement
+    fires when hostility rises. Getting the sign wrong would alert on
+    discourse calming down.
+    """
+    return recent - baseline
+
+
+async def check_hostility_shifts(
     pool: asyncpg.Pool,
     broadcast: BroadcastFn,
 ) -> int:
-    """Check all active topics for sentiment shifts. Returns count of signals fired."""
+    """Check all active topics for a rise in mean hostility.
+
+    Returns count of signals fired. Issue #30.
+    """
     fired = 0
     async with pool.acquire() as conn:
         topics = await conn.fetch(SQL_ACTIVE_TOPICS)
         for topic_row in topics:
             topic_id: str = topic_row["id"]
 
-            # Dedup: skip if sentiment_shift already fired for this topic in 24h
+            # Dedup: skip if hostility_shift already fired for this topic in 24h
             existing = await conn.fetchrow(
                 SQL_DUPLICATE_TOPIC_SIGNAL_CHECK,
                 topic_id,
-                _SIGNAL_TYPE_SENTIMENT_SHIFT,
+                _SIGNAL_TYPE_HOSTILITY_SHIFT,
             )
             if existing:
                 continue
 
             baseline = await conn.fetchrow(
-                SQL_SENTIMENT_BASELINE,
+                SQL_HOSTILITY_BASELINE,
                 topic_id,
-                settings.sentiment_shift_baseline_days,
+                settings.hostility_shift_baseline_days,
             )
             recent = await conn.fetchrow(
-                SQL_SENTIMENT_RECENT,
+                SQL_HOSTILITY_RECENT,
                 topic_id,
-                settings.sentiment_shift_window_hours,
+                settings.hostility_shift_window_hours,
             )
 
             if not baseline or not recent:
@@ -293,26 +313,31 @@ async def check_sentiment_shifts(
             baseline_avg = baseline["baseline_avg"]
             recent_avg = recent["recent_avg"]
             if baseline_avg is None or recent_avg is None:
+                # Nothing scored in one window or the other. Stance and
+                # hostility only run on clusters above their size threshold,
+                # so a quiet topic legitimately has nothing to compare.
                 continue
 
-            drop = baseline_avg - recent_avg
-            if drop < settings.sentiment_shift_threshold:
+            rise = hostility_shift_delta(baseline=baseline_avg, recent=recent_avg)
+            if rise < settings.hostility_shift_threshold:
                 continue
 
             signal_id = str(uuid.uuid4())
             now = datetime.now(UTC)
             description = (
-                f"Sentiment dropped {drop:.2f} in last "
-                f"{settings.sentiment_shift_window_hours}h "
+                f"Mean hostility rose {rise:.2f} in last "
+                f"{settings.hostility_shift_window_hours}h "
                 f"(baseline: {baseline_avg:.2f}, recent: {recent_avg:.2f})"
             )
             evidence = json.dumps(
                 {
                     "baseline_avg": round(baseline_avg, 4),
                     "recent_avg": round(recent_avg, 4),
-                    "drop": round(drop, 4),
-                    "window_hours": settings.sentiment_shift_window_hours,
-                    "baseline_days": settings.sentiment_shift_baseline_days,
+                    "drop": round(rise, 4),
+                    "window_hours": settings.hostility_shift_window_hours,
+                    "baseline_days": settings.hostility_shift_baseline_days,
+                    "baseline_sample_count": baseline["sample_count"],
+                    "recent_sample_count": recent["sample_count"],
                 }
             )
 
@@ -321,7 +346,7 @@ async def check_sentiment_shifts(
                 signal_id,
                 topic_id,
                 None,
-                _SIGNAL_TYPE_SENTIMENT_SHIFT,
+                _SIGNAL_TYPE_HOSTILITY_SHIFT,
                 description,
                 evidence,
                 now,
@@ -335,14 +360,14 @@ async def check_sentiment_shifts(
                 "cluster_id": None,
                 "cluster_label": None,
                 "severity": "MEDIUM",
-                "signal_type": _SIGNAL_TYPE_SENTIMENT_SHIFT,
+                "signal_type": _SIGNAL_TYPE_HOSTILITY_SHIFT,
                 "description": description,
             }
             try:
                 await broadcast(payload)
             except Exception as exc:
                 log.warning(
-                    "signal_engine.sentiment_broadcast_failed",
+                    "signal_engine.hostility_broadcast_failed",
                     signal_id=signal_id,
                     error=str(exc),
                 )
@@ -370,15 +395,15 @@ async def signal_engine_loop(pool: asyncpg.Pool, broadcast: BroadcastFn) -> None
     while True:
         try:
             fired = await check_signals(pool, broadcast)
-            sentiment_fired = await check_sentiment_shifts(pool, broadcast)
+            hostility_fired = await check_hostility_shifts(pool, broadcast)
             identifier_fired = await check_identifier_signals(pool, broadcast)
             template_fired = await check_template_signals(pool, broadcast)
-            total = fired + sentiment_fired + identifier_fired + template_fired
+            total = fired + hostility_fired + identifier_fired + template_fired
             if total:
                 log.info(
                     "signal_engine.cycle_complete",
                     signals_fired=fired,
-                    sentiment_signals=sentiment_fired,
+                    hostility_signals=hostility_fired,
                     identifier_signals=identifier_fired,
                     template_signals=template_fired,
                 )

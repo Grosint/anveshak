@@ -181,10 +181,17 @@ class AnalystSettings(BaseSettings):
     # Signal engine
     signal_check_interval_s: int = 300  # check every 5 minutes
 
-    # Sentiment shift signal — fires when avg compound drops sharply
-    sentiment_shift_threshold: float = 0.3  # min compound drop to trigger signal
-    sentiment_shift_window_hours: int = 24  # recent window to compare
-    sentiment_shift_baseline_days: int = 7  # baseline average window
+    # Hostility shift signal — issue #30. Fires when the multilingual
+    # hostility measure rises sharply against its own baseline.
+    #
+    # It used to fire on the English VADER lexicon applied to
+    # machine-translated text, which for Hindi discourse is a false positive
+    # waiting to be raised to an intelligence customer. The lexicon score
+    # survives as a content filter, where a rough value is acceptable
+    # because nothing alerts on it.
+    hostility_shift_threshold: float = 0.15  # min rise in mean hostility (0.0-1.0)
+    hostility_shift_window_hours: int = 24  # recent window to compare
+    hostility_shift_baseline_days: int = 7  # baseline average window
 
     # Cross-topic cluster convergence
     cross_topic_similarity_threshold: float = 0.85  # centroid cosine similarity

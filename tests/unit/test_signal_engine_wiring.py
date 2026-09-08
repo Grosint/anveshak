@@ -2,7 +2,7 @@
 
 Verifies that signal_engine_loop calls all 4 check functions:
   1. check_signals (narrative multi-source convergence)
-  2. check_sentiment_shifts
+  2. check_hostility_shifts
   3. check_identifier_signals (Engine C)
   4. check_template_signals (Engine C)
 
@@ -44,7 +44,7 @@ class TestSignalEngineLoopCallsIdentifierSignals:
 
         with (
             patch(f"{_MOD}.check_signals", new_callable=AsyncMock, return_value=0),
-            patch(f"{_MOD}.check_sentiment_shifts", new_callable=AsyncMock, return_value=0),
+            patch(f"{_MOD}.check_hostility_shifts", new_callable=AsyncMock, return_value=0),
             patch(
                 f"{_MOD}.check_identifier_signals", new_callable=AsyncMock, return_value=2
             ) as mock_id_signals,
@@ -68,7 +68,7 @@ class TestSignalEngineLoopCallsTemplateSignals:
 
         with (
             patch(f"{_MOD}.check_signals", new_callable=AsyncMock, return_value=0),
-            patch(f"{_MOD}.check_sentiment_shifts", new_callable=AsyncMock, return_value=0),
+            patch(f"{_MOD}.check_hostility_shifts", new_callable=AsyncMock, return_value=0),
             patch(f"{_MOD}.check_identifier_signals", new_callable=AsyncMock, return_value=0),
             patch(
                 f"{_MOD}.check_template_signals", new_callable=AsyncMock, return_value=1
@@ -92,7 +92,7 @@ class TestSignalEngineLoopCountsAllSignalTypes:
 
         with (
             patch(f"{_MOD}.check_signals", new_callable=AsyncMock, return_value=1),
-            patch(f"{_MOD}.check_sentiment_shifts", new_callable=AsyncMock, return_value=1),
+            patch(f"{_MOD}.check_hostility_shifts", new_callable=AsyncMock, return_value=1),
             patch(f"{_MOD}.check_identifier_signals", new_callable=AsyncMock, return_value=2),
             patch(f"{_MOD}.check_template_signals", new_callable=AsyncMock, return_value=3),
             patch(f"{_MOD}.settings") as mock_settings,

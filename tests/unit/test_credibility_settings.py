@@ -68,13 +68,19 @@ class TestCredibilitySettingInvariants:
             f"noise_ratio_threshold ({s.credibility_noise_ratio_threshold}) must be in (0.0, 1.0]"
         )
 
-    def test_sentiment_shift_threshold_positive(self):
-        """sentiment_shift_threshold must be > 0.
+    def test_hostility_shift_threshold_positive(self):
+        """hostility_shift_threshold must be > 0.
 
-        Zero or negative would fire on every topic regardless of sentiment.
+        Zero or negative would fire on every topic regardless of hostility,
+        including topics where hostility fell.
         """
         s = AnalystSettings()
-        assert s.sentiment_shift_threshold > 0, (
-            f"sentiment_shift_threshold ({s.sentiment_shift_threshold}) "
+        assert s.hostility_shift_threshold > 0, (
+            f"hostility_shift_threshold ({s.hostility_shift_threshold}) "
             f"must be positive to prevent constant signal firing"
         )
+
+    def test_hostility_shift_threshold_within_the_measure_range(self):
+        """Hostility is 0.0 to 1.0, so a threshold above 1.0 never fires."""
+        s = AnalystSettings()
+        assert s.hostility_shift_threshold <= 1.0

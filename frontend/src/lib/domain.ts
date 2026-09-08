@@ -132,6 +132,7 @@ export function signalTitle(signal: Signal): string {
       return `Mean hostility changed${delta}${window}`
     }
 
+    // Kept for signals stored before the #30 rebase. Nothing fires it now.
     case 'sentiment_shift': {
       const drop = num('drop')
       const hours = num('window_hours')
