@@ -51,6 +51,27 @@ class TestOrgIsolation:
         for sql in ACTOR_SQL:
             assert "topic_id" in sql
 
+    def test_every_placeholder_is_passed_by_its_caller(self):
+        """Renumbering a placeholder without renumbering the call is a
+        runtime InterfaceError, not a test failure, unless something checks."""
+        import inspect
+        import re
+
+        from anveshak.api.db import actors
+
+        for name, sql in (
+            ("get_actor_summary", SQL_ACTOR_SUMMARY),
+            ("list_actor_content", SQL_ACTOR_CONTENT),
+            ("get_actor_activity", SQL_ACTOR_ACTIVITY),
+        ):
+            highest = max(int(p[1:]) for p in re.findall(r"\$\d+", sql))
+            body = inspect.getsource(getattr(actors, name))
+            call = body[body.index("await conn.fetch") :]
+            call = call[: call.index("\n    return")]
+            # SQL constant plus one argument per placeholder.
+            passed = call.count(",")
+            assert passed >= highest, f"{name}: {passed} args for ${highest}"
+
     def test_param_counts_match_the_repository_calls(self):
         import inspect
 
@@ -74,18 +95,27 @@ class TestPublicContentOnly:
     def test_every_query_uses_a_public_platform_allowlist(self):
         """A denylist would let a new private-source adapter through silently."""
         for sql in ACTOR_SQL:
-            assert "s.platform IN" in sql
+            assert "s.platform = ANY(" in sql
             assert "NOT IN" not in sql
 
-    def test_private_platforms_are_absent_from_the_allowlist(self):
-        from anveshak.api.db.actors import _PUBLIC_PLATFORMS
+    def test_the_allowlist_is_bound_not_interpolated(self):
+        """No query in this module is assembled from a string."""
+        from pathlib import Path
 
-        assert "tipline" not in _PUBLIC_PLATFORMS
+        source = Path("services/api/anveshak/api/db/actors.py").read_text()
+        assert 'SQL_ACTOR_SUMMARY = f"""' not in source
+        assert 'SQL_ACTOR_CONTENT = f"""' not in source
+        assert 'SQL_ACTOR_ACTIVITY = f"""' not in source
+
+    def test_private_platforms_are_absent_from_the_allowlist(self):
+        from anveshak.api.db.actors import PUBLIC_PLATFORMS
+
+        assert "tipline" not in PUBLIC_PLATFORMS
         # The WhatsApp adapter records every group member's display name as
         # author_handle, so a WhatsApp actor view is a dossier on a private
         # group participant.
-        assert "whatsapp" not in _PUBLIC_PLATFORMS
-        assert "instagram" not in _PUBLIC_PLATFORMS
+        assert "whatsapp" not in PUBLIC_PLATFORMS
+        assert "instagram" not in PUBLIC_PLATFORMS
 
 
 class TestQualityGateAtEveryConsumptionPoint:

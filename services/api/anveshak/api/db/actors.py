@@ -23,24 +23,20 @@ from anveshak.db import DBConnection
 # of every group member as author_handle. That would build a per-person
 # dossier out of a private group, which is the opposite of this view's
 # stated posture. A new adapter has to be added here deliberately.
-_PUBLIC_PLATFORMS = "('web', 'rss', 'twitter', 'reddit', 'bluesky', 'youtube', 'telegram')"
+#
+# Bound as a query parameter rather than interpolated, so no query in this
+# module is assembled from a string.
+PUBLIC_PLATFORMS = [
+    "web",
+    "rss",
+    "twitter",
+    "reddit",
+    "bluesky",
+    "youtube",
+    "telegram",
+]
 
-# Matching is on the normalised handle, so '@Someone' and 'someone' are the
-# same actor. Only a leading '@' is stripped, matching normalise_handle: a
-# handle is one token, and a value with an interior '@' is an address rather
-# than a handle.
-_HANDLE_MATCH = """
-    LOWER(LTRIM(ci.labels->>'author_handle', '@')) = $3
-"""
-
-# Quality gate, applied at every consumption point rather than only on the
-# content list. Without it the post count and the activity chart include
-# items the content list refuses to show.
-_QUALITY_GATE = """
-    (ci.content_quality IS NULL OR ci.content_quality != 'low_quality')
-"""
-
-SQL_ACTOR_SUMMARY = f"""
+SQL_ACTOR_SUMMARY = """
     SELECT
         COUNT(*)                                        AS post_count,
         COUNT(DISTINCT s.id)                            AS source_count,
@@ -58,12 +54,15 @@ SQL_ACTOR_SUMMARY = f"""
     JOIN sources s ON s.id = ci.source_id
     WHERE ci.topic_id = $1
       AND ci.org_id = $2
-      AND {_HANDLE_MATCH}
-      AND s.platform IN {_PUBLIC_PLATFORMS}
-      AND {_QUALITY_GATE}
+      AND LOWER(LTRIM(ci.labels->>'author_handle', '@')) = $3
+      AND s.platform = ANY($4::text[])
+      -- Quality gate at every consumption point, not only on the
+      -- content list, or the post count and the activity chart
+      -- include items the content list refuses to show.
+      AND (ci.content_quality IS NULL OR ci.content_quality != 'low_quality')
 """
 
-SQL_ACTOR_CONTENT = f"""
+SQL_ACTOR_CONTENT = """
     SELECT
         ci.id,
         ci.url,
@@ -87,18 +86,21 @@ SQL_ACTOR_CONTENT = f"""
     LEFT JOIN narrative_clusters nc ON nc.id = ci.narrative_cluster_id
     WHERE ci.topic_id = $1
       AND ci.org_id = $2
-      AND {_HANDLE_MATCH}
-      AND s.platform IN {_PUBLIC_PLATFORMS}
-      AND {_QUALITY_GATE}
+      AND LOWER(LTRIM(ci.labels->>'author_handle', '@')) = $3
+      AND s.platform = ANY($4::text[])
+      -- Quality gate at every consumption point, not only on the
+      -- content list, or the post count and the activity chart
+      -- include items the content list refuses to show.
+      AND (ci.content_quality IS NULL OR ci.content_quality != 'low_quality')
     ORDER BY COALESCE(ci.published_at, ci.captured_at) DESC
-    LIMIT $4 OFFSET $5
+    LIMIT $5 OFFSET $6
 """
 
 # Activity over time uses publication time where the platform supplied one
 # and falls back to collection time, because an empty activity chart is less
 # useful than one that says which points are approximate. The API reports the
 # fallback count alongside, so the analyst can tell.
-SQL_ACTOR_ACTIVITY = f"""
+SQL_ACTOR_ACTIVITY = """
     SELECT
         DATE_TRUNC('day', COALESCE(ci.published_at, ci.captured_at)) AS day,
         COUNT(*)                                                     AS post_count,
@@ -108,10 +110,13 @@ SQL_ACTOR_ACTIVITY = f"""
     JOIN sources s ON s.id = ci.source_id
     WHERE ci.topic_id = $1
       AND ci.org_id = $2
-      AND {_HANDLE_MATCH}
-      AND s.platform IN {_PUBLIC_PLATFORMS}
-      AND {_QUALITY_GATE}
-      AND COALESCE(ci.published_at, ci.captured_at) >= NOW() - make_interval(days => $4)
+      AND LOWER(LTRIM(ci.labels->>'author_handle', '@')) = $3
+      AND s.platform = ANY($4::text[])
+      -- Quality gate at every consumption point, not only on the
+      -- content list, or the post count and the activity chart
+      -- include items the content list refuses to show.
+      AND (ci.content_quality IS NULL OR ci.content_quality != 'low_quality')
+      AND COALESCE(ci.published_at, ci.captured_at) >= NOW() - make_interval(days => $5)
     GROUP BY 1
     ORDER BY 1
 """
@@ -136,7 +141,9 @@ async def get_actor_summary(
     org_id: str,
 ) -> dict[str, Any]:
     """Aggregate counts for one handle within one topic."""
-    row = await conn.fetchrow(SQL_ACTOR_SUMMARY, topic_id, org_id, normalise_handle(handle))
+    row = await conn.fetchrow(
+        SQL_ACTOR_SUMMARY, topic_id, org_id, normalise_handle(handle), PUBLIC_PLATFORMS
+    )
     return dict(row) if row else {}
 
 
@@ -151,7 +158,13 @@ async def list_actor_content(
 ) -> list[dict[str, Any]]:
     """Public content authored by one handle within one topic."""
     rows = await conn.fetch(
-        SQL_ACTOR_CONTENT, topic_id, org_id, normalise_handle(handle), limit, offset
+        SQL_ACTOR_CONTENT,
+        topic_id,
+        org_id,
+        normalise_handle(handle),
+        PUBLIC_PLATFORMS,
+        limit,
+        offset,
     )
     return [dict(r) for r in rows]
 
@@ -165,5 +178,12 @@ async def get_actor_activity(
     days: int = 90,
 ) -> list[dict[str, Any]]:
     """Daily post counts for one handle within one topic."""
-    rows = await conn.fetch(SQL_ACTOR_ACTIVITY, topic_id, org_id, normalise_handle(handle), days)
+    rows = await conn.fetch(
+        SQL_ACTOR_ACTIVITY,
+        topic_id,
+        org_id,
+        normalise_handle(handle),
+        PUBLIC_PLATFORMS,
+        days,
+    )
     return [dict(r) for r in rows]
