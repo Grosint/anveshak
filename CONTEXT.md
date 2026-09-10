@@ -50,6 +50,23 @@ Terms used across the codebase and product. Canonical meanings only — no imple
 
 **Severity** - A neutral magnitude indicator on a signal, computed from propagation facts alone (independent source count, item count, contributing account count), never from a judgement about content. Rendered alongside the arithmetic that produced it. A severity badge is a measurement, not an accusation. See ADR 0001.
 
+**Capture Time** - When Anveshak first saw a content item.
+A property of the collection run, not of the story.
+Always known, because it is set by the act of collecting.
+
+**Publication Time** - When the source published the content item.
+A property of the story, not of the collection run.
+Unknown for some sources, and never inferred from Capture Time when absent.
+Anything an analyst reads as a date - a timeline, a date filter, a report window - means Publication Time.
+
+**Backfill** - Loading content that was published before Anveshak began watching, carrying its real Publication Time.
+Necessary because sources expose only a recent window, so a narrative older than that window cannot be collected by ordinary polling.
+A Backfill's Capture Times are all the day it was loaded; its Publication Times span the real history.
+
+**Replay** - Ingesting a Backfill in chronological stages rather than as one load, running detection between stages.
+Detection then unfolds in the order the story did, so a cluster grows, a baseline forms, and a shift is measured against what preceded it.
+A single bulk load produces the same end state with none of the history that makes it meaningful.
+
 ---
 
 ## Narrative Detection
