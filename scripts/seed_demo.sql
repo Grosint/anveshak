@@ -212,47 +212,57 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- -----------------------------------------------------------------------------
--- Narrative clusters — grouped related content (insert before content_items
--- so content_items.narrative_cluster_id FK can reference them)
+-- Retire the fabricated detection rows this seed used to write (issue #40)
+--
+-- Every statement here is ON CONFLICT DO NOTHING, so deleting the INSERTs only
+-- fixes a database that has never been seeded. A demonstration box seeded
+-- before this change would keep the hand-written Signal and Narrative Clusters
+-- forever, and they would still be on screen.
+--
+-- Scoped to the three fixed IDs this seed itself created. Nothing else is
+-- touched, and detection output is never deleted.
 -- -----------------------------------------------------------------------------
 
-INSERT INTO narrative_clusters (
-    id, topic_id, label, item_count, independent_source_count,
-    embedding_centroid, labels, created_at, updated_at
-)
-VALUES
-(
+UPDATE content_items
+SET narrative_cluster_id = NULL
+WHERE narrative_cluster_id IN (
     '00000001-0000-0000-0000-000000000001',
-    'b0000000-0000-0000-0000-000000000002',
-    'UCAV deployment Hotan Airbase / northern approach vectors',
-    1,
-    2,
-    NULL,
-    '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "topic_id": "b0000000-0000-0000-0000-000000000002"}'::jsonb,
-    NOW() - INTERVAL '3 days',
-    NOW() - INTERVAL '3 days'
-),
-(
-    '00000001-0000-0000-0000-000000000002',
-    'b0000000-0000-0000-0000-000000000003',
-    'Coordinated deepfake campaign targeting IAF Rafale narrative',
-    1,
-    3,
-    NULL,
-    '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "topic_id": "b0000000-0000-0000-0000-000000000003"}'::jsonb,
-    NOW() - INTERVAL '1 day',
-    NOW() - INTERVAL '1 day'
-)
-ON CONFLICT (id) DO NOTHING;
+    '00000001-0000-0000-0000-000000000002'
+);
+
+DELETE FROM signals
+WHERE id = '11000000-0000-0000-0000-000000000001'
+   OR cluster_id IN (
+       '00000001-0000-0000-0000-000000000001',
+       '00000001-0000-0000-0000-000000000002'
+   );
+
+DELETE FROM narrative_clusters
+WHERE id IN (
+    '00000001-0000-0000-0000-000000000001',
+    '00000001-0000-0000-0000-000000000002'
+);
 
 -- -----------------------------------------------------------------------------
 -- Content items — sampled OSINT content
+--
+-- No narrative_cluster_id and no cluster rows: clustering assigns content to a
+-- Narrative Cluster, and a cluster written here would put an unfired Signal on
+-- screen. See issue #40.
+--
+-- published_at is the Publication Time and is offset from captured_at, which is
+-- the Capture Time. They are deliberately different values so that anything
+-- confusing the two shows up rather than passing.
+--
+-- created_at is NOW() because that is when the row is actually written. It is
+-- also what the analyst orphan sweep filters on, so backdating it left seeded
+-- content permanently unembedded and therefore never clustered.
 -- -----------------------------------------------------------------------------
 
 INSERT INTO content_items (
     id, topic_id, source_id, url, raw_text, clean_text, content_hash,
-    language, captured_at, credibility_score_at_capture, labels, created_at, updated_at,
-    narrative_cluster_id, org_id
+    language, captured_at, published_at, credibility_score_at_capture,
+    labels, created_at, updated_at, org_id
 )
 VALUES
 (
@@ -265,11 +275,11 @@ VALUES
     'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f601',
     'en',
     NOW() - INTERVAL '6 days',
+    NOW() - INTERVAL '6 days 5 hours',
     91.0,
     '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "topic_id": "b0000000-0000-0000-0000-000000000001"}'::jsonb,
-    NOW() - INTERVAL '6 days',
-    NOW() - INTERVAL '6 days',
-    NULL,
+    NOW(),
+    NOW(),
     'org-anshul'
 ),
 (
@@ -282,11 +292,32 @@ VALUES
     'b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6b202',
     'en',
     NOW() - INTERVAL '4 days',
+    NOW() - INTERVAL '4 days 9 hours',
     82.0,
     '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "topic_id": "b0000000-0000-0000-0000-000000000002"}'::jsonb,
-    NOW() - INTERVAL '4 days',
-    NOW() - INTERVAL '4 days',
-    '00000001-0000-0000-0000-000000000001',
+    NOW(),
+    NOW(),
+    'org-anshul'
+),
+-- Second, independent report of the Hotan deployment. The UAV topic has a
+-- signal_threshold of 2, so this is what gives the Signal engine something
+-- real to fire on. Without it the demonstration can only show detection by
+-- fabricating it.
+(
+    'e0000000-0000-0000-0000-000000000004',
+    'b0000000-0000-0000-0000-000000000002',
+    'c0000000-0000-0000-0000-000000000004',
+    'https://www.janes.com/defence-news/hotan-ucav-detachment',
+    'Wing Loong III detachment assessed at Hotan Airbase. Jane''s assesses a Wing Loong III unmanned combat aerial vehicle detachment at Hotan Airbase, Xinjiang, corroborating commercial satellite imagery reporting of the same deployment. Ground control station shelters are visible on the eastern apron. The published combat radius places northern Ladakh inside the operational envelope.',
+    'Jane''s assesses a Wing Loong III unmanned combat aerial vehicle detachment at Hotan Airbase, Xinjiang, corroborating commercial satellite imagery reporting of the same deployment. Ground control station shelters are visible on the eastern apron. The published combat radius places northern Ladakh inside the operational envelope.',
+    'f2e1d79e1b018dae2c6b325606f241d752d705ef4aeb5ad2b0dddff3a80d5da8',
+    'en',
+    NOW() - INTERVAL '3 days',
+    NOW() - INTERVAL '3 days 7 hours',
+    91.0,
+    '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "topic_id": "b0000000-0000-0000-0000-000000000002"}'::jsonb,
+    NOW(),
+    NOW(),
     'org-anshul'
 ),
 (
@@ -299,11 +330,31 @@ VALUES
     'c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6c303',
     'en',
     NOW() - INTERVAL '2 days',
+    NOW() - INTERVAL '2 days 3 hours',
     38.0,
     '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "topic_id": "b0000000-0000-0000-0000-000000000003"}'::jsonb,
-    NOW() - INTERVAL '2 days',
-    NOW() - INTERVAL '2 days',
-    '00000001-0000-0000-0000-000000000002',
+    NOW(),
+    NOW(),
+    'org-anshul'
+),
+-- The same fabricated video carried by a second, independent source. Two
+-- sources on one narrative is what the disinformation topic''s threshold of 2
+-- is measuring, and it is measured by the engine rather than asserted here.
+(
+    'e0000000-0000-0000-0000-000000000005',
+    'b0000000-0000-0000-0000-000000000003',
+    'c0000000-0000-0000-0000-000000000003',
+    'https://www.defence.pk/threads/rafale-shootdown-footage',
+    'Rafale shootdown footage reposted as authentic. The same video of an Indian Air Force Rafale being shot down is being reposted on defence forums as authentic combat footage. Frame analysis returns a deepfake probability of 0.94 and the underlying airframe footage is from a 2019 French Air Force training exercise. The reposts carry identical captions, which indicates coordinated amplification rather than independent reporting.',
+    'The same video of an Indian Air Force Rafale being shot down is being reposted on defence forums as authentic combat footage. Frame analysis returns a deepfake probability of 0.94 and the underlying airframe footage is from a 2019 French Air Force training exercise. The reposts carry identical captions, which indicates coordinated amplification rather than independent reporting.',
+    'c803bf93207fd0053400d959e7d58d75a6cbecfccc6d244a172747b5d3206a21',
+    'en',
+    NOW() - INTERVAL '1 day',
+    NOW() - INTERVAL '1 day 6 hours',
+    45.0,
+    '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "topic_id": "b0000000-0000-0000-0000-000000000003"}'::jsonb,
+    NOW(),
+    NOW(),
     'org-anshul'
 )
 ON CONFLICT (content_hash) DO NOTHING;
@@ -339,34 +390,6 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- -----------------------------------------------------------------------------
--- Signals — threshold-based notifications
--- -----------------------------------------------------------------------------
-
-INSERT INTO signals (
-    id, topic_id, cluster_id, signal_type,
-    description, evidence, status, labels, created_at, updated_at
-)
-VALUES
-(
-    '11000000-0000-0000-0000-000000000001',
-    'b0000000-0000-0000-0000-000000000003',
-    '00000001-0000-0000-0000-000000000002',
-    'threshold_breach',
-    'Coordinated deepfake campaign detected — 3 independent platforms',
-    '{
-        "cluster_id": "00000001-0000-0000-0000-000000000002",
-        "independent_source_count": 3,
-        "deepfake_score": 0.94,
-        "platforms": ["telegram", "reddit", "web"]
-    }'::jsonb,
-    'new',
-    '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "topic_id": "b0000000-0000-0000-0000-000000000003"}'::jsonb,
-    NOW() - INTERVAL '1 day',
-    NOW() - INTERVAL '1 day'
-)
-ON CONFLICT (id) DO NOTHING;
-
--- -----------------------------------------------------------------------------
 -- Sample report (intelligence brief)
 -- -----------------------------------------------------------------------------
 
@@ -390,7 +413,7 @@ VALUES
         "c0000000-0000-0000-0000-000000000004": {"name": "Janes Defence Weekly", "credibility_score": 91.0},
         "c0000000-0000-0000-0000-000000000001": {"name": "Global Security", "credibility_score": 82.0}
     }'::jsonb,
-    1,
+    2,
     '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak", "topic_id": "b0000000-0000-0000-0000-000000000002"}'::jsonb,
     NOW() - INTERVAL '1 day',
     NOW() - INTERVAL '1 day'
@@ -406,10 +429,13 @@ BEGIN
     RAISE NOTICE '  Users:     2 (demo@anveshak.local / AnveshakDemo2024!, admin@anveshak.local / AnveshakAdmin2024!)';
     RAISE NOTICE '  Topics:    3';
     RAISE NOTICE '  Sources:   5 (credibility-scored)';
-    RAISE NOTICE '  Content:   3 items';
-    RAISE NOTICE '  Clusters:  2 narrative clusters';
-    RAISE NOTICE '  Signals:   1 (HIGH severity — deepfake campaign)';
+    RAISE NOTICE '  Content:   5 items (each with a Publication Time)';
+    RAISE NOTICE '  Clusters:  0 - produced by clustering, never seeded';
+    RAISE NOTICE '  Signals:   0 - fired by the Signal engine, never seeded';
     RAISE NOTICE '  Reports:   1 (intelligence brief)';
+    RAISE NOTICE '';
+    RAISE NOTICE 'Clusters and Signals appear once the analyst service has';
+    RAISE NOTICE 'analysed the seeded content and run detection over it.';
     RAISE NOTICE '';
     RAISE NOTICE 'Login: http://localhost:3000';
     RAISE NOTICE 'Username: demo@anveshak.local';

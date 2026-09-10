@@ -1,9 +1,10 @@
 """Phase 8F — End-to-end pipeline tests.
 
-Verifies the complete demo arc against live services seeded with seed_demo.sql.
-All tests are read-only (no writes) to avoid disturbing demo state.
+Verifies the complete demo arc against live services seeded with seed_demo.sql
+and analysed by the pipeline. All tests are read-only (no writes) to avoid
+disturbing demo state.
 
-Requirements: make up seed-demo
+Requirements: make up seed-demo demo-detect
 Run: uv run --package anveshak-tests pytest tests/e2e/test_full_pipeline.py -v -m e2e
 """
 
@@ -16,8 +17,6 @@ import pytest
 from .conftest import (
     API_BASE,
     DEMO_REPORT_ID,
-    DEMO_SIGNAL_ID,
-    DEMO_TOPIC_DEEPFAKE,
     DEMO_TOPIC_UAV,
     DEMO_VISION_JOB_ID,
     _http,
@@ -91,36 +90,76 @@ def test_content_items_exist_for_uav_topic(auth_headers):
 
 
 # ---------------------------------------------------------------------------
-# Step 5 — Intelligence signal
+# Step 5 - Intelligence signal, fired by the engine rather than seeded
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.e2e
-def test_signal_exists_and_new(auth_headers):
-    """8F.5 — At least one signal exists with status=new."""
+def _new_signals(auth_headers) -> list[dict]:
     status, body = _http(
         "GET",
         f"{API_BASE}/api/v1/signals?status=new",
         headers=auth_headers,
     )
     assert status == 200
-    signals = body if isinstance(body, list) else body.get("items", [])
-    assert len(signals) >= 1, "no active signals found"
+    return body if isinstance(body, list) else body.get("items", [])
 
 
 @pytest.mark.e2e
-def test_specific_signal_fields(auth_headers):
-    """8F.5 — Demo signal has required fields from list endpoint."""
-    status, body = _http(
-        "GET",
-        f"{API_BASE}/api/v1/signals?status=new&topic_id={DEMO_TOPIC_DEEPFAKE}",
-        headers=auth_headers,
+def test_signal_exists_and_new(auth_headers):
+    """8F.5 - At least one signal exists with status=new."""
+    signals = _new_signals(auth_headers)
+    assert len(signals) >= 1, (
+        "no active signals found; the seed writes none, so run `make demo-detect`"
     )
-    assert status == 200
-    signals = body if isinstance(body, list) else body.get("items", [])
-    demo = [s for s in signals if s.get("id") == DEMO_SIGNAL_ID]
-    assert demo, f"Demo signal {DEMO_SIGNAL_ID} not found in {len(signals)} signals"
-    sig = demo[0]
+
+
+# The IDs the seed used to fabricate. Asserting on "has a cluster_id or has
+# evidence" was hollow: the old seeded row had both, so it would have passed
+# the very check written to catch it. These IDs are the falsifiable part.
+RETIRED_SIGNAL_ID = "11000000-0000-0000-0000-000000000001"
+RETIRED_CLUSTER_IDS = (
+    "00000001-0000-0000-0000-000000000001",
+    "00000001-0000-0000-0000-000000000002",
+)
+
+
+@pytest.mark.e2e
+def test_no_signal_is_a_retired_seeded_row(auth_headers):
+    """8F.5 - No Signal is one the seed used to write (issue #40).
+
+    Deleting the INSERT only fixes a fresh database. A box seeded before the
+    change keeps the row until a reseed retires it, so the demonstration has
+    to be checked, not assumed.
+    """
+    for sig in _new_signals(auth_headers):
+        assert sig.get("id") != RETIRED_SIGNAL_ID, (
+            "the fabricated seeded Signal is still present; run `make seed-demo` to retire it"
+        )
+        assert sig.get("cluster_id") not in RETIRED_CLUSTER_IDS, (
+            f"signal {sig.get('id')} points at a fabricated cluster {sig.get('cluster_id')}"
+        )
+
+
+@pytest.mark.e2e
+def test_signals_name_what_they_fired_on(auth_headers):
+    """8F.5 - Every Signal records what it fired on.
+
+    Multi-source convergence names a Narrative Cluster; identifier and template
+    detectors put their reference in evidence, because the cluster_id FK points
+    at narrative_clusters only.
+    """
+    for sig in _new_signals(auth_headers):
+        assert sig.get("cluster_id") or sig.get("evidence"), (
+            f"signal {sig.get('id')} names nothing it fired on"
+        )
+
+
+@pytest.mark.e2e
+def test_signal_fields(auth_headers):
+    """8F.5 - Signals carry the fields the workbench renders."""
+    signals = _new_signals(auth_headers)
+    assert signals, "no signals to inspect; run `make demo-detect`"
+    sig = signals[0]
     for field in ("id", "topic_id", "status", "signal_type", "description", "cluster_label"):
         assert field in sig, f"missing field: {field}"
     assert sig["status"] == "new"
@@ -179,7 +218,9 @@ def test_report_topic_list(auth_headers):
         headers=auth_headers,
     )
     assert status == 200
-    reports = body if isinstance(body, list) else []
+    # The endpoint paginates, so the reports are under "items". Falling back to
+    # an empty list on a dict body made this assertion unfalsifiable.
+    reports = body if isinstance(body, list) else body.get("items", [])
     assert any(r.get("id") == DEMO_REPORT_ID for r in reports), (
         "seeded report not found in topic reports list"
     )

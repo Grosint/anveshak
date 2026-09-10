@@ -1,8 +1,10 @@
 """E2E test fixtures — Phase 8F.
 
-pytest.mark.e2e — requires running Docker Compose services with seeded demo data.
+pytest.mark.e2e - requires running Docker Compose services with seeded demo
+data and detection already run over it. The seed writes content only, so
+Narrative Clusters and Signals exist only after demo-detect.
 
-  make up seed-demo
+  make up seed-demo demo-detect
   uv run --package anveshak-tests pytest tests/e2e/ -v -m e2e
 """
 
@@ -21,10 +23,12 @@ DEMO_PASSWORD = "AnveshakDemo2024!"
 
 # Seeded demo IDs (from seed_demo.sql)
 DEMO_TOPIC_UAV = "b0000000-0000-0000-0000-000000000002"
-DEMO_TOPIC_DEEPFAKE = "b0000000-0000-0000-0000-000000000003"
 DEMO_REPORT_ID = "22000000-0000-0000-0000-000000000001"
 DEMO_VISION_JOB_ID = "f0000000-0000-0000-0000-000000000001"
-DEMO_SIGNAL_ID = "11000000-0000-0000-0000-000000000001"
+
+# There is deliberately no DEMO_SIGNAL_ID. A Signal the seed wrote would be
+# decoration, so Signal IDs are whatever the engine assigned at detection time
+# and the tests read them from the API. See issue #40.
 
 
 def _http(

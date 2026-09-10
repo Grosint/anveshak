@@ -155,17 +155,30 @@ def check_topics(base: str, token: str) -> Check:
 
 # ---------------------------------------------------------------------------
 # Step 5 — Intelligence signal exists (≥1 active signal)
+#
+# The seed writes no Signals (issue #40), so a count of zero means detection
+# has not run yet rather than that the demo data is missing. The fix is to run
+# the engine, never to seed a row that looks like its output.
 # ---------------------------------------------------------------------------
 
 
 def check_signals(base: str, token: str) -> Check:
     status, body = http_get(f"{base}/api/v1/signals?status=new", headers=_authed_headers(token))
-    count = len(body) if isinstance(body, list) else body.get("total", 0)
-    passed = status == 200 and count >= 1
+    if status != 200:
+        return Check("Step 5 — Intelligence signals", False, f"HTTP {status}")
+
+    signals = body if isinstance(body, list) else body.get("items", [])
+    count = len(signals)
+    if count == 0:
+        return Check(
+            "Step 5 — Intelligence signals",
+            False,
+            "0 active signals; run `make demo-detect` to run the pipeline over the seeded corpus",
+        )
     return Check(
         "Step 5 — Intelligence signals",
-        passed,
-        f"{count} active signal(s) (need ≥1)" if status == 200 else f"HTTP {status}",
+        True,
+        f"{count} active signal(s), fired by the Signal engine",
     )
 
 
@@ -217,7 +230,9 @@ def check_report(base: str, token: str) -> Check:
     if status != 200:
         return Check("Step 7 — Intelligence report", False, f"HTTP {status}")
 
-    reports = body if isinstance(body, list) else []
+    # The endpoint paginates, so the reports are under "items". Falling back to
+    # an empty list on a dict body reported a seeded report as missing.
+    reports = body if isinstance(body, list) else body.get("items", [])
     if not reports:
         return Check(
             "Step 7 — Intelligence report",

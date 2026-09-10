@@ -50,6 +50,7 @@
 #   make migrate-status   show current migration revision
 #   make migrate-rollback rollback one migration
 #   make seed-demo        load Indian Navy demo scenario
+#   make demo-detect      run detection over the seeded corpus
 #
 # QUALITY:
 #   make lint             ruff check
@@ -92,7 +93,7 @@ _WORK  := $(_CYN)⟳$(_RST)
         fresh fresh-all \
         test test-unit test-contract test-integration test-e2e test-full test-scrape \
         test-ci test-all test-nightly \
-        demo-check validate validate-vision health syscheck \
+        demo-check demo-detect validate validate-vision health syscheck \
         lint format typecheck security-scan \
         clean clean-containers clean-volumes clean-cache purge nuke \
         verify-labels verify-reports verify-env check-env-sync shell-% \
@@ -201,6 +202,7 @@ setup:
 		printf "\n"; \
 		printf "  $(_WARN) $(_YEL)Validation had failures — this is expected on first setup$(_RST)\n"; \
 		printf "  $(_INFO) Corpus will grow as scraper and social adapters run.\n"; \
+		printf "  $(_INFO) Clusters and Signals appear once detection runs: $(_BOLD)make demo-detect$(_RST)\n"; \
 	}
 	$(call header,Setup Complete)
 	@printf "  $(_GRN)$(_BOLD)Anveshak is ready!$(_RST)\n\n"
@@ -209,7 +211,8 @@ setup:
 	@printf "  Grafana:            $(_CYN)http://localhost:3001$(_RST)\n"
 	@printf "  Prometheus:         $(_CYN)http://localhost:9090$(_RST)\n\n"
 	@printf "  Login:    $(_BOLD)demo@anveshak.local$(_RST) / $(_BOLD)AnveshakDemo2024!$(_RST)\n"
-	@printf "  Next:     $(_BOLD)make validate$(_RST)  to re-run validation anytime\n\n"
+	@printf "  Next:     $(_BOLD)make demo-detect$(_RST)  to run detection over the seeded content\n"
+	@printf "            $(_BOLD)make validate$(_RST)     to re-run validation anytime\n\n"
 
 # ---------------------------------------------------------------------------
 # Docker Compose lifecycle
@@ -377,6 +380,8 @@ seed-demo:
 	$(call header,Loading Demo Scenario)
 	@$(COMPOSE) exec -T postgres psql -U anveshak -d anveshak < scripts/seed_demo.sql 2>&1 | tail -1
 	$(call success,Demo scenario loaded)
+	@printf "\n  Content only. Clusters and Signals come from detection.\n"
+	@printf "  Next: $(_BOLD)make demo-detect$(_RST)  to run the pipeline over it\n"
 	@printf "\n  Login at $(_CYN)http://localhost:3000$(_RST)\n"
 	@printf "  Username: $(_BOLD)demo@anveshak.local$(_RST)\n"
 	@printf "  Password: $(_BOLD)AnveshakDemo2024!$(_RST)\n\n"
@@ -485,6 +490,11 @@ fresh-all:
 	@$(MAKE) --no-print-directory pull-models
 	@$(MAKE) --no-print-directory download-models
 	@$(MAKE) --no-print-directory seed-demo
+	@$(MAKE) --no-print-directory demo-detect || { \
+		printf "\n"; \
+		printf "  $(_WARN) $(_YEL)Detection did not complete - Clusters and Signals may be missing$(_RST)\n"; \
+		printf "  $(_INFO) Re-run $(_BOLD)make demo-detect$(_RST) once the analyst worker is consuming jobs.\n"; \
+	}
 	@$(MAKE) --no-print-directory validate
 	$(call success,Full fresh start complete)
 
@@ -535,7 +545,7 @@ test-integration: venv-check
 	exit $$_fail
 
 test-e2e: venv-check
-	$(call header,End-to-End Tests (~2min — requires make up + seed-demo))
+	$(call header,End-to-End Tests (~2min - requires make up seed-demo demo-detect))
 	@$(UV) pytest tests/e2e/ tests/resilience/ -v --tb=short -m "e2e or resilience"
 
 # ── Frontend tests ─────────────────────────────────────────
@@ -617,6 +627,23 @@ health:
 		printf "  %-20s $(_YEL)● not running$(_RST)\n" "prometheus"; \
 	fi
 	@printf "\n"
+
+# Runs the same ARQ jobs production ingest runs, then waits for the Signal
+# engine. The seed writes content only, so this is what produces the Narrative
+# Clusters and Signals the demo shows.
+#
+# check_env sources .env and fails on an unset POSTGRES_PASSWORD, which compose
+# references without a default. Without it an empty password produced a valid
+# looking DSN and the script's own credential refusal never fired. The password
+# is exported rather than interpolated into a URL here, because the script
+# percent-encodes it and a Makefile cannot.
+demo-detect: venv-check
+	$(call check_env,infra/compose.yml)
+	$(call header,Running Detection Over the Seeded Corpus (~2-8min))
+	@set -a; . ./.env; set +a; \
+		POSTGRES_URL="" \
+		REDIS_URL="$${DEMO_DETECT_REDIS_URL:-redis://localhost:6379/0}" \
+		$(UV) python scripts/run_demo_detection.py --org-id org-anshul
 
 demo-check:
 	$(call header,Demo Readiness Check)
