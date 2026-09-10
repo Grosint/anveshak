@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><title>Rolling coverage</title></head>
+<body>
+  <article>
+    <!-- No datetime attribute. The epoch is the only machine-readable signal.
+         The visible string beside it is wrong: the outlet formats this epoch
+         in UTC and labels the result IST, so it reads 5h30m early. -->
+    <time data-epoch="1784540045">20 July 2026, 9:34 AM IST</time>
+    <p>Rolling coverage of the march.</p>
+  </article>
+  <!-- The comment widget carries the same attribute name on a date months
+       away. Reading it would produce invented history under a signal name
+       claiming it came from the article. -->
+  <section class="comments">
+    <div class="comment" data-timestamp="1600000000">A reader comment.</div>
+  </section>
+  <aside class="related" data-ts="1500000000">Related stories</aside>
+</body>
+</html>

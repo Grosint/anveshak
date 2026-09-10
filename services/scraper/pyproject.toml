@@ -20,6 +20,8 @@ dependencies = [
     "prometheus-client>=0.20",
     "feedparser>=6.0",
     "pymupdf>=1.24",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.0",
 ]
 [tool.hatch.build.targets.wheel]
 packages = ["anveshak"]
