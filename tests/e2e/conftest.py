@@ -11,6 +11,7 @@ Narrative Clusters and Signals exist only after demo-detect.
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -18,8 +19,15 @@ import urllib.request
 import pytest
 
 API_BASE = "http://localhost:8000"
-DEMO_EMAIL = "demo@anveshak.local"
-DEMO_PASSWORD = "AnveshakDemo2024!"
+# Demonstration credentials come from the environment - issue #41.
+# scripts/seed_demo_org.py seeds these; nothing here carries a password.
+DEMO_EMAIL = os.environ.get("ANVESHAK_DEMO_ANALYST_USERNAME", "demo@anveshak.local")
+DEMO_PASSWORD = os.environ.get("ANVESHAK_DEMO_ANALYST_PASSWORD", "")
+
+if not DEMO_PASSWORD:
+    # Without it every test in this layer fails as HTTP 401, which hides
+    # the cause behind a login failure.
+    pytest.skip("ANVESHAK_DEMO_ANALYST_PASSWORD is not set - see .env.example", allow_module_level=True)
 
 # Seeded demo IDs (from seed_demo.sql)
 DEMO_TOPIC_UAV = "b0000000-0000-0000-0000-000000000002"

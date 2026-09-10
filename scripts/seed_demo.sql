@@ -25,55 +25,12 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 
 -- -----------------------------------------------------------------------------
--- Demo user account
--- Password: AnveshakDemo2024! (bcrypt hash, rounds=12)
--- Regenerate: uv run python scripts/gen_demo_password.py
+-- Accounts
+--
+-- Seeded by scripts/seed_demo_org.py, not here. Every password comes from the
+-- environment, so this file carries neither a password nor a password hash.
+-- `make seed-demo` runs that script before this one.
 -- -----------------------------------------------------------------------------
-
-INSERT INTO users (id, username, password_hash, role, org_id, created_at, updated_at, labels)
-VALUES (
-    'a0000000-0000-0000-0000-000000000001',
-    'demo@anveshak.local',
-    '$2b$12$exK0vBQZHOMCPjg37GTJZ.AtYqz1NI5SXwMLrWjnPvP2IqZMZKaei',
-    'analyst',
-    'org-anshul',
-    NOW(),
-    NOW(),
-    '{"classification": "OPEN", "domain": "osint", "owner_org": "anshul"}'::jsonb
-)
-ON CONFLICT (username) DO NOTHING;
-
--- Admin user account
--- Password: AnveshakAdmin2024! (bcrypt hash, rounds=12)
-
-INSERT INTO users (id, username, password_hash, role, org_id, created_at, updated_at, labels)
-VALUES (
-    'a0000000-0000-0000-0000-000000000002',
-    'admin@anveshak.local',
-    '$2b$12$S12K1p/iLSVP3VohoNnP1uxB493/aJIMt6lf/xmUWjJjvTJZHmSt.',
-    'admin',
-    'org-anshul',
-    NOW(),
-    NOW(),
-    '{"classification": "OPEN", "domain": "osint", "owner_org": "anveshak"}'::jsonb
-)
-ON CONFLICT (username) DO NOTHING;
-
--- Super-admin account (platform-wide, no org)
--- Password: AnveshakSuper2024! (bcrypt hash, rounds=12)
-
-INSERT INTO users (id, username, password_hash, role, org_id, created_at, updated_at, labels)
-VALUES (
-    'a0000000-0000-0000-0000-000000000003',
-    'superadmin@anveshak.local',
-    '$2b$12$GTfea1Nttz2/iwcUGthIyuReJSy.N/FeBdqi9btzEMg6R/zYiBRca',
-    'super-admin',
-    NULL,
-    NOW(),
-    NOW(),
-    '{"classification": "OPEN", "domain": "platform"}'::jsonb
-)
-ON CONFLICT (username) DO NOTHING;
 
 -- -----------------------------------------------------------------------------
 -- Topics — OSINT monitoring areas
@@ -426,7 +383,7 @@ COMMIT;
 DO $$
 BEGIN
     RAISE NOTICE 'Demo seed complete:';
-    RAISE NOTICE '  Users:     2 (demo@anveshak.local / AnveshakDemo2024!, admin@anveshak.local / AnveshakAdmin2024!)';
+    RAISE NOTICE '  Users:     0 - seeded by scripts/seed_demo_org.py from the environment';
     RAISE NOTICE '  Topics:    3';
     RAISE NOTICE '  Sources:   5 (credibility-scored)';
     RAISE NOTICE '  Content:   5 items (each with a Publication Time)';
@@ -438,6 +395,5 @@ BEGIN
     RAISE NOTICE 'analysed the seeded content and run detection over it.';
     RAISE NOTICE '';
     RAISE NOTICE 'Login: http://localhost:3000';
-    RAISE NOTICE 'Username: demo@anveshak.local';
-    RAISE NOTICE 'Password: AnveshakDemo2024!';
+    RAISE NOTICE 'Credentials: ANVESHAK_DEMO_* in .env';
 END $$;

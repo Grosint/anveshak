@@ -13,14 +13,22 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 
 BASE = "http://localhost:8000"
-DEMO_USER = "demo@anveshak.local"
-DEMO_PASS = "AnveshakDemo2024!"
+# Demonstration credentials come from the environment - issue #41.
+# scripts/seed_demo_org.py seeds these; nothing here carries a password.
+DEMO_USER = os.environ.get("ANVESHAK_DEMO_ANALYST_USERNAME", "demo@anveshak.local")
+DEMO_PASS = os.environ.get("ANVESHAK_DEMO_ANALYST_PASSWORD", "")
+
+if not DEMO_PASS:
+    # An empty password reaches the API as a 401, which reads like a broken
+    # deployment rather than an unset variable.
+    raise SystemExit("ERROR: ANVESHAK_DEMO_ANALYST_PASSWORD is not set - see .env.example")
 
 
 @dataclass

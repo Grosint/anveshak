@@ -312,6 +312,11 @@ fi
 PG_PASS=$(openssl rand -hex 16)
 API_KEY=$(openssl rand -hex 32)
 GRAFANA_PASS=$(openssl rand -hex 12)
+# Demonstration accounts, seeded by scripts/seed_demo_org.py. Generated per
+# deployment so no password ships in the repository.
+DEMO_ANALYST_PASS=$(openssl rand -hex 12)
+DEMO_ADMIN_PASS=$(openssl rand -hex 12)
+DEMO_SUPERADMIN_PASS=$(openssl rand -hex 12)
 
 # Detect RunPod proxy URL base
 # RunPod exposes ports via: https://{POD_ID}-{PORT}.proxy.runpod.net
@@ -410,6 +415,17 @@ API_SECRET_KEY=${API_KEY}
 JWT_SECRET_KEY=${API_KEY}
 GRAFANA_ADMIN_PASSWORD=${GRAFANA_PASS}
 
+# --- Demonstration organisation and accounts ---
+# ENVIRONMENT is production here, and this deployment exists to be shown,
+# so the seeder's production guard is opted into explicitly.
+ANVESHAK_ALLOW_DEMO_SEED=1
+ANVESHAK_DEMO_ANALYST_USERNAME=demo@anveshak.local
+ANVESHAK_DEMO_ANALYST_PASSWORD=${DEMO_ANALYST_PASS}
+ANVESHAK_DEMO_ADMIN_USERNAME=admin@anveshak.local
+ANVESHAK_DEMO_ADMIN_PASSWORD=${DEMO_ADMIN_PASS}
+ANVESHAK_DEMO_SUPERADMIN_USERNAME=superadmin@anveshak.local
+ANVESHAK_DEMO_SUPERADMIN_PASSWORD=${DEMO_SUPERADMIN_PASS}
+
 # --- Application ---
 ENVIRONMENT=production
 LOG_LEVEL=INFO
@@ -505,7 +521,7 @@ printf "  ${BOLD}Credentials (save these — shown only once):${RST}\n"
 printf "  ├─ Postgres password:  ${PG_PASS}\n"
 printf "  ├─ API secret key:     ${API_KEY:0:16}...\n"
 printf "  ├─ Grafana password:   ${GRAFANA_PASS}\n"
-printf "  ├─ Demo login:         demo@anveshak.local / AnveshakDemo2024!\n"
+printf "  ├─ Demo login:         demo@anveshak.local / ${DEMO_ANALYST_PASS}\n"
 printf "  ├─ Telegram adapter:   ${TELE_ENABLED}\n"
 printf "  └─ X/Twitter adapter:  ${X_ENABLED}\n"
 printf "\n"
@@ -654,7 +670,7 @@ else
 fi
 
 printf "\n"
-printf "  ${BOLD}Login:${RST}  demo@anveshak.local / AnveshakDemo2024!\n"
+printf "  ${BOLD}Login:${RST}  demo@anveshak.local (password: ANVESHAK_DEMO_ANALYST_PASSWORD in .env)\n"
 printf "  ${BOLD}Grafana:${RST} admin / ${GRAFANA_PASS}\n"
 printf "\n"
 

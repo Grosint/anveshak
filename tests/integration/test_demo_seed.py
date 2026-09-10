@@ -39,12 +39,9 @@ TOPIC_UAV = "b0000000-0000-0000-0000-000000000002"
 
 # The seed's own fixed IDs. Deleting these rather than everything owned by the
 # org keeps the blast radius to rows this seed is the author of.
-SEED_USER_IDS = (
-    "a0000000-0000-0000-0000-000000000001",
-    "a0000000-0000-0000-0000-000000000002",
-    # org_id IS NULL on the super-admin, so an org-scoped delete never reaches it.
-    "a0000000-0000-0000-0000-000000000003",
-)
+# Accounts moved out of the SQL seed in #41: scripts/seed_demo_org.py owns
+# them now, and their ids are derived from the usernames in the environment.
+# Nothing here creates a user, so nothing here deletes one.
 SEED_TOPIC_IDS = (
     "b0000000-0000-0000-0000-000000000001",
     TOPIC_UAV,
@@ -115,7 +112,6 @@ async def demo_seed(db_pool: asyncpg.Pool):
             ("reports", SEED_REPORT_IDS),
             ("content_items", SEED_CONTENT_IDS),
             ("credibility_audit_log", SEED_AUDIT_IDS),
-            ("users", SEED_USER_IDS),
         ):
             await conn.execute(f"DELETE FROM {table} WHERE id = ANY($1::text[])", list(ids))
         await conn.execute(

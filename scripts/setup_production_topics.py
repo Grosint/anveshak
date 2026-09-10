@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -331,6 +332,9 @@ SOURCES = [
 # ---------------------------------------------------------------------------
 
 
+MISSING_PASSWORD = "ANVESHAK_DEMO_ANALYST_PASSWORD is not set - see .env.example"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Set up production validation topics and sources",
@@ -340,14 +344,22 @@ def main() -> int:
         default="http://localhost:8000",
         help="Anveshak API base URL (default: http://localhost:8000)",
     )
-    parser.add_argument("--username", default="demo@anveshak.local")
-    parser.add_argument("--password", default="AnveshakDemo2024!")
+    parser.add_argument(
+        "--username",
+        default=os.environ.get("ANVESHAK_DEMO_ANALYST_USERNAME", "demo@anveshak.local"),
+    )
     parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print what would be created without calling API",
     )
     args = parser.parse_args()
+
+    password = os.environ.get("ANVESHAK_DEMO_ANALYST_PASSWORD", "")
+    if not password:
+        # Not a CLI flag: anything passed on argv is readable in `ps`.
+        print(f"ERROR: {MISSING_PASSWORD}")
+        return 1
     base = args.api_url.rstrip("/")
 
     # --- Dry run ---
@@ -382,7 +394,7 @@ def main() -> int:
         f"{base}/api/v1/auth/login",
         {
             "username": args.username,
-            "password": args.password,
+            "password": password,
         },
     )
     if status_code != 200 or "access_token" not in resp:

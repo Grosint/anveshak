@@ -1892,9 +1892,10 @@ Data-dependent checks use WARN (not FAIL) on fresh deployments where no data has
 
 ```bash
 cp .env.example .env          # Configure secrets and model settings
+                               # including every ANVESHAK_DEMO_* password
 make up                        # Start all 17 containers
 make migrate                   # Run Alembic migrations
-make seed-demo                 # Load demo content (optional)
+make seed-demo                 # Seed the demonstration org, accounts and content (optional)
 make demo-detect               # Run detection over it - produces Clusters and Signals
 make ps                        # Check container health
 ```

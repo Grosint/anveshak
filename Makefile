@@ -89,7 +89,9 @@ _WORK  := $(_CYN)⟳$(_RST)
 
 .PHONY: all setup up up-vision up-bridge build build-nocache build-vision down restart \
         ps logs init pull-models download-models migrate migrate-status migrate-hnsw \
-        migrate-rollback seed-demo seed-demo-iaf seed-demo-haryana seed-demo-kerala \
+        migrate-rollback seed-demo seed-demo-accounts seed-demo-check seed-demo-iaf \
+        seed-demo-haryana \
+        seed-demo-kerala \
         fresh fresh-all \
         test test-unit test-contract test-integration test-e2e test-full test-scrape \
         test-ci test-all test-nightly \
@@ -195,7 +197,8 @@ setup:
 	$(call step,Step 7/8,Downloading vision models (YOLO + CLIP + deepfake))
 	@$(MAKE) --no-print-directory download-models
 	$(call success,Vision models ready)
-	@$(COMPOSE) exec -T postgres psql -U anveshak -d anveshak < scripts/seed_demo.sql 2>&1 | tail -1
+	@$(MAKE) --no-print-directory seed-demo-accounts
+	@$(COMPOSE) exec -T postgres psql -v ON_ERROR_STOP=1 -U anveshak -d anveshak < scripts/seed_demo.sql
 	$(call success,Demo scenario loaded)
 	$(call step,Step 8/8,Validating pipeline)
 	@$(UV) python scripts/validate_pipeline.py || { \
@@ -210,7 +213,7 @@ setup:
 	@printf "  API:                $(_CYN)http://localhost:8000$(_RST)\n"
 	@printf "  Grafana:            $(_CYN)http://localhost:3001$(_RST)\n"
 	@printf "  Prometheus:         $(_CYN)http://localhost:9090$(_RST)\n\n"
-	@printf "  Login:    $(_BOLD)demo@anveshak.local$(_RST) / $(_BOLD)AnveshakDemo2024!$(_RST)\n"
+	@printf "  Login:    the ANVESHAK_DEMO_ANALYST_* credentials in your $(_BOLD).env$(_RST)\n"
 	@printf "  Next:     $(_BOLD)make demo-detect$(_RST)  to run detection over the seeded content\n"
 	@printf "            $(_BOLD)make validate$(_RST)     to re-run validation anytime\n\n"
 
@@ -376,15 +379,33 @@ migrate-hnsw:
 # Demo seed
 # ---------------------------------------------------------------------------
 
-seed-demo:
+# The organisation and its accounts come first: the SQL seed's topics and
+# sources reference the organisation by foreign key. Credentials are read from
+# .env, so a missing ANVESHAK_DEMO_* password stops here rather than seeding an
+# account nobody can log in as.
+seed-demo: seed-demo-accounts
 	$(call header,Loading Demo Scenario)
-	@$(COMPOSE) exec -T postgres psql -U anveshak -d anveshak < scripts/seed_demo.sql 2>&1 | tail -1
+	@$(COMPOSE) exec -T postgres psql -v ON_ERROR_STOP=1 -U anveshak -d anveshak < scripts/seed_demo.sql
 	$(call success,Demo scenario loaded)
 	@printf "\n  Content only. Clusters and Signals come from detection.\n"
 	@printf "  Next: $(_BOLD)make demo-detect$(_RST)  to run the pipeline over it\n"
 	@printf "\n  Login at $(_CYN)http://localhost:3000$(_RST)\n"
-	@printf "  Username: $(_BOLD)demo@anveshak.local$(_RST)\n"
-	@printf "  Password: $(_BOLD)AnveshakDemo2024!$(_RST)\n\n"
+	@set -a; . ./.env; set +a; printf "  Username: $(_BOLD)%s$(_RST) (from .env)\n" "$$ANVESHAK_DEMO_ANALYST_USERNAME"
+	@printf "  Password: $(_BOLD)ANVESHAK_DEMO_ANALYST_PASSWORD$(_RST) in .env\n\n"
+
+# POSTGRES_URL is exported inside the subshell rather than set on the command
+# line, so the database password does not sit in the child process's argv.
+seed-demo-accounts:
+	$(call header,Seeding Demonstration Organisation and Accounts)
+	@test -f .env || { printf "  $(_FAIL) .env not found - run: cp .env.example .env\n"; exit 1; }
+	@set -a; . ./.env; set +a; $(UV) python scripts/seed_demo_org.py
+	$(call success,Organisation and accounts seeded)
+
+# Validates the demonstration credentials without touching the database, so a
+# fresh box fails in seconds rather than at step 7 of 8 after an image build.
+seed-demo-check:
+	@test -f .env || { printf "  $(_FAIL) .env not found - run: cp .env.example .env\n"; exit 1; }
+	@set -a; . ./.env; set +a; $(UV) python scripts/seed_demo_org.py --check
 
 seed-demo-ec:
 	$(call header,Loading Engine C Demo — 4 Agency Scenarios)
@@ -392,7 +413,7 @@ seed-demo-ec:
 	$(call success,Engine C demo loaded (MEA + Cyber + SEBI + NCB))
 	@printf "\n  Orgs: org_mea, org_cyber, org_sebi, org_ncb\n"
 	@printf "  Login: demo_{mea,cyber,sebi,ncb}@anveshak.local\n"
-	@printf "  Password: $(_BOLD)AnveshakDemo2024!$(_RST)\n\n"
+	@printf "  Password: $(_BOLD)the legacy shared password in scripts/seed_demo_engine_c.sql$(_RST)\n\n"
 
 seed-demo-iaf:
 	$(call header,Loading IAF Bengaluru Demo — Air Force Intelligence)
@@ -400,7 +421,7 @@ seed-demo-iaf:
 	$(call success,IAF demo loaded (3 topics — Chinese Air Power + Disinfo + PAF))
 	@printf "\n  Login at $(_CYN)http://localhost:3000$(_RST)\n"
 	@printf "  Username: $(_BOLD)demo_iaf@anveshak.local$(_RST)\n"
-	@printf "  Password: $(_BOLD)AnveshakDemo2024!$(_RST)\n\n"
+	@printf "  Password: $(_BOLD)the legacy shared password in scripts/seed_airforce_bengaluru_demo.sql$(_RST)\n\n"
 
 seed-demo-tgcsb:
 	$(call header,Loading Telangana TGCSB Demo — Cyber Fraud Intelligence)
@@ -408,7 +429,7 @@ seed-demo-tgcsb:
 	$(call success,TGCSB demo loaded (topic tg-cyber-001 — investment fraud + mule accounts))
 	@printf "\n  Login at $(_CYN)http://localhost:3000$(_RST)\n"
 	@printf "  Username: $(_BOLD)demo_cyber@anveshak.local$(_RST)\n"
-	@printf "  Password: $(_BOLD)AnveshakDemo2024!$(_RST)\n\n"
+	@printf "  Password: $(_BOLD)the legacy shared password in scripts/seed_telangana_demo.sql$(_RST)\n\n"
 
 pdf-telangana:
 	$(call header,Generating Telangana TGCSB Leave-Behind PDF)
@@ -423,7 +444,7 @@ seed-demo-haryana:
 	$(call success,Haryana STF demo loaded (topic hr-stf-001 — drug trafficking + narcotics))
 	@printf "\n  Login at $(_CYN)http://localhost:3000$(_RST)\n"
 	@printf "  Username: $(_BOLD)demo_cyber@anveshak.local$(_RST)\n"
-	@printf "  Password: $(_BOLD)AnveshakDemo2024!$(_RST)\n\n"
+	@printf "  Password: $(_BOLD)the legacy shared password in scripts/seed_haryana_demo.sql$(_RST)\n\n"
 
 pdf-haryana:
 	$(call header,Generating Haryana STF Leave-Behind PDF)
@@ -451,7 +472,7 @@ seed-demo-kerala:
 	$(call success,Kerala demo loaded (topic kl-cyd-001 — child protection + predator networks))
 	@printf "\n  Login at $(_CYN)http://localhost:3000$(_RST)\n"
 	@printf "  Username: $(_BOLD)demo_cyber@anveshak.local$(_RST)\n"
-	@printf "  Password: $(_BOLD)AnveshakDemo2024!$(_RST)\n\n"
+	@printf "  Password: $(_BOLD)the legacy shared password in scripts/seed_kerala_demo.sql$(_RST)\n\n"
 
 pdf-kerala:
 	$(call header,Generating Kerala Cyber Dome Leave-Behind PDF)

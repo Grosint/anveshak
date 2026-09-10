@@ -28,6 +28,9 @@ graphify-out/
 secrets/
 *_secret*
 *_credentials*
+# Blanket patterns above also match source files with the same words in
+# their name. Tests are never credential stores, so keep them visible.
+!tests/**
 
 # Telegram session strings
 *.session

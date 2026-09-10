@@ -19,6 +19,11 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 
+# Demonstration credentials come from the environment - issue #41.
+# scripts/seed_demo_org.py seeds these; nothing here carries a password.
+DEMO_USER = os.environ.get("ANVESHAK_DEMO_ANALYST_USERNAME", "demo@anveshak.local")
+DEMO_PASS = os.environ.get("ANVESHAK_DEMO_ANALYST_PASSWORD", "")
+
 
 @dataclass
 class Check:
@@ -72,9 +77,11 @@ def check_services() -> list[Check]:
             Check(
                 f"Step 1 — {name} service",
                 passed,
-                f"HTTP {status}"
-                if passed
-                else f"HTTP {status} — {body.get('error', body.get('detail', 'no response'))}",
+                (
+                    f"HTTP {status}"
+                    if passed
+                    else f"HTTP {status} — {body.get('error', body.get('detail', 'no response'))}"
+                ),
             )
         )
     return checks
@@ -99,9 +106,11 @@ def check_ollama_models() -> list[Check]:
         Check(
             f"Step 2 — Ollama model: {configured_model}",
             found,
-            "loaded"
-            if found
-            else f"not found — run: docker exec anveshak-ollama ollama pull {configured_model}",
+            (
+                "loaded"
+                if found
+                else f"not found — run: docker exec anveshak-ollama ollama pull {configured_model}"
+            ),
         )
     ]
 
@@ -112,11 +121,15 @@ def check_ollama_models() -> list[Check]:
 
 
 def demo_login(base: str) -> tuple[Check, str | None]:
+    if not DEMO_PASS:
+        # An empty password posts fine and comes back 401, which reads like a
+        # broken API rather than a missing variable.
+        return Check("Step 3 — Demo login", False, "ANVESHAK_DEMO_ANALYST_PASSWORD is not set"), None
     try:
         data = json.dumps(
             {
-                "username": "demo@anveshak.local",
-                "password": "AnveshakDemo2024!",
+                "username": DEMO_USER,
+                "password": DEMO_PASS,
             }
         ).encode()
         req = urllib.request.Request(
@@ -132,9 +145,10 @@ def demo_login(base: str) -> tuple[Check, str | None]:
         return Check("Step 3 — Demo login", False, str(e)), None
 
     passed = bool(token)
-    return Check(
-        "Step 3 — Demo login", passed, "OK" if passed else "no access_token returned"
-    ), token
+    return (
+        Check("Step 3 — Demo login", passed, "OK" if passed else "no access_token returned"),
+        token,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -210,9 +224,11 @@ def check_vision_deepfake(base: str, token: str) -> Check:
     return Check(
         "Step 6 — Vision deepfake score",
         is_float,
-        f"deepfake_score={score} (float ✓)"
-        if is_float
-        else f"deepfake_score={score!r} is not a 0–1 float",
+        (
+            f"deepfake_score={score} (float ✓)"
+            if is_float
+            else f"deepfake_score={score!r} is not a 0–1 float"
+        ),
     )
 
 
@@ -245,9 +261,11 @@ def check_report(base: str, token: str) -> Check:
     return Check(
         "Step 7 — Intelligence report",
         has_generated_at,
-        f"report '{first.get('title', '')[:50]}...' generated_at set ✓"
-        if has_generated_at
-        else "generated_at is null",
+        (
+            f"report '{first.get('title', '')[:50]}...' generated_at set ✓"
+            if has_generated_at
+            else "generated_at is null"
+        ),
     )
 
 
@@ -343,7 +361,7 @@ def main() -> int:
     print("RESULT: READY FOR DEMO")
     print()
     print("  Analyst workbench: http://localhost:3000")
-    print("  Login:             demo@anveshak.local / AnveshakDemo2024!")
+    print(f"  Login:             {DEMO_USER} / the password in ANVESHAK_DEMO_ANALYST_PASSWORD")
     print("  Prometheus:        http://localhost:9090")
     print("  Grafana:           http://localhost:3001")
     return 0

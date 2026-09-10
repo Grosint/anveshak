@@ -21,8 +21,15 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 BASE = "http://localhost:8000"
-DEMO_USER = "demo@anveshak.local"
-DEMO_PASS = "AnveshakDemo2024!"
+# Demonstration credentials come from the environment - issue #41.
+# scripts/seed_demo_org.py seeds these; nothing here carries a password.
+DEMO_USER = os.environ.get("ANVESHAK_DEMO_ANALYST_USERNAME", "demo@anveshak.local")
+DEMO_PASS = os.environ.get("ANVESHAK_DEMO_ANALYST_PASSWORD", "")
+
+if not DEMO_PASS:
+    # An empty password reaches the API as a 401, which reads like a broken
+    # deployment rather than an unset variable.
+    raise SystemExit("ERROR: ANVESHAK_DEMO_ANALYST_PASSWORD is not set - see .env.example")
 
 
 @dataclass
@@ -505,7 +512,7 @@ def main() -> int:
 
     print()
     print("  Analyst workbench: http://localhost:3000")
-    print(f"  Login:             {DEMO_USER} / {DEMO_PASS}")
+    print(f"  Login:             {DEMO_USER} / the password in ANVESHAK_DEMO_ANALYST_PASSWORD")
     print("  Grafana:           http://localhost:3001")
     print("=" * 62)
     return 0

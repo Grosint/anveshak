@@ -1,49 +1,53 @@
 #!/usr/bin/env python3
-"""Generate a bcrypt hash for the Anveshak demo password.
+"""Generate demonstration account passwords for .env - issue #41.
+
+Passwords are no longer pasted into a seed file as bcrypt hashes.
+scripts/seed_demo_org.py reads them from the environment and hashes them at
+seed time, so what this script produces is .env lines rather than SQL.
 
 Usage:
-    uv run python scripts/gen_demo_password.py
-    uv run python scripts/gen_demo_password.py --password "YourNewPassword"
-
-The output hash goes into scripts/seed_demo.sql (hashed_password column).
+    uv run python scripts/gen_demo_password.py          # all three accounts
+    uv run python scripts/gen_demo_password.py --length 32
 """
 
 from __future__ import annotations
 
 import argparse
-import sys
+import secrets
 
-DEFAULT_PASSWORD = "AnveshakDemo2024!"
+PASSWORD_VARS = (
+    "ANVESHAK_DEMO_ANALYST_PASSWORD",
+    "ANVESHAK_DEMO_ADMIN_PASSWORD",
+    "ANVESHAK_DEMO_SUPERADMIN_PASSWORD",
+)
+
+# bcrypt hashes the first 72 bytes only, so a longer password is partly
+# decorative. Stay well inside that.
+MAX_LENGTH = 64
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate bcrypt hash for demo user")
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Generate demonstration account passwords")
     parser.add_argument(
-        "--password",
-        default=DEFAULT_PASSWORD,
-        help=f"Password to hash (default: {DEFAULT_PASSWORD})",
-    )
-    parser.add_argument(
-        "--rounds",
+        "--length",
         type=int,
-        default=12,
-        help="bcrypt cost factor (default: 12)",
+        default=24,
+        help="password length in characters (default: 24)",
     )
     args = parser.parse_args()
 
-    try:
-        import bcrypt
-    except ImportError:
-        print("ERROR: bcrypt not installed. Run: uv add bcrypt", file=sys.stderr)
-        sys.exit(1)
+    if not 12 <= args.length <= MAX_LENGTH:
+        print(f"ERROR: --length must be between 12 and {MAX_LENGTH}")
+        return 1
 
-    hashed = bcrypt.hashpw(args.password.encode(), bcrypt.gensalt(rounds=args.rounds)).decode()
-    print(f"\nPassword : {args.password}")
-    print(f"Hash     : {hashed}")
-    print()
-    print("Paste this hash into scripts/seed_demo.sql hashed_password column.")
-    print("Then run: make seed-demo")
+    print("Add these to .env, then run: make seed-demo\n")
+    for var in PASSWORD_VARS:
+        # token_urlsafe returns roughly 1.3 characters per byte.
+        password = secrets.token_urlsafe(args.length)[: args.length]
+        print(f"{var}={password}")
+    print("\nRerunning the seed after changing a password updates the account.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -39,8 +40,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 BASE = "http://localhost:8000"
-DEMO_USER = "demo@anveshak.local"
-DEMO_PASS = "AnveshakDemo2024!"
+# Demonstration credentials come from the environment - issue #41.
+# scripts/seed_demo_org.py seeds these; nothing here carries a password.
+DEMO_USER = os.environ.get("ANVESHAK_DEMO_ANALYST_USERNAME", "demo@anveshak.local")
+DEMO_PASS = os.environ.get("ANVESHAK_DEMO_ANALYST_PASSWORD", "")
+
+if not DEMO_PASS:
+    # An empty password reaches the API as a 401, which reads like a broken
+    # deployment rather than an unset variable.
+    raise SystemExit("ERROR: ANVESHAK_DEMO_ANALYST_PASSWORD is not set - see .env.example")
 
 JOB_POLL_INTERVAL_S = 5
 JOB_TIMEOUT_S = 180  # longer for video (keyframe extraction)

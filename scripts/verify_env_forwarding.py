@@ -40,6 +40,16 @@ EXEMPT_VARS: dict[str, str] = {
     # container. Forwarding them would imply a service reads them, which is worse.
     "ANVESHAK_ALLOW_LIVE": "host-only guard for scripts/seed_demo.py --live",
     "COMPOSE_PROJECT_NAME": "read by the docker compose CLI itself, not by a service",
+    # Read on the host by scripts/seed_demo_org.py before any container is
+    # involved. A service that could read a demonstration password would be a
+    # service that could seed accounts, which none of them should be.
+    "ANVESHAK_DEMO_ANALYST_USERNAME": "host-only, read by scripts/seed_demo_org.py",
+    "ANVESHAK_DEMO_ANALYST_PASSWORD": "host-only, read by scripts/seed_demo_org.py",
+    "ANVESHAK_DEMO_ADMIN_USERNAME": "host-only, read by scripts/seed_demo_org.py",
+    "ANVESHAK_DEMO_ADMIN_PASSWORD": "host-only, read by scripts/seed_demo_org.py",
+    "ANVESHAK_DEMO_SUPERADMIN_USERNAME": "host-only, read by scripts/seed_demo_org.py",
+    "ANVESHAK_DEMO_SUPERADMIN_PASSWORD": "host-only, read by scripts/seed_demo_org.py",
+    "ANVESHAK_ALLOW_DEMO_SEED": "host-only opt-in for seeding demo accounts in production",
 }
 
 # Matches `FOO=` at the start of a line in a .env file.

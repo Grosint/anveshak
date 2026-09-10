@@ -54,36 +54,10 @@ VALUES (
 -- =============================================================================
 -- 1. USERS
 -- =============================================================================
--- Password: AnveshakDemo2024! (bcrypt hash, rounds=12)
-
-INSERT INTO users (id, username, password_hash, role, org_id, created_at, updated_at, labels)
-VALUES (
-    'demo0001-0000-0000-0000-000000000001',
-    'demo@anveshak.local',
-    '$2b$12$exK0vBQZHOMCPjg37GTJZ.AtYqz1NI5SXwMLrWjnPvP2IqZMZKaei',
-    'analyst',
-    'org-anshul',
-    NOW() - INTERVAL '30 days',
-    NOW(),
-    '{"classification": "OPEN", "domain": "osint", "owner_org": "anshul"}'::jsonb
-)
-ON CONFLICT (username) DO NOTHING;
-
--- Admin user account
--- Password: AnveshakAdmin2024! (bcrypt hash, rounds=12)
-
-INSERT INTO users (id, username, password_hash, role, org_id, created_at, updated_at, labels)
-VALUES (
-    'demo0001-0000-0000-0000-000000000002',
-    'admin@anveshak.local',
-    '$2b$12$S12K1p/iLSVP3VohoNnP1uxB493/aJIMt6lf/xmUWjJjvTJZHmSt.',
-    'admin',
-    'org-anshul',
-    NOW() - INTERVAL '30 days',
-    NOW(),
-    '{"classification": "OPEN", "domain": "osint", "owner_org": "anshul"}'::jsonb
-)
-ON CONFLICT (username) DO NOTHING;
+-- Seeded by scripts/seed_demo_org.py, not here. It reads every password from
+-- the environment, so this file carries neither a password nor a hash, and it
+-- owns demo@anveshak.local and admin@anveshak.local. Run it first:
+--     make seed-demo-accounts
 
 -- =============================================================================
 -- 2. TOPICS (6)
@@ -1539,7 +1513,7 @@ BEGIN
     RAISE NOTICE '=============================================================';
     RAISE NOTICE 'Anveshak Full Demo Seed — Complete';
     RAISE NOTICE '=============================================================';
-    RAISE NOTICE '  Users:              1 (demo@anveshak.local / AnveshakDemo2024!)';
+    RAISE NOTICE '  Users:              0 - seeded by scripts/seed_demo_org.py';
     RAISE NOTICE '  Topics:             6';
     RAISE NOTICE '  Sources:           15 (mixed platforms & credibility)';
     RAISE NOTICE '  Topic-Sources:     31 associations';
@@ -1554,8 +1528,7 @@ BEGIN
     RAISE NOTICE '=============================================================';
     RAISE NOTICE '';
     RAISE NOTICE '  Login:    http://localhost:3000';
-    RAISE NOTICE '  Username: demo@anveshak.local';
-    RAISE NOTICE '  Password: AnveshakDemo2024!';
+    RAISE NOTICE '  Credentials: ANVESHAK_DEMO_* in .env';
     RAISE NOTICE '';
     RAISE NOTICE '  Topics:';
     RAISE NOTICE '    1. Strait of Hormuz — Maritime Threat Monitoring';
