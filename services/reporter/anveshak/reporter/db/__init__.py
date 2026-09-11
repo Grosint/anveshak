@@ -279,13 +279,19 @@ async def set_report_generated(
     geojson: dict[str, Any],
     source_snapshot: dict[str, Any],
     content_item_count: int,
+    now: datetime | None = None,
 ) -> bool:
     """Set generated_at ONCE via WHERE generated_at IS NULL guard.
 
     Returns True if the row was updated (first time), False if already generated
     (idempotency — second call is a no-op).
+
+    `now` is the moment the report is generated at, resolved by the caller and
+    defaulting to the current time. Architectural rule 4 forbids updating
+    generated_at, and this does not: the value is still written once, at
+    generation. See ADR 0003.
     """
-    now = datetime.now(UTC)
+    now = now if now is not None else datetime.now(UTC)
     async with pool.acquire() as conn:
         result = await conn.execute(
             SQL_SET_REPORT_GENERATED,
@@ -519,7 +525,7 @@ SQL_REPORT_SENTIMENT_TREND = """
     WHERE (ci.topic_id = $1
        OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND ci.labels->>'sentiment_compound' IS NOT NULL
-      AND ci.captured_at >= NOW() - INTERVAL '30 days'
+      AND ci.captured_at >= $2::timestamptz - INTERVAL '30 days'
     GROUP BY DATE(ci.captured_at)
     ORDER BY DATE(ci.captured_at)
 """
@@ -531,7 +537,7 @@ SQL_REPORT_KEYWORDS = """
     WHERE (ci.topic_id = $1
        OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND ci.labels->'keywords' IS NOT NULL
-      AND ci.captured_at >= NOW() - INTERVAL '7 days'
+      AND ci.captured_at >= $2::timestamptz - INTERVAL '7 days'
     GROUP BY kw
     ORDER BY COUNT(*) DESC
     LIMIT 20
@@ -614,17 +620,39 @@ async def fetch_report_entities(pool: asyncpg.Pool, topic_id: str) -> list[dict[
     return [dict(r) for r in rows]
 
 
-async def fetch_report_sentiment_trend(pool: asyncpg.Pool, topic_id: str) -> list[dict[str, Any]]:
-    """Return daily sentiment aggregation for last 30 days."""
+async def fetch_report_sentiment_trend(
+    pool: asyncpg.Pool,
+    topic_id: str,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """Return daily sentiment aggregation for the 30 days before `now`.
+
+    `now` is the moment the report is generated at, defaulting to the current
+    time. "Last 30 days" then means 30 days before the report's own date
+    rather than 30 days before whenever the query ran. See ADR 0003.
+    """
     async with pool.acquire() as conn:
-        rows = await conn.fetch(SQL_REPORT_SENTIMENT_TREND, topic_id)
+        rows = await conn.fetch(
+            SQL_REPORT_SENTIMENT_TREND,
+            topic_id,
+            now if now is not None else datetime.now(UTC),
+        )
     return [dict(r) for r in rows]
 
 
-async def fetch_report_keywords(pool: asyncpg.Pool, topic_id: str) -> list[dict[str, Any]]:
-    """Return trending keywords from last 7 days."""
+async def fetch_report_keywords(
+    pool: asyncpg.Pool,
+    topic_id: str,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """Return trending keywords from the 7 days before `now`, which defaults
+    to the current time. See ADR 0003."""
     async with pool.acquire() as conn:
-        rows = await conn.fetch(SQL_REPORT_KEYWORDS, topic_id)
+        rows = await conn.fetch(
+            SQL_REPORT_KEYWORDS,
+            topic_id,
+            now if now is not None else datetime.now(UTC),
+        )
     return [dict(r) for r in rows]
 
 
@@ -644,12 +672,21 @@ async def fetch_report_language_breakdown(
     return [dict(r) for r in rows]
 
 
-async def fetch_report_data_bundle(pool: asyncpg.Pool, topic_id: str) -> dict[str, Any]:
+async def fetch_report_data_bundle(
+    pool: asyncpg.Pool,
+    topic_id: str,
+    now: datetime | None = None,
+) -> dict[str, Any]:
     """Fetch all structured data for a data-driven report.
 
     Runs all queries concurrently via asyncio.gather for performance.
     Returns dict with keys: topic_stats, sources, clusters, signals,
     entities, sentiment_trend, keywords, evidence_items, language_breakdown.
+
+    `now` anchors the two sections whose windows are relative, so a report
+    dated to a past moment describes "the last 7 days" of that moment.
+    Bounding the report's whole evidence set to an arbitrary date range is a
+    separate capability and is not this parameter.
     """
     import asyncio
 
@@ -659,8 +696,8 @@ async def fetch_report_data_bundle(pool: asyncpg.Pool, topic_id: str) -> dict[st
         fetch_report_topic_clusters(pool, topic_id),
         fetch_report_signals(pool, topic_id),
         fetch_report_entities(pool, topic_id),
-        fetch_report_sentiment_trend(pool, topic_id),
-        fetch_report_keywords(pool, topic_id),
+        fetch_report_sentiment_trend(pool, topic_id, now),
+        fetch_report_keywords(pool, topic_id, now),
         fetch_report_evidence_items(pool, topic_id),
         fetch_report_language_breakdown(pool, topic_id),
     )

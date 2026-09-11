@@ -35,6 +35,25 @@ x-llm-env: &llm-env
   LLM_CLOUD_EXTRA_HEADERS: ${LLM_CLOUD_EXTRA_HEADERS:-}
   LLM_CLOUD_ALLOWED_ENVIRONMENTS: ${LLM_CLOUD_ALLOWED_ENVIRONMENTS:-["development","test","local"]}
 
+# The virtual clock exists so a Replay can run detection at the date the
+# evidence existed. Off by default, and an override is refused rather than
+# ignored when it is off. See docs/adr/0003-virtual-clock.md.
+#
+# Forwarded to three containers, for two different reasons.
+#
+# analyse-worker and report-worker can be handed a reference time as an ARQ
+# job argument, so they read the flag to decide whether to accept it.
+#
+# analyse-scheduler is never handed one. It reads the flag to suspend
+# wall-clock cluster archival, because a deployment where backdated rows can
+# exist must not archive on staleness measured against now.
+#
+# Deliberately not in x-common-env: a scraper that could backdate a Capture
+# Time would be a different capability than the one this flag gates.
+x-clock-env: &clock-env
+  VIRTUAL_CLOCK_ENABLED: ${VIRTUAL_CLOCK_ENABLED:-false}
+  VIRTUAL_CLOCK_ALLOWED_ENVIRONMENTS: ${VIRTUAL_CLOCK_ALLOWED_ENVIRONMENTS:-["development","test","local","replay"]}
+
 x-vision-env: &vision-env
   <<: *common-env
   VISION_DEVICE: ${VISION_DEVICE:-cpu}
@@ -502,7 +521,7 @@ services:
     mem_limit: 1g
     command: ["python", "-m", "anveshak.analyst.scheduler"]
     environment:
-      <<: *common-env
+      <<: [*common-env, *clock-env]
       HOSTILITY_SHIFT_THRESHOLD: ${HOSTILITY_SHIFT_THRESHOLD:-0.15}
       HOSTILITY_SHIFT_WINDOW_HOURS: ${HOSTILITY_SHIFT_WINDOW_HOURS:-24}
       HOSTILITY_SHIFT_BASELINE_DAYS: ${HOSTILITY_SHIFT_BASELINE_DAYS:-7}
@@ -562,7 +581,7 @@ services:
     cpus: ${ANALYST_WORKER_CPUS:-4}
     command: ["python", "-m", "arq", "anveshak.analyst.jobs.WorkerSettings"]
     environment:
-      <<: [*common-env, *llm-env]
+      <<: [*common-env, *llm-env, *clock-env]
       SPACY_EN_MODEL: ${SPACY_EN_MODEL:-en_core_web_md}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2:7b}
       LLM_LABEL_MAX_TOKENS: ${LLM_LABEL_MAX_TOKENS:-512}
@@ -651,7 +670,7 @@ services:
     restart: unless-stopped
     mem_limit: 1g
     environment:
-      <<: [*common-env, *llm-env]
+      <<: [*common-env, *llm-env, *clock-env]
       REPORT_OUTPUT_DIR: /app/reports
       REPORT_TEMPLATE_DIR: /app/templates
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2:7b}

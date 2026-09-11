@@ -18,11 +18,12 @@ from __future__ import annotations
 import json
 import uuid
 from collections import Counter
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 import asyncpg
 import structlog
+from anveshak.clock import resolve_reference_time
 
 from .metrics import analyst_signals_fired_total
 from .settings import settings
@@ -194,12 +195,16 @@ def build_evidence(
 async def check_manufactured_narratives(
     pool: asyncpg.Pool,
     broadcast: BroadcastFn,
+    reference_time: datetime | None = None,
 ) -> int:
     """One pass over amplified clusters. Returns count of signals fired.
 
-    Dedup is the shared 24h per-cluster window every other signal uses.
+    Dedup is the shared 24h per-cluster window every other signal uses,
+    measured back from reference_time. reference_time defaults to the current
+    time. See ADR 0003.
     """
     fired = 0
+    now = resolve_reference_time(reference_time)
 
     async with pool.acquire() as conn:
         clusters = await conn.fetch(
@@ -223,7 +228,7 @@ async def check_manufactured_narratives(
             ):
                 continue
 
-            if await is_duplicate_signal(conn, cluster_id, _SIGNAL_TYPE_MANUFACTURED):
+            if await is_duplicate_signal(conn, cluster_id, _SIGNAL_TYPE_MANUFACTURED, now):
                 continue
 
             sample = await conn.fetch(
@@ -248,7 +253,6 @@ async def check_manufactured_narratives(
             )
 
             signal_id = str(uuid.uuid4())
-            now = datetime.now(UTC)
             await conn.execute(
                 SQL_INSERT_SIGNAL,
                 signal_id,

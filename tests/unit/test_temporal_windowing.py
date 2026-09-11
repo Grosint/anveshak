@@ -35,12 +35,14 @@ async def test_windowed_query_uses_filtered_sql():
     result = await load_embeddings("topic-1", mock_pool, window_days=30)
 
     assert result == []
-    mock_conn.fetch.assert_called_once_with(
-        SQL_TOPIC_EMBEDDINGS_WINDOWED,
-        "topic-1",
-        0.0,
-        30,
-    )
+    # The window anchor is the pass's reference time, which defaults to the
+    # current time. Asserted as a type rather than a value, since pinning it
+    # would mean freezing the clock the parameter exists to avoid. ADR 0003.
+    mock_conn.fetch.assert_called_once()
+    sql, topic_id, threshold, window_days, anchor = mock_conn.fetch.call_args.args
+    assert sql == SQL_TOPIC_EMBEDDINGS_WINDOWED
+    assert (topic_id, threshold, window_days) == ("topic-1", 0.0, 30)
+    assert anchor.tzinfo is not None
 
 
 @pytest.mark.unit

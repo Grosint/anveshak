@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 import arq
 import asyncpg
 import structlog
+from anveshak.clock import ClockSettings, log_clock_startup, parse_reference_time
 from anveshak.llm import LLMProviderSettings, log_provider_startup
 from anveshak.logging import configure_logging
 from anveshak.tracing import configure_tracing
@@ -436,15 +437,20 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def run_clustering(ctx: dict, topic_id: str) -> None:
+async def run_clustering(ctx: dict, topic_id: str, reference_time: str | None = None) -> None:
     """Leiden clustering for a topic (criteria 2.1–2.5).
 
     Creates/updates narrative_clusters rows and enqueues label generation
     for each cluster formed. Also enqueues cross-verification boost (7.1)
     so the feedback loop fires immediately after fresh clusters exist.
+
+    reference_time is an ISO-8601 timestamp with an offset, supplied by a
+    Replay stage and refused unless VIRTUAL_CLOCK_ENABLED is on. Omitted on
+    every live dispatch. See ADR 0003.
     """
     db_pool: asyncpg.Pool = ctx["db_pool"]
-    cluster_ids = await _run_clustering(topic_id, db_pool)
+    reference = parse_reference_time(reference_time)
+    cluster_ids = await _run_clustering(topic_id, db_pool, reference_time=reference)
 
     from arq import create_pool
 
@@ -465,7 +471,14 @@ async def run_clustering(ctx: dict, topic_id: str) -> None:
 
     # Enqueue cross-verification boost for this topic (7.1)
     if cluster_ids:
-        await redis.enqueue_job("run_cross_verification", topic_id, _queue_name="arq:analyst")
+        # The stage's reference time travels with the chained job, or the
+        # boost it writes would be audit-logged on the day of the Replay.
+        await redis.enqueue_job(
+            "run_cross_verification",
+            topic_id,
+            reference_time,
+            _queue_name="arq:analyst",
+        )
 
     analyst_clusters_created_total.labels(topic_id=topic_id).inc(len(cluster_ids))
     log.info("jobs.run_clustering.done", topic_id=topic_id, clusters=len(cluster_ids))
@@ -486,14 +499,17 @@ async def score_cluster_stance(ctx: dict, cluster_id: str) -> None:
     log.info("jobs.score_cluster_stance.done", cluster_id=cluster_id, items_scored=scored)
 
 
-async def detect_candidate_topics_job(ctx: dict) -> int:
+async def detect_candidate_topics_job(ctx: dict, reference_time: str | None = None) -> int:
     """Surface narratives forming inside a Watch Space (#26).
 
     Proposes only. Nothing is monitored until an analyst accepts, so this job
-    never creates a Topic.
+    never creates a Topic. reference_time is a Replay stage's clock, omitted
+    on every live dispatch. See ADR 0003.
     """
     db_pool: asyncpg.Pool = ctx["db_pool"]
-    written = await detect_candidate_topics(db_pool)
+    written = await detect_candidate_topics(
+        db_pool, reference_time=parse_reference_time(reference_time)
+    )
     log.info("jobs.detect_candidate_topics.done", candidates=written)
     return written
 
@@ -517,10 +533,14 @@ async def generate_cluster_label(ctx: dict, cluster_id: str) -> None:
     log.info("jobs.generate_cluster_label.done", cluster_id=cluster_id, label=label)
 
 
-async def update_source_credibility(ctx: dict) -> None:
-    """Auto-update source credibility scores based on deepfake amplification (criteria 2.21–2.24)."""
+async def update_source_credibility(ctx: dict, reference_time: str | None = None) -> None:
+    """Auto-update source credibility scores based on deepfake amplification (criteria 2.21–2.24).
+
+    reference_time is a Replay stage's clock, omitted on every live dispatch.
+    See ADR 0003.
+    """
     db_pool: asyncpg.Pool = ctx["db_pool"]
-    await run_credibility_update(db_pool)
+    await run_credibility_update(db_pool, reference_time=parse_reference_time(reference_time))
     log.info("jobs.update_source_credibility.done")
 
 
@@ -541,24 +561,32 @@ async def backfill_topic_job(ctx: dict, topic_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def run_cross_verification(ctx: dict, topic_id: str) -> None:
+async def run_cross_verification(
+    ctx: dict, topic_id: str, reference_time: str | None = None
+) -> None:
     """Boost credibility of high-credibility sources confirmed by multi-platform clusters (7.1).
 
     Enqueued by run_clustering — not a cron. Scoped to a single topic_id so
-    only the relevant cluster data is queried.
+    only the relevant cluster data is queried. reference_time arrives from the
+    run_clustering job that chained this one. See ADR 0003.
     """
     db_pool: asyncpg.Pool = ctx["db_pool"]
-    updated = await run_cross_verification_update(db_pool, topic_id)
+    updated = await run_cross_verification_update(
+        db_pool, topic_id, reference_time=parse_reference_time(reference_time)
+    )
     log.info("jobs.run_cross_verification.done", topic_id=topic_id, updated=updated)
 
 
-async def run_contradiction_scoring(ctx: dict) -> None:
+async def run_contradiction_scoring(ctx: dict, reference_time: str | None = None) -> None:
     """Daily global pass: reduce credibility for sources with high noise-item ratio (7.2).
 
-    Registered as an ARQ cron job — runs once per day at 02:00 UTC.
+    Registered as an ARQ cron job — runs once per day at 02:00 UTC, and
+    dispatchable by a Replay stage with a reference_time. See ADR 0003.
     """
     db_pool: asyncpg.Pool = ctx["db_pool"]
-    updated = await run_contradiction_update(db_pool)
+    updated = await run_contradiction_update(
+        db_pool, reference_time=parse_reference_time(reference_time)
+    )
     log.info("jobs.run_contradiction_scoring.done", updated=updated)
 
 
@@ -672,6 +700,7 @@ async def on_startup(ctx: dict) -> None:
     # A disabled or degraded feature explains itself at startup. Without this,
     # local inference and a refused cloud configuration look identical.
     log_provider_startup(LLMProviderSettings(), service="analyst-worker")
+    log_clock_startup(ClockSettings(), service="analyst-worker")
     log_confirmation_startup()
 
     log.info("analyst_worker.ready")

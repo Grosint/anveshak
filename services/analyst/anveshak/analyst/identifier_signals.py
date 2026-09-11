@@ -17,6 +17,7 @@ from typing import Awaitable, Callable
 
 import asyncpg
 import structlog
+from anveshak.clock import resolve_reference_time
 from anveshak.db import DBConnection
 
 from .metrics import analyst_signals_fired_total
@@ -52,7 +53,7 @@ SQL_DUPLICATE_IDENTIFIER_SIGNAL_CHECK = """
     SELECT id FROM signals
     WHERE signal_type = 'identifier_convergence'
       AND evidence->>'identifier_cluster_id' = $1
-      AND created_at > NOW() - INTERVAL '24 hours'
+      AND created_at > $2::timestamptz - INTERVAL '24 hours'
     LIMIT 1
 """
 
@@ -152,11 +153,14 @@ def build_identifier_signal_payload(
 async def is_duplicate_identifier_signal(
     conn: DBConnection,
     identifier_cluster_id: str,
+    now: datetime | None = None,
 ) -> bool:
-    """Return True if identifier_convergence signal fired for this cluster in last 24h."""
+    """Return True if an identifier_convergence signal fired for this cluster
+    in the 24h before `now`. `now` defaults to the current time."""
     row = await conn.fetchrow(
         SQL_DUPLICATE_IDENTIFIER_SIGNAL_CHECK,
         identifier_cluster_id,
+        now if now is not None else datetime.now(timezone.utc),
     )
     return row is not None
 
@@ -173,8 +177,11 @@ async def fire_identifier_signal(
     content_item_count: int,
     now: datetime,
 ) -> str | None:
-    """Insert identifier_convergence signal. Returns signal_id or None if deduplicated."""
-    if await is_duplicate_identifier_signal(conn, identifier_cluster_id):
+    """Insert identifier_convergence signal. Returns signal_id or None if deduplicated.
+
+    `now` is both the dedup anchor and the row's created_at.
+    """
+    if await is_duplicate_identifier_signal(conn, identifier_cluster_id, now):
         log.debug(
             "identifier_signals.dedup_skipped",
             identifier_cluster_id=identifier_cluster_id,
@@ -234,12 +241,15 @@ BroadcastFn = Callable[[dict], Awaitable[None]]
 async def check_identifier_signals(
     pool: asyncpg.Pool,
     broadcast: BroadcastFn,
+    reference_time: datetime | None = None,
 ) -> int:
     """One check pass: query breaching identifier clusters, fire signals.
 
-    Returns count of signals fired.
+    Returns count of signals fired. reference_time is the time this pass
+    treats as now, defaulting to the current time. See ADR 0003.
     """
     fired = 0
+    now = resolve_reference_time(reference_time)
 
     async with pool.acquire() as conn:
         clusters = await conn.fetch(SQL_BREACHING_IDENTIFIER_CLUSTERS)
@@ -258,8 +268,6 @@ async def check_identifier_signals(
                 cluster_id,
             )
             sources = [f"{r['platform']}:{r['name']}" for r in source_rows]
-
-            now = datetime.now(timezone.utc)
 
             signal_id = await fire_identifier_signal(
                 conn,

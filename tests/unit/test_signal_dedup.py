@@ -81,7 +81,7 @@ class TestIsDuplicateSignal:
         """Signals for different clusters are independent."""
         call_count = 0
 
-        async def mock_fetchrow(sql, cluster_id, signal_type):
+        async def mock_fetchrow(sql, cluster_id, signal_type, reference_time):
             nonlocal call_count
             call_count += 1
             # Only cluster-1 has existing signal

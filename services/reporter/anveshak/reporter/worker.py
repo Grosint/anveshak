@@ -21,6 +21,13 @@ from typing import Any
 
 import arq
 import structlog
+from anveshak.clock import (
+    ClockOverrideRefusedError,
+    ClockSettings,
+    log_clock_startup,
+    parse_reference_time,
+    resolve_reference_time,
+)
 from anveshak.llm import LLMProviderSettings, log_provider_startup
 from anveshak.logging import configure_logging
 from anveshak.models import Labels
@@ -73,6 +80,7 @@ async def startup(ctx: dict) -> None:
     # A disabled or degraded feature explains itself at startup. Without this,
     # local inference and a refused cloud configuration look identical.
     log_provider_startup(LLMProviderSettings(), service="reporter-worker")
+    log_clock_startup(ClockSettings(), service="reporter-worker")
 
     log.info("reporter.worker_started")
 
@@ -90,15 +98,30 @@ async def shutdown(ctx: dict) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def generate_report(ctx: dict, report_id: str) -> None:
+async def generate_report(ctx: dict, report_id: str, reference_time: str | None = None) -> None:
     """RAG → LLM → geocode → store.
 
     Idempotent: the UPDATE uses WHERE generated_at IS NULL so a duplicate
     dispatch results in a no-op (set_report_generated returns False).
+
+    reference_time is an ISO-8601 timestamp with an offset, supplied by a
+    Replay stage and refused unless VIRTUAL_CLOCK_ENABLED is on. Omitted on
+    every live dispatch, so the report is dated the moment it was generated
+    either way. See ADR 0003.
     """
     import time as _time
 
     _t0 = _time.monotonic()
+
+    try:
+        generated_at = resolve_reference_time(parse_reference_time(reference_time))
+    except ClockOverrideRefusedError as exc:
+        # The refusal has to reach the row. Raising alone leaves generated_at
+        # NULL and generation_error NULL, which the API reads as "queued"
+        # forever: an analyst waits on a report that was refused at dispatch.
+        log.warning("reporter.clock_override_refused", report_id=report_id, error=str(exc))
+        await db.set_report_failed(ctx["db"], report_id, str(exc))
+        raise
 
     pool = ctx["db"]
     s = ctx["settings"]
@@ -124,7 +147,7 @@ async def generate_report(ctx: dict, report_id: str) -> None:
     report_type: str = report.get("report_type", "intelligence_brief")
 
     # --- 2. Fetch data bundle (all structured data from SQL) ---
-    data_bundle = await db.fetch_report_data_bundle(pool, topic_id)
+    data_bundle = await db.fetch_report_data_bundle(pool, topic_id, generated_at)
     log.info("reporter.data_bundle_fetched", report_id=report_id, topic_id=topic_id)
 
     # --- 3. Generate query embedding (still needed for RAG chunks) ---
@@ -240,6 +263,7 @@ async def generate_report(ctx: dict, report_id: str) -> None:
         geojson=geojson,
         source_snapshot=sources,
         content_item_count=len(chunks),
+        now=generated_at,
     )
 
     if stored:
@@ -251,7 +275,10 @@ async def generate_report(ctx: dict, report_id: str) -> None:
                 "id": report_id,
                 "report_type": report_type,
                 "topic_name": topic_name,
-                "generated_at": str(datetime.now(UTC)),
+                # The same moment the row carries, not a second reading of
+                # the clock. A PDF footer that disagreed with the row would
+                # be the report's own immutability claim contradicting itself.
+                "generated_at": str(generated_at),
                 "confidence_score": bluf.confidence_level,
                 "content_item_count": len(chunks),
                 "labels": {"classification": "OPEN", "domain": "report", "owner_org": "anveshak"},
@@ -263,8 +290,12 @@ async def generate_report(ctx: dict, report_id: str) -> None:
             pdf_path = await generate_pdf(report_id, pdf_data, s.pdf_output_dir)
             async with pool.acquire() as conn:
                 await conn.execute(
-                    "UPDATE reports SET pdf_path = $1, updated_at = NOW() WHERE id = $2",
+                    # The generation moment again, not a second clock read.
+                    # This UPDATE runs immediately after generated_at is set,
+                    # and NOW() here would leave the row carrying two moments.
+                    "UPDATE reports SET pdf_path = $1, updated_at = $2 WHERE id = $3",
                     pdf_path,
+                    generated_at,
                     report_id,
                 )
             log.info("reporter.pdf_generated", report_id=report_id, path=pdf_path)

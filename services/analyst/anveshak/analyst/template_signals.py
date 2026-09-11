@@ -22,6 +22,7 @@ from typing import Awaitable, Callable
 
 import asyncpg
 import structlog
+from anveshak.clock import resolve_reference_time
 from anveshak.db import DBConnection
 
 from .metrics import analyst_signals_fired_total
@@ -52,7 +53,7 @@ SQL_BREACHING_TEMPLATE_MATCHES = """
     JOIN scam_templates st ON st.name = ci.labels->>'scam_template'
     WHERE ci.labels->>'scam_template' IS NOT NULL
       AND t.status = 'active'
-      AND ci.created_at > NOW() - INTERVAL '24 hours'
+      AND ci.created_at > $1::timestamptz - INTERVAL '24 hours'
     GROUP BY ci.labels->>'scam_template', st.display, st.severity,
              st.legal_sections, ci.topic_id
 """
@@ -62,7 +63,7 @@ SQL_DUPLICATE_TEMPLATE_SIGNAL_CHECK = """
     WHERE signal_type = 'scam_template_match'
       AND evidence->>'template_name' = $1
       AND topic_id = $2
-      AND created_at > NOW() - INTERVAL '24 hours'
+      AND created_at > $3::timestamptz - INTERVAL '24 hours'
     LIMIT 1
 """
 
@@ -74,7 +75,7 @@ SQL_LATEST_TEMPLATE_MATCH_ITEM = """
     FROM content_items ci
     WHERE ci.topic_id = $1
       AND ci.labels->>'scam_template' = $2
-      AND ci.created_at > NOW() - INTERVAL '24 hours'
+      AND ci.created_at > $3::timestamptz - INTERVAL '24 hours'
     ORDER BY (ci.labels->>'template_confidence')::float DESC
     LIMIT 1
 """
@@ -180,12 +181,15 @@ async def is_duplicate_template_signal(
     conn: DBConnection,
     template_name: str,
     topic_id: str,
+    now: datetime | None = None,
 ) -> bool:
-    """Return True if scam_template_match signal fired for this template+topic in last 24h."""
+    """Return True if a scam_template_match signal fired for this
+    template+topic in the 24h before `now`, which defaults to the current time."""
     row = await conn.fetchrow(
         SQL_DUPLICATE_TEMPLATE_SIGNAL_CHECK,
         template_name,
         topic_id,
+        now if now is not None else datetime.now(timezone.utc),
     )
     return row is not None
 
@@ -205,8 +209,11 @@ async def fire_template_signal(
     match_count: int,
     now: datetime,
 ) -> str | None:
-    """Insert scam_template_match signal. Returns signal_id or None if deduplicated."""
-    if await is_duplicate_template_signal(conn, template_name, topic_id):
+    """Insert scam_template_match signal. Returns signal_id or None if deduplicated.
+
+    `now` is both the dedup anchor and the row's created_at.
+    """
+    if await is_duplicate_template_signal(conn, template_name, topic_id, now):
         log.debug(
             "template_signals.dedup_skipped",
             template_name=template_name,
@@ -267,15 +274,18 @@ BroadcastFn = Callable[[dict], Awaitable[None]]
 async def check_template_signals(
     pool: asyncpg.Pool,
     broadcast: BroadcastFn,
+    reference_time: datetime | None = None,
 ) -> int:
     """One check pass: query breaching template matches, fire signals.
 
-    Returns count of signals fired.
+    Returns count of signals fired. reference_time is the time this pass
+    treats as now, defaulting to the current time. See ADR 0003.
     """
     fired = 0
+    now = resolve_reference_time(reference_time)
 
     async with pool.acquire() as conn:
-        matches = await conn.fetch(SQL_BREACHING_TEMPLATE_MATCHES)
+        matches = await conn.fetch(SQL_BREACHING_TEMPLATE_MATCHES, now)
 
         for row in matches:
             template_name: str = row["template_name"]
@@ -291,13 +301,12 @@ async def check_template_signals(
             if match_count < threshold:
                 continue
 
-            now = datetime.now(timezone.utc)
-
             # Fetch highest-confidence matching content item for evidence
             latest = await conn.fetchrow(
                 SQL_LATEST_TEMPLATE_MATCH_ITEM,
                 topic_id,
                 template_name,
+                now,
             )
 
             content_item_id = latest["content_item_id"] if latest else ""

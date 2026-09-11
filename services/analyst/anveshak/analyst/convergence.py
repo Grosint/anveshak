@@ -16,10 +16,11 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 
 import asyncpg
 import structlog
+from anveshak.clock import resolve_reference_time
 
 from .metrics import analyst_signals_fired_total
 from .settings import settings
@@ -60,24 +61,30 @@ SQL_CONVERGENT_CLUSTERS = """
 # ---------------------------------------------------------------------------
 
 
-async def check_cross_topic_convergence(pool: asyncpg.Pool) -> int:
+async def check_cross_topic_convergence(
+    pool: asyncpg.Pool,
+    reference_time: datetime | None = None,
+) -> int:
     """Detect and signal cross-topic cluster convergence.
 
-    Returns count of signals fired.
+    Returns count of signals fired. reference_time is the time this pass
+    treats as now: it anchors dedup and stamps the Signal, so a convergence
+    found during a Replay carries the date its evidence existed. Defaults to
+    the current time. See ADR 0003.
     """
     threshold = settings.cross_topic_similarity_threshold
     max_pairs = settings.cross_topic_max_pairs
     fired = 0
+    now = resolve_reference_time(reference_time)
 
     async with pool.acquire() as conn:
         pairs = await conn.fetch(SQL_CONVERGENT_CLUSTERS, threshold, max_pairs)
 
         for row in pairs:
-            now = datetime.now(UTC)
             cluster_a_id: str = row["cluster_a_id"]
 
-            # Dedup: same cluster_a + signal_type within 24h
-            if await is_duplicate_signal(conn, cluster_a_id, _SIGNAL_TYPE_CROSS_TOPIC):
+            # Dedup: same cluster_a + signal_type within 24h of the reference
+            if await is_duplicate_signal(conn, cluster_a_id, _SIGNAL_TYPE_CROSS_TOPIC, now):
                 continue
 
             signal_id = str(uuid.uuid4())

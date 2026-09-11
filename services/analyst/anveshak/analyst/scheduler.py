@@ -26,6 +26,7 @@ from pathlib import Path
 import asyncpg
 import structlog
 import uvicorn
+from anveshak.clock import ClockSettings
 from anveshak.logging import configure_logging
 from anveshak.tracing import configure_tracing
 from arq import ArqRedis
@@ -335,8 +336,23 @@ async def cluster_loop(pool: asyncpg.Pool, redis: ArqRedis) -> None:
     while True:
         await asyncio.sleep(300)
         try:
-            # Archive stale clusters before processing
-            if settings.cluster_archive_after_days > 0:
+            # Archive stale clusters before processing.
+            #
+            # Not on a deployment that can write backdated rows. Archival is
+            # staleness measured against the wall clock, and a Replay stage
+            # writes a cluster stamped months ago, which the very next tick
+            # would archive. Every downstream query filters archived_at IS
+            # NULL, so the clusters would form and then no Signal would fire,
+            # with nothing to say why. See ADR 0003.
+            if ClockSettings().virtual_clock_enabled:
+                log.info(
+                    "scheduler.cluster_archival.disabled",
+                    reason=(
+                        "VIRTUAL_CLOCK_ENABLED is true, so cluster rows may carry "
+                        "a past reference time that wall-clock staleness would archive"
+                    ),
+                )
+            elif settings.cluster_archive_after_days > 0:
                 async with pool.acquire() as conn:
                     archived = await conn.execute(
                         SQL_ARCHIVE_OLD_CLUSTERS,

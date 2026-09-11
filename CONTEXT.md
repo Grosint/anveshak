@@ -67,6 +67,12 @@ A Backfill's Capture Times are all the day it was loaded; its Publication Times 
 Detection then unfolds in the order the story did, so a cluster grows, a baseline forms, and a shift is measured against what preceded it.
 A single bulk load produces the same end state with none of the history that makes it meaningful.
 
+**Reference Time** - The moment a detection pass treats as now.
+Defaults to the current time, so live detection is unaffected, and is set to a stage's date during a Replay so that a Signal carries the date its evidence existed.
+It bounds every relative window the pass reads and stamps every row the pass writes, so one pass reads and writes a single moment.
+Overriding it is refused unless `VIRTUAL_CLOCK_ENABLED` is on, and it never rewrites a row after the fact.
+See [docs/adr/0003-virtual-clock.md](docs/adr/0003-virtual-clock.md).
+
 **Corpus** - A committed file of dated items that a Backfill or Replay is loaded from.
 It is the source of truth for a dataset, and a database dump is only an artifact of a run over it.
 Each item carries its Publication Time and the name of the signal that produced it, so a date is defensible from the row rather than from whoever collected it.

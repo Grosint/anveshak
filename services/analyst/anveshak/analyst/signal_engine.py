@@ -12,10 +12,11 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 
 import asyncpg
 import structlog
+from anveshak.clock import resolve_reference_time
 from anveshak.db import DBConnection
 
 from .identifier_signals import check_identifier_signals
@@ -78,7 +79,7 @@ SQL_HOSTILITY_BASELINE = """
     FROM content_items
     WHERE (topic_id = $1
        OR id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
-      AND captured_at >= NOW() - make_interval(days => $2)
+      AND captured_at >= $3::timestamptz - make_interval(days => $2)
       AND hostility IS NOT NULL
 """
 
@@ -88,7 +89,7 @@ SQL_HOSTILITY_RECENT = """
     FROM content_items
     WHERE (topic_id = $1
        OR id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
-      AND captured_at >= NOW() - make_interval(hours => $2)
+      AND captured_at >= $3::timestamptz - make_interval(hours => $2)
       AND hostility IS NOT NULL
 """
 
@@ -131,11 +132,12 @@ async def fire_signal(
 ) -> str | None:
     """Insert a new signal row. Returns signal_id, or None if deduplicated.
 
-    Criteria 2.12, 2.13.
+    Criteria 2.12, 2.13. `now` is both the dedup anchor and the row's
+    created_at, so a Signal carries the date its evidence existed.
     """
     signal_type = _SIGNAL_TYPE_MULTI_SOURCE
 
-    if await is_duplicate_signal(conn, cluster_id, signal_type):
+    if await is_duplicate_signal(conn, cluster_id, signal_type, now):
         log.debug(
             "signal_engine.dedup_skipped",
             cluster_id=cluster_id,
@@ -185,12 +187,15 @@ async def fire_signal(
 async def check_signals(
     pool: asyncpg.Pool,
     broadcast: BroadcastFn,
+    reference_time: datetime | None = None,
 ) -> int:
     """One signal-check pass. Returns count of signals fired.
 
-    Criteria 2.11–2.18.
+    Criteria 2.11–2.18. reference_time is the time this pass treats as now,
+    defaulting to the current time. See ADR 0003.
     """
     fired = 0
+    now = resolve_reference_time(reference_time)
 
     async with pool.acquire() as conn:
         clusters = await conn.fetch(SQL_BREACHING_CLUSTERS)
@@ -200,7 +205,6 @@ async def check_signals(
             topic_id: str = row["topic_id"]
             label: str = row["label"] or f"Cluster {cluster_id[:8]}"
             isc: int = row["independent_source_count"]
-            now = datetime.now(UTC)
 
             signal_id = await fire_signal(
                 conn=conn,
@@ -245,12 +249,20 @@ def hostility_shift_delta(*, baseline: float, recent: float) -> float:
 async def check_hostility_shifts(
     pool: asyncpg.Pool,
     broadcast: BroadcastFn,
+    reference_time: datetime | None = None,
 ) -> int:
     """Check all active topics for a rise in mean hostility.
 
     Returns count of signals fired. Issue #30.
+
+    Both windows are measured back from reference_time, so a Replay stage
+    compares the period that actually preceded it rather than the minute the
+    corpus was imported. Their relationship is unchanged: the baseline still
+    spans baseline_days back from the reference time and the recent window
+    still sits inside it. Defaults to the current time. See ADR 0003.
     """
     fired = 0
+    now = resolve_reference_time(reference_time)
     async with pool.acquire() as conn:
         topics = await conn.fetch(SQL_ACTIVE_TOPICS)
         for topic_row in topics:
@@ -261,6 +273,7 @@ async def check_hostility_shifts(
                 SQL_DUPLICATE_TOPIC_SIGNAL_CHECK,
                 topic_id,
                 _SIGNAL_TYPE_HOSTILITY_SHIFT,
+                now,
             )
             if existing:
                 continue
@@ -269,11 +282,13 @@ async def check_hostility_shifts(
                 SQL_HOSTILITY_BASELINE,
                 topic_id,
                 settings.hostility_shift_baseline_days,
+                now,
             )
             recent = await conn.fetchrow(
                 SQL_HOSTILITY_RECENT,
                 topic_id,
                 settings.hostility_shift_window_hours,
+                now,
             )
 
             if not baseline or not recent:
@@ -291,7 +306,6 @@ async def check_hostility_shifts(
                 continue
 
             signal_id = str(uuid.uuid4())
-            now = datetime.now(UTC)
             description = (
                 f"Mean hostility rose {rise:.2f} in last "
                 f"{settings.hostility_shift_window_hours}h "

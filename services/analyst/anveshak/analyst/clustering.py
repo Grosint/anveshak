@@ -30,6 +30,7 @@ import igraph as ig
 import leidenalg
 import numpy as np
 import structlog
+from anveshak.clock import resolve_reference_time
 from anveshak.db import DBConnection
 
 from .entity_minhash import minhash_similarity_matrix
@@ -69,7 +70,7 @@ SQL_TOPIC_EMBEDDINGS_WINDOWED = """
       AND ci.embedding IS NOT NULL
       AND COALESCE(ci.content_quality, 'good') != 'low_quality'
       AND (ci.topic_relevance_score IS NULL OR ci.topic_relevance_score >= $2)
-      AND ci.captured_at >= NOW() - MAKE_INTERVAL(days => $3)
+      AND ci.captured_at >= $4::timestamptz - MAKE_INTERVAL(days => $3)
     ORDER BY ci.captured_at ASC
 """
 
@@ -87,7 +88,7 @@ SQL_UNCLUSTERED_EMBEDDINGS_WINDOWED = """
       AND ci.narrative_cluster_id IS NULL
       AND COALESCE(ci.content_quality, 'good') != 'low_quality'
       AND (ci.topic_relevance_score IS NULL OR ci.topic_relevance_score >= $2)
-      AND ci.captured_at >= NOW() - MAKE_INTERVAL(days => $3)
+      AND ci.captured_at >= $4::timestamptz - MAKE_INTERVAL(days => $3)
     ORDER BY ci.captured_at ASC
 """
 
@@ -164,12 +165,18 @@ SQL_UPSERT_CLUSTER = """
         SET item_count              = EXCLUDED.item_count,
             embedding_centroid      = EXCLUDED.embedding_centroid,
             independent_source_count = EXCLUDED.independent_source_count,
-            updated_at              = EXCLUDED.updated_at
+            -- Monotonic, never moved backwards. A Replay pass runs at a past
+            -- reference time, and a plain assignment would drag a live
+            -- cluster's updated_at into the past, where the scheduler's
+            -- staleness archival would then collect it.
+            updated_at              = GREATEST(narrative_clusters.updated_at,
+                                               EXCLUDED.updated_at)
 """
 
 SQL_LINK_ITEMS_TO_CLUSTER = """
     UPDATE content_items
-    SET narrative_cluster_id = $1, updated_at = $2
+    SET narrative_cluster_id = $1,
+        updated_at = GREATEST(updated_at, $2)
     WHERE id = ANY($3::text[])
 """
 
@@ -178,7 +185,7 @@ SQL_UPDATE_CLUSTER_STATS = """
     SET item_count = $2,
         independent_source_count = $3,
         embedding_centroid = $4::vector,
-        updated_at = $5
+        updated_at = GREATEST(updated_at, $5)
     WHERE id = $1
 """
 
@@ -266,8 +273,15 @@ async def load_embeddings(
     pool: asyncpg.Pool,
     window_days: int = 0,
     relevance_threshold: float = 0.0,
+    now: datetime | None = None,
 ) -> list[EmbeddingRow]:
-    """Fetch ALL content_item embeddings for a topic (criteria 2.2)."""
+    """Fetch ALL content_item embeddings for a topic (criteria 2.2).
+
+    The window is measured back from `now`, the moment the calling pass runs
+    at, which defaults to the current time. Already resolved by the caller:
+    the override guard sits at the entry point, not here. See ADR 0003.
+    """
+    now = now if now is not None else datetime.now(UTC)
     async with pool.acquire() as conn:
         if window_days > 0:
             rows = await conn.fetch(
@@ -275,6 +289,7 @@ async def load_embeddings(
                 topic_id,
                 relevance_threshold,
                 window_days,
+                now,
             )
         else:
             rows = await conn.fetch(SQL_TOPIC_EMBEDDINGS, topic_id, relevance_threshold)
@@ -286,8 +301,15 @@ async def load_unclustered_embeddings(
     pool: asyncpg.Pool,
     window_days: int = 0,
     relevance_threshold: float = 0.0,
+    now: datetime | None = None,
 ) -> list[EmbeddingRow]:
-    """Fetch only items NOT yet assigned to a cluster."""
+    """Fetch only items NOT yet assigned to a cluster.
+
+    The window is measured back from `now`, the moment the calling pass runs
+    at, which defaults to the current time. Already resolved by the caller:
+    the override guard sits at the entry point, not here. See ADR 0003.
+    """
+    now = now if now is not None else datetime.now(UTC)
     async with pool.acquire() as conn:
         if window_days > 0:
             rows = await conn.fetch(
@@ -295,6 +317,7 @@ async def load_unclustered_embeddings(
                 topic_id,
                 relevance_threshold,
                 window_days,
+                now,
             )
         else:
             rows = await conn.fetch(SQL_UNCLUSTERED_EMBEDDINGS, topic_id, relevance_threshold)
@@ -601,12 +624,14 @@ async def update_cluster_with_assignments(
     new_items: list[EmbeddingRow],
     existing_centroid: np.ndarray,
     existing_item_count: int,
+    now: datetime | None = None,
 ) -> int:
     """Add new items to an existing cluster, update centroid and ISC.
 
-    Returns updated ISC.
+    Returns updated ISC. `now` is the reference time the rows are stamped
+    with, defaulting to the current time. See ADR 0003.
     """
-    now = datetime.now(UTC)
+    now = now if now is not None else datetime.now(UTC)
     new_item_ids = [r.content_item_id for r in new_items]
 
     async with pool.acquire() as conn:
@@ -658,7 +683,11 @@ SQL_GET_TOPIC_RELEVANCE_THRESHOLD = """
 """
 
 
-async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
+async def run_clustering(
+    topic_id: str,
+    pool: asyncpg.Pool,
+    reference_time: datetime | None = None,
+) -> list[str]:
     """Incremental clustering for a topic.
 
     Flow:
@@ -669,8 +698,14 @@ async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
       5. Returns list of cluster_ids created or updated
 
     Criteria 2.1–2.5, 2.9.
+
+    reference_time is the time this pass treats as now. It bounds the content
+    window and stamps every cluster row, so one pass reads and writes a single
+    consistent moment. Defaults to the current time. See ADR 0003.
     """
     from .relevance import resolve_threshold
+
+    now = resolve_reference_time(reference_time)
 
     async with pool.acquire() as conn:
         per_topic = await conn.fetchval(SQL_GET_TOPIC_RELEVANCE_THRESHOLD, topic_id)
@@ -682,6 +717,7 @@ async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
         pool,
         window_days=settings.clustering_window_days,
         relevance_threshold=threshold,
+        now=now,
     )
 
     if not new_rows:
@@ -712,6 +748,7 @@ async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
                 items,
                 c.vector,
                 c.item_count,
+                now=now,
             )
             cluster_ids.append(cluster_id)
 
@@ -733,6 +770,7 @@ async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
                     topic_id,
                     pool,
                     unassigned,
+                    now=now,
                 )
                 cluster_ids.extend(new_cluster_ids)
             else:
@@ -748,6 +786,7 @@ async def run_clustering(topic_id: str, pool: asyncpg.Pool) -> list[str]:
             topic_id,
             pool,
             new_rows,
+            now=now,
         )
         cluster_ids.extend(new_cluster_ids)
 
@@ -770,15 +809,20 @@ async def _leiden_and_persist(
     topic_id: str,
     pool: asyncpg.Pool,
     rows: list[EmbeddingRow],
+    now: datetime | None = None,
 ) -> list[str]:
-    """Run Leiden community detection on items and persist resulting clusters."""
+    """Run Leiden community detection on items and persist resulting clusters.
+
+    `now` stamps every cluster written by this pass, defaulting to the current
+    time. See ADR 0003.
+    """
     groups, edge_count = find_narrative_clusters(rows)
     analyst_clustering_edges.labels(topic_id=topic_id).set(edge_count)
     if not groups:
         log.info("clustering.no_clusters_formed", topic_id=topic_id, item_count=len(rows))
         return []
 
-    now = datetime.now(UTC)
+    now = now if now is not None else datetime.now(UTC)
     cluster_ids: list[str] = []
 
     async with pool.acquire() as conn:

@@ -22,7 +22,7 @@ import re
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Optional
@@ -30,6 +30,7 @@ from typing import Any, Optional
 import asyncpg
 import structlog
 import yaml
+from anveshak.clock import resolve_reference_time
 
 from .metrics import analyst_signals_fired_total
 from .settings import settings
@@ -374,7 +375,7 @@ SQL_UNCHECKED_CLUSTER_CONTENT = """
       AND t.status = 'active'
       AND nc.archived_at IS NULL
       AND ci.org_id = t.org_id
-      AND ci.captured_at >= NOW() - make_interval(days => $2)
+      AND ci.captured_at >= $4::timestamptz - make_interval(days => $2)
       AND (ci.content_quality IS NULL OR ci.content_quality != 'low_quality')
     ORDER BY ci.captured_at DESC
     LIMIT $3
@@ -383,11 +384,20 @@ SQL_UNCHECKED_CLUSTER_CONTENT = """
 _SIGNAL_TYPE_MOBILIZATION = "mobilization_call"
 
 
-async def check_mobilization_calls(pool: asyncpg.Pool, broadcast: BroadcastFn) -> int:
+async def check_mobilization_calls(
+    pool: asyncpg.Pool,
+    broadcast: BroadcastFn,
+    reference_time: datetime | None = None,
+) -> int:
     """One pass over recent clustered content. Returns count of signals fired.
 
     Groups hits by cluster and fires once per cluster, deduplicated by the
     same 24h window every other signal uses.
+
+    reference_time is the time this pass treats as now. It bounds the content
+    window, anchors dedup, stamps the Signal, and resolves a relative date in
+    the matched text such as "kal", so a Replay reads the date the content
+    meant. Defaults to the current time. See ADR 0003.
     """
     lexicon = load_lexicon()
     if not lexicon.patterns:
@@ -398,6 +408,7 @@ async def check_mobilization_calls(pool: asyncpg.Pool, broadcast: BroadcastFn) -
         return 0
 
     fired = 0
+    now = resolve_reference_time(reference_time)
     async with pool.acquire() as conn:
         topic_ids = [r["id"] for r in await conn.fetch(SQL_ACTIVE_TOPIC_IDS)]
 
@@ -408,6 +419,7 @@ async def check_mobilization_calls(pool: asyncpg.Pool, broadcast: BroadcastFn) -
                 topic_id,
                 settings.mobilization_window_days,
                 settings.mobilization_max_items_per_topic,
+                now,
             )
             if len(rows) == settings.mobilization_max_items_per_topic:
                 log.warning(
@@ -437,7 +449,7 @@ async def check_mobilization_calls(pool: asyncpg.Pool, broadcast: BroadcastFn) -
         for cluster_id, hits in by_cluster.items():
             if len(hits) < settings.mobilization_min_items:
                 continue
-            if await is_duplicate_signal(conn, cluster_id, _SIGNAL_TYPE_MOBILIZATION):
+            if await is_duplicate_signal(conn, cluster_id, _SIGNAL_TYPE_MOBILIZATION, now):
                 continue
 
             first = hits[0]
@@ -445,7 +457,7 @@ async def check_mobilization_calls(pool: asyncpg.Pool, broadcast: BroadcastFn) -
             work_text = first["row"]["work_text"]
             language = first["row"]["language"]
 
-            when = extract_date(work_text)
+            when = extract_date(work_text, today=now.date())
             place = extract_place(work_text, language=language)
 
             description = build_description(
@@ -467,7 +479,6 @@ async def check_mobilization_calls(pool: asyncpg.Pool, broadcast: BroadcastFn) -
             }
 
             signal_id = str(uuid.uuid4())
-            now = datetime.now(UTC)
             await conn.execute(
                 SQL_INSERT_SIGNAL,
                 signal_id,
@@ -498,6 +509,11 @@ async def check_mobilization_calls(pool: asyncpg.Pool, broadcast: BroadcastFn) -
 
             # Confirmation runs only on the ids the lexicon flagged, as a
             # background job. A no-op while the flag is off (#34).
+            #
+            # It carries no reference time, and that is deliberate: it writes
+            # no detection output row, only a label onto a content item that
+            # already exists. The Signal above is what carries the date the
+            # evidence existed. See ADR 0003.
             if confirm_redis is not None:
                 try:
                     await confirm_redis.enqueue_job(

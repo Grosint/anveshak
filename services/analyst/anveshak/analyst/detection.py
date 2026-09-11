@@ -27,10 +27,12 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 import asyncpg
 import structlog
+from anveshak.clock import resolve_reference_time
 from anveshak.db import DBConnection
 
 from .settings import settings
@@ -111,7 +113,7 @@ SQL_UPSERT_CANDIDATE = """
         novelty_score, run_count, evidence, labels, created_at, updated_at
     )
     VALUES ($1, $2, $3, $4, $11, $5, $6, $7, $8, 1, $9::jsonb, $10::jsonb,
-            NOW(), NOW())
+            $12, $12)
     ON CONFLICT (cluster_id) DO UPDATE SET
         independent_source_count   = EXCLUDED.independent_source_count,
         item_count                 = EXCLUDED.item_count,
@@ -119,7 +121,9 @@ SQL_UPSERT_CANDIDATE = """
         novelty_score              = EXCLUDED.novelty_score,
         run_count                  = candidate_topics.run_count + 1,
         evidence                   = EXCLUDED.evidence,
-        updated_at                 = NOW(),
+        -- Monotonic. A Replay pass must not drag a candidate's updated_at
+        -- backwards past the live run that last touched it.
+        updated_at                 = GREATEST(candidate_topics.updated_at, $12),
         status = CASE
             WHEN candidate_topics.status IN ('accepted', 'dismissed')
                 THEN candidate_topics.status
@@ -217,15 +221,23 @@ async def _novelty_score(conn: DBConnection, centroid_text: str, org_id: str) ->
     return 1.0 - float(similarity)
 
 
-async def detect_candidate_topics(pool: asyncpg.Pool) -> int:
+async def detect_candidate_topics(
+    pool: asyncpg.Pool,
+    reference_time: datetime | None = None,
+) -> int:
     """One detection pass across every Watch Space. Returns candidates written.
 
     Every cluster large enough to consider is recorded so that its run_count
     accumulates. Only clusters passing all four gates become pending inbox
     rows; the rest stay recorded so a cluster that grows into a candidate
     already has its persistence history.
+
+    reference_time stamps every candidate this pass writes, so the discovery
+    moment in the record is the moment the evidence existed. Defaults to the
+    current time. See ADR 0003.
     """
     written = 0
+    now = resolve_reference_time(reference_time)
 
     async with pool.acquire() as conn:
         clusters = await conn.fetch(
@@ -301,6 +313,7 @@ async def detect_candidate_topics(pool: asyncpg.Pool) -> int:
                 json.dumps(evidence),
                 LABELS_JSON,
                 status,
+                now,
             )
 
             if gates.passed and result is not None:

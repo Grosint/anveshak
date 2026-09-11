@@ -20,6 +20,7 @@ only the orchestrator.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Awaitable, Callable
 
 from anveshak.db import DBConnection
@@ -36,11 +37,15 @@ SQL_INSERT_SIGNAL = """
     RETURNING id
 """
 
+# The dedup window is measured back from the reference time the pass runs at,
+# not from NOW(). A Replay stage that dedup'd against the wall clock would
+# compare a simulated signal against 24 hours of real time and fire every
+# stage, or none. See ADR 0003.
 SQL_DUPLICATE_SIGNAL_CHECK = """
     SELECT id FROM signals
     WHERE cluster_id  = $1
       AND signal_type = $2
-      AND created_at  > NOW() - INTERVAL '24 hours'
+      AND created_at  > $3::timestamptz - INTERVAL '24 hours'
     LIMIT 1
 """
 
@@ -48,7 +53,7 @@ SQL_DUPLICATE_TOPIC_SIGNAL_CHECK = """
     SELECT id FROM signals
     WHERE topic_id = $1
       AND signal_type = $2
-      AND created_at > NOW() - INTERVAL '24 hours'
+      AND created_at > $3::timestamptz - INTERVAL '24 hours'
     LIMIT 1
 """
 
@@ -57,7 +62,12 @@ async def is_duplicate_signal(
     conn: DBConnection,
     cluster_id: str,
     signal_type: str,
+    now: datetime | None = None,
 ) -> bool:
-    """True if an identical signal fired within the last 24h (criteria 2.13)."""
-    row = await conn.fetchrow(SQL_DUPLICATE_SIGNAL_CHECK, cluster_id, signal_type)
+    """True if an identical signal fired within the 24h before `now`.
+
+    Criteria 2.13. `now` defaults to the current time.
+    """
+    reference = now if now is not None else datetime.now(UTC)
+    row = await conn.fetchrow(SQL_DUPLICATE_SIGNAL_CHECK, cluster_id, signal_type, reference)
     return row is not None

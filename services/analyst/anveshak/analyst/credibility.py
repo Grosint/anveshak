@@ -27,6 +27,7 @@ from datetime import UTC, datetime
 
 import asyncpg
 import structlog
+from anveshak.clock import resolve_reference_time
 from anveshak.db import DBConnection
 
 from .metrics import analyst_credibility_changes_total
@@ -52,7 +53,7 @@ SQL_DEEPFAKE_AMPLIFIERS = """
     JOIN media_assets ma ON ma.content_item_id = ci.id
     JOIN vision_results vr ON vr.media_asset_id = ma.id
     WHERE vr.deepfake_score > 0.8
-      AND vr.processed_at > NOW() - INTERVAL '7 days'
+      AND vr.processed_at > $1::timestamptz - INTERVAL '7 days'
       AND s.auto_score_enabled = TRUE
       AND s.credibility_score > 0
     GROUP BY s.id, s.name, s.credibility_score, s.org_id
@@ -111,7 +112,7 @@ SQL_CONTRADICTION_SOURCES = """
     )
       AND s.auto_score_enabled = TRUE
       AND s.credibility_score  > 0
-      AND ci.captured_at > NOW() - INTERVAL '7 days'
+      AND ci.captured_at > $3::timestamptz - INTERVAL '7 days'
     GROUP BY s.id, s.name, s.credibility_score, s.org_id
     HAVING COUNT(*) >= $2
 """
@@ -197,9 +198,14 @@ async def apply_credibility_boost(
 
 async def find_deepfake_amplifiers(
     conn: DBConnection,
+    now: datetime | None = None,
 ) -> list[asyncpg.Record]:
-    """Return sources that have amplified high-confidence deepfakes recently."""
-    return await conn.fetch(SQL_DEEPFAKE_AMPLIFIERS)
+    """Return sources that amplified high-confidence deepfakes in the 7 days
+    before `now`, which defaults to the current time."""
+    return await conn.fetch(
+        SQL_DEEPFAKE_AMPLIFIERS,
+        now if now is not None else datetime.now(UTC),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -207,15 +213,21 @@ async def find_deepfake_amplifiers(
 # ---------------------------------------------------------------------------
 
 
-async def run_credibility_update(pool: asyncpg.Pool) -> int:
+async def run_credibility_update(
+    pool: asyncpg.Pool,
+    reference_time: datetime | None = None,
+) -> int:
     """Run one credibility auto-update pass. Returns number of sources updated.
 
-    Criteria 2.21–2.24.
+    Criteria 2.21–2.24. reference_time bounds the deepfake window and stamps
+    every audit log entry this pass writes, defaulting to the current time.
+    See ADR 0003.
     """
     updated = 0
+    now = resolve_reference_time(reference_time)
 
     async with pool.acquire() as conn:
-        amplifiers = await find_deepfake_amplifiers(conn)
+        amplifiers = await find_deepfake_amplifiers(conn, now)
 
         for row in amplifiers:
             source_id: str = row["source_id"]
@@ -232,7 +244,6 @@ async def run_credibility_update(pool: asyncpg.Pool) -> int:
                 f"Auto-reduced: {deepfake_count} deepfake-amplified item(s) "
                 f"detected in last 7 days (score > 0.8)"
             )
-            now = datetime.now(UTC)
 
             async with conn.transaction():  # criteria 2.24: single transaction
                 await apply_credibility_drop(
@@ -263,13 +274,19 @@ async def run_credibility_update(pool: asyncpg.Pool) -> int:
 # ---------------------------------------------------------------------------
 
 
-async def run_cross_verification_update(pool: asyncpg.Pool, topic_id: str) -> int:
+async def run_cross_verification_update(
+    pool: asyncpg.Pool,
+    topic_id: str,
+    reference_time: datetime | None = None,
+) -> int:
     """Boost credibility of high-credibility sources confirmed by multi-platform clusters.
 
     Criteria 7.1. Triggered from the run_clustering ARQ job — not a cron.
-    Returns number of sources boosted.
+    Returns number of sources boosted. reference_time stamps every audit log
+    entry this pass writes, defaulting to the current time. See ADR 0003.
     """
     updated = 0
+    now = resolve_reference_time(reference_time)
 
     async with pool.acquire() as conn:
         rows = await conn.fetch(
@@ -291,7 +308,6 @@ async def run_cross_verification_update(pool: asyncpg.Pool, topic_id: str) -> in
                 f"Auto-boosted: source confirmed in multi-platform cluster "
                 f"(cross-verification, topic {topic_id})"
             )
-            now = datetime.now(UTC)
 
             async with conn.transaction():
                 await apply_credibility_boost(
@@ -322,21 +338,28 @@ async def run_cross_verification_update(pool: asyncpg.Pool, topic_id: str) -> in
 # ---------------------------------------------------------------------------
 
 
-async def run_contradiction_update(pool: asyncpg.Pool) -> int:
+async def run_contradiction_update(
+    pool: asyncpg.Pool,
+    reference_time: datetime | None = None,
+) -> int:
     """Reduce credibility of sources with a high noise-item ratio on clustered topics.
 
     Criteria 7.2. Noise = content_items where narrative_cluster_id IS NULL on a
     topic that has real clusters. A source whose items are predominantly unclustered
     while other sources cluster successfully is treated as a contradiction signal.
-    Returns number of sources penalised.
+    Returns number of sources penalised. reference_time bounds the content
+    window and stamps every audit log entry, defaulting to the current time.
+    See ADR 0003.
     """
     updated = 0
+    now = resolve_reference_time(reference_time)
 
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             SQL_CONTRADICTION_SOURCES,
             settings.credibility_contradiction_min_items,
             settings.credibility_contradiction_min_items,
+            now,
         )
 
         for row in rows:
@@ -361,7 +384,6 @@ async def run_contradiction_update(pool: asyncpg.Pool) -> int:
                 f"(noise ratio {noise_ratio:.2f} >= threshold "
                 f"{settings.credibility_noise_ratio_threshold})"
             )
-            now = datetime.now(UTC)
 
             async with conn.transaction():
                 await apply_credibility_drop(
