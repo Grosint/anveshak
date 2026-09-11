@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import uuid
 from datetime import UTC, datetime
 from html.parser import HTMLParser
@@ -49,6 +50,7 @@ from .metrics import (
     scraper_url_seen_skip_total,
 )
 from .normalise import compute_content_hash
+from .publication_time import publication_time_signal_labels
 from .rate_limiter import DomainRateLimiter
 from .rss import fetch_rss_items
 from .settings import settings
@@ -114,6 +116,16 @@ SQL_GET_MEDIA_ASSET_BY_HASH = "SELECT id FROM media_assets WHERE content_hash = 
 
 _LABELS_JSON = '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'
 _DARKWEB_LABELS_JSON = '{"classification":"RESTRICTED","domain":"darkweb","owner_org":"anveshak"}'
+
+
+def _content_labels(**derived: str) -> str:
+    """Serialise the open-source content labels with any derived metadata merged.
+
+    Classification, domain and owner are fixed for this pipeline. Derived keys
+    are per item, so they cannot live in a module constant.
+    """
+    return json.dumps({**json.loads(_LABELS_JSON), **derived})
+
 
 _URL_SEEN_PREFIX = "scraper:seen:"
 
@@ -428,12 +440,15 @@ async def poll_rss_sources(ctx: dict, topic_id: str) -> int:
 
     semaphore = asyncio.Semaphore(settings.scraper_concurrency)
     counter: dict[str, int] = {"inserted": 0}
+    # One limiter for the whole cycle, so two feeds from the same publisher
+    # share its allowance rather than each getting one.
+    domain_limiter = DomainRateLimiter()
 
     async def _process_feed(source: asyncpg.Record) -> None:
         async with semaphore:
             feed_url: str = source["url_or_handle"]
             try:
-                items = await fetch_rss_items(feed_url)
+                items = await fetch_rss_items(feed_url, limiter=domain_limiter)
                 for item in items:
                     try:
                         content_hash = compute_content_hash(item.raw_text)
@@ -465,7 +480,9 @@ async def poll_rss_sources(ctx: dict, topic_id: str) -> int:
                                 float(source["credibility_score"]),
                                 now,  # created_at
                                 now,  # updated_at
-                                _LABELS_JSON,
+                                _content_labels(
+                                    **publication_time_signal_labels(item.published_at_signal)
+                                ),
                                 quality,
                                 c_hash,
                                 title,

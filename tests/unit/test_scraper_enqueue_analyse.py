@@ -189,12 +189,13 @@ class TestRSSEnqueuesAnalyse:
     async def test_enqueues_analyse_content_for_rss_item(self, mock_fetch_rss):
         """poll_rss_sources must enqueue analyse_content for each new RSS item."""
         from anveshak.scraper.jobs import poll_rss_sources
+        from anveshak.scraper.rss import RssItem
 
-        rss_item = MagicMock()
-        rss_item.raw_text = "RSS article content that is long enough to be real."
-        rss_item.url = "https://feeds.example.com/article-1"
-        rss_item.title = "Test Article"
-        rss_item.published_at = None
+        rss_item = RssItem(
+            raw_text="RSS article content that is long enough to be real.",
+            url="https://feeds.example.com/article-1",
+            title="Test Article",
+        )
         mock_fetch_rss.return_value = [rss_item]
 
         source = _make_source(url="https://feeds.example.com/rss")

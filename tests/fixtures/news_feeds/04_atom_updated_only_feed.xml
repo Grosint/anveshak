@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Atom Outlet</title>
+  <link href="https://atom.example.in/"/>
+  <updated>2026-07-20T12:00:00+05:30</updated>
+  <!-- This outlet dates entries with updated and never emits published. -->
+  <entry>
+    <title>Teachers unions join the call</title>
+    <link href="https://atom.example.in/2026/07/22/unions-join"/>
+    <id>tag:atom.example.in,2026:unions-join</id>
+    <updated>2026-07-22T07:40:00+05:30</updated>
+    <summary>Teachers unions in four states said they would join the call for an assembly outside the ministry, adding an organised constituency to what had until then been a student movement without institutional backing of any kind.</summary>
+  </entry>
+</feed>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Summary Only Outlet</title>
+    <link>https://summary.example.in/</link>
+    <item>
+      <title>Police detain forty at the march</title>
+      <link>https://summary.example.in/2026/07/20/detained-at-march</link>
+      <pubDate>Mon, 20 Jul 2026 14:00:00 +0530</pubDate>
+      <description>Forty marchers were detained near the parliament approach road on Monday afternoon.</description>
+    </item>
+    <item>
+      <title>Opposition seeks a statement in the house</title>
+      <link>https://summary.example.in/2026/07/21/statement-sought</link>
+      <pubDate>Tue, 21 Jul 2026 08:15:00 +0530</pubDate>
+      <description>Opposition members sought a statement from the treasury benches.</description>
+    </item>
+  </channel>
+</rss>

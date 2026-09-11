@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Always Empty Content Outlet</title>
+    <link>https://emptycontent.example.in/</link>
+    <!-- This outlet emits content:encoded on every item and never fills it.
+         Item one still carries a usable description; item two does not. -->
+    <item>
+      <title>Education minister resigns</title>
+      <link>https://emptycontent.example.in/2026/07/25/minister-resigns</link>
+      <pubDate>Sat, 25 Jul 2026 11:20:00 +0530</pubDate>
+      <description>The education minister resigned on Saturday, five days after police action against a student march outside parliament. The resignation letter cited personal reasons and made no reference to the protests, which had run for nine weeks and drawn support from teachers unions in four states.</description>
+      <content:encoded><![CDATA[<div class="article-body-wrapper" data-article-id="99812" data-outlet="emptycontent"><div class="ad-slot ad-slot--inline" data-slot="mid-article"></div><p>&nbsp;</p><div class="related-stories-rail" data-rail="auto"></div></div>]]></content:encoded>
+    </item>
+    <item>
+      <title>Breakaway faction announced</title>
+      <link>https://emptycontent.example.in/2026/09/03/breakaway-faction</link>
+      <pubDate>Wed, 03 Sep 2026 17:45:00 +0530</pubDate>
+      <description>A breakaway faction was announced.</description>
+      <content:encoded><![CDATA[<div class="article-body-wrapper" data-article-id="10422" data-outlet="emptycontent"><div class="ad-slot ad-slot--inline" data-slot="mid-article"></div><p>&nbsp;</p><div class="related-stories-rail" data-rail="auto"></div></div>]]></content:encoded>
+    </item>
+  </channel>
+</rss>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Undated Outlet</title>
+    <link>https://undated.example.in/</link>
+    <!-- No pubDate on any item. Publication Time must come from the article
+         document, never from collection time. -->
+    <item>
+      <title>March route published</title>
+      <link>https://undated.example.in/march-route-published</link>
+      <description>The march route was published.</description>
+    </item>
+  </channel>
+</rss>

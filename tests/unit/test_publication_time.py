@@ -126,16 +126,25 @@ class TestProfileItemsHaveNoPublicationTime:
 
 class TestRssPopulatesOnlyWhatTheFeedSupplies:
     def test_feed_with_published_date_sets_it(self):
+        from anveshak.scraper.publication_time import SIGNAL_FEED_PUBLISHED
         from anveshak.scraper.rss import _entry_published_at
 
         entry = {"published_parsed": PUBLISHED.timetuple()}
-        assert _entry_published_at(entry) == PUBLISHED
+        assert _entry_published_at(entry) == (PUBLISHED, SIGNAL_FEED_PUBLISHED)
+
+    def test_feed_with_only_an_updated_date_uses_it(self):
+        """An Atom outlet that emits only updated is not an undated outlet."""
+        from anveshak.scraper.publication_time import SIGNAL_FEED_UPDATED
+        from anveshak.scraper.rss import _entry_published_at
+
+        entry = {"updated_parsed": PUBLISHED.timetuple()}
+        assert _entry_published_at(entry) == (PUBLISHED, SIGNAL_FEED_UPDATED)
 
     def test_feed_without_published_date_returns_none(self):
         """Previously this fell back to now(), which is a collection time."""
         from anveshak.scraper.rss import _entry_published_at
 
-        assert _entry_published_at({}) is None
+        assert _entry_published_at({}) == (None, None)
 
 
 class TestIngestPersistsBothTimestamps:

@@ -9,7 +9,8 @@ from __future__ import annotations
 import os
 import time
 from contextlib import asynccontextmanager
-from typing import Optional
+from dataclasses import dataclass
+from typing import Any, Optional
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
@@ -26,6 +27,23 @@ log = structlog.get_logger(__name__)
 
 _robots_cache: dict[str, tuple[RobotFileParser | None, float]] = {}
 _ROBOTS_CACHE_TTL = 3600  # 1 hour
+# The key is a host named by scraped content, so the number of distinct keys is
+# not ours to choose. Oldest entries go first once the cache is full, which
+# costs a re-fetch and bounds the worker's memory.
+_ROBOTS_CACHE_MAX_ENTRIES = 2048
+
+# A fetched document is served by whoever scraped content pointed us at, so its
+# size is theirs to choose and ours to bound. Measured after decompression.
+_MAX_DOCUMENT_BYTES = 16 * 1024 * 1024
+
+
+def _cache_robots(domain: str, entry: tuple[RobotFileParser | None, float]) -> None:
+    """Store a robots.txt result, evicting the oldest entry when full."""
+    if domain not in _robots_cache and len(_robots_cache) >= _ROBOTS_CACHE_MAX_ENTRIES:
+        oldest = min(_robots_cache, key=lambda key: _robots_cache[key][1])
+        del _robots_cache[oldest]
+        log.debug("scraper.robots_cache_evicted", domain=oldest)
+    _robots_cache[domain] = entry
 
 
 # ---------------------------------------------------------------------------
@@ -87,13 +105,13 @@ async def check_robots_allowed(url: str) -> bool:
     content = await _fetch_robots_txt(robots_url)
 
     if content is None:
-        _robots_cache[domain] = (None, now)
+        _cache_robots(domain, (None, now))
         log.debug("scraper.robots_unreachable", domain=domain)
         return True
 
     parser = RobotFileParser()
     parser.parse(content.splitlines())
-    _robots_cache[domain] = (parser, now)
+    _cache_robots(domain, (parser, now))
 
     allowed = parser.can_fetch("*", url)
     if not allowed:
@@ -145,7 +163,32 @@ async def create_shared_crawler():
             yield crawler, None
 
 
-def _extract_markdown(result) -> Optional[str]:
+@dataclass(frozen=True)
+class FetchedArticle:
+    """An article body together with the document it was extracted from.
+
+    text is the readable body, or None when nothing was extracted.
+
+    html is that same document as served, kept so a caller needing a signal the
+    body does not carry reads it from this fetch rather than requesting the page
+    a second time. A Publication Time lives in markup - JSON-LD, a meta tag, a
+    time element - all of which extraction has already discarded by the time it
+    returns text. None means the fetch path surfaced no document, and a caller
+    that needs one treats that as a miss rather than as an outlet publishing no
+    date.
+    """
+
+    text: Optional[str]
+    html: Optional[str]
+
+
+def _result_html(result: Any) -> Optional[str]:
+    """Return the raw HTML a Crawl4AI result carried, or None."""
+    html = getattr(result, "html", None)
+    return html if isinstance(html, str) and html else None
+
+
+def _extract_markdown(result: Any) -> Optional[str]:
     """Extract clean text from a Crawl4AI result object."""
     if not result.success:
         return None
@@ -157,8 +200,8 @@ def _extract_markdown(result) -> Optional[str]:
     return str(markdown) or None
 
 
-async def fetch_url_with_crawler(url: str, crawler, run_cfg=None) -> Optional[str]:
-    """Fetch a URL using an existing shared crawler instance.
+async def fetch_article_with_crawler(url: str, crawler, run_cfg=None) -> FetchedArticle:
+    """Fetch an article using an existing shared crawler instance.
 
     Falls back to trafilatura if Crawl4AI returns empty.
     """
@@ -169,16 +212,41 @@ async def fetch_url_with_crawler(url: str, crawler, run_cfg=None) -> Optional[st
             result = await crawler.arun(url=url)
         clean = _extract_markdown(result)
         if clean and len(clean.strip()) >= 50:
-            return clean.strip()
+            return FetchedArticle(text=clean.strip(), html=_result_html(result))
         log.debug("scraper.crawl4ai_empty", url=url)
     except Exception as exc:
         log.warning("scraper.crawl4ai_error", url=url, error=str(exc))
 
     try:
-        return await _trafilatura_fetch(url)
+        return await _trafilatura_fetch_article(url)
     except Exception as exc:
         log.warning("scraper.fetch_failed", url=url, error=str(exc))
-        return None
+        return FetchedArticle(text=None, html=None)
+
+
+async def fetch_url_with_crawler(url: str, crawler, run_cfg=None) -> Optional[str]:
+    """Fetch a URL using an existing shared crawler instance, returning body text."""
+    return (await fetch_article_with_crawler(url, crawler, run_cfg)).text
+
+
+async def fetch_article(url: str) -> FetchedArticle:
+    """Fetch an article standalone, returning its body and its document.
+
+    Same path as fetch_url: Crawl4AI first, trafilatura second. The difference
+    is only what survives the return, and a caller wanting the document asks
+    for it here rather than fetching the page twice.
+    """
+    try:
+        async with create_shared_crawler() as (crawler, run_cfg):
+            return await fetch_article_with_crawler(url, crawler, run_cfg)
+    except Exception as exc:
+        log.warning("scraper.crawl4ai_error", url=url, error=str(exc))
+
+    try:
+        return await _trafilatura_fetch_article(url)
+    except Exception as exc:
+        log.warning("scraper.fetch_failed", url=url, error=str(exc))
+        return FetchedArticle(text=None, html=None)
 
 
 async def fetch_url(url: str) -> Optional[str]:
@@ -189,17 +257,7 @@ async def fetch_url(url: str) -> Optional[str]:
        returns an empty body or raises.
     Returns None on complete fetch failure — caller logs and skips (criteria 1.9).
     """
-    try:
-        async with create_shared_crawler() as (crawler, run_cfg):
-            return await fetch_url_with_crawler(url, crawler, run_cfg)
-    except Exception as exc:
-        log.warning("scraper.crawl4ai_error", url=url, error=str(exc))
-
-    try:
-        return await _trafilatura_fetch(url)
-    except Exception as exc:
-        log.warning("scraper.fetch_failed", url=url, error=str(exc))
-        return None
+    return (await fetch_article(url)).text
 
 
 # ---------------------------------------------------------------------------
@@ -273,7 +331,13 @@ def extract_article_links(html: str, base_url: str) -> list[str]:
 
 
 async def fetch_html(url: str) -> Optional[str]:
-    """Fetch raw HTML from a URL via httpx (for link extraction)."""
+    """Fetch raw HTML from a URL via httpx, up to the byte bound.
+
+    The document is streamed and measured after decompression, because the page
+    is served by whoever the scraped content pointed us at and its size is
+    therefore not ours to choose. Past the bound the read is abandoned and
+    reported, rather than the response being buffered whole and judged after.
+    """
     import httpx
 
     try:
@@ -284,9 +348,21 @@ async def fetch_html(url: str) -> Optional[str]:
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
             },
         ) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            return resp.text
+            async with client.stream("GET", url) as resp:
+                resp.raise_for_status()
+                chunks: list[bytes] = []
+                total = 0
+                async for chunk in resp.aiter_bytes():
+                    total += len(chunk)
+                    if total > _MAX_DOCUMENT_BYTES:
+                        log.warning(
+                            "scraper.html_too_large",
+                            url=url,
+                            limit=_MAX_DOCUMENT_BYTES,
+                        )
+                        return None
+                    chunks.append(chunk)
+                return b"".join(chunks).decode(resp.encoding or "utf-8", errors="replace")
     except Exception as exc:
         log.warning("scraper.html_fetch_failed", url=url, error=str(exc))
         return None
@@ -294,6 +370,17 @@ async def fetch_html(url: str) -> Optional[str]:
 
 async def _trafilatura_fetch(url: str, *, proxy_url: Optional[str] = None) -> Optional[str]:
     """Download raw HTML via httpx then extract with trafilatura.
+
+    Args:
+        proxy_url: Explicit proxy override. If None, falls back to settings.tor_proxy_url.
+    """
+    return (await _trafilatura_fetch_article(url, proxy_url=proxy_url)).text
+
+
+async def _trafilatura_fetch_article(
+    url: str, *, proxy_url: Optional[str] = None
+) -> FetchedArticle:
+    """Download raw HTML via httpx then extract with trafilatura, keeping both.
 
     Args:
         proxy_url: Explicit proxy override. If None, falls back to settings.tor_proxy_url.
@@ -326,7 +413,7 @@ async def _trafilatura_fetch(url: str, *, proxy_url: Optional[str] = None) -> Op
         html = resp.text
 
     text = trafilatura.extract(html, url=url, include_comments=False, include_tables=True)
-    return text or None
+    return FetchedArticle(text=text or None, html=html or None)
 
 
 # ---------------------------------------------------------------------------

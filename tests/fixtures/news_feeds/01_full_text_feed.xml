@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Full Text Outlet</title>
+    <link>https://fulltext.example.in/</link>
+    <item>
+      <title>Students gather outside the education ministry</title>
+      <link>https://fulltext.example.in/2026/07/20/students-gather</link>
+      <pubDate>Mon, 20 Jul 2026 09:30:00 +0530</pubDate>
+      <description>Students gathered outside the ministry on Monday morning.</description>
+      <content:encoded><![CDATA[<p>Students gathered outside the education ministry on Monday morning, the third such assembly in a fortnight. Organisers said the turnout exceeded four thousand, while the district administration put the figure closer to twelve hundred.</p><p>The ministry did not respond to a request for comment. Traffic on the arterial road was diverted for six hours, and metro services at the nearest station were suspended between ten and two.</p>]]></content:encoded>
+    </item>
+    <item>
+      <title>Ministry says no talks are scheduled</title>
+      <link>https://fulltext.example.in/2026/07/21/no-talks</link>
+      <pubDate>Tue, 21 Jul 2026 18:05:00 +0530</pubDate>
+      <description>The ministry said no talks were scheduled.</description>
+      <content:encoded><![CDATA[<p>The education ministry said on Tuesday that no talks with the organisers were scheduled, and that a committee constituted last month would submit its findings in due course. Organisers called the statement an evasion and said the assembly would continue.</p><p>A senior official, speaking on condition of anonymity, said the department had not been asked to prepare a negotiating position.</p>]]></content:encoded>
+    </item>
+  </channel>
+</rss>

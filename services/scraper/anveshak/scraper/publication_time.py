@@ -61,6 +61,17 @@ SIGNAL_TIME_ELEMENT_DATETIME = "time_element_datetime"
 SIGNAL_TIME_ELEMENT_EPOCH = "time_element_epoch"
 SIGNAL_URL_PATH_DATE = "url_path_date"
 
+# Signals from a feed rather than from a document. A feed states a date itself,
+# so no extraction runs at all when one is present. They are named here with the
+# document signals because an analyst reads one list, not two: the question is
+# always which evidence produced this date.
+SIGNAL_FEED_PUBLISHED = "feed_published"
+# Distinct from feed_published, not a synonym for it. An Atom entry's updated is
+# a modification time that most outlets never revise, so it is the best date
+# available from feeds that omit published - and it is a weaker claim, which is
+# exactly what the analyst needs told.
+SIGNAL_FEED_UPDATED = "feed_updated"
+
 # Key under which the signal name is written into the content labels structure,
 # alongside the other derived metadata that lives there.
 PUBLICATION_TIME_SIGNAL_LABEL = "publication_time_signal"
@@ -127,17 +138,26 @@ def source_config_for(
     return SourceConfig(url=url, naive_timezone=policy.zone if policy else None)
 
 
+def publication_time_signal_labels(signal: Optional[str]) -> dict[str, str]:
+    """Return the labels fragment recording which signal produced the date.
+
+    Empty when there is no signal, so a caller merges it unconditionally and an
+    item with no recoverable date carries no claim about one.
+
+    Takes the signal name rather than an extraction result, because a date does
+    not have to come from a document: a feed states one itself, and it needs
+    recording the same way.
+    """
+    if signal is None:
+        return {}
+    return {PUBLICATION_TIME_SIGNAL_LABEL: signal}
+
+
 def publication_time_labels(
     extracted: Optional[ExtractedPublicationTime],
 ) -> dict[str, str]:
-    """Return the labels fragment recording which signal produced the date.
-
-    Empty when there is no date, so a caller merges it unconditionally and an
-    item with no recoverable date carries no claim about one.
-    """
-    if extracted is None:
-        return {}
-    return {PUBLICATION_TIME_SIGNAL_LABEL: extracted.signal}
+    """Return the labels fragment for an extraction result."""
+    return publication_time_signal_labels(extracted.signal if extracted else None)
 
 
 # ---------------------------------------------------------------------------

@@ -10,7 +10,6 @@ pytest.mark.unit — no DB, no Redis, no network.
 """
 
 from datetime import UTC, datetime
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -30,12 +29,20 @@ def _make_pool_and_conn():
 
 
 def _rss_item(raw_text: str, url: str, title: str = "Test", published_at=None):
-    """Simulate an RSS item returned by fetch_rss_items."""
-    return SimpleNamespace(
+    """Build an item as fetch_rss_items returns it.
+
+    The real dataclass rather than a stand-in, so a field added to it fails
+    here instead of being silently absent from what the job is handed.
+    """
+    from anveshak.scraper.publication_time import SIGNAL_FEED_PUBLISHED
+    from anveshak.scraper.rss import RssItem
+
+    return RssItem(
         raw_text=raw_text,
         url=url,
         title=title,
         published_at=published_at or datetime.now(UTC),
+        published_at_signal=SIGNAL_FEED_PUBLISHED,
     )
 
 

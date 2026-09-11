@@ -19,7 +19,7 @@ class TestRobotsTxtFallbackEnforcement:
     @pytest.mark.asyncio
     async def test_robots_blocked_url_never_reaches_trafilatura(self):
         """If robots.txt blocks a URL, trafilatura must NOT be called."""
-        from anveshak.scraper.fetch import fetch_url
+        from anveshak.scraper.fetch import FetchedArticle, fetch_url
 
         with (
             patch(
@@ -28,7 +28,9 @@ class TestRobotsTxtFallbackEnforcement:
                 return_value=True,
             ),
             patch("anveshak.scraper.fetch.create_shared_crawler") as mock_crawler_ctx,
-            patch("anveshak.scraper.fetch._trafilatura_fetch", new_callable=AsyncMock) as mock_traf,
+            patch(
+                "anveshak.scraper.fetch._trafilatura_fetch_article", new_callable=AsyncMock
+            ) as mock_traf,
         ):
             # Crawl4AI returns empty → triggers fallback
             mock_cm = AsyncMock()
@@ -38,7 +40,7 @@ class TestRobotsTxtFallbackEnforcement:
             mock_cm.__aexit__ = AsyncMock(return_value=False)
             mock_crawler_ctx.return_value = mock_cm
 
-            mock_traf.return_value = "fallback text content"
+            mock_traf.return_value = FetchedArticle(text="fallback text content", html=None)
 
             result = await fetch_url("https://example.com/article")
             # trafilatura IS called because robots allowed it
@@ -99,3 +101,64 @@ class TestRobotsTxtFallbackEnforcement:
 
                 allowed = await check_robots_allowed("https://example.com/allowed-page")
                 assert allowed is True
+
+
+class TestRobotsCacheIsBounded:
+    """The cache key is a host named by scraped content, so its size is not ours."""
+
+    async def test_oldest_entry_is_evicted_when_the_cache_is_full(self):
+        from anveshak.scraper import fetch as fetch_module
+
+        original = dict(fetch_module._robots_cache)
+        fetch_module._robots_cache.clear()
+        try:
+            for index in range(fetch_module._ROBOTS_CACHE_MAX_ENTRIES):
+                fetch_module._cache_robots(f"https://host{index}.example", (None, float(index)))
+
+            assert len(fetch_module._robots_cache) == fetch_module._ROBOTS_CACHE_MAX_ENTRIES
+
+            fetch_module._cache_robots("https://newcomer.example", (None, 99999.0))
+
+            assert len(fetch_module._robots_cache) == fetch_module._ROBOTS_CACHE_MAX_ENTRIES
+            assert "https://host0.example" not in fetch_module._robots_cache
+            assert "https://newcomer.example" in fetch_module._robots_cache
+        finally:
+            fetch_module._robots_cache.clear()
+            fetch_module._robots_cache.update(original)
+
+
+class TestFetchHtmlIsBounded:
+    """The page is served by whoever scraped content pointed us at."""
+
+    async def test_document_past_the_byte_bound_is_refused(self):
+        import httpx
+        from anveshak.scraper import fetch as fetch_module
+
+        real_client = httpx.AsyncClient
+        oversized = b"<html>" + (b"x" * (fetch_module._MAX_DOCUMENT_BYTES + 1)) + b"</html>"
+
+        def _factory(*args, **kwargs):
+            def _handler(request: httpx.Request) -> httpx.Response:
+                return httpx.Response(status_code=200, content=oversized)
+
+            return real_client(transport=httpx.MockTransport(_handler))
+
+        with patch("httpx.AsyncClient", new=_factory):
+            assert await fetch_module.fetch_html("https://outlet.example.in/a") is None
+
+    async def test_document_within_the_bound_is_returned(self):
+        import httpx
+        from anveshak.scraper import fetch as fetch_module
+
+        real_client = httpx.AsyncClient
+
+        def _factory(*args, **kwargs):
+            def _handler(request: httpx.Request) -> httpx.Response:
+                return httpx.Response(status_code=200, content=b"<html><body>ok</body></html>")
+
+            return real_client(transport=httpx.MockTransport(_handler))
+
+        with patch("httpx.AsyncClient", new=_factory):
+            assert await fetch_module.fetch_html("https://outlet.example.in/a") == (
+                "<html><body>ok</body></html>"
+            )

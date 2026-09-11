@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -37,12 +38,36 @@ _EMPTY_RSS = b"""<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel><title>Empty</title></channel></rss>"""
 
 
-def _make_http_response(content: bytes, url: str = "https://example.com/feed", status: int = 200):
-    """Build a minimal httpx.Response with a request set (required for raise_for_status)."""
-    import httpx
+_REAL_ASYNC_CLIENT = httpx.AsyncClient
 
-    request = httpx.Request("GET", url)
-    return httpx.Response(status_code=status, content=content, request=request)
+
+def _feed_client(content: bytes, status: int = 200):
+    """Build a client factory serving content over httpx.MockTransport.
+
+    A real client rather than a stand-in, so the streamed, size-bounded read the
+    fetcher performs is exercised instead of mocked past. The real class is
+    captured at import, before the patch that puts this factory in its place.
+    """
+
+    def _factory(*args, **kwargs):
+        def _handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(status_code=status, content=content)
+
+        return _REAL_ASYNC_CLIENT(transport=httpx.MockTransport(_handler))
+
+    return _factory
+
+
+def _failing_client(exc: Exception):
+    """Build a client factory whose every request raises exc."""
+
+    def _factory(*args, **kwargs):
+        def _handler(request: httpx.Request) -> httpx.Response:
+            raise exc
+
+        return _REAL_ASYNC_CLIENT(transport=httpx.MockTransport(_handler))
+
+    return _factory
 
 
 # ---------------------------------------------------------------------------
@@ -77,14 +102,14 @@ def test_rss_published_at_timezone_aware():
     items = _parse_feed_sync(_MINIMAL_RSS, "https://example.com/feed")
     assert items, "Expected at least one item"
     for item in items:
-        assert item.published_at.tzinfo is not None, (
-            f"published_at for {item.url} is naive — must be timezone-aware"
-        )
+        assert (
+            item.published_at.tzinfo is not None
+        ), f"published_at for {item.url} is naive — must be timezone-aware"
 
 
 @pytest.mark.unit
 def test_rss_short_summary_triggers_full_fetch():
-    """Entry with summary < rss_full_text_min_chars triggers fetch_url() for full text."""
+    """Entry with summary < rss_full_text_min_chars triggers fetch_article() for full text."""
     from anveshak.scraper import rss as rss_module
 
     full_text = (
@@ -94,17 +119,19 @@ def test_rss_short_summary_triggers_full_fetch():
     )
 
     async def _run():
-        with patch("anveshak.scraper.rss.fetch_url", new=AsyncMock(return_value=full_text)):
-            with patch("anveshak.scraper.rss.httpx.AsyncClient") as mock_client_cls:
-                mock_client = AsyncMock()
-                mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-                mock_client.__aexit__ = AsyncMock(return_value=False)
-                mock_client.get = AsyncMock(
-                    return_value=_make_http_response(_MINIMAL_RSS, url="https://example.com/feed")
-                )
-                mock_client_cls.return_value = mock_client
+        from anveshak.scraper.fetch import FetchedArticle
 
-                items = await rss_module.fetch_rss_items("https://example.com/feed")
+        fetched = AsyncMock(return_value=FetchedArticle(text=full_text, html=None))
+        with (
+            patch("anveshak.scraper.rss.fetch_article", new=fetched),
+            patch(
+                "anveshak.scraper.rss.validate_external_url_resolved",
+                new=AsyncMock(return_value=True),
+            ),
+            patch("anveshak.scraper.rss.check_robots_allowed", new=AsyncMock(return_value=True)),
+            patch("anveshak.scraper.rss.httpx.AsyncClient", new=_feed_client(_MINIMAL_RSS)),
+        ):
+            items = await rss_module.fetch_rss_items("https://example.com/feed")
 
         # First item has short summary ("Short summary.") → full_text should be used
         matches = [i for i in items if "j20-hotan" in i.url]
@@ -120,15 +147,7 @@ def test_rss_empty_feed_returns_empty_list():
     from anveshak.scraper import rss as rss_module
 
     async def _run():
-        with patch("anveshak.scraper.rss.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.get = AsyncMock(
-                return_value=_make_http_response(_EMPTY_RSS, url="https://example.com/feed")
-            )
-            mock_client_cls.return_value = mock_client
-
+        with patch("anveshak.scraper.rss.httpx.AsyncClient", new=_feed_client(_EMPTY_RSS)):
             items = await rss_module.fetch_rss_items("https://example.com/feed")
 
         assert items == []
@@ -139,17 +158,13 @@ def test_rss_empty_feed_returns_empty_list():
 @pytest.mark.unit
 def test_rss_feed_fetch_failure_returns_empty_list():
     """Network failure fetching the feed returns [] — never raises."""
-    import httpx
     from anveshak.scraper import rss as rss_module
 
     async def _run():
-        with patch("anveshak.scraper.rss.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.get = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
-            mock_client_cls.return_value = mock_client
-
+        with patch(
+            "anveshak.scraper.rss.httpx.AsyncClient",
+            new=_failing_client(httpx.ConnectError("Connection refused")),
+        ):
             items = await rss_module.fetch_rss_items("https://dead-feed.example.com/feed")
 
         assert items == []

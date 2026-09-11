@@ -8,6 +8,8 @@ blocked.
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 pytestmark = pytest.mark.unit
@@ -90,3 +92,63 @@ class TestValidateExternalUrl:
         from anveshak.scraper.url_safety import validate_external_url
 
         assert validate_external_url("//example.com/image.jpg") is False
+
+
+class TestResolvedHostValidation:
+    """A hostname that resolves into the deployment network is not external.
+
+    validate_external_url can only judge literal addresses and a name blocklist.
+    A feed-supplied link naming a compose service - ollama, redis, postgres -
+    passes it and reaches an internal port. Resolution is what settles it.
+    """
+
+    async def test_compose_service_name_resolving_to_private_ip_is_refused(self):
+        from anveshak.scraper import url_safety
+
+        with patch.object(url_safety, "_resolve_host", new=AsyncMock(return_value=["172.28.0.4"])):
+            assert await url_safety.validate_external_url_resolved("http://ollama:11434/") is False
+
+    async def test_public_host_is_allowed(self):
+        from anveshak.scraper import url_safety
+
+        with patch.object(
+            url_safety, "_resolve_host", new=AsyncMock(return_value=["93.184.216.34"])
+        ):
+            assert (
+                await url_safety.validate_external_url_resolved("https://outlet.example.in/a")
+                is True
+            )
+
+    async def test_any_private_answer_refuses_the_whole_name(self):
+        """A name answering with both a public and a private address is refused."""
+        from anveshak.scraper import url_safety
+
+        with patch.object(
+            url_safety,
+            "_resolve_host",
+            new=AsyncMock(return_value=["93.184.216.34", "127.0.0.1"]),
+        ):
+            assert (
+                await url_safety.validate_external_url_resolved("https://rebind.example/a") is False
+            )
+
+    async def test_unresolvable_host_is_refused(self):
+        """Deny by default: a name we cannot resolve is not a name we fetch."""
+        from anveshak.scraper import url_safety
+
+        with patch.object(url_safety, "_resolve_host", new=AsyncMock(return_value=[])):
+            assert await url_safety.validate_external_url_resolved("https://nx.example/a") is False
+
+    async def test_literal_checks_still_apply_before_resolution(self):
+        from anveshak.scraper import url_safety
+
+        resolver = AsyncMock(return_value=["93.184.216.34"])
+        with patch.object(url_safety, "_resolve_host", new=resolver):
+            assert await url_safety.validate_external_url_resolved("file:///etc/passwd") is False
+            assert resolver.await_count == 0
+
+    async def test_unspecified_literal_address_is_refused(self):
+        """:: routes to the local host and is not enumerated by the written-form check."""
+        from anveshak.scraper import url_safety
+
+        assert await url_safety.validate_external_url_resolved("http://[::]:8000/") is False
