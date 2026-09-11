@@ -614,6 +614,16 @@ class TestSeedDefaultOrg:
 
 class TestFrontendOrgId:
     def test_auth_context_has_org_id(self):
-        """AuthContext.tsx JWTPayload must include org_id field."""
-        content = (REPO_ROOT / "frontend" / "src" / "contexts" / "AuthContext.tsx").read_text()
-        assert "org_id" in content
+        """The auth context JWTPayload must carry org_id.
+
+        The claim matters, not which file holds it: AuthContext.tsx is the
+        provider component and contexts/auth.ts is the type and the decode it
+        consumes. Reading whichever of the two exists keeps this test on the
+        invariant rather than on a file layout.
+        """
+        contexts = REPO_ROOT / "frontend" / "src" / "contexts"
+        sources = [p for p in (contexts / "AuthContext.tsx", contexts / "auth.ts") if p.exists()]
+        assert sources, "no auth context module found under frontend/src/contexts"
+        assert any(
+            "org_id" in p.read_text() for p in sources
+        ), "the auth context JWTPayload must include org_id"
