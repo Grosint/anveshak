@@ -749,7 +749,7 @@ async def _walk_paginated_feed(
             )
             break
 
-        dated = [item for item in new_items if item.published_at is not None]
+        dated = [item.published_at for item in new_items if item.published_at is not None]
         for item in new_items:
             seen_urls.add(item.url)
             day = item.published_at.date() if item.published_at else None
@@ -766,7 +766,7 @@ async def _walk_paginated_feed(
                 )
             )
 
-        if dated and all(item.published_at.date() < window.start for item in dated):
+        if dated and all(published_at.date() < window.start for published_at in dated):
             log.info(
                 "backfill.pagination_reached_window",
                 url=page_url,
