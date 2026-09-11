@@ -4,8 +4,9 @@ import { CredibilityBadge } from './CredibilityBadge'
 import { SentimentBadge } from './SentimentBadge'
 import { PlatformBadge } from './PlatformBadge'
 import { Badge } from '../ui/Badge'
-import { formatDistanceToNow } from 'date-fns'
+import { format, formatDistanceToNow } from 'date-fns'
 import { visionApi } from '../../api/vision'
+import { feedTimestamp } from '../../lib/domain'
 
 interface ContentCardProps {
   item: ContentItem
@@ -36,6 +37,8 @@ export function ContentCard({ item, onClick }: ContentCardProps) {
   const displayTitle = item.title || (item.translated_text ?? item.clean_text)
   const displayBody = item.title ? (item.translated_text ?? item.clean_text) : null
   const dupCount = (item.duplicate_count ?? 1) - 1
+  // The feed filters on publication time, so the card leads with it.
+  const timestamp = feedTimestamp(item)
 
   return (
     <article
@@ -141,7 +144,9 @@ export function ContentCard({ item, onClick }: ContentCardProps) {
             </button>
           )}
         </div>
-        <span>{formatDistanceToNow(new Date(item.captured_at), { addSuffix: true })}</span>
+        <span title={`Collected ${format(new Date(item.captured_at), 'dd MMM yyyy HH:mm')}`}>
+          {`${timestamp.label} ${formatDistanceToNow(new Date(timestamp.iso), { addSuffix: true })}`}
+        </span>
       </div>
     </article>
   )

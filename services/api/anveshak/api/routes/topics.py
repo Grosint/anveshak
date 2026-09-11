@@ -1,7 +1,7 @@
 """Topic management endpoints."""
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time
 from typing import Optional
 
 import structlog
@@ -199,6 +199,29 @@ async def get_topic(
     return row
 
 
+def _parse_feed_boundary(raw: str, *, field: str, end_of_day: bool) -> datetime:
+    """Read a feed date boundary as a UTC instant.
+
+    A bare YYYY-MM-DD covers the whole day the analyst picked, so the upper
+    boundary runs to the last microsecond of it. A full instant is taken as
+    given, and a naive one is read as UTC rather than as server local time.
+    """
+    text = raw.strip()
+    try:
+        if len(text) == 10:
+            day = date.fromisoformat(text)
+            return datetime.combine(day, time.max if end_of_day else time.min, tzinfo=UTC)
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        # The parser message quotes the input verbatim, so state the expected
+        # form instead of echoing whatever arrived on the query string.
+        raise HTTPException(
+            status_code=422,
+            detail=f"{field} must be YYYY-MM-DD or an ISO 8601 instant",
+        ) from None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
 @router.get("/{topic_id}/content")
 async def get_topic_content(
     topic_id: str,
@@ -209,6 +232,8 @@ async def get_topic_content(
     include_low_quality: bool = False,
     sentiment: Optional[str] = None,
     sort_by: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
     db: DBConnection = Depends(get_db),
     user: dict = Depends(require_role("analyst", "admin")),
 ):
@@ -217,6 +242,14 @@ async def get_topic_content(
         raise HTTPException(status_code=422, detail="sentiment must be positive|negative|neutral")
     if sort_by and sort_by not in ("captured_at", "relevance"):
         raise HTTPException(status_code=422, detail="sort_by must be captured_at|relevance")
+    # The feed filters on publication time, so the window is the period the
+    # analyst wants to read, not the period we happened to collect in.
+    since = (
+        _parse_feed_boundary(date_from, field="date_from", end_of_day=False) if date_from else None
+    )
+    until = _parse_feed_boundary(date_to, field="date_to", end_of_day=True) if date_to else None
+    if since and until and since > until:
+        raise HTTPException(status_code=422, detail="date_from must be on or before date_to")
     topic = await topics_db.get_topic(db, topic_id)
     relevance_threshold = topic.get("topic_relevance_threshold") if topic else None
     return await topics_db.get_topic_content(
@@ -230,6 +263,8 @@ async def get_topic_content(
         sentiment,
         relevance_threshold=relevance_threshold,
         sort_by=sort_by or "captured_at",
+        date_from=since,
+        date_to=until,
     )
 
 

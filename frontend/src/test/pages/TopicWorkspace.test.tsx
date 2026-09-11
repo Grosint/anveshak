@@ -175,6 +175,28 @@ describe('TopicWorkspace 3-view shell', () => {
     expect(mockClose).toHaveBeenCalled()
   })
 
+  // Issue #49: the date filter must reach the query, otherwise it narrows the
+  // page already fetched instead of the topic.
+  it('sends a picked date range to the content request', async () => {
+    const user = userEvent.setup()
+    const { contentApi } = await import('../../api/content')
+    renderWorkspace('/topics/topic-1/content')
+
+    const fromInput = await screen.findByLabelText('From date')
+    await user.type(fromInput, '2026-03-02')
+    const toInput = screen.getByLabelText('To date')
+    await user.type(toInput, '2026-03-08')
+
+    await waitFor(() => {
+      expect(contentApi.list).toHaveBeenLastCalledWith(
+        'topic-1',
+        0,
+        50,
+        expect.objectContaining({ date_from: '2026-03-02', date_to: '2026-03-08' }),
+      )
+    })
+  })
+
   it('map is not loaded until Map tab clicked', async () => {
     renderWorkspace('/topics/topic-1')
 

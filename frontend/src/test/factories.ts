@@ -76,6 +76,7 @@ export function makeContentItem(overrides?: Partial<ContentItem>): ContentItem {
     language: 'en',
     credibility_score_at_capture: 75,
     captured_at: new Date().toISOString(),
+    published_at: null,
     backfilled: false,
     ...overrides,
   }

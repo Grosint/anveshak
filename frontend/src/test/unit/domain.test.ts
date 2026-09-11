@@ -12,6 +12,7 @@ import {
   deepfakeLabel,
   resolveTimeRange,
   applyClientFilters,
+  feedTimestamp,
   compareByUrgency,
   resolveWorkspaceView,
 } from '../../lib/domain'
@@ -259,6 +260,31 @@ describe('resolveWorkspaceView', () => {
   })
 })
 
+// ── feedTimestamp ───────────────────────────────────────────────────────
+
+describe('feedTimestamp', () => {
+  // Issue #49: the feed filters on publication time, so the card must show the
+  // timestamp the filter acted on rather than when the scraper ran.
+  it('prefers publication time', () => {
+    const item = makeContentItem({
+      captured_at: '2026-09-01T12:00:00Z',
+      published_at: '2026-03-04T09:00:00Z',
+    })
+    expect(feedTimestamp(item)).toEqual({ iso: '2026-03-04T09:00:00Z', label: 'Published' })
+  })
+
+  it('falls back to capture time when publication time is unknown', () => {
+    const item = makeContentItem({ captured_at: '2026-09-01T12:00:00Z', published_at: null })
+    expect(feedTimestamp(item)).toEqual({ iso: '2026-09-01T12:00:00Z', label: 'Collected' })
+  })
+
+  it('treats a missing field as unknown', () => {
+    const item = makeContentItem({ captured_at: '2026-09-01T12:00:00Z' })
+    delete (item as { published_at?: string | null }).published_at
+    expect(feedTimestamp(item).label).toBe('Collected')
+  })
+})
+
 // ── applyClientFilters ──────────────────────────────────────────────────
 
 describe('applyClientFilters', () => {
@@ -279,14 +305,16 @@ describe('applyClientFilters', () => {
     expect(result).toHaveLength(2)
   })
 
-  it('filters by date_from', () => {
+  // Issue #49: date bounds run server side on publication time. A second pass
+  // here would narrow the loaded page against capture time, which is the bug.
+  it('leaves date_from to the server', () => {
     const result = applyClientFilters(items, { date_from: '2026-05-06T00:00:00Z' })
-    expect(result).toHaveLength(2)
+    expect(result).toHaveLength(3)
   })
 
-  it('filters by date_to', () => {
+  it('leaves date_to to the server', () => {
     const result = applyClientFilters(items, { date_to: '2026-05-06T12:00:00Z' })
-    expect(result).toHaveLength(2)
+    expect(result).toHaveLength(3)
   })
 
   it('null/undefined filter values pass through', () => {

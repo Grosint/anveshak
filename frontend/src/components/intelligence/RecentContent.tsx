@@ -12,7 +12,7 @@ interface RecentContentProps {
 export function RecentContent({ topicId, onSelectContent, onShowAll }: RecentContentProps) {
   const { data } = useQuery({
     queryKey: ['recent-content', topicId],
-    queryFn: () => contentApi.list(topicId, 0, 5, undefined, 'captured_at'),
+    queryFn: () => contentApi.list(topicId, 0, 5, { sort_by: 'captured_at' }),
     staleTime: 60_000,
   })
 

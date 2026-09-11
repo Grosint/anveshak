@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Any, Optional
 
 import asyncpg
@@ -390,6 +391,8 @@ async def get_topic_content(
     sentiment: Optional[str] = None,
     relevance_threshold: Optional[float] = None,
     sort_by: str = "captured_at",
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
 ) -> list[dict[str, Any]]:
     if has_embedding is True:
         emb_clause = "AND ci.embedding IS NOT NULL"
@@ -422,6 +425,20 @@ async def get_topic_content(
     params.append(threshold)
     next_param += 1
 
+    # Rule: an analyst filtering by date means when it was said, not when we
+    # collected it. published_at is NULL for anything the platform gave no
+    # timestamp for, so fall back to captured_at and keep those items reachable.
+    date_clauses: list[str] = []
+    if date_from is not None:
+        date_clauses.append(f"AND COALESCE(ci.published_at, ci.captured_at) >= ${next_param}")
+        params.append(date_from)
+        next_param += 1
+    if date_to is not None:
+        date_clauses.append(f"AND COALESCE(ci.published_at, ci.captured_at) <= ${next_param}")
+        params.append(date_to)
+        next_param += 1
+    date_clause = "\n              ".join(date_clauses)
+
     if sentiment == "positive":
         sentiment_clause = "AND (ci.labels->'sentiment'->>'compound')::float >= 0.05"
     elif sentiment == "negative":
@@ -443,7 +460,7 @@ async def get_topic_content(
     # Use a CTE to dedup on clean_hash — show newest item per unique clean_hash,
     # with a count of how many duplicates were collapsed.
     # Safe despite the f-string: every {..._clause} is an internal literal
-    # assembled above, never user input. User values are bind params ($1...$4).
+    # assembled above, never user input. User values are bind params throughout.
     sql = f"""
         WITH all_items AS (
             SELECT ci.id,
@@ -454,6 +471,7 @@ async def get_topic_content(
                    ci.language,
                    ci.credibility_score_at_capture,
                    ci.captured_at,
+                   ci.published_at,
                    ci.clean_hash,
                    ci.labels,
                    ci.topic_relevance_score,
@@ -468,6 +486,7 @@ async def get_topic_content(
               {platform_clause}
               {relevance_clause}
               {sentiment_clause}
+              {date_clause}
 
             UNION ALL
 
@@ -479,6 +498,7 @@ async def get_topic_content(
                    ci.language,
                    ci.credibility_score_at_capture,
                    ci.captured_at,
+                   ci.published_at,
                    ci.clean_hash,
                    ci.labels,
                    ci.topic_relevance_score,
@@ -494,12 +514,13 @@ async def get_topic_content(
               {platform_clause}
               {relevance_clause}
               {sentiment_clause}
+              {date_clause}
         ),
         deduped AS (
             SELECT DISTINCT ON (COALESCE(clean_hash, id))
                    id, url, title, clean_text, translated_text,
                    language, credibility_score_at_capture, captured_at,
-                   clean_hash, labels, topic_relevance_score,
+                   published_at, clean_hash, labels, topic_relevance_score,
                    source_name, platform, backfilled
             FROM all_items
             ORDER BY COALESCE(clean_hash, id), captured_at DESC
@@ -515,7 +536,7 @@ async def get_topic_content(
             ) dup ON COALESCE(d.clean_hash, d.id) = dup.hash_key
         )
         SELECT id, url, title, clean_text, translated_text,
-               language, credibility_score_at_capture, captured_at,
+               language, credibility_score_at_capture, captured_at, published_at,
                source_name, platform, backfilled, duplicate_count, labels,
                topic_relevance_score,
                EXISTS (

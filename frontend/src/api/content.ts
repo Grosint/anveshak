@@ -18,6 +18,9 @@ export interface ContentItem {
   language: string
   credibility_score_at_capture: number
   captured_at: string
+  // When the platform said it was published. NULL means the platform gave no
+  // timestamp, which is not the same as it being published when we collected it.
+  published_at?: string | null
   backfilled: boolean
   duplicate_count?: number
   sentiment?: SentimentScore | null
@@ -61,10 +64,19 @@ export interface ContentFilters {
 }
 
 export const contentApi = {
-  list: (topicId: string, offset = 0, limit = 50, sentiment?: string, sort_by?: string) =>
+  // Date bounds go to the server so they filter the topic, not the loaded page.
+  // The server reads them as publication time, falling back to capture time.
+  list: (topicId: string, offset = 0, limit = 50, filters: ContentFilters = {}) =>
     api
       .get<ContentItem[]>(`/api/v1/topics/${topicId}/content`, {
-        params: { offset, limit, ...(sentiment ? { sentiment } : {}), ...(sort_by ? { sort_by } : {}) },
+        params: {
+          offset,
+          limit,
+          ...(filters.sentiment ? { sentiment: filters.sentiment } : {}),
+          ...(filters.sort_by ? { sort_by: filters.sort_by } : {}),
+          ...(filters.date_from ? { date_from: filters.date_from } : {}),
+          ...(filters.date_to ? { date_to: filters.date_to } : {}),
+        },
       })
       .then((r) => r.data),
 

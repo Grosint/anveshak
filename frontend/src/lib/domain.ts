@@ -288,12 +288,28 @@ export function resolveWorkspaceView(pathname: string, topicId: string): Workspa
 
 // ── Client-side content filtering ───────────────────────────────────────
 
+/**
+ * The timestamp a content card should lead with.
+ *
+ * The feed filters on publication time and falls back to capture time, so the
+ * card shows the same thing. Labelling which one it is keeps "6 months ago" on
+ * a backfilled item from reading as a stale feed.
+ */
+export function feedTimestamp(
+  item: Pick<ContentItem, 'captured_at'> & { published_at?: string | null },
+): { iso: string; label: 'Published' | 'Collected' } {
+  return item.published_at
+    ? { iso: item.published_at, label: 'Published' }
+    : { iso: item.captured_at, label: 'Collected' }
+}
+
 export function applyClientFilters(items: ContentItem[], filters: ContentFilters): ContentItem[] {
   return items.filter((item) => {
     if (filters.language && item.language !== filters.language) return false
     if (filters.credibility_min !== undefined && item.credibility_score_at_capture < filters.credibility_min) return false
-    if (filters.date_from && item.captured_at < filters.date_from) return false
-    if (filters.date_to && item.captured_at > filters.date_to) return false
+    // Date bounds are not here on purpose: they run server side on publication
+    // time, so a client pass over the loaded page would narrow the feed twice
+    // and would compare against the wrong timestamp.
     return true
   })
 }

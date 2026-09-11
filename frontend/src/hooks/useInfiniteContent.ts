@@ -8,7 +8,7 @@ const PAGE_SIZE = 50
 export function useInfiniteContent(topicId: string, filters: ContentFilters = {}, enabled = true) {
   const query = useInfiniteQuery({
     queryKey: ['content', topicId, filters],
-    queryFn: ({ pageParam }) => contentApi.list(topicId, pageParam as number, PAGE_SIZE, filters.sentiment, filters.sort_by),
+    queryFn: ({ pageParam }) => contentApi.list(topicId, pageParam, PAGE_SIZE, filters),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
       if (!lastPage || lastPage.length < PAGE_SIZE) return undefined
