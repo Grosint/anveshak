@@ -1,8 +1,12 @@
-"""Seeding the internal-security-tension Watch Space — issue #25.
+"""Seeding a Watch Space - issues #25 and #52.
 
 Asserts the seeder produces a Watch Space that is a Topic in every technical
 respect: it lists like one, owns sources like one, and is rerunnable without
 duplicating anything.
+
+Every definition in the Watch Space directory is seeded, not one named file.
+A domain that is added as configuration and never proved to seed is a file
+nobody runs.
 """
 
 from __future__ import annotations
@@ -10,24 +14,33 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import yaml
 
 from tests.conftest import POSTGRES_URL, TEST_ORG_ID
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
-SPEC = Path("infra/configs/watch_spaces/internal_security_tension.yaml")
+WATCH_SPACE_DIR = Path("infra/configs/watch_spaces")
+SPECS = sorted(WATCH_SPACE_DIR.glob("*.yaml"))
+
+
+@pytest.fixture(params=SPECS, ids=lambda path: path.stem)
+def spec(request):
+    return request.param
 
 
 @pytest.fixture
-async def seeded(db_pool, ensure_org):
+async def seeded(db_pool, ensure_org, spec):
     """Seed the Watch Space, then remove everything it created."""
     from scripts.seed_watch_space import seed
 
-    await seed(SPEC, POSTGRES_URL, TEST_ORG_ID)
+    await seed(spec, POSTGRES_URL, TEST_ORG_ID)
+    name = yaml.safe_load(spec.read_text())["name"]
 
     async with db_pool.acquire() as conn:
         topic_id = await conn.fetchval(
-            "SELECT id FROM topics WHERE name = 'Internal Security Tension' AND org_id = $1",
+            "SELECT id FROM topics WHERE name = $1 AND org_id = $2",
+            name,
             TEST_ORG_ID,
         )
 
@@ -85,20 +98,22 @@ class TestSeededWatchSpace:
             )
         assert unlinked == 0
 
-    async def test_seeding_twice_creates_nothing_extra(self, db_pool, seeded):
+    async def test_seeding_twice_creates_nothing_extra(self, db_pool, seeded, spec):
         from scripts.seed_watch_space import seed
+
+        name = yaml.safe_load(spec.read_text())["name"]
 
         async with db_pool.acquire() as conn:
             before = await conn.fetchval(
                 "SELECT COUNT(*) FROM topic_sources WHERE topic_id = $1", seeded
             )
 
-        await seed(SPEC, POSTGRES_URL, TEST_ORG_ID)
+        await seed(spec, POSTGRES_URL, TEST_ORG_ID)
 
         async with db_pool.acquire() as conn:
             topics = await conn.fetchval(
-                "SELECT COUNT(*) FROM topics WHERE name = 'Internal Security Tension' "
-                "AND org_id = $1",
+                "SELECT COUNT(*) FROM topics WHERE name = $1 AND org_id = $2",
+                name,
                 TEST_ORG_ID,
             )
             after = await conn.fetchval(

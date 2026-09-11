@@ -1,4 +1,4 @@
-"""Watch Space — issue #25.
+"""Watch Space - issues #25 and #52.
 
 A Watch Space is a Topic in every technical respect. The distinction is
 breadth and intent: it collects across a domain rather than a named subject,
@@ -7,10 +7,16 @@ and its clusters are what narrative detection detects within.
 Its keywords must name no specific organisation, party, or individual. If a
 target appears in the keywords, the later claim that the system found a
 narrative unaided is false, and that is the first thing a customer checks.
+
+Every constraint below runs against every file in the Watch Space directory
+rather than one named file. A second domain was added in #52, and a rule
+that only guards the file it was written for guards nothing once a third
+arrives.
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -20,7 +26,10 @@ from anveshak.models.topic import Topic
 
 pytestmark = pytest.mark.unit
 
-WATCH_SPACE_SEED = Path("infra/configs/watch_spaces/internal_security_tension.yaml")
+WATCH_SPACE_DIR = Path("infra/configs/watch_spaces")
+WATCH_SPACE_SEEDS = sorted(WATCH_SPACE_DIR.glob("*.yaml"))
+
+DEVANAGARI = re.compile(r"[\u0900-\u097f]")
 
 
 class TestTopicModelCarriesTheMarker:
@@ -78,13 +87,29 @@ class TestApiAcceptsTheMarker:
         assert "is_watch_space" in SQL_LIST_TOPICS_BY_ORG
 
 
-class TestSeededWatchSpace:
-    def test_the_seed_file_exists(self):
-        assert WATCH_SPACE_SEED.exists()
+@pytest.fixture(params=WATCH_SPACE_SEEDS, ids=lambda path: path.stem)
+def seed(request):
+    """Every Watch Space definition, one test run each."""
+    return yaml.safe_load(request.param.read_text())
 
-    @pytest.fixture
-    def seed(self):
-        return yaml.safe_load(WATCH_SPACE_SEED.read_text())
+
+class TestSeededWatchSpaces:
+    """Every Watch Space definition on disk, not one named file."""
+
+    def test_the_directory_holds_the_expected_domains(self):
+        """Named explicitly, so an empty glob cannot pass every other test."""
+        names = {path.name for path in WATCH_SPACE_SEEDS}
+        assert "internal_security_tension.yaml" in names
+        assert "youth_grievance.yaml" in names
+
+    def test_more_than_one_domain_is_watched(self):
+        """One Watch Space is a hand-tuned case; two is a mechanism."""
+        assert len(WATCH_SPACE_SEEDS) >= 2
+
+    def test_each_domain_is_defined_once(self):
+        seeds = [yaml.safe_load(path.read_text()) for path in WATCH_SPACE_SEEDS]
+        names = [seed["name"] for seed in seeds]
+        assert len(names) == len(set(names))
 
     def test_it_is_marked_as_a_watch_space(self, seed):
         assert seed["is_watch_space"] is True
@@ -102,9 +127,35 @@ class TestSeededWatchSpace:
             assert source["platform"]
             assert source["url_or_handle"]
 
+    def test_no_source_is_listed_twice(self, seed):
+        handles = [(s["platform"], s["url_or_handle"]) for s in seed["sources"]]
+        assert len(handles) == len(set(handles))
+
     def test_it_collects_in_english_and_hindi(self, seed):
         assert "en" in seed["languages"]
         assert "hi" in seed["languages"]
+
+
+class TestKeywordsCoverBothLanguages:
+    """A declared language with no keywords in it collects nothing.
+
+    languages: [en, hi] sets what the pipeline will accept, but keywords are
+    what the scraper matches on. English-only keywords under a bilingual
+    Watch Space draw the Signal from the English-speaking part of a story.
+    """
+
+    def test_keywords_include_devanagari(self, seed):
+        assert any(DEVANAGARI.search(keyword) for keyword in seed["keywords"])
+
+    def test_keywords_include_latin_script(self, seed):
+        assert any(re.search(r"[a-z]", keyword) for keyword in seed["keywords"])
+
+    def test_each_language_carries_several_keywords(self, seed):
+        """One token in a language is a gesture, not coverage."""
+        hindi = [k for k in seed["keywords"] if DEVANAGARI.search(k)]
+        english = [k for k in seed["keywords"] if not DEVANAGARI.search(k)]
+        assert len(hindi) >= 5
+        assert len(english) >= 5
 
 
 class TestKeywordsNameNoTarget:
@@ -115,8 +166,7 @@ class TestKeywordsNameNoTarget:
     """
 
     @pytest.fixture
-    def keywords(self):
-        seed = yaml.safe_load(WATCH_SPACE_SEED.read_text())
+    def keywords(self, seed):
         return [k.lower() for k in seed["keywords"]]
 
     def test_no_keyword_names_a_political_party(self, keywords):
@@ -168,9 +218,8 @@ class TestKeywordsNameNoTarget:
         for organisation in organisations:
             assert not any(organisation in keyword for keyword in keywords), organisation
 
-    def test_no_keyword_is_a_person_name(self, keywords):
+    def test_no_keyword_is_a_person_name(self, seed):
         """Domain vocabulary is lowercase common nouns, not proper nouns."""
-        seed = yaml.safe_load(WATCH_SPACE_SEED.read_text())
         for keyword in seed["keywords"]:
             assert keyword == keyword.lower(), keyword
 

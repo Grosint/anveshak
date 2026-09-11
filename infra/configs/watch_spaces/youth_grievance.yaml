@@ -1,0 +1,318 @@
+# Youth grievance - Watch Space seed. Issue #52.
+#
+# The second Watch Space, standing alongside internal_security_tension.yaml
+# rather than replacing or widening it. A narrative that begins as an
+# economic or educational grievance and only later produces street
+# mobilization is not public-order vocabulary when it starts, so the public
+# order Watch Space sees it late or not at all.
+#
+# The keywords below describe a domain: examination integrity, employment,
+# and campus grievance. None of them names an organisation, a party, or an
+# individual, which is the same constraint the first Watch Space states. A
+# target hidden in the keywords would make the later claim that the system
+# found a narrative unaided false, and the keywords are the first thing an
+# evaluating officer reads.
+#
+# Enforced by tests/unit/test_watch_space.py, which runs every constraint
+# against every file in this directory.
+
+name: Youth Grievance
+is_watch_space: true
+status: active
+
+# Aspirant and student discourse is substantially Hindi, more so than public
+# order reporting, so an English-only keyword set would read the commentary
+# about the grievance rather than the grievance.
+languages:
+  - en
+  - hi
+
+# Broad, so an emerging narrative is not filtered out before clustering.
+# Matched to the first Watch Space: these are collection-width settings, not
+# a per-domain tuning knob, and issue #52 puts detection thresholds out of
+# scope.
+credibility_min: 20.0
+signal_threshold: 3
+
+keywords:
+  # Examination integrity vocabulary
+  - paper leak
+  - question paper leak
+  - exam cancelled
+  - exam postponed
+  - re-exam demand
+  - answer key dispute
+  - result delay
+  - merit list irregularity
+  - recruitment scam
+  - recruitment exam irregularity
+  - exam malpractice
+  - impersonation racket
+  - cut-off dispute
+  # Employment vocabulary
+  - youth unemployment
+  - jobless growth
+  - vacancy freeze
+  - appointment letter pending
+  - contract hiring
+  - outsourced recruitment
+  - job crisis
+  - employment exchange
+  - retrenchment notice
+  - apprentice stipend
+  # Campus and aspirant grievance vocabulary
+  - student protest
+  - campus unrest
+  - hostel protest
+  - fee hike
+  - scholarship delay
+  - aspirant protest
+  - coaching centre fraud
+  - library sit-in
+  # Hindi domain vocabulary
+  - पेपर लीक
+  - परीक्षा रद्द
+  - भर्ती घोटाला
+  - भर्ती में धांधली
+  - बेरोजगारी
+  - युवा बेरोजगारी
+  - छात्र आंदोलन
+  - नौकरी संकट
+  - रिजल्ट में देरी
+  - नियुक्ति पत्र
+  - फीस वृद्धि
+  - छात्रवृत्ति में देरी
+  - खाली पद
+  - रोजगार मेला
+
+# Roughly thirty to fifty sources spanning education and economy feeds,
+# video channels, aspirant forums, public messaging channels and high-reach
+# accounts. Breadth is the point here too: a grievance confined to one
+# platform is amplification rather than a narrative, and the Manufactured
+# Narrative signal can only read that if the Watch Space is wide enough to
+# have missed it elsewhere.
+#
+# Sources are global rows. The overlap with the first Watch Space is
+# deliberate and costs nothing: the seeder matches on url_or_handle and
+# links the existing row rather than duplicating it.
+sources:
+  # --- Education desks ------------------------------------------------
+  - name: The Hindu Education
+    url_or_handle: https://www.thehindu.com/education/feeder/default.rss
+    platform: rss
+    credibility_score: 80.0
+    language: en
+  - name: Indian Express Education
+    url_or_handle: https://indianexpress.com/section/education/feed/
+    platform: rss
+    credibility_score: 78.0
+    language: en
+  - name: Hindustan Times Education
+    url_or_handle: https://www.hindustantimes.com/feeds/rss/education/rssfeed.xml
+    platform: rss
+    credibility_score: 74.0
+    language: en
+  - name: Times of India Education
+    url_or_handle: https://timesofindia.indiatimes.com/rssfeeds/913168846.cms
+    platform: rss
+    credibility_score: 68.0
+    language: en
+  - name: Deccan Herald Education
+    url_or_handle: https://www.deccanherald.com/rss/education.rss
+    platform: rss
+    credibility_score: 72.0
+    language: en
+  - name: India Today Education
+    url_or_handle: https://www.indiatoday.in/rss/1206967
+    platform: rss
+    credibility_score: 64.0
+    language: en
+
+  # --- Employment and economy desks ------------------------------------
+  # Unemployment is reported as economics long before it is reported as
+  # grievance, and the gap between the two framings is itself a measurement.
+  - name: Indian Express Jobs
+    url_or_handle: https://indianexpress.com/section/jobs/feed/
+    platform: rss
+    credibility_score: 76.0
+    language: en
+  - name: The Hindu Business
+    url_or_handle: https://www.thehindu.com/business/feeder/default.rss
+    platform: rss
+    credibility_score: 80.0
+    language: en
+  - name: Business Standard Economy
+    url_or_handle: https://www.business-standard.com/rss/economy-102.rss
+    platform: rss
+    credibility_score: 76.0
+    language: en
+  - name: Mint Economy
+    url_or_handle: https://www.livemint.com/rss/news
+    platform: rss
+    credibility_score: 74.0
+    language: en
+  - name: Moneycontrol Economy
+    url_or_handle: https://www.moneycontrol.com/rss/economy.xml
+    platform: rss
+    credibility_score: 68.0
+    language: en
+  - name: The Print Economy
+    url_or_handle: https://theprint.in/category/economy/feed/
+    platform: rss
+    credibility_score: 70.0
+    language: en
+
+  # --- Hindi language feeds --------------------------------------------
+  - name: BBC Hindi India
+    url_or_handle: https://feeds.bbci.co.uk/hindi/india/rss.xml
+    platform: rss
+    credibility_score: 80.0
+    language: hi
+  - name: Amar Ujala Education
+    url_or_handle: https://www.amarujala.com/rss/education.xml
+    platform: rss
+    credibility_score: 64.0
+    language: hi
+  - name: Dainik Jagran Education
+    url_or_handle: https://www.jagran.com/rss/news/education.xml
+    platform: rss
+    credibility_score: 62.0
+    language: hi
+  - name: Navbharat Times India
+    url_or_handle: https://navbharattimes.indiatimes.com/rssfeedsdefault.cms
+    platform: rss
+    credibility_score: 60.0
+    language: hi
+  - name: Aaj Tak Education
+    url_or_handle: https://www.aajtak.in/rssfeeds/?id=education
+    platform: rss
+    credibility_score: 58.0
+    language: hi
+  - name: Dainik Bhaskar National
+    url_or_handle: https://www.bhaskar.com/rss-feed/1061/
+    platform: rss
+    credibility_score: 58.0
+    language: hi
+  - name: Jagran Josh Hindi
+    url_or_handle: https://www.jagranjosh.com/rss/hindi-news.xml
+    platform: rss
+    credibility_score: 52.0
+    language: hi
+
+  # --- Independent and long-form ---------------------------------------
+  - name: Scroll.in Latest
+    url_or_handle: https://feeds.feedburner.com/ScrollinArticles.rss
+    platform: rss
+    credibility_score: 74.0
+    language: en
+  - name: The Wire
+    url_or_handle: https://thewire.in/rss
+    platform: rss
+    credibility_score: 70.0
+    language: en
+  - name: Newslaundry
+    url_or_handle: https://www.newslaundry.com/stories.rss
+    platform: rss
+    credibility_score: 68.0
+    language: en
+  - name: The News Minute
+    url_or_handle: https://www.thenewsminute.com/feeds/default.rss
+    platform: rss
+    credibility_score: 68.0
+    language: en
+
+  # --- Examination and vacancy notice feeds -----------------------------
+  # Where an aspirant learns a date slipped, usually before a newsroom
+  # reports it.
+  - name: Jagran Josh Latest
+    url_or_handle: https://www.jagranjosh.com/rss/latest-news.xml
+    platform: rss
+    credibility_score: 52.0
+    language: en
+  - name: Careers360 News
+    url_or_handle: https://news.careers360.com/rss
+    platform: rss
+    credibility_score: 54.0
+    language: en
+
+  # --- Wire services and official ---------------------------------------
+  - name: Press Information Bureau
+    url_or_handle: https://www.pib.gov.in/RssMain.aspx?ModId=6&Lang=1&Regid=3
+    platform: rss
+    credibility_score: 78.0
+    language: en
+  - name: Reuters India
+    url_or_handle: https://www.reuters.com/world/india/
+    platform: web
+    credibility_score: 84.0
+    language: en
+
+  # --- Video channels ----------------------------------------------------
+  - name: The Lallantop YouTube
+    url_or_handle: https://www.youtube.com/@thelallantop
+    platform: youtube
+    credibility_score: 58.0
+    language: hi
+  - name: Aaj Tak YouTube
+    url_or_handle: https://www.youtube.com/@aajtak
+    platform: youtube
+    credibility_score: 56.0
+    language: hi
+  - name: The Quint YouTube
+    url_or_handle: https://www.youtube.com/@TheQuint
+    platform: youtube
+    credibility_score: 66.0
+    language: en
+  - name: NDTV YouTube
+    url_or_handle: https://www.youtube.com/@ndtv
+    platform: youtube
+    credibility_score: 70.0
+    language: en
+
+  # --- Forums -------------------------------------------------------------
+  # Aspirant forums carry the grievance in the words the aspirants use,
+  # which is rarely the words a newsroom uses for the same event.
+  - name: r/india
+    url_or_handle: india
+    platform: reddit
+    credibility_score: 40.0
+    language: en
+  - name: r/IndianAcademia
+    url_or_handle: IndianAcademia
+    platform: reddit
+    credibility_score: 38.0
+    language: en
+  - name: r/developersIndia
+    url_or_handle: developersIndia
+    platform: reddit
+    credibility_score: 38.0
+    language: en
+  - name: r/UPSC
+    url_or_handle: UPSC
+    platform: reddit
+    credibility_score: 35.0
+    language: en
+
+  # --- High-reach accounts ------------------------------------------------
+  - name: ANI on X
+    url_or_handle: "@ANI"
+    platform: twitter
+    credibility_score: 55.0
+    language: en
+  - name: PTI on X
+    url_or_handle: "@PTI_News"
+    platform: twitter
+    credibility_score: 65.0
+    language: en
+
+  # --- Public messaging channels -------------------------------------------
+  - name: The Hindu Telegram
+    url_or_handle: "@the_hindu"
+    platform: telegram
+    credibility_score: 70.0
+    language: en
+  - name: NDTV Telegram
+    url_or_handle: "@ndtvnews"
+    platform: telegram
+    credibility_score: 66.0
+    language: en
