@@ -1,11 +1,11 @@
 ---
 name: learned
-description: "Index of 181 one-page notes on specific failure modes hit in this repository, each named after the mistake it prevents. The other skills and AGENTS.md cite these notes by path. Use when a rule cites a reference path, when a bug looks like one this repository has seen before, or when recording a newly learned failure mode."
+description: "Index of 182 one-page notes on specific failure modes hit in this repository, each named after the mistake it prevents. The other skills and AGENTS.md cite these notes by path. Use when a rule cites a reference path, when a bug looks like one this repository has seen before, or when recording a newly learned failure mode."
 ---
 
 # Learned notes
 
-181 notes under `references/`, one failure mode per file.
+182 notes under `references/`, one failure mode per file.
 A note exists because the failure happened here, cost time, and was not obvious from the code.
 
 ## How to use this skill

@@ -138,6 +138,9 @@ spec:
         - podSelector:
             matchLabels:
               app: report-worker
+        - podSelector:
+            matchLabels:
+              app: api
       ports:
         - port: 11434
 ---
@@ -169,7 +172,12 @@ spec:
   policyTypes:
     - Egress
 ---
-# Allow all pods -> DNS (required for service discovery)
+# Allow all pods -> the cluster resolver (required for service discovery).
+#
+# Scoped to kube-system rather than to every destination. Port 53 open to the
+# internet is an exfiltration path out of a collector that has just been handed
+# markup by whoever it is collecting from, and the collectors are the pods this
+# policy set is otherwise busy fencing in.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -180,13 +188,31 @@ spec:
   policyTypes:
     - Egress
   egress:
-    - ports:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
         - port: 53
           protocol: UDP
         - port: 53
           protocol: TCP
 ---
-# Allow scraper + social -> external HTTPS (web scraping, social APIs)
+# Allow the collectors -> the internet, and nowhere inside the cluster.
+#
+# This is the control the in-process address guard cannot be: a browser resolves
+# and navigates inside its own process, and a name can answer differently
+# between the check and the connection. Neither matters if the packet to an
+# internal address is dropped. See docs/adr/0005-outbound-fetch-guard.md.
+#
+# The except list is the cluster and the node's own networks. Egress to postgres,
+# redis and ollama is granted by the rules above, by pod selector rather than by
+# address, so excluding the private ranges here does not cut the collectors off
+# from the services they need.
+#
+# The selector names the deployments. A NetworkPolicy whose selector matches no
+# pod is not an error: it applies to nothing, silently, and the traffic it was
+# meant to describe falls to the default deny.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -197,17 +223,36 @@ spec:
     matchExpressions:
       - key: app
         operator: In
-        values: [scraper, social]
+        values:
+          - scrape-web-scheduler
+          - scrape-web-worker
+          - scrape-social-scheduler
+          - scrape-social-worker
   policyTypes:
     - Egress
   egress:
-    - ports:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+              - 100.64.0.0/10
+      ports:
         - port: 443
           protocol: TCP
         - port: 80
           protocol: TCP
 ---
-# Allow scraper -> Tor SOCKS5 proxy (dark web scraping)
+# Allow the web collectors -> Tor SOCKS5 proxy (dark web scraping).
+#
+# tor-proxy is a compose service with no k3s Deployment yet, so this rule names
+# a pod that is not there and dark web collection does not work on k3s. The rule
+# is kept rather than deleted because the gap is the missing Deployment, not the
+# missing permission. tests/unit/test_k3s_network_policy.py records the absence
+# by name so it stays a known gap rather than becoming a surprise.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -215,8 +260,12 @@ metadata:
   namespace: anveshak
 spec:
   podSelector:
-    matchLabels:
-      app: scraper
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - scrape-web-scheduler
+          - scrape-web-worker
   policyTypes:
     - Egress
   egress:
@@ -226,4 +275,147 @@ spec:
               app: tor-proxy
       ports:
         - port: 9050
+          protocol: TCP
+---
+# Allow every service -> postgres, redis and ollama.
+#
+# The ingress rules above say who may arrive; under default-deny-egress a pod
+# also needs permission to leave, or it cannot reach the database it is allowed
+# to connect to. Selecting by pod rather than by address is what lets the
+# collectors' internet rule exclude the private ranges outright.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-services-to-datastores-egress
+  namespace: anveshak
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - api
+          - analyse-scheduler
+          - analyse-worker
+          - analyse-vision-worker
+          - scrape-web-scheduler
+          - scrape-web-worker
+          - scrape-social-scheduler
+          - scrape-social-worker
+          - report-worker
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - port: 5432
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - port: 6379
+          protocol: TCP
+---
+# Allow api + report-worker -> analyse-scheduler, which serves the embedding
+# endpoint both of them call: semantic search in the api, RAG chunks in the
+# reporter. RAG chunks are the case that must NOT fail open, so a denied hop
+# here is a broken report rather than a degraded one.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-services-to-analyse-scheduler
+  namespace: anveshak
+spec:
+  podSelector:
+    matchLabels:
+      app: analyse-scheduler
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: api
+        - podSelector:
+            matchLabels:
+              app: report-worker
+      ports:
+        - port: 8007
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-services-to-analyse-scheduler-egress
+  namespace: anveshak
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - api
+          - report-worker
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: analyse-scheduler
+      ports:
+        - port: 8007
+          protocol: TCP
+---
+# Allow the services that call an LLM -> ollama.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-services-to-ollama-egress
+  namespace: anveshak
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - analyse-worker
+          - report-worker
+          # Warms the model at startup and probes it in /health/ready. Denied,
+          # readiness reports degraded forever while the pod stays live.
+          - api
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: ollama
+      ports:
+        - port: 11434
+          protocol: TCP
+---
+# Allow the frontend -> api.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-to-api-egress
+  namespace: anveshak
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: api
+      ports:
+        - port: 8000
           protocol: TCP

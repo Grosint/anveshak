@@ -16,6 +16,7 @@ The failures these pin, each seen on a surveyed outlet:
 
 from __future__ import annotations
 
+import contextlib
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -59,25 +60,34 @@ def _fetched(text: str | None = _FETCHED_BODY, html: str | None = None):
     return FetchedArticle(text=text, html=html)
 
 
-class _FeedTransport:
-    """Patch target for the feed HTTP client.
+@contextlib.contextmanager
+def _feed_served(payload: bytes):
+    """Serve feed bytes to the guarded fetch path, with resolution fixed.
 
     A real httpx.AsyncClient over a MockTransport, not a stand-in for one, so
     the streamed read the fetcher performs is exercised rather than mocked past.
+    The resolver is fixed because the fetch path connects to the address it
+    validated, and a unit test that asks DNS about an example host is a network
+    test with a slow failure.
     """
 
-    def __init__(self, payload: bytes) -> None:
-        self.payload = payload
+    def _handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status_code=200, content=payload)
 
-    def __call__(self, *args, **kwargs):
-        import httpx
-
-        def _handler(request: httpx.Request) -> httpx.Response:
-            return httpx.Response(status_code=200, content=self.payload)
-
+    def _factory(*args, **kwargs):
+        kwargs.pop("proxy", None)
         # The real class, captured before the patch that installed this factory
         # in its place, so constructing one here does not call this again.
-        return _REAL_ASYNC_CLIENT(transport=httpx.MockTransport(_handler))
+        return _REAL_ASYNC_CLIENT(*args, transport=httpx.MockTransport(_handler), **kwargs)
+
+    with (
+        patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=_factory),
+        patch(
+            "anveshak.net.url_safety._resolve_host",
+            new=AsyncMock(return_value=["93.184.216.34"]),
+        ),
+    ):
+        yield
 
 
 async def _collect_bytes(
@@ -96,7 +106,7 @@ async def _collect_bytes(
 
     fetch_article = AsyncMock(return_value=article if article is not None else _fetched())
     with (
-        patch("anveshak.scraper.rss.httpx.AsyncClient", new=_FeedTransport(payload)),
+        _feed_served(payload),
         patch("anveshak.scraper.rss.fetch_article", new=fetch_article),
         patch(
             "anveshak.scraper.rss.validate_external_url_resolved",
@@ -284,10 +294,7 @@ class TestFetchConventions:
                 waited.append(url)
 
         with (
-            patch(
-                "anveshak.scraper.rss.httpx.AsyncClient",
-                new=_FeedTransport(_feed_bytes("02_summary_only_feed.xml")),
-            ),
+            _feed_served(_feed_bytes("02_summary_only_feed.xml")),
             patch("anveshak.scraper.rss.fetch_article", new=AsyncMock(return_value=_fetched())),
             patch(
                 "anveshak.scraper.rss.validate_external_url_resolved",
@@ -401,10 +408,7 @@ class TestUntrustedLinks:
                 order.append("wait")
 
         with (
-            patch(
-                "anveshak.scraper.rss.httpx.AsyncClient",
-                new=_FeedTransport(_feed_bytes("02_summary_only_feed.xml")),
-            ),
+            _feed_served(_feed_bytes("02_summary_only_feed.xml")),
             patch("anveshak.scraper.rss.fetch_article", new=AsyncMock(return_value=_fetched())),
             patch("anveshak.scraper.rss.validate_external_url_resolved", new=_validate),
             patch("anveshak.scraper.rss.check_robots_allowed", new=_robots),
@@ -428,10 +432,7 @@ class TestUntrustedLinks:
                 order.append("wait")
 
         with (
-            patch(
-                "anveshak.scraper.rss.httpx.AsyncClient",
-                new=_FeedTransport(_feed_bytes("02_summary_only_feed.xml")),
-            ),
+            _feed_served(_feed_bytes("02_summary_only_feed.xml")),
             patch("anveshak.scraper.rss.fetch_article", new=AsyncMock(return_value=_fetched())),
             patch(
                 "anveshak.scraper.rss.validate_external_url_resolved",
@@ -475,7 +476,7 @@ class TestBounds:
         )
 
         with (
-            patch("anveshak.scraper.rss.httpx.AsyncClient", new=_FeedTransport(long_body_undated)),
+            _feed_served(long_body_undated),
             patch("anveshak.scraper.rss.fetch_article", new=fetch_article),
             patch("anveshak.scraper.rss.fetch_html", new=fetch_html),
             patch(

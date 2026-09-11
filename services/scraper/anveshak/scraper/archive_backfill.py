@@ -64,16 +64,17 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from functools import partial
 from html import unescape
-from typing import Any, Optional, Protocol, TypeVar
+from typing import Any, Optional, Protocol, TypeVar, Union
 from urllib.parse import urlencode, urlparse
 
-import httpx
 import structlog
 import trafilatura
+from anveshak.net.safe_fetch import FetchFailure, FetchResult, Guard, fetch
+from anveshak.net.url_safety import ResolvedTarget, resolve_external_target
 from bs4 import BeautifulSoup
 
 from .clean import is_paywall_page
-from .fetch import check_robots_allowed
+from .fetch import BROWSER_UA, check_robots_allowed
 from .publication_time import (
     SIGNAL_URL_PATH_DATE,
     extract_publication_time,
@@ -83,17 +84,11 @@ from .publication_time import (
 from .rate_limiter import DomainRateLimiter
 from .rss import parse_feed_items
 from .settings import settings
-from .url_safety import validate_external_url_resolved
 
 log = structlog.get_logger(__name__)
 
 _T = TypeVar("_T")
 
-_BROWSER_UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/124.0.0.0 Safari/537.36"
-)
 
 # Which mechanism found an item. Recorded on the item, because the mechanisms
 # do not carry the same date quality: a sitemap gives a day, a feed gives an
@@ -128,9 +123,6 @@ _MAX_SITEMAP_LOCATIONS = 50_000
 # One URL. Past this it is a payload wearing a URL's shape, and it would travel
 # into DNS resolution, the log pipeline and the corpus.
 _MAX_URL_CHARS = 2048
-# Redirect hops followed. Each is revalidated, so the cost of a hop is a DNS
-# round trip and the chain has to end.
-_MAX_REDIRECTS = 5
 
 # The character class matters. A lazy ``.*?`` under DOTALL rescans to the end of
 # the document at every unclosed ``<loc>``, which is quadratic: 160 KB of them
@@ -444,101 +436,60 @@ async def _in_executor(func: Callable[..., _T], *args: Any) -> _T:
     return await loop.run_in_executor(None, func, *args)
 
 
-async def _guard(url: str, limiter: _RateLimiter) -> bool:
-    """Validate and throttle before a request leaves, in the scraper's order.
+def _guard_for(limiter: _RateLimiter) -> Guard:
+    """Build the per-hop guard this module fetches under.
 
     The URL is chosen by an outlet's sitemap or feed rather than by the
-    operator, so it is validated before anything is sent, including the
-    robots.txt request, which goes to a host the outlet named. The per-domain
-    gap is taken before that request for the same reason.
+    operator, so every hop pays the same checks the first one did: the length
+    bound, the resolved SSRF check, the per-domain gap and robots.txt. The gap
+    is taken before the robots.txt request for the same reason - an entry list
+    naming a hundred hosts would otherwise issue a hundred unthrottled requests
+    and only then start being polite.
     """
-    if len(url) > _MAX_URL_CHARS:
-        log.warning("backfill.fetch_refused", url=url[:128], reason="url past the length bound")
-        return False
-    if not await validate_external_url_resolved(url):
-        log.warning("backfill.fetch_refused", url=url, reason="not an external address")
-        return False
-    await limiter.wait(url)
-    if not await check_robots_allowed(url):
-        log.info("backfill.fetch_disallowed", url=url, reason="robots.txt")
-        return False
-    return True
 
-
-async def _read_bounded(resp: httpx.Response, url: str, limit: int) -> Optional[bytes]:
-    """Read a streamed response up to limit, measured after decompression.
-
-    A small compressed response that expands without limit is refused rather
-    than buffered, which ``resp.content`` would have already done by the time
-    anything could object.
-    """
-    chunks: list[bytes] = []
-    total = 0
-    async for chunk in resp.aiter_bytes():
-        total += len(chunk)
-        if total > limit:
-            log.warning("backfill.response_too_large", url=url, limit=limit)
+    async def guard(url: str) -> Optional[ResolvedTarget]:
+        if len(url) > _MAX_URL_CHARS:
+            log.warning("backfill.fetch_refused", url=url[:128], reason="url past the length bound")
             return None
-        chunks.append(chunk)
-    return b"".join(chunks)
+        target = await resolve_external_target(url)
+        if target is None:
+            log.warning("backfill.fetch_refused", url=url, reason="not an external address")
+            return None
+        await limiter.wait(url)
+        if not await check_robots_allowed(url):
+            log.info("backfill.fetch_disallowed", url=url, reason="robots.txt")
+            return None
+        return target
+
+    return guard
 
 
-@dataclass(frozen=True)
-class _Response:
-    """One fetched response, after redirects have been followed and revalidated."""
+async def _request(
+    url: str, limiter: _RateLimiter, *, limit: int
+) -> Union[FetchResult, FetchFailure]:
+    """Fetch one URL through the shared guarded path, status and all.
 
-    status: Optional[int]
-    body: Optional[bytes]
-    encoding: Optional[str] = None
-
-
-async def _request(url: str, limiter: _RateLimiter, *, limit: int) -> _Response:
-    """Fetch one URL, revalidating every redirect hop against the SSRF guard.
-
-    Redirects are followed here rather than by the client, because a client
-    following them decides the final host on its own. Every URL reaching this
-    module is chosen by an outlet's sitemap or feed, so a 302 to an address
-    inside the deployment is the shape of the attack, and the address the guard
-    approved is then not the address fetched.
-
-    Each hop goes through the same guard as the first: length bound, resolved
-    SSRF check, per-domain gap, robots.txt. The chain is bounded, so a redirect
-    loop ends rather than running to the job timeout.
+    A 4xx is an answer this module reads rather than a failure, so the status
+    comes back instead of being refused, and a failure carries whatever status
+    it came with.
     """
-    current = url
-    for hop in range(_MAX_REDIRECTS + 1):
-        if not await _guard(current, limiter):
-            return _Response(status=None, body=None)
-        try:
-            async with httpx.AsyncClient(
-                timeout=settings.scraper_request_timeout_s,
-                follow_redirects=False,
-                headers={"User-Agent": _BROWSER_UA},
-            ) as client:
-                async with client.stream("GET", current) as resp:
-                    if resp.is_redirect:
-                        location = resp.headers.get("location")
-                        if not location:
-                            log.warning("backfill.redirect_without_location", url=current)
-                            return _Response(status=resp.status_code, body=None)
-                        current = str(httpx.URL(current).join(location))
-                        continue
-                    body = await _read_bounded(resp, current, limit)
-                    return _Response(status=resp.status_code, body=body, encoding=resp.encoding)
-        except Exception as exc:
-            log.warning("backfill.fetch_failed", url=current, error=str(exc))
-            return _Response(status=None, body=None)
-
-    log.warning("backfill.redirect_chain_too_long", url=url, limit=_MAX_REDIRECTS, last=current)
-    return _Response(status=None, body=None)
+    return await fetch(
+        url,
+        timeout=settings.scraper_request_timeout_s,
+        headers={"User-Agent": BROWSER_UA},
+        guard=_guard_for(limiter),
+        max_redirects=settings.scraper_max_redirects,
+        limit=limit,
+        expect_ok=False,
+    )
 
 
 async def _fetch_bytes(url: str, limiter: _RateLimiter, *, limit: int) -> Optional[bytes]:
     """Fetch a sitemap, feed page or CDX answer. None on any failure."""
     response = await _request(url, limiter, limit=limit)
-    if response.body is None:
+    if not isinstance(response, FetchResult):
         return None
-    if response.status is not None and response.status >= 400:
+    if response.status >= 400:
         log.warning("backfill.fetch_failed", url=url, status=response.status)
         return None
     return response.body
@@ -551,7 +502,11 @@ async def _fetch_document(url: str, limiter: _RateLimiter) -> _Document:
     a transport failure is a degraded item rather than a failed Backfill.
     """
     response = await _request(url, limiter, limit=_MAX_DOCUMENT_BYTES)
-    if response.body is None or (response.status is not None and response.status >= 400):
+    if not isinstance(response, FetchResult):
+        # A failure keeps the status it came with, where it had one: a redirect
+        # with no Location is a 302 the caller can act on, not a silent nothing.
+        return _Document(status=response.status, html=None)
+    if response.status >= 400:
         return _Document(status=response.status, html=None)
     return _Document(
         status=response.status,

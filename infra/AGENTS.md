@@ -37,6 +37,14 @@ Repo-wide rules are in [../AGENTS.md](../AGENTS.md).
 - Overlay compose files (`compose.vision.yml`, `compose.bridge.yml`) are ONLY for optional GPU or dev services that not every deployment needs
 - A feature whose env var exists only in an overlay is silently disabled on non-overlay deployments
 
+## Egress policy
+
+- The collectors fetch addresses that scraped content chose, so `infra/k3s/networkpolicy.yml` allows them `0.0.0.0/0` on ports 80 and 443 with the private ranges in `except`, and grants postgres, redis and ollama by pod selector instead
+- A NetworkPolicy whose `podSelector` matches no pod applies to nothing, silently: the values must be deployment `app` labels, and `tests/unit/test_k3s_network_policy.py` asserts they are
+- Compose has no egress equivalent. A Compose deployment relies on the in-process guards alone: `sdk/anveshak/net/safe_fetch.py` for httpx and the Playwright route guard for the browser, which narrows the browser path rather than closing it, since Chromium resolves the name again when it connects
+- `allow-scraper-tor-egress` names `tor-proxy`, which has no k3s Deployment yet, so dark web collection does not work there. `tests/unit/test_k3s_network_policy.py` records that by name
+- See [ADR 0005](../docs/adr/0005-outbound-fetch-guard.md)
+
 ## Cleanup
 
 - Graduated cleanup: `clean`, then `clean-containers`, then `clean-volumes`, then `nuke`

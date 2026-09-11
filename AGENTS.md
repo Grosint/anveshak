@@ -17,7 +17,7 @@ Directory-specific rules live in nested `AGENTS.md` files and take precedence wi
 
 Deeper procedural knowledge is packaged as Agent Skills in `.agents/skills/`.
 Each skill declares in its `description` when it applies, so load one when the task matches rather than reading them all.
-The `learned` skill indexes 181 notes on specific failure modes; other skills and these rules cite it by path.
+The `learned` skill indexes 182 notes on specific failure modes; other skills and these rules cite it by path.
 
 ## Architectural rules, always enforce
 
@@ -124,6 +124,14 @@ if existing:
 - Scraped content is untrusted input, sanitise before storage
 - Scraper images are potentially adversarial, run them in the isolated vision service
 - `content_hash` (SHA-256) on every ContentItem, for dedup and integrity
+
+### Outbound fetches of addresses scraped content chose
+
+Scraped content chooses the addresses the scraper fetches, so every such fetch goes through `sdk/anveshak/net/safe_fetch.py`.
+It walks the redirect chain itself, validating every hop, and connects to the address the guard resolved rather than resolving the name a second time.
+NEVER build an `httpx.AsyncClient` with `follow_redirects=True` on one of those paths; a contract test refuses it.
+Egress policy in `infra/k3s/networkpolicy.yml` is the control for what the process cannot see, which is the browser.
+See [ADR 0005](docs/adr/0005-outbound-fetch-guard.md) and `.agents/skills/learned/references/ssrf-validate-every-hop.md`.
 
 ### Scanning
 

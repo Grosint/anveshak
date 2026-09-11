@@ -130,35 +130,38 @@ class TestRobotsCacheIsBounded:
 class TestFetchHtmlIsBounded:
     """The page is served by whoever scraped content pointed us at."""
 
-    async def test_document_past_the_byte_bound_is_refused(self):
-        import httpx
+    async def test_document_past_the_byte_bound_is_refused(self, serve_bytes):
         from anveshak.scraper import fetch as fetch_module
 
-        real_client = httpx.AsyncClient
         oversized = b"<html>" + (b"x" * (fetch_module._MAX_DOCUMENT_BYTES + 1)) + b"</html>"
 
-        def _factory(*args, **kwargs):
-            def _handler(request: httpx.Request) -> httpx.Response:
-                return httpx.Response(status_code=200, content=oversized)
-
-            return real_client(transport=httpx.MockTransport(_handler))
-
-        with patch("httpx.AsyncClient", new=_factory):
+        with serve_bytes(oversized):
             assert await fetch_module.fetch_html("https://outlet.example.in/a") is None
 
-    async def test_document_within_the_bound_is_returned(self):
-        import httpx
+    async def test_document_within_the_bound_is_returned(self, serve_bytes):
         from anveshak.scraper import fetch as fetch_module
 
-        real_client = httpx.AsyncClient
-
-        def _factory(*args, **kwargs):
-            def _handler(request: httpx.Request) -> httpx.Response:
-                return httpx.Response(status_code=200, content=b"<html><body>ok</body></html>")
-
-            return real_client(transport=httpx.MockTransport(_handler))
-
-        with patch("httpx.AsyncClient", new=_factory):
+        with serve_bytes(b"<html><body>ok</body></html>"):
             assert await fetch_module.fetch_html("https://outlet.example.in/a") == (
                 "<html><body>ok</body></html>"
             )
+
+    async def test_a_redirect_into_the_deployment_is_refused(self, serve_handler):
+        """The page is named by scraped content, so every hop is judged (#55)."""
+        import httpx
+        from anveshak.scraper import fetch as fetch_module
+
+        requested: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requested.append(request.headers["host"])
+            return httpx.Response(302, headers={"location": "http://postgres:5432/"})
+
+        async def _resolve(hostname: str) -> list[str]:
+            return ["172.28.0.3"] if hostname == "postgres" else ["93.184.216.34"]
+
+        with serve_handler(handler):
+            with patch("anveshak.net.url_safety._resolve_host", new=_resolve):
+                assert await fetch_module.fetch_html("https://outlet.example.in/a") is None
+
+        assert requested == ["outlet.example.in"]

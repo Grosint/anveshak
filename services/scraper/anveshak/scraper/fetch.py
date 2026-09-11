@@ -10,12 +10,18 @@ import os
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Awaitable, Callable, Optional
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
 import structlog
 import trafilatura
+from anveshak.net.safe_fetch import DEFAULT_MAX_BYTES, Guard, fetch_bytes, fetch_text
+from anveshak.net.url_safety import (
+    ResolvedTarget,
+    resolve_external_target,
+    validate_external_url,
+)
 
 from .settings import settings
 
@@ -32,9 +38,232 @@ _ROBOTS_CACHE_TTL = 3600  # 1 hour
 # costs a re-fetch and bounds the worker's memory.
 _ROBOTS_CACHE_MAX_ENTRIES = 2048
 
+# One User-Agent for every outbound fetch in this service, so a site sees one
+# client rather than three, and a change of story is made in one place.
+BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/124.0.0.0 Safari/537.36"
+)
+
 # A fetched document is served by whoever scraped content pointed us at, so its
 # size is theirs to choose and ours to bound. Measured after decompression.
-_MAX_DOCUMENT_BYTES = 16 * 1024 * 1024
+_MAX_DOCUMENT_BYTES = DEFAULT_MAX_BYTES
+
+# robots.txt is a rules file, and one this size is not one. It is fetched from a
+# host scraped content named, so it is bounded like everything else from there.
+_MAX_ROBOTS_BYTES = 1024 * 1024
+
+
+# ---------------------------------------------------------------------------
+# Fetch guards — what each outbound path is allowed to reach
+# ---------------------------------------------------------------------------
+
+# A degraded guard says so once per process rather than once per request, which
+# would bury the line under the fetch traffic it is describing.
+_degradations_logged: set[str] = set()
+
+
+def _log_degradation_once(reason: str, **fields: object) -> None:
+    if reason in _degradations_logged:
+        return
+    _degradations_logged.add(reason)
+    log.info("scraper.fetch_guard_degraded", reason=reason, **fields)
+
+
+async def proxied_guard(url: str) -> Optional[ResolvedTarget]:
+    """Judge a URL fetched through a proxy, which resolves the name itself.
+
+    Nothing is resolved here, deliberately. Resolving a .onion name on this side
+    is the DNS leak the Tor path exists to avoid, and resolving a clearnet name
+    we are not going to connect to ourselves answers a question about our
+    resolver rather than about the proxy's. What is left is the written form,
+    plus the rule that a .onion fetch stays on .onion. The address inside the
+    deployment is unreachable from the proxy anyway, which is the real control.
+    """
+    try:
+        hostname = urlparse(url).hostname or ""
+    except ValueError as exc:
+        # "http://[::1/" and friends. A guard that throws is a guard the caller
+        # has to defend against; this one refuses instead.
+        log.warning("scraper.fetch_refused", url=url[:128], reason=f"unparseable url: {exc}")
+        return None
+    if hostname.endswith(".onion"):
+        try:
+            validate_onion_url(url)
+        except ValueError as exc:
+            log.warning("scraper.fetch_refused", url=url, reason=str(exc))
+            return None
+        _log_degradation_once("tor resolves the onion name, so no address is pinned")
+        return ResolvedTarget(url=url, hostname=hostname, address=None)
+    if not validate_external_url(url):
+        return None
+    _log_degradation_once("proxy resolves the name, so no address is pinned")
+    return ResolvedTarget(url=url, hostname=hostname, address=None)
+
+
+# A page pulls scripts, styles and images from the same few hosts, so a verdict
+# is kept per host rather than taken per asset. Bounded, because the hosts are
+# named by the page and their number is not ours to choose.
+_BROWSER_VERDICT_MAX_ENTRIES = 1024
+
+# Schemes the page answers itself. Nothing leaves the process for these, so
+# there is no address to judge and refusing them only breaks inline images.
+_INERT_SCHEMES = ("data:", "blob:", "about:", "chrome:", "chrome-extension:")
+
+
+def browser_route_guard(guard: Guard) -> Callable[..., Awaitable[None]]:
+    """Return a Playwright route handler that refuses non-external addresses.
+
+    Crawl4AI navigates on its own: it resolves the name, follows the redirect
+    and pulls every subresource without the httpx path ever seeing it. This is
+    the one place inside the process where those requests can be judged, so the
+    same guard the fetch path uses is applied to each of them.
+
+    It narrows rather than closes: Chromium resolves the name again when it
+    connects, so a name answering differently the second time is still fetched.
+    Egress policy is what closes that. See docs/adr/0005-outbound-fetch-guard.md.
+    """
+    verdicts: dict[str, bool] = {}
+
+    async def handle(route: Any, request: Any = None) -> None:
+        target = request if request is not None else getattr(route, "request", None)
+        url = getattr(target, "url", "") or ""
+        if url.startswith(_INERT_SCHEMES):
+            await route.continue_()
+            return
+
+        try:
+            parsed = urlparse(url)
+        except ValueError:
+            log.warning("scraper.browser_request_blocked", url=url[:128], reason="unparseable url")
+            await route.abort()
+            return
+        key = f"{parsed.scheme}://{parsed.netloc}"
+        allowed = verdicts.get(key)
+        if allowed is None:
+            allowed = await guard(url) is not None
+            if len(verdicts) >= _BROWSER_VERDICT_MAX_ENTRIES:
+                verdicts.clear()
+            verdicts[key] = allowed
+
+        if not allowed:
+            log.warning("scraper.browser_request_blocked", url=url)
+            try:
+                await route.abort()
+            except Exception as exc:  # page closed mid-flight
+                log.debug("scraper.browser_route_abort_failed", url=url, error=str(exc))
+            return
+
+        try:
+            await route.continue_()
+        except Exception as exc:  # page closed mid-flight
+            log.debug("scraper.browser_route_continue_failed", url=url, error=str(exc))
+
+    return handle
+
+
+# Registering a service worker is the one way a page moves its requests out of
+# reach of route interception. Removing the entry point is cheaper than chasing
+# the requests, and a scraped page has no legitimate use for one.
+_BLOCK_SERVICE_WORKERS_JS = (
+    "Object.defineProperty(navigator, 'serviceWorker', { get: () => undefined });"
+)
+
+
+def _browser_websocket_guard(guard: Guard) -> Callable[..., Awaitable[None]]:
+    """Return a handler that closes a WebSocket to an address the guard refuses."""
+
+    async def handle(ws: Any) -> None:
+        url = getattr(ws, "url", "") or ""
+        if await guard(url) is not None:
+            connect = getattr(ws, "connect_to_server", None)
+            if connect is not None:
+                connect()
+            return
+        log.warning("scraper.browser_websocket_blocked", url=url)
+        try:
+            close = getattr(ws, "close", None)
+            if close is not None:
+                result = close()
+                if hasattr(result, "__await__"):
+                    await result
+        except Exception as exc:
+            log.debug("scraper.browser_websocket_close_failed", url=url, error=str(exc))
+
+    return handle
+
+
+async def install_browser_address_guard(crawler: Any, guard: Guard) -> bool:
+    """Route every browser request through guard. False when it could not be.
+
+    Returning False is not a quiet failure: the deployment is then relying on
+    egress policy alone for the browser, and the log line says so.
+    """
+    if not settings.scraper_browser_address_guard:
+        log.info(
+            "scraper.browser_address_guard_disabled",
+            reason="scraper_browser_address_guard is false, egress policy is the only control",
+        )
+        return False
+
+    set_hook = getattr(getattr(crawler, "crawler_strategy", None), "set_hook", None)
+    if set_hook is None:
+        log.warning(
+            "scraper.browser_address_guard_unavailable",
+            reason="this crawl4ai build exposes no page hook",
+        )
+        return False
+
+    handler = browser_route_guard(guard)
+
+    async def on_page_context_created(page: Any = None, context: Any = None, **kwargs: Any) -> Any:
+        # The context covers every page opened under it, including a popup the
+        # page opens itself, which a page-level route would miss.
+        target = context if context is not None else page
+        if target is None:
+            log.warning("scraper.browser_address_guard_not_attached", reason="no page or context")
+            return page
+        try:
+            await target.route("**/*", handler)
+        except Exception as exc:
+            log.warning("scraper.browser_address_guard_not_attached", error=str(exc))
+            return page
+
+        # A request a service worker makes bypasses route interception entirely,
+        # so the page is stopped from registering one. Nothing we collect needs
+        # offline caching, and an unrouted request is an unjudged address.
+        try:
+            await target.add_init_script(_BLOCK_SERVICE_WORKERS_JS)
+        except Exception as exc:
+            log.warning("scraper.browser_service_workers_not_blocked", error=str(exc))
+
+        # Route interception does not cover WebSockets either. Where the
+        # Playwright build can intercept them, the same guard decides.
+        route_web_socket = getattr(target, "route_web_socket", None)
+        if route_web_socket is None:
+            log.info(
+                "scraper.browser_websockets_unguarded",
+                reason="this playwright build cannot intercept websockets",
+            )
+            return page
+        try:
+            await route_web_socket("**/*", _browser_websocket_guard(guard))
+        except Exception as exc:
+            log.warning("scraper.browser_websockets_unguarded", error=str(exc))
+        return page
+
+    try:
+        set_hook("on_page_context_created", on_page_context_created)
+    except Exception as exc:
+        log.warning("scraper.browser_address_guard_unavailable", error=str(exc))
+        return False
+    return True
+
+
+def guard_for(proxy_url: Optional[str]) -> Guard:
+    """Return the guard that suits the path: resolved direct, written via proxy."""
+    return proxied_guard if proxy_url else resolve_external_target
 
 
 def _cache_robots(domain: str, entry: tuple[RobotFileParser | None, float]) -> None:
@@ -58,17 +287,22 @@ def is_pdf_url(url: str) -> bool:
 
 
 async def _fetch_robots_txt(robots_url: str) -> Optional[str]:
-    """Fetch robots.txt content via httpx. Returns None on failure."""
-    import httpx
+    """Fetch robots.txt through the guarded path. Returns None on failure.
 
-    try:
-        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
-            resp = await client.get(robots_url)
-            if resp.status_code == 200:
-                return resp.text
-    except Exception:
-        pass
-    return None
+    The host is one scraped content named, so this request is guarded like the
+    article fetch it is about to permit. A robots.txt that redirects gets every
+    hop validated rather than the first.
+    """
+    result = await fetch_bytes(
+        robots_url,
+        timeout=10,
+        max_redirects=settings.scraper_max_redirects,
+        limit=_MAX_ROBOTS_BYTES,
+        expect_ok=False,
+    )
+    if result is None or result.status != 200:
+        return None
+    return result.body.decode(result.encoding or "utf-8", errors="replace")
 
 
 async def check_robots_allowed(url: str) -> bool:
@@ -157,9 +391,11 @@ async def create_shared_crawler():
             page_timeout=settings.scraper_request_timeout_s * 1000,
         )
         async with AsyncWebCrawler(config=browser_cfg) as crawler:
+            await install_browser_address_guard(crawler, guard_for(settings.tor_proxy_url))
             yield crawler, run_cfg
     except (ImportError, TypeError):
         async with AsyncWebCrawler(**proxy_kwargs) as crawler:
+            await install_browser_address_guard(crawler, guard_for(settings.tor_proxy_url))
             yield crawler, None
 
 
@@ -203,8 +439,17 @@ def _extract_markdown(result: Any) -> Optional[str]:
 async def fetch_article_with_crawler(url: str, crawler, run_cfg=None) -> FetchedArticle:
     """Fetch an article using an existing shared crawler instance.
 
+    The address is judged here, before the browser is handed it. The route guard
+    judges it too, and that is the point: the route guard is conditional on a
+    setting, on this crawl4ai build exposing a hook, and on the route attaching,
+    and each of those failing leaves the navigation itself unchecked otherwise.
+
     Falls back to trafilatura if Crawl4AI returns empty.
     """
+    if await guard_for(settings.tor_proxy_url)(url) is None:
+        log.warning("scraper.fetch_refused", url=url, reason="not an external address")
+        return FetchedArticle(text=None, html=None)
+
     try:
         if run_cfg is not None:
             result = await crawler.arun(url=url, config=run_cfg)
@@ -331,41 +576,23 @@ def extract_article_links(html: str, base_url: str) -> list[str]:
 
 
 async def fetch_html(url: str) -> Optional[str]:
-    """Fetch raw HTML from a URL via httpx, up to the byte bound.
+    """Fetch raw HTML from a URL through the guarded path, up to the byte bound.
 
-    The document is streamed and measured after decompression, because the page
+    Every redirect hop is revalidated and the connection is made to the address
+    that was validated, because the page is named by scraped content and a 302
+    into the deployment is the shape of the attack.
+
+    The document is bounded and measured after decompression, because the page
     is served by whoever the scraped content pointed us at and its size is
-    therefore not ours to choose. Past the bound the read is abandoned and
-    reported, rather than the response being buffered whole and judged after.
+    therefore not ours to choose.
     """
-    import httpx
-
-    try:
-        async with httpx.AsyncClient(
-            timeout=settings.scraper_request_timeout_s,
-            follow_redirects=True,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-            },
-        ) as client:
-            async with client.stream("GET", url) as resp:
-                resp.raise_for_status()
-                chunks: list[bytes] = []
-                total = 0
-                async for chunk in resp.aiter_bytes():
-                    total += len(chunk)
-                    if total > _MAX_DOCUMENT_BYTES:
-                        log.warning(
-                            "scraper.html_too_large",
-                            url=url,
-                            limit=_MAX_DOCUMENT_BYTES,
-                        )
-                        return None
-                    chunks.append(chunk)
-                return b"".join(chunks).decode(resp.encoding or "utf-8", errors="replace")
-    except Exception as exc:
-        log.warning("scraper.html_fetch_failed", url=url, error=str(exc))
-        return None
+    return await fetch_text(
+        url,
+        timeout=settings.scraper_request_timeout_s,
+        headers={"User-Agent": BROWSER_UA},
+        max_redirects=settings.scraper_max_redirects,
+        limit=_MAX_DOCUMENT_BYTES,
+    )
 
 
 async def _trafilatura_fetch(url: str, *, proxy_url: Optional[str] = None) -> Optional[str]:
@@ -380,37 +607,23 @@ async def _trafilatura_fetch(url: str, *, proxy_url: Optional[str] = None) -> Op
 async def _trafilatura_fetch_article(
     url: str, *, proxy_url: Optional[str] = None
 ) -> FetchedArticle:
-    """Download raw HTML via httpx then extract with trafilatura, keeping both.
+    """Download raw HTML through the guarded path, then extract with trafilatura.
 
     Args:
         proxy_url: Explicit proxy override. If None, falls back to settings.tor_proxy_url.
     """
-    import httpx
-
     effective_proxy = proxy_url or settings.tor_proxy_url
-    client_kwargs: dict = {
-        "timeout": settings.scraper_request_timeout_s,
-        "follow_redirects": True,
-        "headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        },
-    }
-    if effective_proxy:
-        try:
-            import inspect
-
-            sig = inspect.signature(httpx.AsyncClient.__init__)
-            if "proxy" in sig.parameters:
-                client_kwargs["proxy"] = effective_proxy
-            else:
-                client_kwargs["proxies"] = {"all://": effective_proxy}
-        except Exception:
-            client_kwargs["proxy"] = effective_proxy
-
-    async with httpx.AsyncClient(**client_kwargs) as client:
-        resp = await client.get(url)
-        resp.raise_for_status()
-        html = resp.text
+    html = await fetch_text(
+        url,
+        timeout=settings.scraper_request_timeout_s,
+        headers={"User-Agent": BROWSER_UA},
+        guard=guard_for(effective_proxy),
+        max_redirects=settings.scraper_max_redirects,
+        limit=_MAX_DOCUMENT_BYTES,
+        proxy=effective_proxy,
+    )
+    if html is None:
+        return FetchedArticle(text=None, html=None)
 
     text = trafilatura.extract(html, url=url, include_comments=False, include_tables=True)
     return FetchedArticle(text=text or None, html=html or None)
@@ -462,9 +675,11 @@ async def create_tor_crawler():
             page_timeout=settings.darkweb_request_timeout_s * 1000,
         )
         async with AsyncWebCrawler(config=browser_cfg) as crawler:
+            await install_browser_address_guard(crawler, proxied_guard)
             yield crawler, run_cfg
     except (ImportError, TypeError):
         async with AsyncWebCrawler(**proxy_kwargs) as crawler:
+            await install_browser_address_guard(crawler, proxied_guard)
             yield crawler, None
 
 

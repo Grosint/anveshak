@@ -23,6 +23,8 @@ from anveshak.tracing import configure_tracing
 configure_logging("scraper-worker")
 configure_tracing("scraper-worker")
 from anveshak.media.downloader import download_media_asset
+from anveshak.net.safe_fetch import fetch_text
+from anveshak.net.url_safety import validate_external_url
 from arq import cron
 from arq.connections import RedisSettings
 
@@ -694,28 +696,23 @@ async def _download_page_media(
     Criteria 4.3–4.4: media_assets rows created with content_hash of raw bytes.
     Errors never propagate — media failure never aborts content ingestion.
     """
-    try:
-        import httpx
-
-        async with httpx.AsyncClient(
-            timeout=settings.scraper_request_timeout_s,
-            follow_redirects=True,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; Anveshak/1.0)"},
-        ) as client:
-            resp = await client.get(page_url)
-            resp.raise_for_status()
-            html = resp.text
-    except Exception as exc:
-        log.debug("scraper.media_page_fetch_failed", url=page_url, error=str(exc))
+    html = await fetch_text(
+        page_url,
+        timeout=settings.scraper_request_timeout_s,
+        headers={"User-Agent": "Mozilla/5.0 (compatible; Anveshak/1.0)"},
+        max_redirects=settings.scraper_max_redirects,
+    )
+    if html is None:
+        log.debug("scraper.media_page_fetch_failed", url=page_url)
         return
 
     media_urls = _extract_media_urls(html, page_url)
     if not media_urls:
         return
 
-    from .url_safety import validate_external_url
-
     for media_url in media_urls:
+        # The written form only. The address is resolved and revalidated on
+        # every hop inside the download itself, which is where the request is.
         if not validate_external_url(media_url):
             continue
         if seen_media_urls is not None:

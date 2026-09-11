@@ -12,8 +12,13 @@ from __future__ import annotations
 from typing import Optional
 
 import structlog
+from anveshak.net.safe_fetch import fetch_bytes
 
 log = structlog.get_logger(__name__)
+
+# A PDF is served by whoever the scraped page linked to, so its size is theirs
+# to choose and ours to bound. Measured after decompression.
+_MAX_PDF_BYTES = 32 * 1024 * 1024
 
 try:
     import fitz  # PyMuPDF
@@ -52,21 +57,19 @@ def extract_pdf_text(pdf_bytes: bytes) -> Optional[str]:
 
 
 async def fetch_pdf_text(url: str, timeout: int = 30) -> Optional[str]:
-    """Download a PDF from URL and extract its text.
+    """Download a PDF through the guarded path and extract its text.
 
-    Returns None on fetch failure or empty PDF.
+    The URL is a link found in scraped markup, so the destination is validated
+    at every redirect hop and the document is bounded rather than buffered
+    whole. Returns None on fetch failure or empty PDF.
     """
-    import httpx
-
-    try:
-        async with httpx.AsyncClient(
-            timeout=timeout,
-            follow_redirects=True,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; Anveshak/1.0)"},
-        ) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            return extract_pdf_text(resp.content)
-    except Exception as exc:
-        log.warning("scraper.pdf_fetch_failed", url=url, error=str(exc))
+    result = await fetch_bytes(
+        url,
+        timeout=timeout,
+        headers={"User-Agent": "Mozilla/5.0 (compatible; Anveshak/1.0)"},
+        limit=_MAX_PDF_BYTES,
+    )
+    if result is None:
+        log.warning("scraper.pdf_fetch_failed", url=url)
         return None
+    return extract_pdf_text(result.body)

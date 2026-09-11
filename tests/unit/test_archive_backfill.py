@@ -80,12 +80,24 @@ def _routed_client(routes: dict[str, httpx.Response], record: list[str] | None =
     return _factory
 
 
+async def _approve_as_written(url: str):
+    """Approve a URL without resolving it, and pin no address.
+
+    The guarded fetch path connects to the address its guard returned, so a test
+    that wants the request to arrive at the host in the URL must hand back a
+    target with no address rather than a fixed one.
+    """
+    from anveshak.net.url_safety import ResolvedTarget
+
+    return ResolvedTarget(url=url, hostname=httpx.URL(url).host, address=None)
+
+
 def _allow_fetch():
     """Patch the SSRF and robots gates open, so a test asserts on the walk."""
     return (
         patch(
-            "anveshak.scraper.archive_backfill.validate_external_url_resolved",
-            new=AsyncMock(return_value=True),
+            "anveshak.scraper.archive_backfill.resolve_external_target",
+            new=AsyncMock(side_effect=_approve_as_written),
         ),
         patch(
             "anveshak.scraper.archive_backfill.check_robots_allowed",
@@ -190,7 +202,7 @@ async def test_sitemap_discovery_filters_by_path_date_without_fetching_articles(
         record=requested,
     )
     ssrf, robots = _allow_fetch()
-    with ssrf, robots, patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client):
+    with ssrf, robots, patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client):
         found = await discover_archive_sitemap(_sitemap_outlet(), _window())
 
     urls = [item.url for item in found]
@@ -245,7 +257,7 @@ async def test_paginated_feed_walks_backwards_through_pages():
         }
     )
     ssrf, robots = _allow_fetch()
-    with ssrf, robots, patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client):
+    with ssrf, robots, patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client):
         found = await discover_paginated_feed(_paged_outlet(), _window())
 
     urls = [item.url for item in found]
@@ -274,7 +286,7 @@ async def test_paginated_feed_stops_when_a_page_repeats_its_predecessor():
         record=requested,
     )
     ssrf, robots = _allow_fetch()
-    with ssrf, robots, patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client):
+    with ssrf, robots, patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client):
         found = await discover_paginated_feed(_paged_outlet(), _window())
 
     assert "paged=3" in " ".join(requested), "The wrap is only visible once page three is read"
@@ -298,7 +310,7 @@ async def test_paginated_feed_stops_once_a_page_predates_the_window():
         record=requested,
     )
     ssrf, robots = _allow_fetch()
-    with ssrf, robots, patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client):
+    with ssrf, robots, patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client):
         found = await discover_paginated_feed(_paged_outlet(), _window())
 
     assert "paged=3" not in " ".join(requested)
@@ -323,7 +335,7 @@ async def test_topic_feed_discovery_is_labelled_as_its_own_route():
         {"paged=1": httpx.Response(200, content=_fixture("05_topic_feed_page_1.xml"))}
     )
     ssrf, robots = _allow_fetch()
-    with ssrf, robots, patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client):
+    with ssrf, robots, patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client):
         found = await discover_topic_feeds(outlet, _window())
 
     assert [item.discovery for item in found] == [DISCOVERY_TOPIC_FEED]
@@ -362,7 +374,7 @@ async def test_publisher_client_error_triggers_archive_rehydration():
         }
     )
     ssrf, robots = _allow_fetch()
-    with ssrf, robots, patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client):
+    with ssrf, robots, patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client):
         item = await fetch_backfill_item(
             _discovered("https://sitemap.example.in/2026/7/20/police-clear"),
             _sitemap_outlet(),
@@ -384,7 +396,7 @@ async def test_publisher_server_error_is_not_an_archive_fallback():
         record=requested,
     )
     ssrf, robots = _allow_fetch()
-    with ssrf, robots, patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client):
+    with ssrf, robots, patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client):
         item = await fetch_backfill_item(
             _discovered("https://sitemap.example.in/2026/7/20/police-clear"),
             _sitemap_outlet(),
@@ -412,7 +424,7 @@ async def test_archive_capture_time_is_never_a_publication_time():
         }
     )
     ssrf, robots = _allow_fetch()
-    with ssrf, robots, patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client):
+    with ssrf, robots, patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client):
         item = await fetch_backfill_item(
             _discovered("https://sitemap.example.in/undated-article"),
             _sitemap_outlet(),
@@ -442,7 +454,7 @@ async def test_path_date_is_used_only_where_the_document_asserts_nothing():
         ssrf,
         robots,
         _kolkata("sitemap.example.in"),
-        patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client),
+        patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client),
     ):
         item = await fetch_backfill_item(
             _discovered(
@@ -466,14 +478,14 @@ async def test_robots_disallow_stops_the_body_fetch():
     client = _routed_client({}, record=requested)
     with (
         patch(
-            "anveshak.scraper.archive_backfill.validate_external_url_resolved",
-            new=AsyncMock(return_value=True),
+            "anveshak.scraper.archive_backfill.resolve_external_target",
+            new=AsyncMock(side_effect=_approve_as_written),
         ),
         patch(
             "anveshak.scraper.archive_backfill.check_robots_allowed",
             new=AsyncMock(return_value=False),
         ),
-        patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client),
+        patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client),
     ):
         item = await fetch_backfill_item(
             _discovered("https://sitemap.example.in/2026/7/20/police-clear"),
@@ -502,7 +514,7 @@ async def test_feed_dated_item_keeps_the_feeds_date():
         }
     )
     ssrf, robots = _allow_fetch()
-    with ssrf, robots, patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client):
+    with ssrf, robots, patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client):
         item = await fetch_backfill_item(
             DiscoveredUrl(
                 url="https://sitemap.example.in/2026/7/20/police-clear",
@@ -588,7 +600,7 @@ async def test_discover_urls_keeps_the_entry_whose_date_needed_no_fetch():
         }
     )
     ssrf, robots = _allow_fetch()
-    with ssrf, robots, patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client):
+    with ssrf, robots, patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client):
         found = await discover_urls(outlet, _window())
 
     urls = [item.url for item in found]
@@ -627,7 +639,7 @@ async def test_backfill_outlet_drops_an_item_published_outside_the_window():
         }
     )
     ssrf, robots = _allow_fetch()
-    with ssrf, robots, patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client):
+    with ssrf, robots, patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client):
         items = await backfill_outlet(_sitemap_outlet(), _window())
 
     assert [item.url for item in items] == [in_window]
@@ -645,7 +657,7 @@ async def test_an_article_the_archive_never_captured_is_dropped():
         }
     )
     ssrf, robots = _allow_fetch()
-    with ssrf, robots, patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client):
+    with ssrf, robots, patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client):
         item = await fetch_backfill_item(
             _discovered("https://sitemap.example.in/2026/7/20/police-clear"),
             _sitemap_outlet(),
@@ -667,7 +679,7 @@ async def test_archive_fallback_can_be_turned_off():
         ssrf,
         robots,
         patch("anveshak.scraper.archive_backfill.settings.archive_backfill_enabled", new=False),
-        patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client),
+        patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client),
     ):
         item = await fetch_backfill_item(
             _discovered("https://sitemap.example.in/2026/7/20/police-clear"),
@@ -719,7 +731,7 @@ async def test_sitemap_locations_off_the_outlets_host_are_refused():
     </urlset>"""
     client = _routed_client({"/archive/2026/7.xml": httpx.Response(200, content=sitemap)})
     ssrf, robots = _allow_fetch()
-    with ssrf, robots, patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client):
+    with ssrf, robots, patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client):
         found = await discover_archive_sitemap(_sitemap_outlet(), _window())
 
     assert [item.url for item in found] == [
@@ -739,7 +751,7 @@ async def test_sitemap_location_entities_are_unescaped():
     )
     client = _routed_client({"/archive/2026/7.xml": httpx.Response(200, content=sitemap)})
     ssrf, robots = _allow_fetch()
-    with ssrf, robots, patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client):
+    with ssrf, robots, patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client):
         found = await discover_archive_sitemap(_sitemap_outlet(), _window())
 
     assert [item.url for item in found] == [
@@ -755,7 +767,7 @@ async def test_a_location_longer_than_a_url_is_not_a_url():
     sitemap = f"<urlset><url><loc>{padded}</loc></url></urlset>".encode()
     client = _routed_client({"/archive/2026/7.xml": httpx.Response(200, content=sitemap)})
     ssrf, robots = _allow_fetch()
-    with ssrf, robots, patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client):
+    with ssrf, robots, patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client):
         found = await discover_archive_sitemap(_sitemap_outlet(), _window())
 
     assert found == []
@@ -800,19 +812,21 @@ async def test_a_redirect_to_an_internal_address_is_refused():
         record=requested,
     )
 
-    async def _external_only(url: str) -> bool:
-        return "ollama" not in url
+    async def _external_only(url: str):
+        if "ollama" in url:
+            return None
+        return await _approve_as_written(url)
 
     with (
         patch(
-            "anveshak.scraper.archive_backfill.validate_external_url_resolved",
+            "anveshak.scraper.archive_backfill.resolve_external_target",
             new=AsyncMock(side_effect=_external_only),
         ),
         patch(
             "anveshak.scraper.archive_backfill.check_robots_allowed",
             new=AsyncMock(return_value=True),
         ),
-        patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client),
+        patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client),
     ):
         item = await fetch_backfill_item(
             _discovered("https://sitemap.example.in/2026/7/20/police-clear"),
@@ -825,7 +839,8 @@ async def test_a_redirect_to_an_internal_address_is_refused():
 
 async def test_a_redirect_loop_ends():
     """A chain that never resolves stops at the hop bound, not at the job timeout."""
-    from anveshak.scraper.archive_backfill import _MAX_REDIRECTS, fetch_backfill_item
+    from anveshak.scraper.archive_backfill import fetch_backfill_item
+    from anveshak.scraper.settings import settings
 
     requested: list[str] = []
 
@@ -837,14 +852,14 @@ async def test_a_redirect_loop_ends():
         return _REAL_ASYNC_CLIENT(*args, transport=httpx.MockTransport(_handler), **kwargs)
 
     ssrf, robots = _allow_fetch()
-    with ssrf, robots, patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=_factory):
+    with ssrf, robots, patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=_factory):
         item = await fetch_backfill_item(
             _discovered("https://sitemap.example.in/2026/7/20/police-clear"),
             _sitemap_outlet(),
         )
 
     assert item is None
-    assert len(requested) == _MAX_REDIRECTS + 1
+    assert len(requested) == settings.scraper_max_redirects + 1
 
 
 async def test_a_cdx_timestamp_that_is_not_one_is_never_put_in_a_url():
@@ -862,7 +877,7 @@ async def test_a_cdx_timestamp_that_is_not_one_is_never_put_in_a_url():
         record=requested,
     )
     ssrf, robots = _allow_fetch()
-    with ssrf, robots, patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client):
+    with ssrf, robots, patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client):
         item = await fetch_backfill_item(
             _discovered("https://sitemap.example.in/2026/7/20/police-clear"),
             _sitemap_outlet(),
@@ -920,7 +935,7 @@ async def test_the_page_cap_is_a_backstop_and_reports_itself():
         ssrf,
         robots,
         patch("anveshak.scraper.archive_backfill.settings.archive_backfill_max_feed_pages", new=3),
-        patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=_factory),
+        patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=_factory),
     ):
         found = await discover_paginated_feed(_paged_outlet(), _window())
 
@@ -965,7 +980,7 @@ async def test_discovery_stops_fetching_once_the_url_budget_is_spent():
             "anveshak.scraper.archive_backfill.settings.archive_backfill_max_urls_per_outlet",
             new=2,
         ),
-        patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client),
+        patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client),
     ):
         found = await discover_urls(outlet, _window())
 
@@ -980,7 +995,7 @@ async def test_a_response_past_the_byte_bound_is_refused_rather_than_buffered():
     oversized = b"<html><body><p>" + (b"a" * (_MAX_DOCUMENT_BYTES + 1)) + b"</p></body></html>"
     client = _routed_client({"sitemap.example.in": httpx.Response(200, content=oversized)})
     ssrf, robots = _allow_fetch()
-    with ssrf, robots, patch("anveshak.scraper.archive_backfill.httpx.AsyncClient", new=client):
+    with ssrf, robots, patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=client):
         item = await fetch_backfill_item(
             _discovered("https://sitemap.example.in/2026/7/20/police-clear"),
             _sitemap_outlet(),

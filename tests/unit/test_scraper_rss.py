@@ -41,6 +41,19 @@ _EMPTY_RSS = b"""<?xml version="1.0" encoding="UTF-8"?>
 _REAL_ASYNC_CLIENT = httpx.AsyncClient
 
 
+def _public_dns():
+    """Patch resolution so the guarded fetch path judges the host as external.
+
+    The fetch goes through anveshak.net.safe_fetch now, which resolves the name
+    and connects to the address it approved. Tests must not depend on a
+    resolver, so the answer is fixed here.
+    """
+    return patch(
+        "anveshak.net.url_safety._resolve_host",
+        new=AsyncMock(return_value=["93.184.216.34"]),
+    )
+
+
 def _feed_client(content: bytes, status: int = 200):
     """Build a client factory serving content over httpx.MockTransport.
 
@@ -102,9 +115,9 @@ def test_rss_published_at_timezone_aware():
     items = parse_feed_items(_MINIMAL_RSS, "https://example.com/feed")
     assert items, "Expected at least one item"
     for item in items:
-        assert (
-            item.published_at.tzinfo is not None
-        ), f"published_at for {item.url} is naive — must be timezone-aware"
+        assert item.published_at.tzinfo is not None, (
+            f"published_at for {item.url} is naive — must be timezone-aware"
+        )
 
 
 @pytest.mark.unit
@@ -129,7 +142,8 @@ def test_rss_short_summary_triggers_full_fetch():
                 new=AsyncMock(return_value=True),
             ),
             patch("anveshak.scraper.rss.check_robots_allowed", new=AsyncMock(return_value=True)),
-            patch("anveshak.scraper.rss.httpx.AsyncClient", new=_feed_client(_MINIMAL_RSS)),
+            patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=_feed_client(_MINIMAL_RSS)),
+            _public_dns(),
         ):
             items = await rss_module.fetch_rss_items("https://example.com/feed")
 
@@ -147,7 +161,10 @@ def test_rss_empty_feed_returns_empty_list():
     from anveshak.scraper import rss as rss_module
 
     async def _run():
-        with patch("anveshak.scraper.rss.httpx.AsyncClient", new=_feed_client(_EMPTY_RSS)):
+        with (
+            patch("anveshak.net.safe_fetch.httpx.AsyncClient", new=_feed_client(_EMPTY_RSS)),
+            _public_dns(),
+        ):
             items = await rss_module.fetch_rss_items("https://example.com/feed")
 
         assert items == []
@@ -161,9 +178,12 @@ def test_rss_feed_fetch_failure_returns_empty_list():
     from anveshak.scraper import rss as rss_module
 
     async def _run():
-        with patch(
-            "anveshak.scraper.rss.httpx.AsyncClient",
-            new=_failing_client(httpx.ConnectError("Connection refused")),
+        with (
+            patch(
+                "anveshak.net.safe_fetch.httpx.AsyncClient",
+                new=_failing_client(httpx.ConnectError("Connection refused")),
+            ),
+            _public_dns(),
         ):
             items = await rss_module.fetch_rss_items("https://dead-feed.example.com/feed")
 

@@ -19,8 +19,8 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
-import httpx
 import structlog
+from anveshak.net.safe_fetch import DEFAULT_MAX_REDIRECTS, fetch_bytes
 
 log = structlog.get_logger(__name__)
 
@@ -178,15 +178,18 @@ async def download_media_asset(
     storage_root: Path,
     max_size_mb: int = 50,
     timeout_s: int = 30,
+    max_redirects: int = DEFAULT_MAX_REDIRECTS,
 ) -> Optional[MediaDownloadResult]:
     """Download a media asset from URL or read from local path, persist to disk.
 
     Handles both HTTP URLs (scraper) and local file paths (Telegram, WhatsApp).
 
     Returns None if:
-    - HTTP fetch fails / local file not found
+    - HTTP fetch fails, is refused by the address guard, or names a host that
+      is not external
+    - The document runs past max_size_mb, measured as it is read rather than
+      after the whole body is already resident
     - Content type is not a supported media type (image/video/document)
-    - File size exceeds max_size_mb
     - Local path is outside media storage volume (path traversal protection)
 
     Does NOT insert into DB — caller is responsible for the media_assets INSERT
@@ -196,46 +199,30 @@ async def download_media_asset(
     if url.startswith("/"):
         return await _handle_local_file(url, topic_id, storage_root)
 
-    try:
-        async with httpx.AsyncClient(
-            timeout=timeout_s,
-            follow_redirects=True,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; Anveshak/1.0)"},
-        ) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-
-            content_type = resp.headers.get("content-type", "application/octet-stream")
-            asset_type = _infer_asset_type(content_type, url)
-            if asset_type is None:
-                log.debug("media.skipped_unsupported_type", url=url, content_type=content_type)
-                return None
-
-            # Stream check: read Content-Length header before reading body
-            content_length = resp.headers.get("content-length")
-            if content_length and int(content_length) > max_size_mb * 1024 * 1024:
-                log.warning(
-                    "media.too_large",
-                    url=url,
-                    size_mb=int(content_length) / 1024 / 1024,
-                    limit_mb=max_size_mb,
-                )
-                return None
-
-            data = resp.content
-            if len(data) > max_size_mb * 1024 * 1024:
-                log.warning("media.too_large_after_download", url=url, limit_mb=max_size_mb)
-                return None
-
-            if not data:
-                log.debug("media.empty_response", url=url)
-                return None
-
-    except httpx.HTTPError as exc:
-        log.warning("media.download_failed", url=url, error=str(exc))
+    # A media URL is markup written by whoever we are collecting from, so the
+    # destination is validated at every redirect hop rather than only at the
+    # first, and the connection is made to the address that was validated.
+    result = await fetch_bytes(
+        url,
+        timeout=timeout_s,
+        headers={"User-Agent": "Mozilla/5.0 (compatible; Anveshak/1.0)"},
+        max_redirects=max_redirects,
+        limit=max_size_mb * 1024 * 1024,
+    )
+    if result is None:
+        # safe_fetch logged which check refused and with what limit.
+        log.warning("media.download_failed", url=url)
         return None
-    except Exception as exc:
-        log.warning("media.unexpected_error", url=url, error=str(exc))
+
+    content_type = result.headers.get("content-type", "application/octet-stream")
+    asset_type = _infer_asset_type(content_type, url)
+    if asset_type is None:
+        log.debug("media.skipped_unsupported_type", url=url, content_type=content_type)
+        return None
+
+    data = result.body
+    if not data:
+        log.debug("media.empty_response", url=url)
         return None
 
     # Compute SHA-256 of raw bytes — the dedup key (criteria 4.4)

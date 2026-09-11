@@ -13,6 +13,12 @@ class ScraperSettings(BaseSettings):
     scraper_request_timeout_s: int = 30  # criteria 1.7 — per-URL fetch timeout
     scraper_poll_interval_s: int = 900  # 15 minutes between polling sweeps
     respect_robots_txt: bool = True
+    # A redirect chain is walked hop by hop, each hop revalidated, so this
+    # bounds how long an outlet can keep a worker walking before we give up.
+    scraper_max_redirects: int = 5
+    # Page-level address guard inside the Crawl4AI browser. Off only where a
+    # deployment relies on egress policy instead; see ADR 0005.
+    scraper_browser_address_guard: bool = True
     tor_proxy_url: Optional[str] = None  # criteria 1.10 — e.g. socks5://127.0.0.1:9050
 
     # Dark web (.onion) scraping — routed through Tor SOCKS5 proxy

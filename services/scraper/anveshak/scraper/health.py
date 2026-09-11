@@ -16,19 +16,19 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
-import httpx
 import structlog
+from anveshak.net.safe_fetch import FetchResult, fetch
 
-from .fetch import fetch_url, validate_onion_url
+from .fetch import BROWSER_UA, fetch_url, proxied_guard, validate_onion_url
 from .metrics import scraper_circuit_breaker_total
 from .settings import settings
 
 log = structlog.get_logger(__name__)
 
-_BROWSER_UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-)
+# A health probe reads enough of a feed to judge it, not the whole document. The
+# host is the one being judged, so its answer is bounded like any other.
+_MAX_FEED_BYTES = 8 * 1024 * 1024
+
 # Only patterns that strongly indicate a hard paywall gate — generic nav-bar
 # words like "subscribe" cause false positives on almost every news site.
 _PAYWALL_PATTERNS = frozenset(
@@ -66,31 +66,36 @@ class HealthResult:
 
 
 async def check_rss_health(url: str) -> HealthResult:
-    """Fetch feed XML and verify at least one entry is parseable."""
-    try:
-        async with httpx.AsyncClient(
-            timeout=15,
-            follow_redirects=True,
-            headers={"User-Agent": _BROWSER_UA},
-        ) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
+    """Fetch feed XML through the guarded path and verify one entry parses."""
+    outcome = await fetch(
+        url,
+        timeout=15,
+        headers={"User-Agent": BROWSER_UA},
+        max_redirects=settings.scraper_max_redirects,
+        limit=_MAX_FEED_BYTES,
+        expect_ok=False,
+    )
+    if not isinstance(outcome, FetchResult):
+        # The reason, not a disjunction: this lands in sources.health_error and
+        # an analyst debugging a dead source does not have the worker log.
+        return HealthResult("degraded", outcome.reason[:200])
+    result = outcome
+    if result.status >= 400:
+        return HealthResult("degraded", f"HTTP {result.status}")
 
+    try:
         import asyncio
 
         import feedparser  # lazy — only imported in scraper worker
 
         loop = asyncio.get_event_loop()
-        feed = await loop.run_in_executor(None, feedparser.parse, resp.content)
-
-        if not feed.entries:
-            return HealthResult("degraded", "Feed reachable but contains no entries")
-        return HealthResult("healthy", None)
-
-    except httpx.HTTPStatusError as exc:
-        return HealthResult("degraded", f"HTTP {exc.response.status_code}")
+        feed = await loop.run_in_executor(None, feedparser.parse, result.body)
     except Exception as exc:
         return HealthResult("degraded", str(exc)[:200])
+
+    if not feed.entries:
+        return HealthResult("degraded", "Feed reachable but contains no entries")
+    return HealthResult("healthy", None)
 
 
 async def check_darkweb_health(url: str) -> HealthResult:
@@ -100,37 +105,27 @@ async def check_darkweb_health(url: str) -> HealthResult:
     except ValueError as exc:
         return HealthResult("down", str(exc))
 
-    try:
-        import inspect
-
-        client_kwargs: dict = {
-            "timeout": settings.darkweb_request_timeout_s,
-            "follow_redirects": True,
-            "headers": {"User-Agent": _BROWSER_UA},
-        }
-        try:
-            sig = inspect.signature(httpx.AsyncClient.__init__)
-            if "proxy" in sig.parameters:
-                client_kwargs["proxy"] = settings.darkweb_tor_proxy_url
-            else:
-                client_kwargs["proxies"] = {"all://": settings.darkweb_tor_proxy_url}
-        except Exception:
-            client_kwargs["proxy"] = settings.darkweb_tor_proxy_url
-
-        async with httpx.AsyncClient(**client_kwargs) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            if len(resp.text) < 50:
-                return HealthResult(
-                    "degraded",
-                    f"Response too short ({len(resp.text)} chars)",
-                    hard_failure=True,
-                )
-            return HealthResult("healthy", None)
-    except httpx.HTTPStatusError as exc:
-        return HealthResult("degraded", f"HTTP {exc.response.status_code}")
-    except Exception as exc:
-        return HealthResult("degraded", str(exc)[:200], hard_failure=True)
+    outcome = await fetch(
+        url,
+        timeout=settings.darkweb_request_timeout_s,
+        headers={"User-Agent": BROWSER_UA},
+        guard=proxied_guard,
+        max_redirects=settings.scraper_max_redirects,
+        limit=_MAX_FEED_BYTES,
+        expect_ok=False,
+        proxy=settings.darkweb_tor_proxy_url,
+    )
+    if not isinstance(outcome, FetchResult):
+        return HealthResult("degraded", outcome.reason[:200], hard_failure=True)
+    result = outcome
+    if result.status >= 400:
+        return HealthResult("degraded", f"HTTP {result.status}")
+    body = result.body.decode(result.encoding or "utf-8", errors="replace")
+    if len(body) < 50:
+        return HealthResult(
+            "degraded", f"Response too short ({len(body)} chars)", hard_failure=True
+        )
+    return HealthResult("healthy", None)
 
 
 async def check_web_health(url: str) -> HealthResult:

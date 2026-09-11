@@ -32,12 +32,19 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional, Protocol
 
-import httpx
 import structlog
+from anveshak.net.safe_fetch import fetch_bytes
+from anveshak.net.url_safety import validate_external_url_resolved
 from bs4 import BeautifulSoup
 
 from .clean import is_paywall_page
-from .fetch import FetchedArticle, check_robots_allowed, fetch_article, fetch_html
+from .fetch import (
+    BROWSER_UA,
+    FetchedArticle,
+    check_robots_allowed,
+    fetch_article,
+    fetch_html,
+)
 from .publication_time import (
     SIGNAL_FEED_PUBLISHED,
     SIGNAL_FEED_UPDATED,
@@ -46,15 +53,9 @@ from .publication_time import (
 )
 from .rate_limiter import DomainRateLimiter
 from .settings import settings
-from .url_safety import validate_external_url_resolved
 
 log = structlog.get_logger(__name__)
 
-_BROWSER_UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/124.0.0.0 Safari/537.36"
-)
 
 # Every reader here is bounded, because a feed is adversarial input and its
 # publisher chooses the size of everything in it. Each bound reports itself, so
@@ -209,36 +210,24 @@ def parse_feed_items(
 
 
 async def _fetch_feed_xml(feed_url: str) -> Optional[bytes]:
-    """Fetch the feed document, up to the byte bound. None on any failure.
+    """Fetch the feed document through the guarded path, up to the byte bound.
 
     Streamed rather than buffered whole, and measured after decompression. A
     ten megabyte gzip response expanding to gigabytes is one request, and
     ``resp.content`` would have it resident before anything could object.
+
+    The feed URL is a source the operator configured, but a feed that redirects
+    chooses the final host itself, so every hop is validated rather than the
+    first.
     """
-    try:
-        async with httpx.AsyncClient(
-            timeout=settings.scraper_request_timeout_s,
-            follow_redirects=True,
-            headers={"User-Agent": _BROWSER_UA},
-        ) as client:
-            async with client.stream("GET", feed_url) as resp:
-                resp.raise_for_status()
-                chunks: list[bytes] = []
-                total = 0
-                async for chunk in resp.aiter_bytes():
-                    total += len(chunk)
-                    if total > _MAX_FEED_BYTES:
-                        log.warning(
-                            "rss.feed_too_large",
-                            url=feed_url,
-                            limit=_MAX_FEED_BYTES,
-                        )
-                        return None
-                    chunks.append(chunk)
-                return b"".join(chunks)
-    except Exception as exc:
-        log.warning("rss.feed_fetch_failed", url=feed_url, error=str(exc))
-        return None
+    result = await fetch_bytes(
+        feed_url,
+        timeout=settings.scraper_request_timeout_s,
+        headers={"User-Agent": BROWSER_UA},
+        max_redirects=settings.scraper_max_redirects,
+        limit=_MAX_FEED_BYTES,
+    )
+    return result.body if result else None
 
 
 async def _fetch_article(

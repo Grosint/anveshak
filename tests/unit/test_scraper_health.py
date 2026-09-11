@@ -135,32 +135,15 @@ class TestCheckRssHealth:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_check_rss_health_empty_entries(self):
+    async def test_check_rss_health_empty_entries(self, serve_bytes):
         """Feed reachable but feedparser returns entries=[] → degraded, 'no entries'."""
         import types
 
         from anveshak.scraper.health import check_rss_health
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.content = b"<rss></rss>"
-        mock_response.raise_for_status = MagicMock()
-
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_response
-
-        acm = MagicMock()
-        acm.__aenter__ = AsyncMock(return_value=mock_client)
-        acm.__aexit__ = AsyncMock(return_value=False)
-
         empty_feed = types.SimpleNamespace(entries=[])
 
-        with (
-            patch("anveshak.scraper.health.httpx.AsyncClient", return_value=acm),
-            patch("anveshak.scraper.health.feedparser.parse", return_value=empty_feed)
-            if False
-            else patch("anveshak.scraper.health.httpx.AsyncClient", return_value=acm),
-        ):
+        with serve_bytes(b"<rss></rss>"):
             # feedparser is lazy-imported inside the function, patch via the module
             with patch.dict(
                 "sys.modules", {"feedparser": MagicMock(parse=MagicMock(return_value=empty_feed))}
@@ -172,30 +155,26 @@ class TestCheckRssHealth:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_check_rss_health_http_403_error(self):
-        """httpx raises HTTPStatusError(403) → degraded, 'HTTP 403'."""
+    async def test_check_rss_health_http_403_error(self, serve_bytes):
+        """A 403 is an answer about the source, so it is reported rather than raised."""
         from anveshak.scraper.health import check_rss_health
 
-        mock_response = MagicMock()
-        mock_response.status_code = 403
-
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_response
-        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "Forbidden",
-            request=MagicMock(),
-            response=mock_response,
-        )
-
-        acm = MagicMock()
-        acm.__aenter__ = AsyncMock(return_value=mock_client)
-        acm.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("anveshak.scraper.health.httpx.AsyncClient", return_value=acm):
+        with serve_bytes(b"forbidden", status=403):
             result = await check_rss_health("https://example.com/feed.xml")
 
         assert result.status == "degraded"
         assert "403" in result.error
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_check_rss_health_refuses_a_feed_inside_the_deployment(self, serve_bytes):
+        """A source URL naming an internal host is never fetched (#55)."""
+        from anveshak.scraper.health import check_rss_health
+
+        with serve_bytes(b"<rss></rss>", addresses=["172.28.0.9"]):
+            result = await check_rss_health("http://ollama:11434/feed.xml")
+
+        assert result.status == "degraded"
 
 
 # ---------------------------------------------------------------------------
@@ -204,25 +183,18 @@ class TestCheckRssHealth:
 
 
 class TestCheckDarkwebHealth:
-    """Tests for check_darkweb_health — mocks httpx and validate_onion_url."""
+    """Tests for check_darkweb_health — mocks the fetch path and validate_onion_url."""
 
     @pytest.mark.unit
     @pytest.mark.asyncio
     @patch("anveshak.scraper.health.validate_onion_url")
-    async def test_tor_connection_error(self, mock_validate):
-        """validate_onion_url passes, httpx.get raises ConnectionError → degraded, hard_failure=True."""
+    async def test_tor_connection_error(self, mock_validate, serve_error):
+        """The proxy is unreachable → degraded, hard_failure=True."""
         from anveshak.scraper.health import check_darkweb_health
 
         mock_validate.return_value = None  # passes validation
 
-        mock_client = AsyncMock()
-        mock_client.get.side_effect = ConnectionError("Tor SOCKS5 proxy unreachable")
-
-        acm = MagicMock()
-        acm.__aenter__ = AsyncMock(return_value=mock_client)
-        acm.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("anveshak.scraper.health.httpx.AsyncClient", return_value=acm):
+        with serve_error(httpx.ConnectError("Tor SOCKS5 proxy unreachable")):
             result = await check_darkweb_health("http://example.onion/page")
 
         assert result.status == "degraded"
@@ -231,25 +203,13 @@ class TestCheckDarkwebHealth:
     @pytest.mark.unit
     @pytest.mark.asyncio
     @patch("anveshak.scraper.health.validate_onion_url")
-    async def test_short_response_49_chars(self, mock_validate):
+    async def test_short_response_49_chars(self, mock_validate, serve_bytes):
         """Response text is 49 chars → degraded, 'too short', hard_failure=True. Boundary at < 50."""
         from anveshak.scraper.health import check_darkweb_health
 
         mock_validate.return_value = None
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.text = "x" * 49  # exactly 49 chars — below 50 threshold
-        mock_response.raise_for_status = MagicMock()
-
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_response
-
-        acm = MagicMock()
-        acm.__aenter__ = AsyncMock(return_value=mock_client)
-        acm.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("anveshak.scraper.health.httpx.AsyncClient", return_value=acm):
+        with serve_bytes(b"x" * 49):
             result = await check_darkweb_health("http://example.onion/page")
 
         assert result.status == "degraded"

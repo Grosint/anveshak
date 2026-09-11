@@ -7,9 +7,9 @@ from datetime import UTC, datetime
 from typing import Optional
 from urllib.parse import urlparse
 
-import httpx
 import structlog
 from anveshak.db import DBConnection
+from anveshak.net.safe_fetch import FetchResult, fetch
 from anveshak.source_rubric import (
     NEUTRAL_BASELINE,
     creation_score,
@@ -29,6 +29,9 @@ router = APIRouter(prefix="/api/v1/sources", tags=["sources"])
 log = structlog.get_logger(__name__)
 
 _LABELS_JSON = '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'
+# A probe reads enough of a document to judge it. The host is the one being
+# judged, so the size of its answer is not ours to choose.
+_MAX_PROBE_BYTES = 8 * 1024 * 1024
 _BROWSER_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
@@ -65,63 +68,68 @@ class CreateSourceRequest(BaseModel):
 
 
 async def _probe_rss(url: str) -> tuple[bool, Optional[str]]:
-    """Returns (ok, error_message). Hard check — RSS must return 200 + XML."""
-    try:
-        async with httpx.AsyncClient(
-            timeout=15,
-            follow_redirects=True,
-            headers={"User-Agent": _BROWSER_UA},
-        ) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            ct = resp.headers.get("content-type", "")
-            if not any(k in ct for k in ("xml", "rss", "atom")):
-                # Some feeds serve as text/plain — also accept non-empty body starting with XML
-                body = resp.text.lstrip()
-                if (
-                    not body.startswith("<?xml")
-                    and not body.startswith("<rss")
-                    and not body.startswith("<feed")
-                ):
-                    return (
-                        False,
-                        f"URL returned content-type '{ct}' — does not look like an RSS/Atom feed",
-                    )
-            return True, None
-    except httpx.HTTPStatusError as exc:
-        return False, f"HTTP {exc.response.status_code}"
-    except Exception as exc:
-        return False, str(exc)
+    """Returns (ok, error_message). Hard check — RSS must return 200 + XML.
+
+    The URL is whatever the caller registered, and discovery registers addresses
+    it read out of scraped markup, so the probe goes through the guarded fetch
+    path like every other fetch of an address we did not choose. This request
+    leaves the API process, which holds the database credentials, so the probe
+    would otherwise be the softest way into the deployment (#55).
+    """
+    outcome = await fetch(
+        url,
+        timeout=15,
+        headers={"User-Agent": _BROWSER_UA},
+        limit=_MAX_PROBE_BYTES,
+        expect_ok=False,
+    )
+    if not isinstance(outcome, FetchResult):
+        return False, outcome.reason[:200]
+    if outcome.status >= 400:
+        return False, f"HTTP {outcome.status}"
+
+    ct = outcome.headers.get("content-type", "")
+    if not any(k in ct for k in ("xml", "rss", "atom")):
+        # Some feeds serve as text/plain — also accept non-empty body starting with XML
+        body = outcome.body.decode(outcome.encoding or "utf-8", errors="replace").lstrip()
+        if (
+            not body.startswith("<?xml")
+            and not body.startswith("<rss")
+            and not body.startswith("<feed")
+        ):
+            return (
+                False,
+                f"URL returned content-type '{ct}' — does not look like an RSS/Atom feed",
+            )
+    return True, None
 
 
 async def _probe_web(url: str) -> tuple[str, Optional[str], bool]:
     """Returns (health_status, error_message, hard_failure).
 
+    Guarded like _probe_rss, and for the same reason.
+
     Soft warnings (paywall heuristic, short content) return hard_failure=False
     so they don't accumulate toward 'down' status.
     """
-    try:
-        async with httpx.AsyncClient(
-            timeout=15,
-            follow_redirects=True,
-            headers={"User-Agent": _BROWSER_UA},
-        ) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            text = resp.text.lower()
-            if any(p in text for p in _PAYWALL_PATTERNS):
-                return "degraded", "Possible paywall detected — content may be incomplete", False
-            if len(resp.text) < 200:
-                return (
-                    "degraded",
-                    f"Response too short ({len(resp.text)} chars) — may be blocked",
-                    True,
-                )
-            return "healthy", None, False
-    except httpx.HTTPStatusError as exc:
-        return "degraded", f"HTTP {exc.response.status_code}", True
-    except Exception as exc:
-        return "degraded", str(exc), True
+    outcome = await fetch(
+        url,
+        timeout=15,
+        headers={"User-Agent": _BROWSER_UA},
+        limit=_MAX_PROBE_BYTES,
+        expect_ok=False,
+    )
+    if not isinstance(outcome, FetchResult):
+        return "degraded", outcome.reason[:200], True
+    if outcome.status >= 400:
+        return "degraded", f"HTTP {outcome.status}", True
+
+    body = outcome.body.decode(outcome.encoding or "utf-8", errors="replace")
+    if any(p in body.lower() for p in _PAYWALL_PATTERNS):
+        return "degraded", "Possible paywall detected — content may be incomplete", False
+    if len(body) < 200:
+        return "degraded", f"Response too short ({len(body)} chars) — may be blocked", True
+    return "healthy", None, False
 
 
 # ---------------------------------------------------------------------------
