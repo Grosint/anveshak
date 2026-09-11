@@ -16,11 +16,14 @@ from datetime import UTC, date, datetime, timedelta
 import pytest
 from anveshak.clock import ClockSettings
 
-from scripts.import_corpus import CorpusItem, CorpusSource
+from scripts.import_corpus import CorpusItem, CorpusSource, ImportSummary
 from scripts.replay_corpus import (
     RESET_STATEMENTS,
+    DetectionCounts,
     ReplayRefusedError,
+    Stage,
     plan_stages,
+    run_stage,
     verify_replay_permitted,
 )
 
@@ -263,3 +266,73 @@ class TestResetStatements:
         # and leave their audit rows describing a score that no longer exists.
         _, sql = RESET_STATEMENTS[self._index_of("UPDATE sources")]
         assert "s.org_id = $1" in sql
+
+
+# ---------------------------------------------------------------------------
+# Report formats
+# ---------------------------------------------------------------------------
+
+
+class TestStageReportTypes:
+    """A report point is two artifacts, the brief and the full report - #54.
+
+    The demonstration shows the same Topic reported on at three points, each in
+    both formats, and both have to come out of the one Replay: a second run to
+    collect the other format would be a second reset, so the first run's
+    reports would no longer exist to compare against.
+    """
+
+    @staticmethod
+    def _stage() -> Stage:
+        return plan_stages(
+            [_item(FOUNDED), _item(FOUNDED + timedelta(days=8), url="https://outlet-a.example/b")],
+            report_dates=[date(2026, 5, 24)],
+        )[1]
+
+    async def _run(self, monkeypatch: pytest.MonkeyPatch, report_types: tuple[str, ...]) -> list:
+        generated: list[str] = []
+
+        async def fake_import(*args: object, **kwargs: object) -> ImportSummary:
+            return ImportSummary(items=1, imported=1, duplicates=0, undated=0, sources_created=1)
+
+        async def fake_detection(*args: object, **kwargs: object) -> DetectionCounts:
+            return DetectionCounts(clusters=1, signals=0, candidates=0)
+
+        async def fake_report(*args: object, report_type: str = "", **kwargs: object) -> str:
+            generated.append(report_type)
+            return f"report-{report_type}"
+
+        async def fake_embed(*args: object, **kwargs: object) -> int:
+            return 0
+
+        monkeypatch.setattr("scripts.replay_corpus.import_corpus", fake_import)
+        monkeypatch.setattr("scripts.replay_corpus.run_detection", fake_detection)
+        monkeypatch.setattr("scripts.replay_corpus.generate_stage_report", fake_report)
+
+        await run_stage(
+            self._stage(),
+            topic_id="topic",
+            org_id="org-demo",
+            pool=None,  # type: ignore[arg-type]
+            arq_pool=None,  # type: ignore[arg-type]
+            corpus_start=FOUNDED,
+            embed=fake_embed,
+            report_types=report_types,
+        )
+        return generated
+
+    async def test_both_formats_are_generated_at_a_report_date(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        generated = await self._run(monkeypatch, ("intelligence_brief", "research_summary"))
+        assert generated == ["intelligence_brief", "research_summary"]
+
+    async def test_a_repeated_format_is_generated_once(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Report immutability (rule 4) means a second generation of the same
+        # format at the same moment is either a duplicate row or a silently
+        # returned cached one. Neither is what an operator who typed the flag
+        # twice meant, and both cost a language model run on CPU.
+        generated = await self._run(monkeypatch, ("intelligence_brief", "intelligence_brief"))
+        assert generated == ["intelligence_brief"]

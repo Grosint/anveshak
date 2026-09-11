@@ -208,6 +208,18 @@ generated/
 db_backups/
 pgdata/
 
+# The frozen demonstration Replay - issue #54. Named by its exact path rather
+# than left to the *.dump rule above, because this one has a reason of its own:
+# it is a database of material authored by identifiable people in a matter
+# still before the courts, and a dump that reaches version control is in every
+# clone from then on. Deleting it later does not recall it.
+#
+# An exact path rather than a blanket artifacts/ or corpora/ rule, which would
+# silently exclude a same-named Python package elsewhere in the tree. The
+# corpus file itself is committed: it is the reviewable source of truth, and
+# the dump is only an artifact of a run over it.
+/artifacts/replay/cockroach_janta_party.dump
+
 # SQLite (used in tests sometimes)
 *.sqlite
 *.sqlite3

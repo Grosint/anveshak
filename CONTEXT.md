@@ -81,6 +81,11 @@ It is the source of truth for a dataset, and a database dump is only an artifact
 Each item carries its Publication Time and the name of the signal that produced it, so a date is defensible from the row rather than from whoever collected it.
 See [docs/corpus_format.md](docs/corpus_format.md).
 
+**Corpus Plan** - The file a corpus is collected against and the run afterwards is measured against.
+It carries the arc and its phases, the collection targets, the report points, and the Signal each phase is expected to fire with the reasoning behind the expectation.
+The expectations are written before the run, which is what makes a Signal that does not fire a finding to investigate rather than a threshold to tune away.
+Lives in `infra/configs/corpora/`, and is read by `scripts/build_corpus.py` and `scripts/assert_demo_run.py`.
+
 ---
 
 ## Narrative Detection

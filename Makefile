@@ -96,6 +96,7 @@ _WORK  := $(_CYN)⟳$(_RST)
         test test-unit test-contract test-integration test-e2e test-full test-scrape \
         test-ci test-all test-nightly \
         demo-check demo-detect validate validate-vision health syscheck \
+        corpus-plan corpus-build demo-assert replay-freeze replay-restore \
         lint format typecheck security-scan \
         clean clean-containers clean-volumes clean-cache purge nuke \
         verify-labels verify-reports verify-env check-env-sync shell-% \
@@ -669,6 +670,87 @@ demo-detect: venv-check
 demo-check:
 	$(call header,Demo Readiness Check)
 	@$(UV) python scripts/demo_check.py
+
+# ---------------------------------------------------------------------------
+# Demonstration corpus, Replay assertions and the freeze - issue #54
+#
+# The corpus plan in infra/configs/corpora/ is read by all three: the build
+# collects against it, the assertions compare the database to the expectations
+# recorded in it before the run, and the freeze dumps the result to the exact
+# path the plan names.
+# ---------------------------------------------------------------------------
+
+# Reports which collection targets are still unpinned, and collects nothing.
+# Safe to run anywhere, which is the point: it answers what the build needs
+# before the build reaches the public internet.
+corpus-plan: venv-check
+	$(call header,Corpus Plan)
+	@$(UV) python scripts/build_corpus.py --dry-run
+
+# Reaches the public internet. Run it where that is intended and where the
+# collector account's OPSEC posture has been agreed, never on a demo host.
+corpus-build: venv-check
+	$(call header,Building the Demonstration Corpus)
+	@$(UV) python scripts/build_corpus.py
+
+# The run is the test. Exit code 1 means an expectation the plan recorded
+# before the run was not met, which is a finding to investigate at the seam.
+#
+# POSTGRES_URL is blanked for the reason demo-detect blanks it: .env may carry
+# the in-container DSN, which is unreachable from the host, and the script
+# assembles a host DSN from POSTGRES_PASSWORD instead. The organisation comes
+# from SEED_ORG_ID in .env, and TOPIC_ID overrides the Topic the assertions
+# scope to, which otherwise resolves to the one promoted from a Watch Space.
+demo-assert: venv-check
+	$(call check_env,infra/compose.yml)
+	$(call header,Asserting the Replay Against Its Plan)
+	@set -a; . ./.env; set +a; \
+		POSTGRES_URL="" \
+		$(UV) python scripts/assert_demo_run.py $(if $(TOPIC_ID),--topic-id $(TOPIC_ID),)
+
+# The path comes from the plan rather than from here, so editing the plan moves
+# the artifact instead of silently doing nothing. The .gitignore rule names the
+# same path literally, because .gitignore cannot read a YAML file.
+REPLAY_DUMP = $(shell $(UV) python -c \
+	"from scripts.corpus_plan import load_plan; print(load_plan().dump_file)" 2>/dev/null)
+
+# The frozen artifact. Held outside version control at the exact path the plan
+# names, because a dump of material about identifiable people entering every
+# clone is not recoverable by deleting it later.
+#
+# It is the whole database: every organisation's content, and the users table
+# with its password hashes. That is what makes a restore reproduce a working
+# demonstration, and it is also why whether this artifact may leave the build
+# machine is a decision taken before the run rather than at demonstration time.
+replay-freeze:
+	$(call header,Freezing the Replay Result)
+	@test -n "$(REPLAY_DUMP)" || { \
+		printf "  $(_FAIL) could not read output.dump_file from the corpus plan\n"; exit 1; }
+	@mkdir -p "$$(dirname $(REPLAY_DUMP))"
+	@$(COMPOSE) exec -T postgres pg_dump -U anveshak -d anveshak \
+		--format=custom --compress=6 > "$(REPLAY_DUMP)"
+	@printf "  frozen: $(_BOLD)%s$(_RST) (%s)\n" "$(REPLAY_DUMP)" \
+		"$$(du -h $(REPLAY_DUMP) | cut -f1)"
+
+# Restores a frozen Replay so a demonstration repeats identically without
+# spending hours re-running it.
+#
+# pg_restore --clean drops and replaces every table in the target database, so
+# it carries the same typed guard the Replay's own reset does: the compose file
+# says which deployment this is, not which database is worth keeping, and a
+# shell aimed at the wrong one passes every check that reads a file.
+replay-restore:
+	$(call header,Restoring the Frozen Replay)
+	@test "$$ANVESHAK_ALLOW_REPLAY_RESET" = "1" || { \
+		printf "  $(_FAIL) refusing to drop and replace every table\n"; \
+		printf "  This restore is destructive. Set ANVESHAK_ALLOW_REPLAY_RESET=1 to confirm.\n"; \
+		exit 1; }
+	@test -f "$(REPLAY_DUMP)" || { \
+		printf "  $(_FAIL) no frozen dump at %s - run: make replay-freeze after a Replay\n" \
+			"$(REPLAY_DUMP)"; exit 1; }
+	@$(COMPOSE) exec -T postgres pg_restore -U anveshak -d anveshak --clean --if-exists \
+		< "$(REPLAY_DUMP)"
+	$(call success,Frozen Replay restored)
 
 validate:
 	$(call header,Pipeline Validation)

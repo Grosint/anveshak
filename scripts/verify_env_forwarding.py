@@ -51,6 +51,11 @@ EXEMPT_VARS: dict[str, str] = {
     "ANVESHAK_DEMO_SUPERADMIN_PASSWORD": "host-only, read by scripts/seed_demo_org.py",
     "ANVESHAK_ALLOW_DEMO_SEED": "host-only opt-in for seeding demo accounts in production",
     "ANVESHAK_ALLOW_REPLAY_RESET": "host-only guard for scripts/replay_corpus.py --reset",
+    # The organisation a host-side run belongs to, read by the corpus import,
+    # the Replay, the Source rubric and the demonstration assertions. A service
+    # that read it would be a service scoping itself from a file rather than
+    # from the request, which is the opposite of how org scope works here.
+    "SEED_ORG_ID": "host-only default --org-id for the corpus, Replay and assertion scripts",
 }
 
 # Matches `FOO=` at the start of a line in a .env file.

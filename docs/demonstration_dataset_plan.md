@@ -1,7 +1,7 @@
 # Cockroach Janta Party dataset and demonstration plan
 
 Epic #39.
-Dataset sub-issues #40 and #52, whose code is on `feature/narrative_signal`, and #54, unstarted.
+Dataset sub-issues #40 and #52, whose code is on `feature/narrative_signal`, and #54, whose tooling is on the same branch and whose collection run has not been made.
 All three GitHub issues are still open.
 
 This document is written once and read at the start of every session that works on the dataset half of this epic.
@@ -13,6 +13,12 @@ Everything here is collection, configuration and a run, and the separation exist
 
 Vocabulary is in [CONTEXT.md](../CONTEXT.md).
 Operator documentation for the mechanisms this plan drives is in [replay.md](replay.md) and [corpus_format.md](corpus_format.md).
+The demonstration order is in [run_sheet.md](run_sheet.md).
+
+The machine-readable half of this plan is `infra/configs/corpora/cockroach_janta_party.yaml`.
+It carries the arc, the phases, the report points, the expected Signals and the collection targets, and it is read by `scripts/build_corpus.py` and by `scripts/assert_demo_run.py`.
+This document is the reasoning; that file is what the two programs agree on.
+Editing an expectation in it after a run that missed the expectation defeats the arrangement, so a miss is recorded in [tuning_history.md](tuning_history.md) instead.
 
 ---
 
@@ -154,18 +160,40 @@ Issues #40 and #52, both landed, plus Source creation.
 Exit criteria: no Signal in the seed that detection did not produce, asserted by `tests/unit/test_demo_seed_honesty.py`; every seeded content item carrying a Publication Time; two Watch Spaces seeded with no keyword naming the subject; and every Source created at a rubric baseline with an audit row.
 
 ### Phase 2 - Collection
+Not run.
+`scripts/build_corpus.py` collects the news layer through the archive Backfill route and merges the hand-placed layer, and it refuses to start until the collection targets in the plan file are pinned and every outlet has an `OUTLET_BACKFILL` entry.
+Both refusals are the point: a guessed channel identifier collects a copycat channel, and an unconfigured outlet discovers nothing and reads as an outlet that published nothing.
+The run itself reaches the public internet, so it happens on a machine where that is intended and after Phase 0's OPSEC decision, not on a demonstration host.
+
+The movement's video channel holds more videos than `YOUTUBE_BACKFILL_COUNT` defaults to, so the collection run raises it in the environment for that run: `YOUTUBE_BACKFILL_COUNT=200`.
+The service default stays where it is, because this is one collection rather than a new deployment-wide collection width.
+
 Exit criteria: the corpus covers all seven phases with no week empty, Publication Time present on every news item with the NULL count stated, and every Hindi item labelled in Hindi rather than as English.
 
 ### Phase 3 - Freeze
+The dump path is named in `.gitignore` by exact path: `/artifacts/replay/cockroach_janta_party.dump`.
+`make replay-freeze` writes it and `make replay-restore` reads it back, so a repeated demonstration restores in minutes rather than re-running the Replay for hours.
+Both read the path from the plan's `output.dump_file`, so it is stated once; `.gitignore` repeats it literally because it cannot read a YAML file.
+The restore drops and replaces every table, so it carries the same typed `ANVESHAK_ALLOW_REPLAY_RESET=1` guard the Replay's own reset does.
+The dump is the whole database, including the users table, which is what Phase 0's decision about whether the artifact may leave the build machine is about.
+
 Exit criteria: the corpus file committed, its item count and date histogram recorded here, and a dump path named in `.gitignore` by exact path.
 
 ### Phase 4 - Replay
+`--report-type` is repeatable, so one run produces both formats at each of the three report points.
+A second run for the other format would be a second reset, and the first run's reports would no longer exist to compare against.
+
 Exit criteria: 17 stages completed, exit code 0, per-stage counts recorded, and a reset plus re-run reproducing the first run's counts.
 
 ### Phase 5 - Reports
-Exit criteria: three Reports at the three reference dates, in both formats, with distinct `generated_at` values, each carrying its source snapshot.
+`make demo-assert` checks the three points in both formats, with distinct generation timestamps.
+
+Exit criteria: three Reports at the three reference dates, in both formats, each carrying its source snapshot, and the three report points distinct in `generated_at` within each format.
+The two formats at one point share a `generated_at`, because the Replay generates both at that stage's reference time: they are the same moment assessed twice, which is what rule 4 means by a point-in-time snapshot.
 
 ### Phase 6 - Run sheet
+Written, in [run_sheet.md](run_sheet.md), with its timings marked as estimates until the first execution corrects them.
+
 Exit criteria: the demonstration order written down, timed, and run once end to end by someone who did not build it.
 
 ---
@@ -178,7 +206,7 @@ After the Replay, assert against the database:
 1. A Candidate Topic was raised from a Watch Space and promoted.
 2. Signals of each expected type exist, with timestamps inside the phase the table above predicts.
 3. The Sentiment Timeline returns non-empty buckets across the arc, with a stated excluded count.
-4. Three Reports exist with distinct generation timestamps.
+4. Three report points exist in each format, distinct in generation time from each other.
 5. A reset plus re-run reproduces the first run's counts.
 
 Surfaces expected to be empty are asserted empty rather than quietly ignored: vision, deepfake and the geographic map, which a text corpus is not expected to populate.
@@ -186,12 +214,18 @@ An honest empty state is part of the demonstration, because it tells an evaluati
 
 Each assertion is made at a seam that already exists, so the run adds no new test mechanism:
 
+`make demo-assert` runs assertions 1 to 4 and the empty-surface checks against the database, reading the same plan file the corpus was built from.
+Assertion 5, a reset plus re-run reproducing the counts, is the Replay's own integration test.
+
 | Assertion | Seam | Prior art |
 |-----------|------|-----------|
 | Watch Spaces seeded, no keyword naming the subject | database, after seeding | `tests/integration/test_watch_space_seed.py`, `tests/unit/test_watch_space.py` |
 | Corpus imported, new against present against missing | ingest, against a real database | `tests/integration/test_corpus_import.py` |
 | Signals dated to their stage, reset plus re-run reproducing counts | database, after a Replay | `tests/integration/test_replay_driver.py` |
 | No Signal written by a seed script | seed honesty | `tests/unit/test_demo_seed_honesty.py` |
+| Expected Signals, promotion, timeline, report points, empty surfaces | database, after a Replay | `scripts/assert_demo_run.py`, `tests/unit/test_demo_run_assertions.py` |
+| The plan itself is answerable: no phase gap, no unknown Signal type | the plan file | `tests/unit/test_corpus_plan.py` |
+| An impostor domain, an uncited hand-placed item, an unconfigured outlet | the build | `tests/unit/test_build_corpus.py` |
 | Three Reports with distinct `generated_at` | reporter | existing Report immutability tests |
 
 ---
@@ -202,8 +236,13 @@ Each assertion is made at a seam that already exists, so the run adds no new tes
 |------|---------|
 | Seed a Watch Space | `uv run python scripts/seed_watch_space.py infra/configs/watch_spaces/youth_grievance.yaml` |
 | Apply Source baselines | `uv run python scripts/apply_source_rubric.py` |
+| See which collection targets are still unpinned | `make corpus-plan` |
+| Build the corpus | `make corpus-build` |
 | Import a corpus without staging | `uv run python scripts/import_corpus.py <corpus> --topic-id <uuid> --org-id <org>` |
-| Run the staged Replay | `uv run python scripts/replay_corpus.py <corpus> --topic-id <uuid> --org-id <org> --report-date ...` |
+| Run the staged Replay | `uv run python scripts/replay_corpus.py <corpus> --topic-id <uuid> --org-id <org> --report-date ... --report-type intelligence_brief --report-type research_summary` |
+| Assert the run against this plan | `make demo-assert`, or `make demo-assert TOPIC_ID=<uuid>` |
+| Freeze the result | `make replay-freeze` |
+| Restore a frozen run | `ANVESHAK_ALLOW_REPLAY_RESET=1 make replay-restore` |
 | Check the demonstration database | `make demo-check` |
 | Assert the seams above | `make test-integration` |
 

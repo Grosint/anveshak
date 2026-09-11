@@ -115,8 +115,14 @@ uv run python scripts/replay_corpus.py corpora/cjp.jsonl \
     --topic-id 1f2e... \
     --org-id org-demo \
     --report-date 2026-07-25 \
-    --report-date 2026-09-03
+    --report-date 2026-09-03 \
+    --report-type intelligence_brief \
+    --report-type research_summary
 ```
+
+`--report-type` is repeatable, and every requested format is generated at every report date, one at a time and awaited.
+Both formats have to come out of one run: a second run to collect the other format is a second reset, so the first run's reports would no longer exist to compare against.
+A format asked for twice is generated once, because a report is immutable once generated and the second is a duplicate row rather than a refreshed one.
 
 The database URL comes from the environment and never from a flag, because a DSN on argv is a password in `ps` output and in shell history.
 

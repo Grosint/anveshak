@@ -1,0 +1,225 @@
+# Cockroach Janta Party corpus plan - issue #54, epic #39.
+#
+# One file, read by three things: scripts/build_corpus.py collects against it,
+# scripts/assert_demo_run.py asserts the Replay against it, and a reviewer reads
+# it to see what the demonstration claims before the run produces anything.
+#
+# Expectations are recorded here BEFORE the run, which is what makes a Signal
+# that does not fire a finding rather than a threshold to tune away. Editing an
+# expectation after a run that missed it defeats the whole arrangement: record
+# the miss in docs/tuning_history.md instead.
+#
+# Nothing in this file names a Watch Space keyword. The Watch Spaces are in
+# infra/configs/watch_spaces/ and neither of them names this subject, because
+# the claim made to an evaluating officer is that the platform surfaced the
+# narrative unaided. Selecting a corpus by subject is corpus construction;
+# selecting a Watch Space by subject would be staging the result.
+
+name: Cockroach Janta Party
+issue: 54
+epic: 39
+
+# The arc runs from the Chief Justice remark on 15 May 2026 and the founding the
+# following day. It has a freeze date rather than an end, because the story is
+# still running. If the story moves before the demonstration, extend the corpus
+# and re-run the Replay from reset, never append to a run.
+start_date: 2026-05-15
+freeze_date: 2026-09-10
+
+languages:
+  # Marathi is collected because the movement's video channel publishes in it,
+  # and an item dropped at collection cannot be recovered at analysis time.
+  collected: [en, hi, mr]
+  # Analysis stays English and Hindi. Marathi content is collected, labelled and
+  # counted; the word counter already handles the script, so it is not silently
+  # read as zero words.
+  analysed: [en, hi]
+
+phases:
+  - number: 1
+    name: Founding
+    start: 2026-05-15
+    end: 2026-05-31
+    summary: A Chief Justice of India remark on 15 May, the movement founded the following day.
+  - number: 2
+    name: Online growth and the account block
+    start: 2026-06-01
+    end: 2026-06-30
+    summary: Growth online, and the block of the movement's primary social account for part of the period.
+  - number: 3
+    name: Street mobilization
+    start: 2026-07-01
+    end: 2026-07-19
+    summary: Street mobilization, calls to assemble.
+  - number: 4
+    name: The march and the police action
+    start: 2026-07-20
+    end: 2026-07-20
+    summary: The Sansad Chalo march and the police action.
+  - number: 5
+    name: The resignation
+    start: 2026-07-21
+    end: 2026-07-31
+    summary: The Education Minister resigned on 25 July.
+  - number: 6
+    name: Consolidation and counter-narrative
+    start: 2026-08-01
+    end: 2026-08-31
+    summary: Consolidation, counter-narrative and impersonation activity.
+  - number: 7
+    name: The split
+    start: 2026-09-01
+    end: 2026-09-10
+    summary: The split into a breakaway faction on 3 September. The outcome of the announced early September march is not established, and is treated as unverified rather than assumed either way.
+
+# Three points in the life of one narrative, each in both formats, so an
+# evaluating officer sees an assessment change rather than a snapshot.
+report_dates:
+  - 2026-05-29
+  - 2026-07-29
+  - 2026-09-08
+
+report_types:
+  - intelligence_brief   # the two page brief
+  - research_summary     # the full report, with the evidence appendix
+
+# The Replay's stage width, stated here because two programs need to agree on
+# it: the Replay stages the corpus by it, and the assertion run uses it to know
+# which window a report point's timestamp should land in. A run with
+# --stage-days other than this would otherwise mis-window every report point
+# and report a correct run as a failure.
+stage_days: 7
+
+# The prediction. The run is the measurement.
+expected_signals:
+  - phase: 1
+    signal_type: new_cluster
+    reasoning: Founding coverage forms a cluster nothing in the Topic matches.
+  - phase: 1
+    signal_type: threshold_crossed
+    reasoning: Founding coverage reaches three independent sources within the fortnight.
+  - phase: 2
+    signal_type: manufactured_narrative
+    reasoning: Item and account counts climb while the independent source count stays flat, which is what an account-driven growth phase looks like.
+  - phase: 2
+    signal_type: credibility_drop
+    reasoning: Partisan and anonymous sites carry claims the mainstream record contradicts.
+  - phase: 3
+    signal_type: mobilization_call
+    reasoning: Explicit calls to assemble, in Hindi destination idiom as well as English.
+  - phase: 4
+    signal_type: hostility_shift
+    reasoning: The march and the police action are the sharpest week in the arc on every measure.
+  - phase: 4
+    signal_type: mobilization_call
+    reasoning: Calls to assemble peak on the day of the march itself.
+  - phase: 4
+    signal_type: threshold_crossed
+    reasoning: Every outlet carries the police action.
+  - phase: 5
+    signal_type: threshold_crossed
+    reasoning: The resignation is carried by every outlet, so the independent source count peaks.
+  - phase: 6
+    signal_type: manufactured_narrative
+    reasoning: Impersonation and counter-messaging is amplification, not reporting.
+  - phase: 7
+    signal_type: new_cluster
+    reasoning: A split is a genuinely new narrative rather than a rediscovery of the parent, so it passes the novelty gate.
+
+# Asserted empty rather than quietly ignored. A text corpus is not expected to
+# populate these, and an honest empty state tells an evaluating officer what the
+# platform does not have. Deepfake scores live on vision_results, so the
+# deepfake surface is covered by the first entry rather than listed twice.
+#
+# The map is not listed. Location entities come from named entity recognition
+# over text, so a text corpus can legitimately populate the map, and asserting
+# it empty would fail on a correct run. It is shown in the run sheet and
+# described as what it is.
+empty_surfaces:
+  - vision_results
+  - media_assets
+
+collection:
+  # Six squatter domains imitating the official site are documented, so an
+  # impostor item entering the corpus is a correctness problem rather than a
+  # tidiness one. Both lists are filled from the verification pass before a
+  # build runs; an unpinned identifier stops the build rather than being
+  # guessed, because a guessed handle collects somebody else's content and
+  # attributes it to the movement.
+  #
+  # An empty impostor list is not "no squatters exist", it is a list nobody
+  # filled in, so the build refuses it rather than running with a filter that
+  # matches nothing.
+  canonical_domain: null
+  impostor_domains: []
+
+  # Subject selection for the news layer. Discovery returns everything an outlet
+  # published in the window, and these decide what is the movement's story.
+  # Reviewed as part of the corpus, because a term too broad manufactures the
+  # independent source count a Signal fires on.
+  keywords: []
+
+  news:
+    # Hosts whose history is collected through the archive Backfill route.
+    # Each host also needs an OUTLET_BACKFILL entry in the scraper, which is
+    # deny-by-default: the build refuses a host with no entry rather than
+    # discovering nothing and reporting an outlet with no history.
+    outlets: []
+
+  social:
+    youtube:
+      # The highest-velocity source in the inventory, publishing in Hindi,
+      # Marathi and English. The channel identifier is pinned because a swarm of
+      # copycat channels exists, all under one hundred subscribers.
+      channel_id: null
+      # The channel's video count exceeds the default backfill count, so the
+      # collection run raises YOUTUBE_BACKFILL_COUNT in the environment. The
+      # service default is not changed: this is one collection, not a new
+      # deployment-wide width.
+      backfill_count: 200
+    telegram:
+      # About one hundred and eighty thousand subscribers and roughly one
+      # hundred and forty messages in total: low volume, fully public.
+      channel: null
+    x:
+      # Only the handle linked from the official site. Reporting conflicts on
+      # which handle was blocked and later restored by court order, and no
+      # archive coverage exists for any of the candidates, so the blocked
+      # account is referred to as the cited article refers to it rather than
+      # asserted as a handle.
+      handle: null
+    instagram:
+      # The movement's centre of gravity by audience, but there is no API, the
+      # anti-scraping is aggressive, and every archive snapshot is a login
+      # redirect rather than content. Hand-placed only: the specific posts news
+      # coverage quotes with a date, each carrying the coverage it came from.
+      hand_placed: true
+    counter_narrative:
+      # A small slice from the two satire opposition accounts, both of which
+      # peaked in late May 2026 and are dormant. Material about the movement
+      # rather than by it, which is what user story 5 needs.
+      handles: []
+
+  # Hand-placed items, merged into the corpus by the build. Each one carries the
+  # reporting or archive it came from, or it is not placed: a hand-placed item
+  # without a citation is a fabricated timestamp inside a corpus that claims
+  # none.
+  hand_placed_files:
+    - corpora/cockroach_janta_party_hand_placed.jsonl
+
+  # Recorded so that an absence is a decision rather than an oversight.
+  not_collected:
+    - target: WhatsApp channel
+      reason: The official public channel is the largest owned audience, but collection requires the sidecar bridge. Deferred unless that bridge is specifically wanted on screen.
+    - target: Facebook page
+      reason: A page exists but is not linked from the official site and has no archive coverage. Treated as unconfirmed.
+    - target: Student wing accounts
+      reason: Search results assert a wing was founded, but a direct check of the encyclopaedia API finds no article and the movement's own article never mentions it. Excluded until a primary source surfaces.
+    - target: Breakaway faction accounts
+      reason: Reporting confirms enrolment by social media, messaging and a missed-call facility, but publishes no handle or number.
+
+# The Replay writes here, and the dump of the result is held outside version
+# control at the exact path named in .gitignore.
+output:
+  corpus_file: corpora/cockroach_janta_party.jsonl
+  dump_file: artifacts/replay/cockroach_janta_party.dump

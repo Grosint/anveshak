@@ -1,0 +1,21 @@
+# Cockroach Janta Party, hand-placed items. Issue #54.
+#
+# The layer of the corpus that has no historic route. The movement's primary
+# social account has no API, aggressive anti-scraping, and archive snapshots
+# that are login redirects rather than content, and the platform where the
+# account was blocked for part of the period leaves a gap in the account's own
+# timeline that the interface cannot be asked about.
+#
+# Every item here is a post that news coverage quotes with a date, and the
+# comment line above it names that coverage. scripts/build_corpus.py refuses an
+# item with no citation above it: an item without the reporting it came from is
+# a fabricated timestamp inside a corpus whose whole claim is that it
+# fabricates none.
+#
+# published_at_signal is cited_reporting for an item dated by the coverage, and
+# archive_capture for one dated by an archive snapshot. Both are weaker claims
+# than an outlet's own assertion, and the difference has to stay answerable
+# from the row.
+#
+# Format: docs/corpus_format.md. One JSON object per line, a citation comment
+# above each.

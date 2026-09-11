@@ -107,6 +107,7 @@ from anveshak.analyst.signal_engine import (  # noqa: E402
     check_template_signals,
 )
 from anveshak.clock import ClockSettings, describe_clock  # noqa: E402
+from anveshak.models.report import ReportType  # noqa: E402
 from anveshak.reporter.db import create_report_row  # noqa: E402
 
 from scripts.import_corpus import (  # noqa: E402
@@ -128,6 +129,10 @@ REPORTER_QUEUE = "arq:reporter"
 DEFAULT_STAGE_DAYS = 7
 
 DEFAULT_REPORT_TYPE = "intelligence_brief"
+# The formats a Replay may be asked for, named by the enum the reporter stores
+# rather than by a list kept here: a typo on the command line would otherwise
+# reach the worker and fail a report point hours into a run.
+REPORT_TYPES = tuple(member.value for member in ReportType)
 DEFAULT_REPORT_CREDIBILITY_MIN = 30.0
 
 # A stage's embedding wait. Generous: translation costs roughly 30s per article
@@ -841,6 +846,19 @@ class ReplaySummary:
         return tuple(report for result in self.stages for report in result.reports)
 
 
+def _unique(values: Sequence[str]) -> tuple[str, ...]:
+    """Order-preserving de-duplication of the requested report formats.
+
+    A format asked for twice is one artifact either way: rule 4 makes a report
+    immutable, so the second generation is a duplicate row rather than a
+    refreshed one, and it costs a language model run on CPU to produce.
+    """
+    seen: dict[str, None] = {}
+    for value in values:
+        seen.setdefault(value, None)
+    return tuple(seen)
+
+
 def _progress(stage: Stage, message: str) -> None:
     print(f"  [{stage.index}/{stage.total}] {stage.label}  {message}", flush=True)
 
@@ -854,7 +872,7 @@ async def run_stage(
     arq_pool: ArqRedis,
     corpus_start: datetime,
     embed: EmbedFn = wait_for_embeddings,
-    report_type: str = DEFAULT_REPORT_TYPE,
+    report_types: Sequence[str] = (DEFAULT_REPORT_TYPE,),
 ) -> StageResult:
     """Import one stage's items and run detection at that stage's clock."""
     summary = await import_corpus(
@@ -880,17 +898,20 @@ async def run_stage(
 
     reports: list[str] = []
     for report_date in stage.report_dates:
-        _progress(stage, f"generating the {report_date.isoformat()} report")
-        reports.append(
-            await generate_stage_report(
-                pool,
-                arq_pool,
-                topic_id=topic_id,
-                reference_time=stage.reference_time,
-                window_start=corpus_start,
-                report_type=report_type,
+        # One format at a time and awaited, for the reason the report point
+        # itself is awaited: concurrent generation on CPU times out.
+        for report_type in _unique(report_types):
+            _progress(stage, f"generating the {report_date.isoformat()} {report_type}")
+            reports.append(
+                await generate_stage_report(
+                    pool,
+                    arq_pool,
+                    topic_id=topic_id,
+                    reference_time=stage.reference_time,
+                    window_start=corpus_start,
+                    report_type=report_type,
+                )
             )
-        )
 
     return StageResult(
         stage=stage,
@@ -914,7 +935,7 @@ async def run_replay(
     stage_days: int = DEFAULT_STAGE_DAYS,
     report_dates: Iterable[date] = (),
     embed: EmbedFn = wait_for_embeddings,
-    report_type: str = DEFAULT_REPORT_TYPE,
+    report_types: Sequence[str] = (DEFAULT_REPORT_TYPE,),
     now: datetime | None = None,
     clock_settings: ClockSettings | None = None,
     allow_shared_host: bool = False,
@@ -958,7 +979,7 @@ async def run_replay(
             arq_pool=arq_pool,
             corpus_start=corpus_start,
             embed=embed,
-            report_type=report_type,
+            report_types=report_types,
         )
         _progress(
             stage,
@@ -995,7 +1016,7 @@ async def _run(args: argparse.Namespace) -> int:
             arq_pool=arq_pool,
             stage_days=args.stage_days,
             report_dates=args.report_dates,
-            report_type=args.report_type,
+            report_types=tuple(args.report_types) or (DEFAULT_REPORT_TYPE,),
             allow_shared_host=args.allow_shared_host,
         )
     except ReplayStageError as exc:
@@ -1055,8 +1076,14 @@ def main() -> int:
     )
     parser.add_argument(
         "--report-type",
-        default=DEFAULT_REPORT_TYPE,
-        help=f"Report type to generate (default: {DEFAULT_REPORT_TYPE}).",
+        dest="report_types",
+        action="append",
+        default=[],
+        choices=REPORT_TYPES,
+        help=(
+            "Report format to generate at every report date. Repeatable, so one "
+            f"run produces a report point in each format (default: {DEFAULT_REPORT_TYPE})."
+        ),
     )
     parser.add_argument(
         "--allow-shared-host",
