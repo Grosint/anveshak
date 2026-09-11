@@ -10,6 +10,7 @@ from anveshak.tracing import configure_tracing
 
 configure_logging("api")
 configure_tracing("api")
+from anveshak.source_rubric import load_rubric
 from arq import create_pool as arq_create_pool
 from arq.connections import RedisSettings
 from fastapi import FastAPI
@@ -57,6 +58,18 @@ async def lifespan(app: FastAPI):
 
     # ARQ pool — vision routes dispatch run_vision_analysis jobs via this
     app.state.arq_pool = await arq_create_pool(RedisSettings.from_dsn(settings.redis_url))
+
+    # Read the credibility rubric now (#51). It is read lazily on the first
+    # Source created, and a malformed file would otherwise surface as an
+    # opaque 500 on that request rather than as a container that refuses to
+    # start. The load logs the version, the criteria count and the path.
+    rubric = load_rubric()
+    log.info(
+        "source_rubric.ready",
+        version=rubric.version,
+        criteria=len(rubric.criteria),
+        outlets=len(rubric.outlets),
+    )
 
     # Pre-warm Ollama (prevents cold-start during demo)
     try:

@@ -10,10 +10,16 @@ from urllib.parse import urlparse
 import httpx
 import structlog
 from anveshak.db import DBConnection
+from anveshak.source_rubric import (
+    NEUTRAL_BASELINE,
+    creation_score,
+    load_rubric,
+    rubric_changed_by,
+)
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict
 
-from ..auth.rbac import get_user_org, is_super_admin, require_org_context, require_role
+from ..auth.rbac import is_super_admin, require_org_context, require_role
 from ..db import audit as audit_db
 from ..db import sources as sources_db
 from ..db.pool import get_db
@@ -43,7 +49,12 @@ class CreateSourceRequest(BaseModel):
     name: str
     url_or_handle: str
     platform: str  # web|telegram|twitter|reddit|bluesky|rss|upload|darkweb
-    credibility_score: float = 50.0
+    # None means the structural rubric decides, which is the ordinary case.
+    # A number states a score explicitly and overrides the rubric, including
+    # a number that happens to equal the neutral score: a client that sends
+    # 50 on every registration pins every outlet at neutral and the rubric
+    # never applies. Omit the field (#51, ADR 0004).
+    credibility_score: Optional[float] = None
     topic_id: Optional[str] = None  # if provided, auto-link source to this topic
     topic_ids: Optional[list[str]] = None  # link to multiple topics at creation
 
@@ -162,18 +173,53 @@ async def create_source(
 
     source_id = str(uuid.uuid4())
     now = datetime.now(UTC)
-    org_id = get_user_org(user)
-    await sources_db.insert_source(
-        db,
-        source_id,
-        req.name,
-        req.url_or_handle,
-        req.platform,
-        req.credibility_score,
-        now,
-        _LABELS_JSON,
-        org_id=org_id,
+    # Required rather than optional: sources.org_id and
+    # credibility_audit_log.org_id are both NOT NULL references to
+    # organizations, so a missing one is a 400 rather than a failed insert.
+    org_id = require_org_context(user)
+    rubric = load_rubric()
+    score, basis, declaration = creation_score(req.url_or_handle, stated=req.credibility_score)
+    if basis == "stated" and declaration is not None:
+        # An operator overriding an assessment that exists is a decision
+        # worth being able to find later, and it reads in the log exactly
+        # like an ordinary stated score unless it says so.
+        log.warning(
+            "sources.credibility_override",
+            url_or_handle=req.url_or_handle,
+            stated=score,
+            rubric_baseline=rubric.baseline_for(declaration.criteria_met),
+        )
+    log.info(
+        "sources.credibility_baseline",
+        url_or_handle=req.url_or_handle,
+        score=score,
+        basis=basis,
+        criteria_met=declaration.criteria_met if basis == "rubric" and declaration else [],
     )
+    async with db.transaction():
+        await sources_db.insert_source(
+            db,
+            source_id,
+            req.name,
+            req.url_or_handle,
+            req.platform,
+            score,
+            now,
+            _LABELS_JSON,
+            org_id=org_id,
+        )
+        if basis == "rubric" and declaration is not None:
+            await sources_db.log_creation_baseline(
+                db,
+                source_id,
+                neutral_score=NEUTRAL_BASELINE,
+                baseline=score,
+                reason=rubric.reason_for(declaration),
+                changed_by=rubric_changed_by(rubric.version),
+                now=now,
+                labels_json=_LABELS_JSON,
+                org_id=org_id,
+            )
     # Write initial health status
     await sources_db.update_source_health(db, source_id, initial_health, 0, health_error, now)
 

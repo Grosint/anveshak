@@ -8,9 +8,15 @@ from typing import Any, Optional
 
 import structlog
 from anveshak.db import DBConnection
+from anveshak.source_rubric import (
+    NEUTRAL_BASELINE,
+    creation_score,
+    load_rubric,
+    rubric_changed_by,
+)
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from ..auth.rbac import require_role
+from ..auth.rbac import require_org_context, require_role
 from ..db import catalog as catalog_db
 from ..db import sources as sources_db
 from ..db import topics as topics_db
@@ -20,6 +26,61 @@ log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["catalog"])
 
 _LABELS_JSON = '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}'
+
+
+async def _insert_with_baseline(
+    db: DBConnection,
+    *,
+    source_id: str,
+    name: str,
+    handle: str,
+    platform: str,
+    now: Any,
+    org_id: str,
+) -> None:
+    """Create a Source at its structural baseline, audited (#51, ADR 0004).
+
+    `org_id` is required, not optional: `sources.org_id` and
+    `credibility_audit_log.org_id` are both NOT NULL references to
+    organizations, so a default of None writes a row postgres refuses.
+
+    The score and its audit row are written together, the same way the
+    Source registration route writes them, so an approved catalog entry and
+    a hand-registered outlet leave the same trail.
+    """
+    score, basis, declaration = creation_score(handle)
+    rubric = load_rubric()
+    log.info(
+        "catalog.credibility_baseline",
+        url_or_handle=handle,
+        score=score,
+        basis=basis,
+        criteria_met=declaration.criteria_met if basis == "rubric" and declaration else [],
+    )
+    async with db.transaction():
+        await sources_db.insert_source(
+            db,
+            source_id=source_id,
+            name=name,
+            url_or_handle=handle,
+            platform=platform,
+            credibility_score=score,
+            now=now,
+            labels_json=_LABELS_JSON,
+            org_id=org_id,
+        )
+        if basis == "rubric" and declaration is not None:
+            await sources_db.log_creation_baseline(
+                db,
+                source_id,
+                neutral_score=NEUTRAL_BASELINE,
+                baseline=score,
+                reason=rubric.reason_for(declaration),
+                changed_by=rubric_changed_by(rubric.version),
+                now=now,
+                labels_json=_LABELS_JSON,
+                org_id=org_id,
+            )
 
 SQL_GET_TOPIC_KEYWORDS = "SELECT keywords FROM topics WHERE id = $1"
 SQL_GET_DISCOVERED = "SELECT * FROM discovered_sources WHERE id = $1 AND topic_id = $2"
@@ -89,15 +150,14 @@ async def approve_catalog_entry(
     source_id = str(uuid.uuid4())
     now = datetime.now(UTC)
 
-    await sources_db.insert_source(
+    await _insert_with_baseline(
         db,
         source_id=source_id,
         name=entry["name"],
-        url_or_handle=entry["url_or_handle"],
+        handle=entry["url_or_handle"],
         platform=entry["platform"],
-        credibility_score=50.0,
         now=now,
-        labels_json=_LABELS_JSON,
+        org_id=require_org_context(user),
     )
 
     # Link source to topic
@@ -179,15 +239,14 @@ async def approve_discovered_source(
     source_id = str(uuid.uuid4())
     now = datetime.now(UTC)
 
-    await sources_db.insert_source(
+    await _insert_with_baseline(
         db,
         source_id=source_id,
         name=row["domain_or_handle"],
-        url_or_handle=row["domain_or_handle"],
+        handle=row["domain_or_handle"],
         platform=row["platform"],
-        credibility_score=50.0,
         now=now,
-        labels_json=_LABELS_JSON,
+        org_id=require_org_context(user),
     )
 
     # Link to topic

@@ -203,6 +203,7 @@ services:
       TIMELINE_DAILY_BUCKET_MAX_DAYS: ${TIMELINE_DAILY_BUCKET_MAX_DAYS:-90}
       TIMELINE_CONSTRAINED_PLATFORMS: ${TIMELINE_CONSTRAINED_PLATFORMS:-["twitter","instagram"]}
       CONCERN_TAXONOMY_PATH: ${CONCERN_TAXONOMY_PATH:-/workspace/infra/configs/taxonomies/concern.yaml}
+      SOURCE_RUBRIC_PATH: ${SOURCE_RUBRIC_PATH:-/workspace/infra/configs/credibility/source_rubric.yaml}
       API_SECRET_KEY: ${API_SECRET_KEY}
       JWT_SECRET_KEY: ${API_SECRET_KEY}
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-480}
@@ -224,6 +225,11 @@ services:
     volumes:
       - vision_media:/app/media
       - reporter_output:/app/reports
+      # The credibility rubric is the customer's to edit (#51, ADR 0004).
+      # The image carries a copy so the container starts without the mount,
+      # and this makes an edit on the host the file the API reads. Read-only,
+      # and picked up on restart, since the loader caches it per process.
+      - ../infra/configs/credibility:/workspace/infra/configs/credibility:ro
     ports:
       - "8000:8000"
     depends_on:

@@ -1,0 +1,193 @@
+# Source credibility rubric - issue #51, ADR 0004.
+#
+# The score a Source is created at. It is a sum of points for structural
+# properties of the outlet, added to a neutral baseline. Movement away from
+# that number comes only from behaviour this platform observed, applied
+# through the audited drop and boost functions, so every change after
+# creation is a row in credibility_audit_log.
+#
+# Two rules govern every criterion in this file.
+#
+# 1. A criterion is a STRUCTURAL property a reviewer can check by opening
+#    the outlet's own pages. Not a judgement about its editorial line, not
+#    its politics, and not whether its conclusions are agreeable. Two
+#    outlets with opposing politics and the same structural properties get
+#    the same baseline. An evaluating officer is entitled to check that,
+#    and the tests in tests/unit/test_source_rubric.py hold it.
+#
+# 2. A criterion is worth a stated number of points and nothing else. The
+#    file is the whole basis of a baseline, so a customer asking why an
+#    outlet scores as it does can be shown this file and the outlet.
+#
+# A criterion that delegated the judgement to a third party, such as
+# membership of an external code of practice, was considered and left out.
+# It is not checkable on the outlet's pages, the admission rules belong to
+# a body the customer does not own or version, and in the Indian outlet
+# landscape that membership is not politically inert.
+#
+# `exclusive_with` names the criteria that cannot be true of the same
+# outlet. An outlet either carries bylines or it does not, and a
+# declaration naming both halves is refused rather than averaged into a
+# baseline that reads like a considered middle.
+#
+# The criteria are drafted by the vendor and handed to the customer to own,
+# edit and version, because assessing outlets is an editorial act and it
+# belongs to the agency accountable for it.
+#
+# The `outlets` list is the per-outlet assessment. It ships empty: an
+# assessment invented by the vendor for outlets it has not reviewed would
+# be exactly the unaccountable scoring this rubric exists to replace. An
+# outlet absent from the list has no structural baseline and its Sources
+# are created at the neutral score, which is logged rather than silent.
+
+version: 1
+updated: 2026-09-11
+owner: customer
+
+# Where an outlet meeting no criterion sits. Neutral, and the value a
+# Source was created with before this rubric existed, so an undeclared
+# outlet is unaffected by introducing it.
+baseline: 50.0
+
+# The points are scaled so that no combination of them reaches either end of
+# the range: an outlet meeting every positive criterion starts at 84, and one
+# meeting every negative at 12. That headroom belongs to behaviour. A
+# structural baseline that pinned a Source at 100 would leave the
+# cross-verification boost nothing to add, and one that pinned it at 0 would
+# make every later drop invisible. An invariant test holds the margin.
+
+criteria:
+  # --- Accountability: is there someone answerable for what is published?
+  - id: named_editorial_responsibility
+    label: Named editorial responsibility
+    points: 7
+    test: >
+      The masthead or an imprint page names an editor or an equivalent
+      responsible person, and gives a postal address and a working contact
+      address. Checked by opening the page.
+    exclusive_with: [anonymous_ownership, unidentifiable_operator]
+
+  - id: ownership_disclosed
+    label: Ownership disclosed
+    points: 4
+    test: >
+      The owning entity is stated on the site or in a public filing the site
+      points to. An outlet owned by a political party meets this criterion
+      by saying so; the criterion is the disclosure, not the owner.
+    exclusive_with: [anonymous_ownership]
+
+  - id: registered_publishing_entity
+    label: Registered publishing entity
+    points: 2
+    test: >
+      A legal entity publishes the outlet and can be identified from a
+      public register.
+    exclusive_with: [anonymous_ownership]
+
+  # --- Attribution: can a claim be traced to a person and a place?
+  - id: bylines_on_items
+    label: Bylines on items
+    points: 4
+    test: >
+      Items routinely carry a named author rather than only a desk name or
+      no author at all.
+    exclusive_with: [no_named_authors]
+
+  - id: dateline_and_publication_date
+    label: Dateline and publication date
+    points: 5
+    test: >
+      Items carry a publication date, and reported items carry the place
+      they were reported from.
+
+  - id: original_reporting
+    label: Original reporting
+    points: 4
+    test: >
+      The outlet publishes reporting of its own rather than only
+      republishing other outlets and wire copy.
+    exclusive_with: [unattributed_republication]
+
+  # --- Correction: does the outlet have a mechanism for being wrong?
+  - id: corrections_policy_published
+    label: Corrections policy published
+    points: 5
+    test: >
+      A corrections or clarifications policy is published, with a route to
+      request one, and corrections appear against the items they correct.
+    exclusive_with: [no_corrections_mechanism]
+
+  # --- Separation: is paid and opinion material marked as such?
+  - id: opinion_and_sponsorship_labelled
+    label: Opinion and sponsorship labelled
+    points: 3
+    test: >
+      Opinion is visibly separated from reporting, and paid or sponsored
+      material is labelled as paid or sponsored.
+    exclusive_with: [undisclosed_paid_content]
+
+  # --- Absences. A penalty is the absence of a checkable property, never a
+  # --- position the outlet holds.
+  - id: anonymous_ownership
+    label: Anonymous ownership
+    points: -8
+    test: >
+      Neither the owning entity nor a responsible person can be identified
+      from the outlet or from a public register.
+    exclusive_with: [ownership_disclosed, named_editorial_responsibility, registered_publishing_entity]
+
+  - id: no_named_authors
+    label: No named authors
+    points: -6
+    test: >
+      Items are published with no author, or only ever with a desk name.
+    exclusive_with: [bylines_on_items]
+
+  - id: no_corrections_mechanism
+    label: No corrections mechanism
+    points: -6
+    test: >
+      There is no published route to request a correction, and no
+      corrections appear.
+    exclusive_with: [corrections_policy_published]
+
+  - id: undisclosed_paid_content
+    label: Undisclosed paid content
+    points: -8
+    test: >
+      Paid or sponsored material is presented as ordinary reporting, shown
+      by the same item appearing as paid elsewhere or by a disclosure made
+      after publication.
+    exclusive_with: [opinion_and_sponsorship_labelled]
+
+  - id: unattributed_republication
+    label: Unattributed republication
+    points: -4
+    test: >
+      Wire copy or another outlet's reporting is published as the outlet's
+      own, without attribution.
+    exclusive_with: [original_reporting]
+
+  - id: unidentifiable_operator
+    label: Unidentifiable operator
+    points: -6
+    test: >
+      For a channel or an account rather than a publication: the operator
+      cannot be identified from the channel itself or from a linked site.
+    exclusive_with: [named_editorial_responsibility]
+
+# Per-outlet assessments, owned and reviewed by the customer.
+#
+# Each entry is:
+#
+#   - handle: https://example.in/feed   # matches sources.url_or_handle
+#     name: Example Outlet
+#     criteria_met:
+#       - named_editorial_responsibility
+#       - bylines_on_items
+#     note: who assessed it, when, and anything a reviewer should know
+#
+# A handle appearing twice is refused, and a criterion this file does not
+# define is refused, rather than being skipped into a score that still
+# looks considered.
+outlets: []

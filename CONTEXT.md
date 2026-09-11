@@ -10,6 +10,8 @@ Terms used across the codebase and product. Canonical meanings only — no imple
 
 **Source** — A feed, channel, or account that produces content. Global entity (an RSS feed is the same feed regardless of who monitors it). Linked to topics via `topic_sources`. Has credibility score and health status.
 
+**Structural baseline** — The credibility score a Source is created at, summed from verifiable properties of the outlet rather than from a view about its politics. Configured in `infra/configs/credibility/source_rubric.yaml`. Everything after creation is behavioural and audited. See ADR 0004.
+
 **Content Item** — A single scraped artifact: article, post, message, image. Always belongs to one source and one topic. Carries `content_hash` for dedup, `credibility_score_at_capture` for audit. The atomic unit of evidence.
 
 **Narrative Cluster** — A group of content items about the same emerging story, detected via embedding similarity (Leiden). Has a label, independent source count (ISC), and growth rate. Clusters are topic-scoped.

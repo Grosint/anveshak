@@ -52,6 +52,9 @@ COPY infra/configs/geocoder/custom_locations.json /workspace/infra/configs/geoco
 # Concern taxonomy (#36). The analyst scores against it and the API
 # filters by it, so both images carry it.
 COPY infra/configs/taxonomies/concern.yaml /workspace/infra/configs/taxonomies/concern.yaml
+# Source credibility rubric (#51). The API creates Sources, so it computes
+# the structural baseline a Source starts at.
+COPY infra/configs/credibility/source_rubric.yaml /workspace/infra/configs/credibility/source_rubric.yaml
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1

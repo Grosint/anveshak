@@ -57,6 +57,7 @@ import asyncpg
 import structlog
 from anveshak.social.adapters.base import RawItem
 from anveshak.social.ingest import ingest_raw_item
+from anveshak.source_rubric import creation_score
 from arq import create_pool
 from arq.connections import ArqRedis, RedisSettings
 
@@ -88,11 +89,11 @@ REQUIRED_ITEM_KEYS = frozenset({"url", "text", "source"})
 SOURCE_KEYS = frozenset({"handle", "name", "platform", "credibility_score"})
 REQUIRED_SOURCE_KEYS = frozenset({"handle", "name", "platform"})
 
-# The credibility a Source is created with when the corpus states none. Matches
-# the Watch Space seeder, and is only ever applied at creation: a Source that
-# already exists keeps its score, because changing one is an audited event
-# (architectural rule 8) and an import is not an assessment.
-DEFAULT_CREDIBILITY = 50.0
+# The score a Source is created at comes from anveshak.source_rubric: the
+# corpus value when it states one, the structural baseline when the rubric
+# declares the outlet, and the neutral score otherwise. It is only ever
+# applied at creation, because changing an existing score is an audited
+# event (architectural rule 8) and an import is not an assessment.
 
 # A credibility score is a percentage everywhere else in the system, and the
 # column has no CHECK constraint to catch a value that is not. A score outside
@@ -434,6 +435,26 @@ def _source_labels(org_id: str) -> str:
     return json.dumps({"classification": "OPEN", "domain": "osint", "owner_org": org_id})
 
 
+def _creation_score(handle: str, source: CorpusSource) -> float:
+    """The score a Source is created at, logged with its basis.
+
+    A corpus that states a score keeps it, since an operator who wrote one
+    meant it. Otherwise the structural rubric decides, and an outlet nobody
+    has assessed falls to the neutral score. Which of the three happened is
+    logged, because a Source quietly created at the neutral score looks
+    identical to one assessed as ordinary (issue #51, ADR 0004).
+    """
+    score, basis, declaration = creation_score(handle, stated=source.credibility_score)
+    log.info(
+        "corpus.source_score",
+        handle=handle,
+        score=score,
+        basis=basis,
+        criteria_met=declaration.criteria_met if basis == "rubric" and declaration else [],
+    )
+    return score
+
+
 async def ensure_sources(
     pool: asyncpg.Pool,
     items: Sequence[CorpusItem],
@@ -477,9 +498,7 @@ async def ensure_sources(
                     source.name,
                     handle,
                     source.platform,
-                    source.credibility_score
-                    if source.credibility_score is not None
-                    else DEFAULT_CREDIBILITY,
+                    _creation_score(handle, source),
                     org_id,
                     datetime.now(UTC),
                     _source_labels(org_id),

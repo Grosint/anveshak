@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import Any, Optional
 
 from anveshak.db import DBConnection
@@ -192,6 +193,44 @@ async def insert_source(
         True,
         True,
         now,
+        now,
+        labels_json,
+        org_id,
+    )
+
+
+async def log_creation_baseline(
+    conn: DBConnection,
+    source_id: str,
+    *,
+    neutral_score: float,
+    baseline: float,
+    reason: str,
+    changed_by: str,
+    now: Any,
+    labels_json: str,
+    org_id: Optional[str],
+) -> None:
+    """Record why a Source was created away from the neutral score (#51).
+
+    Creation is not a change, so rule 8 does not require this. It is written
+    anyway: without it the only record of why a Source starts at 68 is a log
+    line, and the audit log an analyst opens to answer a challenge would be
+    empty for every Source the rubric placed.
+
+    `old_score` is the neutral score the Source would have been created at,
+    because that is what the baseline moved it from.
+
+    Caller MUST call this inside an open transaction, alongside the insert.
+    """
+    await conn.execute(
+        SQL_INSERT_CREDIBILITY_AUDIT,
+        str(uuid.uuid4()),
+        source_id,
+        neutral_score,
+        baseline,
+        reason,
+        changed_by,
         now,
         labels_json,
         org_id,

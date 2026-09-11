@@ -4,6 +4,7 @@ import { Modal } from '../ui/Modal'
 import { Button } from '../ui/Button'
 import { CreateSourcePayload, Platform } from '../../api/sources'
 import { topicsApi, Topic } from '../../api/topics'
+import { apiErrorDetail } from '../../lib/apiError'
 
 const PLATFORMS: { value: Platform; label: string }[] = [
   { value: 'web',      label: 'Web (URL)' },
@@ -25,6 +26,10 @@ export function AddSourceModal({ open, onClose, onSubmit }: AddSourceModalProps)
   const [name, setName]             = useState('')
   const [handle, setHandle]         = useState('')
   const [platform, setPlatform]     = useState<Platform>('web')
+  // The structural rubric sets the score unless an analyst overrides it.
+  // Sending a number on every registration meant the rubric never applied
+  // to a Source added through the workbench (#51, ADR 0004).
+  const [overrideCredibility, setOverrideCredibility] = useState(false)
   const [credibility, setCredibility] = useState(50)
   const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
@@ -46,14 +51,14 @@ export function AddSourceModal({ open, onClose, onSubmit }: AddSourceModalProps)
         name: name.trim(),
         url_or_handle: handle.trim(),
         platform,
-        credibility_score: credibility,
+        ...(overrideCredibility ? { credibility_score: credibility } : {}),
         ...(selectedTopicIds.length > 0 ? { topic_ids: selectedTopicIds } : {}),
       })
-      setName(''); setHandle(''); setPlatform('web'); setCredibility(50); setSelectedTopicIds([])
+      setName(''); setHandle(''); setPlatform('web'); setCredibility(50)
+      setOverrideCredibility(false); setSelectedTopicIds([])
       onClose()
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(detail ?? 'Failed to add source.')
+      setError(apiErrorDetail(err, 'Failed to add source.'))
     } finally {
       setSubmitting(false)
     }
@@ -71,7 +76,7 @@ export function AddSourceModal({ open, onClose, onSubmit }: AddSourceModalProps)
         </>
       }
     >
-      <form id="add-source-form" onSubmit={handleSubmit} className="space-y-4" noValidate>
+      <form id="add-source-form" onSubmit={(e) => { void handleSubmit(e) }} className="space-y-4" noValidate>
         <div>
           <label htmlFor="src-name" className="block text-xs font-medium text-text-secondary mb-1.5">
             Source name <span className="text-signal-high">*</span>
@@ -115,22 +120,40 @@ export function AddSourceModal({ open, onClose, onSubmit }: AddSourceModalProps)
         </div>
 
         <div>
-          <label htmlFor="src-cred" className="block text-xs font-medium text-text-secondary mb-1.5">
-            Initial credibility score: <span className="text-anveshak-accent font-semibold">{credibility}</span>
+          <label className="flex items-center gap-2 text-xs font-medium text-text-secondary mb-1.5">
+            <input
+              type="checkbox"
+              checked={overrideCredibility}
+              onChange={(e) => setOverrideCredibility(e.target.checked)}
+              className="accent-anveshak-accent"
+            />
+            Set the initial credibility score by hand
           </label>
-          <input
-            id="src-cred"
-            type="range"
-            min={0}
-            max={100}
-            value={credibility}
-            onChange={(e) => setCredibility(Number(e.target.value))}
-            className="w-full accent-anveshak-accent"
-            aria-label={`Credibility score: ${credibility}`}
-          />
-          <div className="flex justify-between text-[10px] text-text-muted mt-1">
-            <span>0 (untrusted)</span><span>50</span><span>100 (trusted)</span>
-          </div>
+          {!overrideCredibility ? (
+            <p className="text-[11px] text-text-muted leading-relaxed">
+              The structural rubric sets it from the outlet&apos;s published properties.
+              An outlet the rubric does not cover starts at 50.
+            </p>
+          ) : (
+            <>
+              <label htmlFor="src-cred" className="block text-xs font-medium text-text-secondary mb-1.5">
+                Initial credibility score: <span className="text-anveshak-accent font-semibold">{credibility}</span>
+              </label>
+              <input
+                id="src-cred"
+                type="range"
+                min={0}
+                max={100}
+                value={credibility}
+                onChange={(e) => setCredibility(Number(e.target.value))}
+                className="w-full accent-anveshak-accent"
+                aria-label={`Credibility score: ${credibility}`}
+              />
+              <div className="flex justify-between text-[10px] text-text-muted mt-1">
+                <span>0 (untrusted)</span><span>50</span><span>100 (trusted)</span>
+              </div>
+            </>
+          )}
         </div>
 
         {topics.length > 0 && (

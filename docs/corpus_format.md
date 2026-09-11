@@ -82,6 +82,11 @@ Sources named by the corpus are created first, because the ingest path looks Sou
 A Source is global, so one another organisation already registered is reused rather than duplicated, and visibility runs through `org_sources`.
 A `credibility_score` in the corpus applies only when the Source is created: changing an existing score is an audited event (architectural rule 8), and an import is not an assessment.
 
+Omit it and the structural rubric decides instead, which is the ordinary case.
+Stating one overrides the rubric, including when the value equals the neutral score, so a corpus that sets `credibility_score: 50` on every source disables the rubric for all of them.
+The rubric scores an outlet on properties a reviewer can check on its own pages, and an outlet it does not declare is created at the neutral score with that fact logged.
+See [ADR 0004](adr/0004-source-credibility-rubric.md).
+
 Items are then ingested one at a time through `ingest_raw_item`, the function the social adapters call.
 Content hashing, labelling, organisation scoping, deduplication and the `analyse_content` dispatch therefore behave exactly as they do for collected content.
 

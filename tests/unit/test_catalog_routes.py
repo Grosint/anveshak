@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -15,6 +15,21 @@ LABELS_JSON = '{"classification":"OPEN","domain":"osint","owner_org":"anveshak"}
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _transactional_conn() -> AsyncMock:
+    """A connection whose `transaction()` is an async context manager.
+
+    Awaiting a plain AsyncMock attribute gives a coroutine, and `async with`
+    on a coroutine raises TypeError. The creation paths write the Source and
+    its baseline audit row in one transaction (#51).
+    """
+    conn = AsyncMock()
+    tx = MagicMock()
+    tx.__aenter__ = AsyncMock(return_value=None)
+    tx.__aexit__ = AsyncMock(return_value=None)
+    conn.transaction = MagicMock(return_value=tx)
+    return conn
 
 
 def _fake_catalog_row(**overrides):
@@ -74,7 +89,7 @@ async def test_catalog_suggestions_returns_list():
     """GET catalog-suggestions returns matching catalog entries."""
     from anveshak.api.routes.catalog import get_catalog_suggestions
 
-    mock_conn = AsyncMock()
+    mock_conn = _transactional_conn()
     mock_user = {"user_id": "test-user", "role": "analyst", "org_id": "org-test"}
 
     with (
@@ -97,7 +112,7 @@ async def test_catalog_suggestions_404_on_missing_topic():
     from anveshak.api.routes.catalog import get_catalog_suggestions
     from fastapi import HTTPException
 
-    mock_conn = AsyncMock()
+    mock_conn = _transactional_conn()
     mock_conn.fetchrow = AsyncMock(return_value=None)
     mock_user = {"user_id": "test-user", "role": "analyst"}
 
@@ -115,7 +130,7 @@ async def test_catalog_approve_creates_source_and_links():
     """POST catalog-approve creates a source, links to topic, records approval."""
     from anveshak.api.routes.catalog import approve_catalog_entry
 
-    mock_conn = AsyncMock()
+    mock_conn = _transactional_conn()
     mock_user = {"user_id": "test-user", "role": "analyst", "org_id": "org-test"}
 
     with (
@@ -151,7 +166,7 @@ async def test_catalog_approve_404_on_missing_entry():
     from anveshak.api.routes.catalog import approve_catalog_entry
     from fastapi import HTTPException
 
-    mock_conn = AsyncMock()
+    mock_conn = _transactional_conn()
     mock_user = {"user_id": "test-user", "role": "analyst"}
 
     with patch("anveshak.api.routes.catalog.catalog_db") as mock_catalog_db:
@@ -171,7 +186,7 @@ async def test_list_all_catalog_returns_entries():
     """GET /api/v1/catalog returns all catalog entries."""
     from anveshak.api.routes.catalog import list_catalog
 
-    mock_conn = AsyncMock()
+    mock_conn = _transactional_conn()
     mock_user = {"user_id": "test-user", "role": "admin"}
 
     with patch("anveshak.api.routes.catalog.catalog_db") as mock_db:
@@ -196,7 +211,7 @@ async def test_list_discovered_returns_sources():
     """GET discovered sources returns list for topic."""
     from anveshak.api.routes.catalog import list_discovered_sources
 
-    mock_conn = AsyncMock()
+    mock_conn = _transactional_conn()
     mock_user = {"user_id": "test-user", "role": "analyst", "org_id": "org-test"}
 
     with (
@@ -222,7 +237,7 @@ async def test_approve_discovered_creates_source():
     """POST approve discovered creates source and updates status."""
     from anveshak.api.routes.catalog import approve_discovered_source
 
-    mock_conn = AsyncMock()
+    mock_conn = _transactional_conn()
     mock_user = {"user_id": "test-user", "role": "analyst", "org_id": "org-test"}
 
     with (
@@ -258,7 +273,7 @@ async def test_dismiss_discovered_updates_status():
     """POST dismiss discovered sets status to dismissed."""
     from anveshak.api.routes.catalog import dismiss_discovered_source
 
-    mock_conn = AsyncMock()
+    mock_conn = _transactional_conn()
     mock_user = {"user_id": "test-user", "role": "analyst", "org_id": "org-test"}
 
     with (
