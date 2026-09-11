@@ -24,6 +24,7 @@ import structlog
 from anveshak.clock import (
     ClockOverrideRefusedError,
     ClockSettings,
+    live_detection_suspended,
     log_clock_startup,
     parse_reference_time,
     resolve_reference_time,
@@ -623,6 +624,15 @@ async def check_scheduled_reports(ctx: dict) -> None:
     last report was generated for that topic.
     """
     pool = ctx["db"]
+
+    suspended = live_detection_suspended()
+    if suspended:
+        # A Replay host generates its reports at each stage's reference time,
+        # one at a time. A cron report here would be dated today from a corpus
+        # only partly loaded, and would compete for the CPU the Replay's own
+        # generation is waiting on. See issue #47.
+        log.info("reporter.scheduled_reports.suspended", reason=suspended)
+        return
 
     now = datetime.now(UTC)
     async with pool.acquire() as conn:

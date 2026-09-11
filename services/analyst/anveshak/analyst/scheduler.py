@@ -26,7 +26,7 @@ from pathlib import Path
 import asyncpg
 import structlog
 import uvicorn
-from anveshak.clock import ClockSettings
+from anveshak.clock import live_detection_suspended
 from anveshak.logging import configure_logging
 from anveshak.tracing import configure_tracing
 from arq import ArqRedis
@@ -319,6 +319,15 @@ async def get_prioritized_topics(pool: asyncpg.Pool) -> list[dict]:
 
 async def content_retention_loop(pool: asyncpg.Pool) -> None:
     """Daily loop: archive old clustered items, then delete from DB."""
+    suspended = live_detection_suspended()
+    if suspended:
+        # Retention measures Capture Time against the wall clock and then
+        # DELETES. A Replay imports with a Capture Time months in the past, so
+        # the first tick of this loop would archive and delete the corpus the
+        # Replay was run to produce. See issue #47.
+        log.info("scheduler.content_retention.suspended", reason=suspended)
+        return
+
     while True:
         await asyncio.sleep(86400)  # daily
         try:
@@ -333,26 +342,18 @@ async def cluster_loop(pool: asyncpg.Pool, redis: ArqRedis) -> None:
     After clustering, enqueues label generation and cross-verification
     to ARQ worker instead of calling Ollama inline.
     """
+    suspended = live_detection_suspended()
+    if suspended:
+        # Clustering here would also archive on wall-clock staleness, which a
+        # Replay's backdated cluster rows meet the moment they are written.
+        log.info("scheduler.cluster_loop.suspended", reason=suspended)
+        return
+
     while True:
         await asyncio.sleep(300)
         try:
             # Archive stale clusters before processing.
-            #
-            # Not on a deployment that can write backdated rows. Archival is
-            # staleness measured against the wall clock, and a Replay stage
-            # writes a cluster stamped months ago, which the very next tick
-            # would archive. Every downstream query filters archived_at IS
-            # NULL, so the clusters would form and then no Signal would fire,
-            # with nothing to say why. See ADR 0003.
-            if ClockSettings().virtual_clock_enabled:
-                log.info(
-                    "scheduler.cluster_archival.disabled",
-                    reason=(
-                        "VIRTUAL_CLOCK_ENABLED is true, so cluster rows may carry "
-                        "a past reference time that wall-clock staleness would archive"
-                    ),
-                )
-            elif settings.cluster_archive_after_days > 0:
+            if settings.cluster_archive_after_days > 0:
                 async with pool.acquire() as conn:
                     archived = await conn.execute(
                         SQL_ARCHIVE_OLD_CLUSTERS,
@@ -412,12 +413,24 @@ async def cluster_loop(pool: asyncpg.Pool, redis: ArqRedis) -> None:
 
 async def signal_check_loop(pool: asyncpg.Pool) -> None:
     """Check if any clusters cross topic.signal_threshold -> fire Signal (criteria 2.11)."""
+    suspended = live_detection_suspended()
+    if suspended:
+        # A Replay fires its own Signals at each stage's reference time, by
+        # calling the detectors directly. See ADR 0003 and issue #47.
+        log.info("scheduler.signal_check_loop.suspended", reason=suspended)
+        return
+
     await signal_engine_loop(pool, _noop_broadcast)
 
 
 async def convergence_loop(pool: asyncpg.Pool) -> None:
     """Cross-topic cluster convergence detection (Phase 6 - P2b)."""
     from .convergence import check_cross_topic_convergence
+
+    suspended = live_detection_suspended()
+    if suspended:
+        log.info("scheduler.convergence_loop.suspended", reason=suspended)
+        return
 
     if settings.cross_topic_check_interval_s <= 0:
         log.info("scheduler.convergence_loop.disabled")

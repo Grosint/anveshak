@@ -195,10 +195,67 @@ def describe_clock(settings: ClockSettings) -> dict[str, object]:
     }
 
 
+def live_detection_suspended(settings: ClockSettings | None = None) -> str | None:
+    """Why a wall-clock detection pass must not run here, or None.
+
+    A deployment where a Replay can actually run writes detection rows dated
+    months ago. A live pass beside it writes rows dated today, and the two
+    corrupt each other silently.
+
+    The Signal dedup window is measured back from the pass's reference time and
+    has no upper bound, so one Signal fired today suppresses every stage Signal
+    for that cluster for the rest of the Replay. The Candidate Topic
+    persistence gate counts detection passes, so a live hourly pass promotes a
+    narrative the Replay's own stages never promoted. And a re-run after a reset
+    stops reproducing the first run, because the number of live passes that
+    landed between stages is a function of how long the operator took.
+
+    The same shape as the archival suspension ADR 0003 describes, for the same
+    reason: staleness and dedup are both wall-clock judgements about rows that
+    no longer carry wall-clock dates.
+
+    The test is the same one a Replay itself has to pass, both layers, not the
+    flag alone. A host with the flag set in an environment off the allowlist
+    refuses every override, so no Replay can run there and there is nothing to
+    protect; suspending live detection there would stop a production pipeline
+    over a stray flag and leave one INFO line to explain it.
+    """
+    try:
+        resolved = settings if settings is not None else ClockSettings()
+    except Exception as exc:
+        # A malformed clock configuration refuses every override too, so no
+        # Replay can be running here either. Stay live and say so, rather than
+        # stopping detection over a value nobody can act on from a log line.
+        log.warning(
+            "clock.settings_unreadable",
+            error=str(exc),
+            reason="live detection continues, since no Replay can run on this configuration",
+        )
+        return None
+
+    if describe_clock(resolved)["clock"] != "virtual":
+        return None
+    return (
+        f"{_FLAG} is true in environment {resolved.environment!r}, so this "
+        "deployment can write backdated detection output and a Replay may be "
+        "running. A wall-clock pass would date its rows today, and the Signal "
+        "dedup window a Replay stage measures back from a past reference time "
+        "would then suppress that stage's Signals. "
+        "See docs/adr/0003-virtual-clock.md and docs/replay.md."
+    )
+
+
 def log_clock_startup(settings: ClockSettings, service: str) -> None:
     """Log which clock is in use and why, at INFO, at startup.
 
     A capability that can date a Signal to a day it was not produced on
-    discloses itself before it is used, not only when it is.
+    discloses itself before it is used, not only when it is. So does the
+    consequence: on a Replay host every wall-clock detection pass is off, and
+    an analyst seeing no Signals needs that stated rather than inferred.
     """
-    log.info("clock.mode_selected", service=service, **describe_clock(settings))
+    log.info(
+        "clock.mode_selected",
+        service=service,
+        live_detection="suspended" if live_detection_suspended(settings) else "running",
+        **describe_clock(settings),
+    )

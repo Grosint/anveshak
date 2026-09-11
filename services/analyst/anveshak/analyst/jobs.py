@@ -12,7 +12,12 @@ from datetime import UTC, datetime
 import arq
 import asyncpg
 import structlog
-from anveshak.clock import ClockSettings, log_clock_startup, parse_reference_time
+from anveshak.clock import (
+    ClockSettings,
+    live_detection_suspended,
+    log_clock_startup,
+    parse_reference_time,
+)
 from anveshak.llm import LLMProviderSettings, log_provider_startup
 from anveshak.logging import configure_logging
 from anveshak.tracing import configure_tracing
@@ -437,6 +442,23 @@ async def analyse_content(ctx: dict, content_item_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _live_pass_skipped(job: str, reference_time: str | None) -> bool:
+    """True when this dispatch is a live pass on a deployment running a Replay.
+
+    A cron dispatch carries no reference time, and that is what identifies it.
+    On a Replay host it would write detection output dated today beside stages
+    dated months ago, so it is skipped and says so. A stage's own dispatch
+    carries a reference time and always runs. See issue #47.
+    """
+    if reference_time is not None:
+        return False
+    suspended = live_detection_suspended()
+    if suspended is None:
+        return False
+    log.info("jobs.live_pass_skipped", job=job, reason=suspended)
+    return True
+
+
 async def run_clustering(ctx: dict, topic_id: str, reference_time: str | None = None) -> None:
     """Leiden clustering for a topic (criteria 2.1–2.5).
 
@@ -507,6 +529,8 @@ async def detect_candidate_topics_job(ctx: dict, reference_time: str | None = No
     on every live dispatch. See ADR 0003.
     """
     db_pool: asyncpg.Pool = ctx["db_pool"]
+    if _live_pass_skipped("detect_candidate_topics", reference_time):
+        return 0
     written = await detect_candidate_topics(
         db_pool, reference_time=parse_reference_time(reference_time)
     )
@@ -540,6 +564,8 @@ async def update_source_credibility(ctx: dict, reference_time: str | None = None
     See ADR 0003.
     """
     db_pool: asyncpg.Pool = ctx["db_pool"]
+    if _live_pass_skipped("update_source_credibility", reference_time):
+        return
     await run_credibility_update(db_pool, reference_time=parse_reference_time(reference_time))
     log.info("jobs.update_source_credibility.done")
 
@@ -584,6 +610,8 @@ async def run_contradiction_scoring(ctx: dict, reference_time: str | None = None
     dispatchable by a Replay stage with a reference_time. See ADR 0003.
     """
     db_pool: asyncpg.Pool = ctx["db_pool"]
+    if _live_pass_skipped("run_contradiction_scoring", reference_time):
+        return
     updated = await run_contradiction_update(
         db_pool, reference_time=parse_reference_time(reference_time)
     )

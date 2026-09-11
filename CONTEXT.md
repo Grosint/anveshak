@@ -66,6 +66,7 @@ A Backfill's Capture Times are all the day it was loaded; its Publication Times 
 **Replay** - Ingesting a Backfill in chronological stages rather than as one load, running detection between stages.
 Detection then unfolds in the order the story did, so a cluster grows, a baseline forms, and a shift is measured against what preceded it.
 A single bulk load produces the same end state with none of the history that makes it meaningful.
+See [docs/replay.md](docs/replay.md).
 
 **Reference Time** - The moment a detection pass treats as now.
 Defaults to the current time, so live detection is unaffected, and is set to a stage's date during a Replay so that a Signal carries the date its evidence existed.
