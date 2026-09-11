@@ -8,8 +8,17 @@
  * interface but a component still reads it, TypeScript catches it at build.
  * These tests catch the RUNTIME case: mock factories returning wrong shapes.
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { makeSignal, makeTopic, makeSource, makeContentItem, makeReport } from '../factories'
+import { reportsApi, type CreateReportPayload } from '../../api/reports'
+
+const mockPost = vi.hoisted(() => vi.fn())
+
+vi.mock('../../api/client', () => ({
+  default: { post: mockPost, get: vi.fn() },
+}))
+
+beforeEach(() => mockPost.mockReset())
 
 describe('Signal shape contract', () => {
   it('has all fields accessed by SignalCard', () => {
@@ -126,6 +135,50 @@ describe('Report shape contract', () => {
   it('generation_status is a valid value', () => {
     const report = makeReport()
     expect(['queued', 'complete', 'failed']).toContain(report.generation_status)
+  })
+
+  it('carries the window it covers, so the report is self-describing', () => {
+    const report = makeReport()
+    expect(report).toHaveProperty('time_window_start')
+    expect(report).toHaveProperty('time_window_end')
+    expect(Number.isNaN(new Date(report.time_window_start).getTime())).toBe(false)
+    expect(Number.isNaN(new Date(report.time_window_end).getTime())).toBe(false)
+  })
+
+  it('posts an absolute window unchanged to the reports endpoint', async () => {
+    // The backend treats time_window_start/end as the explicit window and
+    // time_window_hours as the fallback, so both shapes must reach it intact.
+    mockPost.mockResolvedValue({ data: { report_id: 'rpt-1', status: 'queued', arq_job_id: null } })
+
+    const absolute: CreateReportPayload = {
+      topic_id: 'topic-1',
+      report_type: 'intelligence_brief',
+      time_window_start: '2026-01-01T00:00:00.000Z',
+      time_window_end: '2026-04-30T23:59:59.000Z',
+      credibility_min: 30,
+    }
+    await reportsApi.create(absolute)
+
+    expect(mockPost).toHaveBeenCalledWith('/api/v1/reports', absolute)
+    const [, body] = mockPost.mock.calls[0]
+    expect(body.time_window_hours).toBeUndefined()
+  })
+
+  it('posts a lookback window unchanged to the reports endpoint', async () => {
+    mockPost.mockResolvedValue({ data: { report_id: 'rpt-2', status: 'queued', arq_job_id: null } })
+
+    const lookback: CreateReportPayload = {
+      topic_id: 'topic-1',
+      report_type: 'intelligence_brief',
+      time_window_hours: 72,
+      credibility_min: 30,
+    }
+    await reportsApi.create(lookback)
+
+    expect(mockPost).toHaveBeenCalledWith('/api/v1/reports', lookback)
+    const [, body] = mockPost.mock.calls[0]
+    expect(body.time_window_start).toBeUndefined()
+    expect(body.time_window_end).toBeUndefined()
   })
 })
 

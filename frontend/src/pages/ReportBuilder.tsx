@@ -13,17 +13,32 @@ import { Badge } from '../components/ui/Badge'
 import { Spinner } from '../components/ui/Spinner'
 import { EmptyState } from '../components/ui/EmptyState'
 import { format, formatDistanceToNow } from 'date-fns'
+import { resolveTimeRange } from '../lib/domain'
 
 // Lazy-load MapLibre so it only ships when the GIS tab opens (~700KB saved from initial bundle)
 const GeoMap = lazy(() => import('../components/map/GeoMap'))
 
 type Tab = 'report' | 'gis' | 'history' | 'schedules'
+type WindowMode = 'hours' | 'range'
+
+const WINDOW_MODES: { value: WindowMode; label: string }[] = [
+  { value: 'hours', label: 'Lookback' },
+  { value: 'range', label: 'Date range' },
+]
 
 const REPORT_TYPES: { value: ReportType; label: string; description: string }[] = [
   { value: 'intelligence_brief',  label: 'Intelligence Brief',  description: '1–3 page executive summary' },
   { value: 'research_summary',    label: 'Research Summary',    description: 'Deep-dive, all entities, timeline' },
   { value: 'weekly_digest',       label: 'Weekly Digest',       description: 'Aggregated 7-day summary' },
 ]
+
+/** YYYY-MM-DD in UTC, the form the native date input expects. */
+function isoDate(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
+
+/** Default span of the prefilled range, matching the old 72h lookback default. */
+const DEFAULT_RANGE_DAYS = 3
 
 function ConfidenceBadge({ score }: { score: number | null }) {
   if (score === null) return null
@@ -35,7 +50,12 @@ function ConfidenceBadge({ score }: { score: number | null }) {
 export default function ReportBuilder() {
   const [selectedTopicId, setSelectedTopicId] = useState('')
   const [reportType, setReportType]           = useState<ReportType>('intelligence_brief')
+  const [windowMode, setWindowMode]           = useState<WindowMode>('range')
   const [windowHours, setWindowHours]         = useState(72)
+  const [rangeFrom, setRangeFrom]             = useState(
+    () => isoDate(new Date(Date.now() - DEFAULT_RANGE_DAYS * 86_400_000)),
+  )
+  const [rangeTo, setRangeTo]                 = useState(() => isoDate(new Date()))
   const [credMin, setCredMin]                 = useState(30)
   const [currentReportId, setCurrentReportId] = useState<string | null>(null)
   const [activeTab, setActiveTab]             = useState<Tab>('report')
@@ -86,14 +106,32 @@ export default function ReportBuilder() {
     },
   })
 
+  // A report covers a window that has already happened, so no future dates.
+  const today = isoDate(new Date())
+
+  // An end date is inclusive of the whole day the analyst picked.
+  const rangeError = rangeFrom && rangeTo && rangeFrom > rangeTo
+    ? 'End date must be on or after the start date'
+    : null
+  const rangeReady = windowMode === 'hours' || (!!rangeFrom && !!rangeTo && !rangeError)
+
   async function handleGenerate() {
-    if (!selectedTopicId) return
-    await generate.mutateAsync({
+    if (!selectedTopicId || !rangeReady) return
+    const payload: CreateReportPayload = {
       topic_id: selectedTopicId,
       report_type: reportType,
-      time_window_hours: windowHours,
       credibility_min: credMin,
-    })
+    }
+    if (windowMode === 'range') {
+      // resolveTimeRange anchors both ends in UTC, so a picked date means the
+      // same window whatever timezone the analyst sits in.
+      const { since, until } = resolveTimeRange('custom', rangeFrom, rangeTo)
+      payload.time_window_start = since
+      payload.time_window_end   = until
+    } else {
+      payload.time_window_hours = windowHours
+    }
+    await generate.mutateAsync(payload)
   }
 
   const isGenerating = report?.generation_status === 'queued' || generate.isPending
@@ -168,20 +206,75 @@ export default function ReportBuilder() {
               </div>
             </div>
 
-            {/* Time window + credibility */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="window" className="block text-xs font-medium text-text-secondary mb-1.5">Time window (hours)</label>
-                <input
-                  id="window"
-                  type="number"
-                  min={1}
-                  max={720}
-                  value={windowHours}
-                  onChange={(e) => setWindowHours(Number(e.target.value))}
-                  className="w-full bg-anveshak-bg border border-anveshak-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-anveshak-accent"
-                />
+            {/* Reporting window */}
+            <div>
+              <p className="text-xs font-medium text-text-secondary mb-2">Reporting window</p>
+              <div className="inline-flex rounded border border-anveshak-border overflow-hidden mb-3">
+                {WINDOW_MODES.map((m) => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => setWindowMode(m.value)}
+                    aria-pressed={windowMode === m.value}
+                    className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                      windowMode === m.value
+                        ? 'bg-anveshak-accent/15 text-anveshak-accent'
+                        : 'text-text-muted hover:text-text-primary'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
               </div>
+
+              {windowMode === 'hours' ? (
+                <div>
+                  <label htmlFor="window" className="block text-xs font-medium text-text-secondary mb-1.5">Time window (hours)</label>
+                  <input
+                    id="window"
+                    type="number"
+                    min={1}
+                    max={720}
+                    value={windowHours}
+                    onChange={(e) => setWindowHours(Number(e.target.value))}
+                    className="w-full bg-anveshak-bg border border-anveshak-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-anveshak-accent"
+                  />
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="range-from" className="block text-xs font-medium text-text-secondary mb-1.5">From</label>
+                    <input
+                      id="range-from"
+                      type="date"
+                      value={rangeFrom}
+                      max={rangeTo || today}
+                      onChange={(e) => setRangeFrom(e.target.value)}
+                      className="w-full bg-anveshak-bg border border-anveshak-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-anveshak-accent"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="range-to" className="block text-xs font-medium text-text-secondary mb-1.5">To</label>
+                    <input
+                      id="range-to"
+                      type="date"
+                      value={rangeTo}
+                      min={rangeFrom || undefined}
+                      max={today}
+                      onChange={(e) => setRangeTo(e.target.value)}
+                      className="w-full bg-anveshak-bg border border-anveshak-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-anveshak-accent"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {rangeError && (
+                <p role="alert" className="text-xs text-signal-high mt-1.5">{rangeError}</p>
+              )}
+            </div>
+
+            {/* Credibility */}
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label htmlFor="cred-report" className="block text-xs font-medium text-text-secondary mb-1.5">Min. credibility</label>
                 <input
@@ -199,7 +292,7 @@ export default function ReportBuilder() {
             <Button
               onClick={handleGenerate}
               loading={generate.isPending}
-              disabled={!selectedTopicId || isGenerating}
+              disabled={!selectedTopicId || isGenerating || !rangeReady}
             >
               Generate report
             </Button>
@@ -226,6 +319,11 @@ export default function ReportBuilder() {
                     <span className="text-xs text-text-muted">
                       {report.generated_at && format(new Date(report.generated_at), 'dd MMM yyyy HH:mm')}
                     </span>
+                    {report.time_window_start && report.time_window_end && (
+                      <span className="text-xs text-text-muted">
+                        {`Covers ${format(new Date(report.time_window_start), 'dd MMM yyyy HH:mm')} - ${format(new Date(report.time_window_end), 'dd MMM yyyy HH:mm')}`}
+                      </span>
+                    )}
                     <Button
                       variant="secondary"
                       size="sm"

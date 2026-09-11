@@ -126,11 +126,48 @@ describe('ReportBuilder page', () => {
     })
   })
 
-  it('has time window and credibility inputs', async () => {
+  it('has date range and credibility inputs, and an hours input behind the lookback preset', async () => {
+    const user = userEvent.setup()
     renderWithProviders(<ReportBuilder />)
     await waitFor(() => {
-      expect(screen.getByLabelText(/time window/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/^from$/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/^to$/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/min.*credibility/i)).toBeInTheDocument()
     })
+
+    await user.click(screen.getByRole('button', { name: /lookback/i }))
+    expect(screen.getByLabelText(/time window/i)).toBeInTheDocument()
+  })
+})
+
+describe('ReportBuilder window mode', () => {
+  it('opens on date pickers and swaps them for the hours input in lookback mode', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<ReportBuilder />)
+
+    await waitFor(() => expect(screen.getByLabelText(/^from$/i)).toBeInTheDocument())
+    expect(screen.queryByLabelText(/time window/i)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /lookback/i }))
+
+    expect(screen.getByLabelText(/time window/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/^from$/i)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /date range/i }))
+
+    expect(screen.getByLabelText(/^from$/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/time window/i)).not.toBeInTheDocument()
+  })
+
+  it('prefills the range with a recent window, so a routine report stays one click', async () => {
+    renderWithProviders(<ReportBuilder />)
+
+    await waitFor(() => expect(screen.getByLabelText(/^from$/i)).toBeInTheDocument())
+
+    const from = screen.getByLabelText(/^from$/i) as HTMLInputElement
+    const to = screen.getByLabelText(/^to$/i) as HTMLInputElement
+    expect(from.value).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(to.value).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(from.value < to.value).toBe(true)
   })
 })
