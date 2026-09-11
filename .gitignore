@@ -175,6 +175,12 @@ media/
 exports/
 intel/
 corpus/
+# Blanket `corpus/` above is for collected OSINT, which never lands in git. Two
+# directories named corpus are source, not data: the benchmark fixtures and the
+# importer's sample corpus (docs/corpus_format.md). Re-include the directories
+# themselves, since git cannot re-include a file under an excluded directory.
+!benchmark/corpus/
+!tests/fixtures/corpus/
 
 
 # =============================================================================

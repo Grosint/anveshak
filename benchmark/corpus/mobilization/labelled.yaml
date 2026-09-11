@@ -1,0 +1,71 @@
+# Mobilization labelled set — issue #34.
+#
+# provenance: synthetic
+#
+# These are worked examples that exercise the harness. They are NOT the
+# labelled set the acceptance bars are measured on. That set is 100 to 200
+# examples drawn from public reporting of past events, and assembling it is
+# human work: examples invented by a model would measure the model against
+# its own priors. See README.md in this directory.
+
+provenance: synthetic
+version: 0
+examples:
+  # --- positives, English ---------------------------------------------
+  - text: "All are invited to join the gathering outside the collectorate on March 12 at 4pm."
+    language: en
+    is_call_to_assemble: true
+    expected_date: "2026-03-12"
+    expected_place: "the collectorate"
+  - text: "Everyone gather at Town Square tomorrow evening. Bring your families."
+    language: en
+    is_call_to_assemble: true
+    expected_date: null
+    expected_place: "Town Square"
+  - text: "Protest march to the district headquarters on March 15."
+    language: en
+    is_call_to_assemble: true
+    expected_date: "2026-03-15"
+    expected_place: null
+
+  # --- positives, Hindi -----------------------------------------------
+  - text: "सभी लोग कल सुबह कलेक्ट्रेट पर पहुंचें।"
+    language: hi
+    is_call_to_assemble: true
+    expected_date: null
+    expected_place: "कलेक्ट्रेट"
+  - text: "बंद का ऐलान किया गया है। सभी दुकानें बंद रहेंगी।"
+    language: hi
+    is_call_to_assemble: true
+    expected_date: null
+    expected_place: null
+
+  # --- hard negatives -------------------------------------------------
+  # Where a confirmation model earns or loses its precision: a report about
+  # a past gathering, an official meeting, and a petition rather than an
+  # assembly.
+  - text: "A large gathering was held outside the collectorate yesterday and dispersed peacefully."
+    language: en
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "The chief secretary will meet district officials on Friday to review the situation."
+    language: en
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "Sign the petition to have the order withdrawn."
+    language: en
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "पुलिस ने कहा कि कल की बैठक शांतिपूर्ण रही।"
+    language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "जिला प्रशासन ने स्थिति की समीक्षा की।"
+    language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
