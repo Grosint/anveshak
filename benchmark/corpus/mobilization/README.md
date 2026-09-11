@@ -52,6 +52,26 @@ let the benchmark say which.
 
     uv run python -m benchmark.mobilization --set benchmark/corpus/mobilization/labelled.yaml
 
+That measures the local confirmation model, which is the arm the acceptance
+bars are about.
+
+A change to the lexicon is measured on the same set and the same scorer,
+with `--arm lexicon`. That arm needs no model and no network, which is what
+makes it usable while confirmation is switched off:
+
+    uv run python -m benchmark.mobilization --arm lexicon
+
+Record the precision and recall before and after any vocabulary change in
+`docs/tuning_history.md`. Added recall must not cost precision.
+
+Measure the old version on the same set, not on the set it was written
+against, or the comparison says nothing. Point `MOBILIZATION_LEXICON_PATH`
+at a copy of the previous file and run the arm again.
+
+The arm resolves a relative date in the content against a pinned `--today`,
+and records the lexicon version it measured in the results file. It refuses
+to run against an empty lexicon rather than reporting zero as a result.
+
 Add `--compare-cloud` to measure the cloud model on the same set. That
 requires `LLM_CLOUD_ENABLED=true`, which is refused outside a development
 environment. See ADR 0002.

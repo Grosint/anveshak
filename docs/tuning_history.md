@@ -262,6 +262,70 @@ These are initial values set at Engine C launch. No tuning yet — baselines for
 
 ---
 
+## Mobilization Lexicon - Vocabulary Version
+
+**Parameter:** `version` in `infra/configs/lexicons/mobilization.yaml`
+**Change:** 1 -> **2**
+**Date:** 2026-09-11
+**Issue:** #50
+
+**Evidence:**
+- Version 1 had no pattern for the construction that names a destination and tells people to go there, in either script.
+That idiom names the largest mobilization event in the demonstration corpus, so the gap was visible on screen.
+- The absence indicated the list had been assembled English-first, so the sweep looked for other assembly idioms in the same class.
+- Fifteen patterns were added: five transliterated (`en_chalo`, `en_chalo_hashtag`, `en_kooch`, `en_human_chain`, `en_jail_bharo`)
+and ten Devanagari (`hi_chalo`, `hi_kooch`, `hi_gherao`, `hi_hartal`, `hi_upasthit`, `hi_shamil`, `hi_morcha_nikalna`,
+`hi_manav_shrinkhala`, `hi_jail_bharo`, `hi_dharne_par_baithenge`). The lexicon went from 18 patterns to 33.
+- Measured with `uv run python -m benchmark.mobilization --arm lexicon`, which was added in the same change.
+Both columns are the same 46-example synthetic harness set, which was extended in the same change,
+so the version 1 column is that version re-measured on the extended set rather than a number recorded earlier:
+
+| Metric | Version 1 | Version 2 |
+|--------|-----------|-----------|
+| Precision | 1.00 | 1.00 |
+| Recall | 0.28 | 1.00 |
+| Date and place accuracy | 0.60 | 0.78 |
+
+- The 18 positives include the idioms the new patterns were written for, so the recall figure is 5/18 -> 18/18 by construction.
+It says the patterns work, not that they generalise.
+The precision figure is the one that carries information, because the 28 negatives are all false positives
+found in two rounds of review of these patterns: `chalo` as ordinary speech, as a film title and in a Title Case headline,
+`चलो` after a pronoun or a speech verb, the past-tense `निकाली` and `बनाई गई`, the court-summons `उपस्थित होने`,
+the past-narrative `शामिल होने`, a withdrawn or postponed `हड़ताल का ऐलान`,
+and a `जेल भरो` agitation reported decades after the fact.
+All 28 are correctly rejected by version 2.
+
+**Rationale:**
+- Recall was the whole point, and precision is the number that had to hold. It did.
+- Every added pattern is a call to assemble. None names an organisation, a viewpoint or a grievance,
+which is the constraint the lexicon file states and two unit tests now assert against the compiled patterns.
+- A noun that is also an ordinary word, or a party wing, carries a forward-looking verb rather than standing alone.
+Bare verb stems are not listed, because `निकाल` prefix-matches `निकाली` and would fire on a procession already taken out.
+- `en_chalo` is the one case-sensitive pattern in the file, which is a loader capability added with it.
+Lower-case `chalo` is ordinary Hinglish speech, and folding case made every such sentence a signal.
+Only the destination-first order is listed: the reverse order is the Bollywood title form more often than it is a call.
+- The idiom still matches in reportage that quotes the slogan. That is intended: the slogan is the call,
+and the signal cites the sentence it matched, so an analyst reads the context.
+
+**Known limits, measured or reasoned, not hidden by the numbers above:**
+- `en_chalo` is case-sensitive, so the lower-case and all-caps forms the slogan takes on social platforms are missed.
+`en_chalo_hashtag` covers the hashtag, which is never ordinary speech and can therefore fold case.
+A plain lower-case `dilli chalo` in running text is not detected, and that is the price of rejecting `he said chalo`.
+- `en_chalo` also requires the slogan not to run straight into another capitalised word,
+so a headline reading `Dilli Chalo March 18` is missed while `Dilli Chalo on March 18` is caught.
+- The transliterated patterns are tagged `en`, and detection selects patterns by the item's language label.
+Latin-script Hinglish that the detector labels `hi` never reaches them, which is where this slogan most often lives.
+Nothing in this change can observe that gap: every test and every labelled row carries a hand-written language,
+so the precision figure covers detection given a correct label, never the label itself.
+Tracked as #56; fixing it means selecting patterns by script, which is signal-path work.
+
+**Revert risk:** Returning to version 1 loses every call to assemble phrased in the destination idiom,
+which on the demonstration corpus is the largest mobilization event in it.
+The numbers above are measured on a synthetic harness set and say nothing about the confirmation model,
+which stays disabled until a labelled set drawn from public reporting exists (#34).
+
+---
+
 ## Parameters NOT YET Changed (candidates for future tuning)
 
 | Parameter | Current | Candidate | Reason to consider |

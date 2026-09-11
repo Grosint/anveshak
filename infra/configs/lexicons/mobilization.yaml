@@ -13,8 +13,8 @@
 # or a grievance: the signal fires on the act of convening, not on who is
 # convening or why.
 
-version: 1
-updated: 2026-09-08
+version: 2
+updated: 2026-09-11
 
 patterns:
   # --- English -------------------------------------------------------
@@ -42,6 +42,56 @@ patterns:
   - id: en_mass_gathering
     language: en
     regex: '\b(?:maha)?(?:panchayat|rally|jansabha|sabha)\s+(?:at|on|in)\b'
+
+  # Added in version 2, issue #50.
+  #
+  # The destination-then-imperative construction. It is the most common
+  # call to assemble in India and version 1 did not have it, in either
+  # script, which is what showed the list had been assembled English-first.
+  #
+  # The place is part of the slogan rather than a separate field, so it is
+  # matched either side of the verb and with or without the space, since
+  # the hashtag form joins the two words.
+  #
+  # Case-sensitive, and that is the whole pattern. Lower-case `chalo` is
+  # ordinary speech ("he said chalo, nothing will change"), and folding
+  # case turns every such sentence into a mobilization signal. The slogan
+  # is written as a name, so the destination is capitalised.
+  #
+  # Destination first only, and not followed by another capitalised word.
+  # The reverse order is the Bollywood title form (Chalo Dilli, Chalo Jeete
+  # Hain) far more often than it is a call, and a Title Case headline
+  # reinstates it: "Watch Chalo Dilli on TV tonight". A film review is not
+  # a mobilization signal. The cost is a headline that runs the slogan
+  # straight into a capitalised word, and that is the trade this file makes
+  # everywhere: precision over recall.
+  #
+  # Reportage that quotes the slogan matches, and that is intended: the
+  # slogan is the call, and quoting it is quoting the call. The signal
+  # cites the sentence it matched, so an analyst reads the context.
+  - id: en_chalo
+    language: en
+    case_sensitive: true
+    regex: '\b[A-Z][a-z]{2,}\s*Chalo\b(?!\s+[A-Z])'
+  # A hashtag is never ordinary speech, so this one folds case and catches
+  # the lower-case and all-caps forms the slogan takes on social platforms.
+  - id: en_chalo_hashtag
+    language: en
+    regex: '#[a-z]{3,}\s?chalo\b'
+  # "To set out for". Carries a verb, because the noun alone is a syllable
+  # that occurs inside ordinary transliterated words.
+  - id: en_kooch
+    language: en
+    regex: '\bkooch\s+(?:karenge|karen|karo)\b'
+  - id: en_human_chain
+    language: en
+    regex: '\bhuman\s+chain\s+(?:at|on|from|outside|near|tomorrow|today)\b'
+  # Courting arrest en masse. An assembly, and named as one. The noun
+  # alone also names past agitations, so a call or a forward date carries
+  # the pattern.
+  - id: en_jail_bharo
+    language: en
+    regex: '\b(?:call(?:s|ing)?\s+for\s+(?:a\s+)?jail\s+bharo|jail\s+bharo\s+(?:on|from|tomorrow|today))\b'
 
   # --- Hindi ---------------------------------------------------------
   # Imperative form of "to arrive". Stands alone: the call is the verb, and
@@ -78,6 +128,63 @@ patterns:
   - id: hi_chakka_jam
     language: hi
     regex: 'चक्का\s*जाम|रास्ता\s*रोको'
+
+  # Added in version 2, issue #50. The Devanagari halves of the English
+  # entries above, and the assembly idioms an English-first list missed.
+  # Destination first, which is the Hindi word order, and the verb ends
+  # the phrase: the lookahead rejects चलोगे, the ordinary future tense.
+  # The lookahead rejects the words that stand where the destination
+  # would, when चलो is speech rather than a call: fillers, pronouns and
+  # speech verbs. It sits on the destination token itself, because an
+  # exclusion placed before it would test the wrong word.
+  - id: hi_chalo
+    language: hi
+    regex: '(?<![\u0900-\u097F])(?!(?:अच्छा|ठीक|अब|फिर|हम|तुम|आप|मैं|कहा|बोले|चल)\s+चलो)[\u0900-\u097F]{2,}\s+चलो(?![\u0900-\u0963\u0966-\u097F])'
+  - id: hi_kooch
+    language: hi
+    regex: 'कूच\s*(?:करें|करेंगे)'
+  # Surrounding a building or an official. The noun alone is also used to
+  # report one that has already happened, so a forward-looking verb is
+  # required.
+  - id: hi_gherao
+    language: hi
+    regex: 'घेराव\s*(?:करें|करेंगे|करने\s*का\s*(?:ऐलान|आह्वान))'
+  # A withdrawn or postponed call is not a call, and the retraction is
+  # normally in the same sentence as the announcement it retracts, so the
+  # window stops at the danda. The needle is the verb phrase, not the bare
+  # वापस, which also begins वापसी and वापस लौटेंगे.
+  - id: hi_hartal
+    language: hi
+    regex: 'हड़ताल\s*(?:का\s*(?:ऐलान|आह्वान)|करेंगे|रहेगी)(?![^।]{0,40}(?:वापस\s*(?:ले|लिया|लेने)|स्थगित|रद्द))'
+  # Imperative only. The infinitive उपस्थित होने is the wording of a court
+  # summons to one person, which is not a public call to assemble.
+  - id: hi_upasthit
+    language: hi
+    regex: 'उपस्थित\s*(?:रहें|हों)'
+  # Imperative only. शामिल होने is the past-narrative construction, as in
+  # "after joining the protest, five were arrested".
+  - id: hi_shamil
+    language: hi
+    regex: 'शामिल\s*(?:हों|होकर|हो\s*जाएं)'
+  # A procession being taken out. The nouns are ordinary on their own, one
+  # of them is also a party wing, so a forward-looking verb carries the
+  # pattern. The bare stem निकाल is not listed, because it prefix-matches
+  # the past forms निकाली and निकाला, which report a procession that has
+  # already been taken out.
+  - id: hi_morcha_nikalna
+    language: hi
+    regex: '(?:मोर्चा|रैली|पदयात्रा|यात्रा)\s*(?:निकालेंगे|निकालें|निकलेगी|निकालने\s*का\s*(?:ऐलान|आह्वान))'
+  - id: hi_manav_shrinkhala
+    language: hi
+    regex: 'मानव\s*श्रृंखला\s*(?:बनाएंगे|बनाई\s*जाएगी|बनेगी|बनाने\s*का\s*(?:ऐलान|आह्वान))'
+  - id: hi_jail_bharo
+    language: hi
+    regex: 'जेल\s*भरो\s*(?:का\s*(?:ऐलान|आह्वान)|आंदोलन\s*(?:करेंगे|शुरू\s*होगा))'
+  # Future tense only. The same words in the past tense report a sit-in
+  # that is already under way.
+  - id: hi_dharne_par_baithenge
+    language: hi
+    regex: 'धरने\s*पर\s*(?:बैठेंगे|बैठें)'
 
 # Place markers. A match here is only used to locate a candidate place name
 # next to the matched phrase; it decides nothing on its own.

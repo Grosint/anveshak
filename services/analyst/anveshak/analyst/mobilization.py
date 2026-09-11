@@ -113,12 +113,17 @@ def load_lexicon() -> Lexicon:
     raw: dict[str, Any] = yaml.safe_load(path.read_text()) or {}
     patterns: list[LexiconPattern] = []
     for entry in raw.get("patterns", []):
+        # Case-insensitive by default, since most content is written either
+        # way. A pattern opts out with `case_sensitive: true`, which is how
+        # a two-word slogan is told apart from the same two words used as
+        # ordinary speech: the slogan is capitalised and the speech is not.
+        flags = re.UNICODE if entry.get("case_sensitive") else re.IGNORECASE | re.UNICODE
         try:
             patterns.append(
                 LexiconPattern(
                     pattern_id=entry["id"],
                     language=entry["language"],
-                    regex=re.compile(entry["regex"], re.IGNORECASE | re.UNICODE),
+                    regex=re.compile(entry["regex"], flags),
                 )
             )
         except (KeyError, re.error) as exc:

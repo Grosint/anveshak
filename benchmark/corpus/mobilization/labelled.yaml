@@ -9,7 +9,7 @@
 # its own priors. See README.md in this directory.
 
 provenance: synthetic
-version: 0
+version: 1
 examples:
   # --- positives, English ---------------------------------------------
   - text: "All are invited to join the gathering outside the collectorate on March 12 at 4pm."
@@ -20,7 +20,7 @@ examples:
   - text: "Everyone gather at Town Square tomorrow evening. Bring your families."
     language: en
     is_call_to_assemble: true
-    expected_date: null
+    expected_date: "2026-03-05"
     expected_place: "Town Square"
   - text: "Protest march to the district headquarters on March 15."
     language: en
@@ -32,7 +32,7 @@ examples:
   - text: "सभी लोग कल सुबह कलेक्ट्रेट पर पहुंचें।"
     language: hi
     is_call_to_assemble: true
-    expected_date: null
+    expected_date: "2026-03-05"
     expected_place: "कलेक्ट्रेट"
   - text: "बंद का ऐलान किया गया है। सभी दुकानें बंद रहेंगी।"
     language: hi
@@ -65,6 +65,197 @@ examples:
     expected_date: null
     expected_place: null
   - text: "जिला प्रशासन ने स्थिति की समीक्षा की।"
+    language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+
+  # --- positives, Indian mobilization idiom (issue #50) ----------------
+  # The construction that names a destination and tells people to go there,
+  # in both the transliterated and the Devanagari form, plus the assembly
+  # idioms the English-first list left out.
+  - text: "Sansad Chalo on March 18. Buses leave from every district."
+    language: en
+    is_call_to_assemble: true
+    expected_date: "2026-03-18"
+    expected_place: null
+  - text: "#dillichalo on March 18, buses from every district"
+    language: en
+    is_call_to_assemble: true
+    expected_date: "2026-03-18"
+    expected_place: null
+  - text: "Dilli kooch karenge, sab taiyar rahein."
+    language: en
+    is_call_to_assemble: true
+    expected_date: null
+    expected_place: null
+  - text: "Human chain at Rajghat on March 22."
+    language: en
+    is_call_to_assemble: true
+    expected_date: "2026-03-22"
+    expected_place: "Rajghat"
+  - text: "Jail bharo from March 20. Volunteers will court arrest."
+    language: en
+    is_call_to_assemble: true
+    expected_date: "2026-03-20"
+    expected_place: null
+  - text: "दिल्ली चलो। सभी जिलों से बसें रवाना होंगी।"
+    language: hi
+    is_call_to_assemble: true
+    expected_date: null
+    expected_place: null
+  - text: "कलेक्ट्रेट का घेराव करेंगे।"
+    language: hi
+    is_call_to_assemble: true
+    expected_date: null
+    expected_place: null
+  - text: "जेल भरो आंदोलन के लिए सभी शामिल हों।"
+    language: hi
+    is_call_to_assemble: true
+    expected_date: null
+    expected_place: null
+  - text: "मानव श्रृंखला बनाई जाएगी।"
+    language: hi
+    is_call_to_assemble: true
+    expected_date: null
+    expected_place: null
+  - text: "हड़ताल का ऐलान किया गया है।"
+    language: hi
+    is_call_to_assemble: true
+    expected_date: null
+    expected_place: null
+  - text: "सभी कार्यकर्ता उपस्थित रहें।"
+    language: hi
+    is_call_to_assemble: true
+    expected_date: null
+    expected_place: null
+  - text: "मोर्चा निकालेंगे।"
+    language: hi
+    is_call_to_assemble: true
+    expected_date: null
+    expected_place: null
+  - text: "धरने पर बैठेंगे।"
+    language: hi
+    is_call_to_assemble: true
+    expected_date: null
+    expected_place: null
+
+  # --- hard negatives for the added idiom ------------------------------
+  # Each one is the reportage form of a pattern above, in the script that
+  # pattern is written in: the noun is present and the call is not. A
+  # negative written in the other script exercises nothing, because
+  # detection selects patterns by language.
+  - text: "He said chalo, nothing will change."
+    language: en
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "The film Chalo Dilli was screened at the club."
+    language: en
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "The jail bharo agitation last month ended with 500 arrests."
+    language: en
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "A human chain formed last week was dispersed peacefully."
+    language: en
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "चलो ठीक है, कल बात करते हैं।"
+    language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "कब चलोगे दिल्ली?"
+    language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "भाजपा युवा मोर्चा ने शहर में रैली निकाली।"
+    language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "कांग्रेस की पदयात्रा निकाली गई थी।"
+    language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "जेल भरो आंदोलन 1930 में शुरू हुआ था।"
+    language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "पिछले साल मानव श्रृंखला बनाई गई थी।"
+    language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "अदालत में उपस्थित होने का नोटिस भेजा गया।"
+    language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "प्रदर्शन में शामिल होने के बाद पांच लोग गिरफ्तार हुए।"
+    language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "किसानों ने कलेक्ट्रेट का घेराव करने के बाद हिरासत में लिए गए।"
+    language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "हड़ताल का ऐलान वापस ले लिया गया।"
+    language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "प्रदर्शनकारी दिल्ली की ओर कूच कर गए थे।"
+    language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "धरने पर बैठे किसानों से प्रशासन ने बातचीत की।"
+    language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "रैली में शामिल हुए लोगों की संख्या हजारों में थी।"
+    language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "Watch Chalo Dilli on TV tonight."
+    language: en
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "Actor Recalls Chalo Dilli Shoot After A Decade"
+    language: en
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "अच्छा चलो, कल मिलते हैं।"
+    language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "तुम चलो, मैं बाद में आता हूँ।"
+    language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "अब चलो यहाँ से।"
+    language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "हड़ताल का ऐलान स्थगित कर दिया गया।"
     language: hi
     is_call_to_assemble: false
     expected_date: null

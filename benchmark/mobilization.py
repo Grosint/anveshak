@@ -9,9 +9,20 @@ Precision is weighted over recall. A false mobilization alert about a
 political group is the worst output this system can produce, and the lexicon
 already catches the obvious cases, so lower recall is tolerable.
 
+Three arms can be measured on the same set and the same scorer:
+
+  lexicon    the versioned pattern file, alone. No model, no network.
+  local      the confirmation prompt against Ollama.
+  cloud      the confirmation prompt against a cloud provider.
+
+The lexicon arm is what a vocabulary change is measured against. The lexicon
+ships enabled while confirmation does not, so a pattern added for recall has
+to show that it did not cost precision, and that measurement must not need a
+model that is switched off.
+
 Run:
 
-    uv run python -m benchmark.mobilization \\
+    uv run python -m benchmark.mobilization --arm lexicon \\
         --set benchmark/corpus/mobilization/labelled.yaml
 
 Add --compare-cloud to measure a cloud model on the same set. That requires
@@ -25,13 +36,18 @@ import argparse
 import asyncio
 import json
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, Optional
 
 import yaml
 
 RESULTS_DIR = Path("benchmark/results")
+
+# The labelled sets state absolute dates, so a relative expression in the
+# content has to resolve against a fixed day or the recorded numbers change
+# at the year boundary.
+REFERENCE_TODAY = date(2026, 3, 4)
 
 
 def _normalise(value: Optional[str]) -> str:
@@ -50,8 +66,9 @@ def score_predictions(
 ) -> dict[str, Any]:
     """Precision on detection, exact-match accuracy on date and place.
 
-    Extraction accuracy is computed only where the truth is a call to
-    assemble: a correct null on a non-call says nothing about extraction.
+    Extraction accuracy is computed only on the true positives: a correct
+    null on a non-call says nothing about extraction, and neither does a
+    null the arm produced by missing the call altogether.
     """
     if len(predictions) != len(truth):
         raise ValueError(
@@ -75,7 +92,10 @@ def score_predictions(
         elif not said_call and is_call:
             false_negatives += 1
 
-        if is_call:
+        # Scored only where the arm found the call. Counting a missed call
+        # as a correct null extraction reads as accuracy where there was no
+        # extraction at all.
+        if is_call and said_call:
             extraction_total += 1
             if _normalise(predicted.get("date")) == _normalise(
                 actual.get("expected_date")
@@ -108,6 +128,53 @@ def load_labelled_set(path: Path) -> dict[str, Any]:
     if not examples:
         raise SystemExit(f"{path} contains no examples")
     return data
+
+
+def predict_lexicon(
+    examples: list[dict[str, Any]], *, today: Optional[date] = None
+) -> list[dict[str, Any]]:
+    """Run the lexicon over the labelled set, with no model involved.
+
+    The same three functions the signal engine calls, so the arm measures
+    the shipped detection path rather than a re-implementation of it. It
+    stops at detection: the cluster threshold and the cited-phrase evidence
+    string are the pipeline test's ground, not this one's.
+
+    `today` anchors a relative date in the content, so a run is reproducible
+    across a year boundary. See ADR 0003.
+    """
+    from anveshak.analyst.mobilization import (
+        extract_date,
+        extract_place,
+        find_calls_to_assemble,
+        load_lexicon,
+    )
+
+    # An unresolvable lexicon loads as an empty one, by design, so that the
+    # signal engine degrades visibly rather than crashing. Here that would
+    # write precision 0.0 to a results file as though it were a measurement.
+    if not load_lexicon().patterns:
+        raise SystemExit(
+            "The lexicon is empty, so this arm would measure nothing. "
+            "Check MOBILIZATION_LEXICON_PATH."
+        )
+
+    predictions: list[dict[str, Any]] = []
+    for example in examples:
+        text = example["text"]
+        language = example.get("language")
+        if not find_calls_to_assemble(text, language=language):
+            predictions.append({"is_call_to_assemble": False, "date": None, "place": None})
+            continue
+        when = extract_date(text, today=today)
+        predictions.append(
+            {
+                "is_call_to_assemble": True,
+                "date": when.isoformat() if when else None,
+                "place": extract_place(text, language=language),
+            }
+        )
+    return predictions
 
 
 async def _predict(examples: list[dict[str, Any]], *, use_cloud: bool) -> list[dict[str, Any]]:
@@ -158,7 +225,7 @@ async def _predict(examples: list[dict[str, Any]], *, use_cloud: bool) -> list[d
     return predictions
 
 
-async def run(spec_path: Path, *, compare_cloud: bool) -> dict[str, Any]:
+async def run(spec_path: Path, *, arms_to_run: list[str], today: date) -> dict[str, Any]:
     from anveshak.analyst.mobilization_confirm import (
         ACCEPTANCE_DATE_PLACE_ACCURACY,
         ACCEPTANCE_PRECISION,
@@ -178,21 +245,34 @@ async def run(spec_path: Path, *, compare_cloud: bool) -> dict[str, Any]:
 
     arms: dict[str, Any] = {}
 
-    print(f"Local model, {len(examples)} examples...")
-    arms["local"] = score_predictions(
-        await _predict(examples, use_cloud=False), examples
-    )
+    if "lexicon" in arms_to_run:
+        from anveshak.analyst.mobilization import load_lexicon
 
-    if compare_cloud:
+        print(f"Lexicon, {len(examples)} examples...")
+        arms["lexicon"] = score_predictions(predict_lexicon(examples, today=today), examples)
+        # Without this a results file cannot be attributed to a vocabulary
+        # after the fact, which is the one thing this arm exists to pin.
+        arms["lexicon"]["lexicon_version"] = load_lexicon().version
+        arms["lexicon"]["today"] = today.isoformat()
+
+    if "local" in arms_to_run:
+        print(f"Local model, {len(examples)} examples...")
+        arms["local"] = score_predictions(await _predict(examples, use_cloud=False), examples)
+
+    if "cloud" in arms_to_run:
         print(f"Cloud model, {len(examples)} examples...")
-        arms["cloud"] = score_predictions(
-            await _predict(examples, use_cloud=True), examples
-        )
+        arms["cloud"] = score_predictions(await _predict(examples, use_cloud=True), examples)
 
-    local = arms["local"]
-    ships = meets_acceptance_bars(
-        precision=local["precision"],
-        date_place_accuracy=local["date_place_accuracy"],
+    # The bars are the confirmation step's, so they are decided only when
+    # that arm ran. A lexicon-only run reports numbers and decides nothing.
+    local = arms.get("local")
+    ships = (
+        meets_acceptance_bars(
+            precision=local["precision"],
+            date_place_accuracy=local["date_place_accuracy"],
+        )
+        if local is not None
+        else None
     )
 
     result = {
@@ -213,12 +293,15 @@ async def run(spec_path: Path, *, compare_cloud: bool) -> dict[str, Any]:
     out.write_text(json.dumps(result, indent=2))
 
     print(json.dumps(result["arms"], indent=2))
-    print(f"\nLocal meets both bars: {ships}")
-    if not ships:
-        print(
-            "MOBILIZATION_CONFIRM_ENABLED stays false. The lexicon runs alone, "
-            "which still cites the phrase that fired each signal."
-        )
+    if ships is None:
+        print("\nThe local arm did not run, so the acceptance bars were not decided.")
+    else:
+        print(f"\nLocal meets both bars: {ships}")
+        if not ships:
+            print(
+                "MOBILIZATION_CONFIRM_ENABLED stays false. The lexicon runs alone, "
+                "which still cites the phrase that fired each signal."
+            )
     print(f"Written to {out}")
     return result
 
@@ -232,6 +315,26 @@ def main() -> int:
         default=Path("benchmark/corpus/mobilization/labelled.yaml"),
     )
     parser.add_argument(
+        "--arm",
+        dest="arms",
+        action="append",
+        choices=["lexicon", "local", "cloud"],
+        help=(
+            "Arm to measure. Repeatable. Defaults to local, which is the arm "
+            "the acceptance bars are about."
+        ),
+    )
+    parser.add_argument(
+        "--today",
+        type=date.fromisoformat,
+        default=REFERENCE_TODAY,
+        help=(
+            "Lexicon arm only. The date a relative expression in the content "
+            "resolves against. Pinned by default, so a recorded number stays "
+            "reproducible. The model arms read the date out of the prompt."
+        ),
+    )
+    parser.add_argument(
         "--compare-cloud",
         action="store_true",
         help="Also measure a cloud model. Development environments only.",
@@ -242,7 +345,11 @@ def main() -> int:
         print(f"No such labelled set: {args.spec}", file=sys.stderr)
         return 1
 
-    asyncio.run(run(args.spec, compare_cloud=args.compare_cloud))
+    arms_to_run = list(args.arms) if args.arms else ["local"]
+    if args.compare_cloud and "cloud" not in arms_to_run:
+        arms_to_run.append("cloud")
+
+    asyncio.run(run(args.spec, arms_to_run=arms_to_run, today=args.today))
     return 0
 
 

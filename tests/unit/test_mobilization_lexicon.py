@@ -40,6 +40,14 @@ class TestTheLexiconIsAVersionedFile:
         lexicon = load_lexicon()
         assert lexicon.version >= 1
 
+    def test_the_version_was_raised_when_the_vocabulary_changed(self):
+        """Issue #50 added patterns, so the version is no longer 1.
+
+        A vocabulary change that kept the same version would be invisible in
+        the evidence of every signal it fired.
+        """
+        assert load_lexicon().version >= 2
+
     def test_it_covers_both_languages(self):
         lexicon = load_lexicon()
         languages = {pattern.language for pattern in lexicon.patterns}
@@ -186,3 +194,142 @@ class TestWordingIsNotAForecast:
             phrase="Join us at the maidan", when=None, place=None, item_count=1
         )
         assert "Join us at the maidan" in description
+
+
+class TestIndianMobilizationIdiom:
+    """Issue #50.
+
+    The construction that names a destination and tells people to go there
+    was absent in both scripts, in a list that already covered gherao,
+    dharna, chakka jam and rasta roko. It was assembled English-first, so
+    the other assembly idioms it had missed were added with it.
+    """
+
+    @pytest.mark.parametrize(
+        ("text", "language", "expected_id"),
+        [
+            ("Sansad Chalo on March 18. Buses leave from every district.", "en", "en_chalo"),
+            ("Dilli Chalo. Buses leave at dawn.", "en", "en_chalo"),
+            ("#BidadiChalo on July 11. Bring water and flags.", "en", "en_chalo"),
+            ("#dillichalo on March 18, buses from every district", "en", "en_chalo_hashtag"),
+            ("Dilli kooch karenge, sab taiyar rahein.", "en", "en_kooch"),
+            ("Human chain at Rajghat on March 22.", "en", "en_human_chain"),
+            ("Call for a jail bharo from March 20.", "en", "en_jail_bharo"),
+            ("दिल्ली चलो। सभी जिलों से बसें रवाना होंगी।", "hi", "hi_chalo"),
+            ("कूच करेंगे, तैयार रहें।", "hi", "hi_kooch"),
+            ("कलेक्ट्रेट का घेराव करेंगे।", "hi", "hi_gherao"),
+            ("हड़ताल का ऐलान किया गया है।", "hi", "hi_hartal"),
+            ("सभी कार्यकर्ता उपस्थित रहें।", "hi", "hi_upasthit"),
+            ("जेल भरो का ऐलान किया गया है।", "hi", "hi_jail_bharo"),
+            ("आंदोलन में शामिल हों।", "hi", "hi_shamil"),
+            ("मोर्चा निकालेंगे।", "hi", "hi_morcha_nikalna"),
+            ("मानव श्रृंखला बनाएंगे।", "hi", "hi_manav_shrinkhala"),
+            ("धरने पर बैठेंगे।", "hi", "hi_dharne_par_baithenge"),
+        ],
+    )
+    def test_a_call_to_assemble_matches(self, text: str, language: str, expected_id: str) -> None:
+        matched = find_calls_to_assemble(text, language=language)
+        assert expected_id in {match.pattern_id for match in matched}
+
+    @pytest.mark.parametrize(
+        ("text", "language"),
+        [
+            # Each is the reportage form of a pattern above, in the script
+            # that pattern is written in: the noun is present and the call
+            # is not.
+            ("He said chalo, nothing will change.", "en"),
+            ("The film Chalo Dilli was screened at the club.", "en"),
+            ("Watch Chalo Dilli on TV tonight.", "en"),
+            ("Actor Recalls Chalo Dilli Shoot After A Decade", "en"),
+            ("A human chain formed last week was dispersed peacefully.", "en"),
+            ("The jail bharo agitation last month ended with 500 arrests.", "en"),
+            ("चलो ठीक है, कल बात करते हैं।", "hi"),
+            ("अच्छा चलो, कल मिलते हैं।", "hi"),
+            ("तुम चलो, मैं बाद में आता हूँ।", "hi"),
+            ("मैंने कहा चलो।", "hi"),
+            ("अब चलो यहाँ से।", "hi"),
+            ("कब चलोगे दिल्ली?", "hi"),
+            ("भाजपा युवा मोर्चा ने शहर में रैली निकाली।", "hi"),
+            ("कांग्रेस की पदयात्रा निकाली गई थी।", "hi"),
+            ("जेल भरो आंदोलन 1930 में शुरू हुआ था।", "hi"),
+            ("पिछले साल मानव श्रृंखला बनाई गई थी।", "hi"),
+            ("अदालत में उपस्थित होने का नोटिस भेजा गया।", "hi"),
+            ("प्रदर्शन में शामिल होने के बाद पांच लोग गिरफ्तार हुए।", "hi"),
+            ("किसानों ने कलेक्ट्रेट का घेराव करने के बाद हिरासत में लिए गए।", "hi"),
+            ("हड़ताल का ऐलान वापस ले लिया गया।", "hi"),
+            ("हड़ताल का ऐलान स्थगित कर दिया गया।", "hi"),
+            ("प्रदर्शनकारी दिल्ली की ओर कूच कर गए थे।", "hi"),
+            ("धरने पर बैठे किसानों से प्रशासन ने बातचीत की।", "hi"),
+            ("रैली में शामिल हुए लोगों की संख्या हजारों में थी।", "hi"),
+            ("घेराव के दौरान यातायात प्रभावित रहा।", "hi"),
+            ("हड़ताल के कारण कामकाज ठप रहा।", "hi"),
+        ],
+    )
+    def test_ordinary_reporting_does_not_match(self, text: str, language: str) -> None:
+        assert find_calls_to_assemble(text, language=language) == []
+
+    def test_the_destination_idiom_is_read_in_both_scripts(self) -> None:
+        """Transliterated and Devanagari, because both appear in real content."""
+        latin = find_calls_to_assemble("Sansad Chalo on March 18.", language="en")
+        devanagari = find_calls_to_assemble("दिल्ली चलो।", language="hi")
+        assert {m.pattern_id for m in latin} >= {"en_chalo"}
+        assert {m.pattern_id for m in devanagari} >= {"hi_chalo"}
+
+    def test_no_pattern_names_an_organisation_a_viewpoint_or_a_grievance(self) -> None:
+        """User story 5: the lexicon fires on the act of convening.
+
+        Not on who is convening, and not on why. The needles are in both
+        scripts, because a guard written only in Latin says nothing about a
+        list that is mostly Devanagari.
+        """
+        lexicon = load_lexicon()
+        source = " ".join(pattern.regex.pattern for pattern in lexicon.patterns).lower()
+        for word in (
+            "bjp",
+            "congress",
+            "भाजपा",
+            "कांग्रेस",
+            "संघ",
+            "kisan",
+            "किसान",
+            "farmer",
+            "बेरोजगार",
+            "unemploy",
+            "भ्रष्टाचार",
+            "corrupt",
+            "मुसलमान",
+            "दलित",
+        ):
+            assert word not in source, f"{word} names who or why, not the act of convening"
+
+    def test_a_noun_that_is_also_an_organisation_carries_a_verb(self) -> None:
+        """`मोर्चा` is both a procession and a party wing.
+
+        Standing alone it fires on every report that names the wing, so the
+        pattern holding it must also require the verb that makes it a call.
+        """
+        for pattern in load_lexicon().patterns:
+            if "मोर्चा" in pattern.regex.pattern:
+                assert "निकाल" in pattern.regex.pattern
+
+    def test_a_retraction_suppresses_only_its_own_sentence(self) -> None:
+        """`वापस` also begins `वापसी` and `वापस लौटेंगे`.
+
+        A needle that matched either of those would suppress the call it
+        was meant to leave alone.
+        """
+        assert find_calls_to_assemble(
+            "हड़ताल का ऐलान किया गया है, वापसी की कोई योजना नहीं है।", language="hi"
+        )
+        assert find_calls_to_assemble(
+            "हड़ताल का ऐलान किया गया है। सभी कर्मचारी काम पर वापस नहीं लौटेंगे।", language="hi"
+        )
+
+    def test_a_slogan_is_told_apart_from_the_same_words_in_speech(self) -> None:
+        """The destination idiom is capitalised; the filler use is not.
+
+        Case is the only thing that separates them, so the pattern carrying
+        the idiom must be the one that opted out of case folding.
+        """
+        assert find_calls_to_assemble("Dilli Chalo on March 18.", language="en")
+        assert find_calls_to_assemble("chalo yaar, we are late.", language="en") == []
