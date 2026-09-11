@@ -58,6 +58,8 @@ Deferred because adding a fourth seam adds maintenance without covering a failur
 
 ### Recommended actions shaped for a service that does not prosecute
 
+Tracked as #57.
+
 `build_recommended_actions` in `services/reporter/anveshak/reporter/rag.py` maps a matched template to prosecution steps: file an FIR, request a CDR, cite an NDPS or IT Act section, refer to ED under PMLA.
 That is correct for the agencies the templates were written for, and wrong for a domestic intelligence consumer, which has none of those powers and produces an assessment rather than a case.
 
