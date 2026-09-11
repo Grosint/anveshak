@@ -50,6 +50,7 @@ EXEMPT_VARS: dict[str, str] = {
     "ANVESHAK_DEMO_SUPERADMIN_USERNAME": "host-only, read by scripts/seed_demo_org.py",
     "ANVESHAK_DEMO_SUPERADMIN_PASSWORD": "host-only, read by scripts/seed_demo_org.py",
     "ANVESHAK_ALLOW_DEMO_SEED": "host-only opt-in for seeding demo accounts in production",
+    "ANVESHAK_ALLOW_REPLAY_RESET": "host-only guard for scripts/replay_corpus.py --reset",
 }
 
 # Matches `FOO=` at the start of a line in a .env file.

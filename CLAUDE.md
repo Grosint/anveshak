@@ -9,7 +9,8 @@ This section covers behaviour that only Claude Code implements.
 
 Skills are stored harness-agnostically in `.agents/skills/` and exposed to Claude Code
 through per-skill symlinks under `.claude/skills/`.
-Run `make agents-sync` after adding a skill so the symlink is created.
+Run `make agents-sync` after adding a skill or a persona so the symlink is created,
+and `make agents-check` to verify the bridge has not drifted.
 Never author a skill directly in `.claude/skills/`, since it will be invisible to Codex and Cursor.
 
 ## Subagents
@@ -35,7 +36,14 @@ security-auditor and schema-guard always run in parallel, as do code-reviewer an
 
 ## Personas
 
-Eight domain personas live in `.agents/personas/` and are symlinked into `.claude/agents/`.
-They are review lenses rather than reviewers: ED, LEA cyber, MEA, NCB, NIA, SEBI,
+Nine domain personas live in `.agents/personas/` and are symlinked into `.claude/agents/`.
+They are review lenses rather than reviewers: ED, IB, LEA cyber, MEA, NCB, NIA, SEBI,
 product manager, and solution architect.
 Invoke one when a design decision needs a specific operational perspective.
+
+IB is the only lens for a service that does not arrest, charge or prosecute.
+Use it when the question is warning time, network mapping, external involvement,
+or how an assessment is framed for a government consumer, since the other
+agency lenses all assume a prosecution at the end of the work.
+`make agents-sync` creates the symlink and `tests/unit/test_agent_persona_bridge.py`
+asserts every persona has one.

@@ -1,0 +1,1 @@
+../../.agents/personas/persona-ib.md

@@ -8,7 +8,11 @@
 # AI TOOLS — GENERATED, NOT COMMITTED
 # =============================================================================
 graphify-out/
-.agents/
+# .agents/ is NOT ignored: it is the harness-agnostic home of the skills and
+# personas (see AGENTS.md), read directly by Codex and Cursor and symlinked into
+# .claude/. A blanket ignore here left 209 tracked files in place while silently
+# excluding every new skill and persona, which is the failure mode in the
+# git-build skill.
 
 # =============================================================================
 # SECRETS & ENVIRONMENT — NEVER COMMIT

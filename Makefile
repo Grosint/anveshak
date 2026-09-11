@@ -909,11 +909,13 @@ graph:
 	@graphify update .
 	$(call success,Knowledge graph updated)
 
-# agents-sync — regenerate .claude/skills symlinks from .agents/skills
-# Skills live harness-agnostically in .agents/skills/ (read directly by Codex and
-# Cursor). Claude Code only scans .claude/skills/, so each skill is symlinked in.
+# agents-sync - regenerate .claude symlinks from .agents
+# Skills and personas live harness-agnostically in .agents/ (read directly by
+# Codex and Cursor). Claude Code only scans .claude/skills/ and .claude/agents/,
+# so each one is symlinked in. Only symlinks are removed and rebuilt, so the
+# real agent definitions in .claude/agents/ are left alone.
 agents-sync:
-	$(call header,Syncing .claude/skills from .agents/skills)
+	$(call header,Syncing .claude from .agents)
 	@find .claude/skills -maxdepth 1 -type l -delete 2>/dev/null || true
 	@mkdir -p .claude/skills
 	@for d in .agents/skills/*/; do \
@@ -921,7 +923,14 @@ agents-sync:
 		ln -sfn "../../.agents/skills/$$n" ".claude/skills/$$n"; \
 	done
 	@printf "  %s skills linked\n" "$$(find .claude/skills -maxdepth 1 -type l | wc -l | tr -d ' ')"
-	$(call success,Skill symlinks synced)
+	@find .claude/agents -maxdepth 1 -type l -delete 2>/dev/null || true
+	@mkdir -p .claude/agents
+	@for f in .agents/personas/*.md; do \
+		n=$$(basename $$f); \
+		ln -sfn "../../.agents/personas/$$n" ".claude/agents/$$n"; \
+	done
+	@printf "  %s personas linked\n" "$$(find .claude/agents -maxdepth 1 -type l | wc -l | tr -d ' ')"
+	$(call success,Skill and persona symlinks synced)
 
 # venv-check - fail early if .venv cannot actually run its console scripts
 #
@@ -970,6 +979,15 @@ agents-check:
 		if [ ! -L ".claude/skills/$$n" ]; then echo "  NOT LINKED: $$n (run make agents-sync)"; fail=1; fi; \
 	done; \
 	for l in .claude/skills/*; do \
+		[ -e "$$l" ] || { echo "  BROKEN LINK: $$l"; fail=1; }; \
+	done; \
+	for f in .agents/personas/*.md; do \
+		n=$$(basename $$f); \
+		fm=$$(awk '/^---$$/{c++;next} c==1&&/^name:/{print $$2; exit}' "$$f" 2>/dev/null); \
+		if [ "$$fm" != "$${n%.md}" ]; then echo "  NAME MISMATCH: persona=$$n frontmatter=$$fm"; fail=1; fi; \
+		if [ ! -L ".claude/agents/$$n" ]; then echo "  NOT LINKED: $$n (run make agents-sync)"; fail=1; fi; \
+	done; \
+	for l in .claude/agents/*; do \
 		[ -e "$$l" ] || { echo "  BROKEN LINK: $$l"; fail=1; }; \
 	done; \
 	for a in .claude/agents/*.md; do \
