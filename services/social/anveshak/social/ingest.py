@@ -65,6 +65,17 @@ SQL_GET_MEDIA_ASSET_BY_HASH = "SELECT id FROM media_assets WHERE content_hash = 
 
 _LABELS_TEMPLATE = '{{"classification":"OPEN","domain":"social","owner_org":"anveshak","source_id":"{adapter_id}"}}'
 
+# Key under which the date signal name is written into the content labels.
+# Deliberately identical to PUBLICATION_TIME_SIGNAL_LABEL in the scraper's
+# publication_time module: an analyst reads one label across collected and
+# imported content, and social cannot import the scraper package to say the
+# same word. A unit test asserts the two stay equal.
+PUBLICATION_TIME_SIGNAL_LABEL = "publication_time_signal"
+
+# Labels an item never sets for itself. Classification in particular is the
+# pipeline's to assert, and a source that could set it could declassify itself.
+RESERVED_LABEL_KEYS = frozenset({"classification", "domain", "owner_org", "source_id"})
+
 
 # ---------------------------------------------------------------------------
 # Helpers — same logic as scraper/normalise.py (no shared dep to avoid coupling)
@@ -145,6 +156,12 @@ async def ingest_raw_item(
             labels_dict["author_handle"] = raw.author_handle
         if raw.reply_to_id:
             labels_dict["reply_to_id"] = raw.reply_to_id
+        if raw.published_at_signal:
+            labels_dict[PUBLICATION_TIME_SIGNAL_LABEL] = raw.published_at_signal
+        if raw.extra_labels:
+            labels_dict.update(
+                {k: v for k, v in raw.extra_labels.items() if k not in RESERVED_LABEL_KEYS}
+            )
         labels = json.dumps(labels_dict)
 
         result = await conn.fetchrow(

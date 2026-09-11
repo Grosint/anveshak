@@ -67,6 +67,11 @@ A Backfill's Capture Times are all the day it was loaded; its Publication Times 
 Detection then unfolds in the order the story did, so a cluster grows, a baseline forms, and a shift is measured against what preceded it.
 A single bulk load produces the same end state with none of the history that makes it meaningful.
 
+**Corpus** - A committed file of dated items that a Backfill or Replay is loaded from.
+It is the source of truth for a dataset, and a database dump is only an artifact of a run over it.
+Each item carries its Publication Time and the name of the signal that produced it, so a date is defensible from the row rather than from whoever collected it.
+See [docs/corpus_format.md](docs/corpus_format.md).
+
 ---
 
 ## Narrative Detection

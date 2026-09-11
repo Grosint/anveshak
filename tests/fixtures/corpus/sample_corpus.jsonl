@@ -1,0 +1,6 @@
+# Sample corpus, used by the importer tests. Comment lines and blank lines are
+# skipped, so a committed corpus can carry its own provenance notes.
+
+{"url": "https://outlet-a.example/2026/05/16/movement-founded", "text": "The movement was founded today at a public meeting in the capital.", "language": "en", "published_at": "2026-05-16T09:30:00+00:00", "published_at_signal": "jsonld_date_published", "discovery": "archive_sitemap", "body_source": "publisher", "source": {"handle": "https://outlet-a.example/feed", "name": "Outlet A", "platform": "web", "credibility_score": 70.0}}
+{"url": "https://outlet-b.example/2026/05/18/reaction", "text": "Opposition leaders reacted to the founding of the movement.", "language": "en", "published_at": "2026-05-18T04:15:00+00:00", "published_at_signal": "url_path_date", "discovery": "paginated_feed", "body_source": "archive", "source": {"handle": "https://outlet-b.example/feed", "name": "Outlet B", "platform": "web"}}
+{"url": "https://outlet-b.example/opinion/undated-column", "text": "An undated opinion column about the same movement.", "source": {"handle": "https://outlet-b.example/feed", "name": "Outlet B", "platform": "web"}}

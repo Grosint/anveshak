@@ -323,3 +323,101 @@ class TestIngestRawItem:
         call_kwargs = mock_dl.call_args[1]
         assert call_kwargs["media_urls"] == ["https://example.com/image.jpg"]
         assert call_kwargs["content_item_id"] == content_item_id
+
+
+# ---------------------------------------------------------------------------
+# Publication Time provenance — issue #45
+# ---------------------------------------------------------------------------
+
+
+class TestPublicationTimeSignalLabel:
+    """Where a date came from is answerable from the row it was written on."""
+
+    @pytest.mark.asyncio
+    async def test_the_signal_name_is_written_into_labels(self):
+        import json
+
+        from anveshak.social.ingest import PUBLICATION_TIME_SIGNAL_LABEL, ingest_raw_item
+
+        raw = _make_raw_item()
+        raw.published_at = datetime(2026, 5, 16, 9, 30, tzinfo=UTC)
+        raw.published_at_signal = "jsonld_date_published"
+        pool, conn = _mock_pool()
+        conn.fetchrow = AsyncMock(side_effect=[_make_source_row(), {"id": "ci-1"}])
+
+        await ingest_raw_item(raw, "topic-1", pool, AsyncMock(), "corpus-import-v1")
+
+        insert_args = conn.fetchrow.await_args_list[1].args
+        labels = json.loads(next(a for a in insert_args if isinstance(a, str) and "domain" in a))
+        assert labels[PUBLICATION_TIME_SIGNAL_LABEL] == "jsonld_date_published"
+
+    @pytest.mark.asyncio
+    async def test_no_signal_writes_no_key(self):
+        """An absent signal is an absent key, never an empty string."""
+        import json
+
+        from anveshak.social.ingest import PUBLICATION_TIME_SIGNAL_LABEL, ingest_raw_item
+
+        raw = _make_raw_item()
+        pool, conn = _mock_pool()
+        conn.fetchrow = AsyncMock(side_effect=[_make_source_row(), {"id": "ci-1"}])
+
+        await ingest_raw_item(raw, "topic-1", pool, AsyncMock(), "reddit-v1")
+
+        insert_args = conn.fetchrow.await_args_list[1].args
+        labels = json.loads(next(a for a in insert_args if isinstance(a, str) and "domain" in a))
+        assert PUBLICATION_TIME_SIGNAL_LABEL not in labels
+
+    def test_the_label_key_matches_the_scraper(self):
+        """One key across collected and imported content, or an analyst reads two.
+
+        The two services cannot share a module, so the constant is duplicated
+        and this test is what keeps the duplicate honest.
+        """
+        from anveshak.scraper.publication_time import (
+            PUBLICATION_TIME_SIGNAL_LABEL as SCRAPER_LABEL,
+        )
+        from anveshak.social.ingest import PUBLICATION_TIME_SIGNAL_LABEL as SOCIAL_LABEL
+
+        assert SOCIAL_LABEL == SCRAPER_LABEL
+
+
+class TestExtraLabels:
+    """An item may add provenance to its labels, but not reclassify itself."""
+
+    @pytest.mark.asyncio
+    async def test_extra_labels_are_merged(self):
+        import json
+
+        from anveshak.social.ingest import ingest_raw_item
+
+        raw = _make_raw_item()
+        raw.extra_labels = {"discovery": "archive_sitemap", "body_source": "archive"}
+        pool, conn = _mock_pool()
+        conn.fetchrow = AsyncMock(side_effect=[_make_source_row(), {"id": "ci-1"}])
+
+        await ingest_raw_item(raw, "topic-1", pool, AsyncMock(), "corpus-import-v1")
+
+        insert_args = conn.fetchrow.await_args_list[1].args
+        labels = json.loads(next(a for a in insert_args if isinstance(a, str) and "domain" in a))
+        assert labels["discovery"] == "archive_sitemap"
+        assert labels["body_source"] == "archive"
+
+    @pytest.mark.asyncio
+    async def test_reserved_keys_are_ignored(self):
+        """Classification is the pipeline's to assert, never the item's."""
+        import json
+
+        from anveshak.social.ingest import ingest_raw_item
+
+        raw = _make_raw_item()
+        raw.extra_labels = {"classification": "OPEN_PUBLIC", "owner_org": "somebody-else"}
+        pool, conn = _mock_pool()
+        conn.fetchrow = AsyncMock(side_effect=[_make_source_row(), {"id": "ci-1"}])
+
+        await ingest_raw_item(raw, "topic-1", pool, AsyncMock(), "corpus-import-v1")
+
+        insert_args = conn.fetchrow.await_args_list[1].args
+        labels = json.loads(next(a for a in insert_args if isinstance(a, str) and "domain" in a))
+        assert labels["classification"] == "OPEN"
+        assert labels["owner_org"] == "anveshak"

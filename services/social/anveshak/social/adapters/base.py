@@ -85,6 +85,18 @@ class RawItem:
     # Appended rather than inserted next to captured_at, so every existing
     # positional slot in this dataclass keeps its meaning.
     published_at: datetime | None = None
+    # Which signal produced published_at, e.g. "jsonld_date_published" or
+    # "url_path_date". Recorded on the row through the content labels, so a
+    # question about a date is answerable from the item rather than from
+    # whoever collected it: a day-granular URL date and an outlet's own
+    # assertion are not the same claim. None wherever published_at is None.
+    published_at_signal: str | None = None
+    # Provenance an adapter or importer knows and the columns have nowhere to
+    # put, e.g. how an item was discovered. Merged into the content labels,
+    # which is where this codebase keeps per-item derived metadata. Keys that
+    # the labels structure owns (classification, domain, owner_org, source_id)
+    # are ignored rather than overwritten: an item may not reclassify itself.
+    extra_labels: dict[str, str] | None = None
 
     def content_hash(self) -> str:
         """SHA-256 dedup key — architectural rule 3.
