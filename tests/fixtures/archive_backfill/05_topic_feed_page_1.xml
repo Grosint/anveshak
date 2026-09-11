@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A tag feed. Same pagination grammar as the outlet's main feed, narrower
+     subject, and the only route some outlets give to a date months back. -->
+<rss version="2.0">
+  <channel>
+    <title>Topic Outlet - education</title>
+    <item>
+      <title>The minister answers a question in the house</title>
+      <link>https://topic.example.in/education/the-minister-answers-20072026</link>
+      <description>The minister was asked about examination scheduling and replied that a committee had been constituted, without naming its members or its terms of reference.</description>
+      <pubDate>Mon, 20 Jul 2026 14:00:00 +0530</pubDate>
+    </item>
+  </channel>
+</rss>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A monthly archive sitemap. The publication date is in the URL path, so a
+     date filter needs no fetch. This outlet writes the month unpadded. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://sitemap.example.in/2026/7/20/police-clear-the-parliament-approach-road</loc>
+    <lastmod>2026-07-21T04:10:00+05:30</lastmod>
+  </url>
+  <url>
+    <loc>https://sitemap.example.in/2026/7/18/organisers-publish-the-march-route</loc>
+    <lastmod>2026-07-18T11:00:00+05:30</lastmod>
+  </url>
+  <url>
+    <loc>https://sitemap.example.in/2026/7/2/a-student-body-writes-to-the-ministry</loc>
+    <lastmod>2026-07-02T09:15:00+05:30</lastmod>
+  </url>
+  <!-- Carries no date in its path at all: a section page, not an article. -->
+  <loc>https://sitemap.example.in/topics/education</loc>
+  <url>
+    <loc>https://sitemap.example.in/subscribe</loc>
+  </url>
+</urlset>

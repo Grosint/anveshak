@@ -87,19 +87,19 @@ def test_rss_content_hash_deterministic():
 
 @pytest.mark.unit
 def test_rss_item_url_non_empty():
-    """Every RssItem returned by _parse_feed_sync has a non-empty url."""
-    from anveshak.scraper.rss import _parse_feed_sync
+    """Every RssItem returned by parse_feed_items has a non-empty url."""
+    from anveshak.scraper.rss import parse_feed_items
 
-    items = _parse_feed_sync(_MINIMAL_RSS, "https://example.com/feed")
+    items = parse_feed_items(_MINIMAL_RSS, "https://example.com/feed")
     assert all(item.url for item in items), "All RssItems must have a non-empty url"
 
 
 @pytest.mark.unit
 def test_rss_published_at_timezone_aware():
     """Every RssItem.published_at must be timezone-aware (never naive)."""
-    from anveshak.scraper.rss import _parse_feed_sync
+    from anveshak.scraper.rss import parse_feed_items
 
-    items = _parse_feed_sync(_MINIMAL_RSS, "https://example.com/feed")
+    items = parse_feed_items(_MINIMAL_RSS, "https://example.com/feed")
     assert items, "Expected at least one item"
     for item in items:
         assert (

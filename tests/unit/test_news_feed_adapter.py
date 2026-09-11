@@ -346,9 +346,9 @@ class TestDegenerateFeeds:
 
     async def test_entry_with_no_link_is_dropped(self):
         """A link is the item's identity and its only route back to the article."""
-        from anveshak.scraper.rss import _parse_feed_sync
+        from anveshak.scraper.rss import parse_feed_items
 
-        parsed = _parse_feed_sync(_TITLELESS_EMPTY_FEED, "https://degenerate.example.in/rss")
+        parsed = parse_feed_items(_TITLELESS_EMPTY_FEED, "https://degenerate.example.in/rss")
 
         assert [item.url for item in parsed] == ["https://degenerate.example.in/nothing-here"]
 

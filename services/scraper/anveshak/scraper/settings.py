@@ -37,6 +37,27 @@ class ScraperSettings(BaseSettings):
     rss_max_items_per_fetch: int = 20  # cap items per feed per poll cycle
     rss_full_text_min_chars: int = 200  # fetch full article if summary shorter than this
 
+    # Archive Backfill — historic discovery and body fetch (issue #44)
+    # Page cap on a feed walk. The backstop, not the stop condition: a walk ends
+    # on a repeated page or on reaching the window long before it reaches this.
+    archive_backfill_max_feed_pages: int = 40
+    # Entries read per archive page. Distinct from rss_max_items_per_fetch,
+    # which caps what one live poll cycle should collect.
+    archive_backfill_max_items_per_page: int = 100
+    # Bounds an operator-run Backfill, which takes hours at the per-domain gap.
+    # An ARQ job wrapping this needs its own timeout; scraper_job_timeout_s is
+    # 300 seconds and would expire long before this number is reached.
+    archive_backfill_max_urls_per_outlet: int = 5000
+    # Shortest body accepted as an article. Distinct from
+    # rss_full_text_min_chars, which decides whether a feed body needs a fetch.
+    archive_backfill_body_min_chars: int = 200
+    # Archive rehydration when the publisher returns a client error.
+    archive_backfill_enabled: bool = True
+    archive_backfill_cdx_url: str = "https://web.archive.org/cdx/search/cdx"
+    archive_backfill_base_url: str = "https://web.archive.org/web"
+    # Gap that separates a feed's real publication run from its evergreen items.
+    archive_backfill_feed_depth_max_gap_days: int = 30
+
     # Recursive scraping — follow article links from fetched pages
     scraper_follow_links: bool = True  # enable depth-1 link following
     scraper_max_links_per_page: int = 100  # cap followed links per source page

@@ -39,7 +39,7 @@ import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from typing import Any, Optional
 from urllib.parse import urlparse
@@ -599,6 +599,23 @@ def _from_url_path(source: SourceConfig) -> Optional[datetime]:
         if instant is not None:
             return instant
     return None
+
+
+def resolve_path_date(day: date, source: SourceConfig) -> Optional[datetime]:
+    """Resolve a day-granular date to the UTC instant the outlet's day began.
+
+    For a caller that read the date out of a URL path itself, under a per-outlet
+    path format this module does not carry. The timezone policy is the same one
+    every other signal goes through: local midnight in the zone the outlet
+    declared, and a refusal where it has declared nothing. A day with no zone is
+    up to fourteen hours wide, which is enough to move an item into the wrong
+    day bucket on every timeline that reads it.
+    """
+    return _resolve(
+        (datetime(day.year, day.month, day.day), False),
+        source,
+        SIGNAL_URL_PATH_DATE,
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- What this outlet serves once its real depth is exhausted: page one again,
+     with a 200 status. A crawler that stops only on an error walks it forever. -->
+<rss version="2.0">
+  <channel>
+    <title>Paginated Outlet</title>
+    <item>
+      <title>Police clear the parliament approach road</title>
+      <link>https://paged.example.in/2026/07/20/police-clear-the-approach-road</link>
+      <description>Forty marchers were detained near the parliament approach road on Monday afternoon and released without charge the same evening, according to a statement issued after midnight.</description>
+      <pubDate>Mon, 20 Jul 2026 18:40:00 +0530</pubDate>
+    </item>
+    <item>
+      <title>Organisers publish the march route</title>
+      <link>https://paged.example.in/2026/07/18/organisers-publish-the-route</link>
+      <description>The organisers named three assembly points and a single dispersal point, and asked participants to carry identification with them on the day of the march.</description>
+      <pubDate>Sat, 18 Jul 2026 09:05:00 +0530</pubDate>
+    </item>
+  </channel>
+</rss>

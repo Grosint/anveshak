@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Every item predates the window. A walk reaching this page has gone as far
+     back as it was asked to, and stops there rather than at the page cap. -->
+<rss version="2.0">
+  <channel>
+    <title>Paginated Outlet</title>
+    <item>
+      <title>A committee is constituted on hostel fees</title>
+      <link>https://paged.example.in/2026/04/11/a-committee-is-constituted</link>
+      <description>The committee was given three months to report, and its constitution was announced in a circular rather than in the house, which several members objected to.</description>
+      <pubDate>Sat, 11 Apr 2026 10:00:00 +0530</pubDate>
+    </item>
+  </channel>
+</rss>

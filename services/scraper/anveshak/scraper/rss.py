@@ -166,14 +166,25 @@ def _entry_published_at(
     return None, None
 
 
-def _parse_feed_sync(xml_bytes: bytes, feed_url: str) -> list[RssItem]:
-    """Parse RSS/Atom XML bytes with feedparser (blocking — call via executor)."""
+def parse_feed_items(
+    xml_bytes: bytes,
+    feed_url: str,
+    *,
+    limit: Optional[int] = None,
+) -> list[RssItem]:
+    """Parse RSS/Atom XML bytes with feedparser (blocking - call via executor).
+
+    limit caps the entries read. It defaults to the poll cycle's cap, and the
+    Backfill passes its own: a historic walk reads a page of archive at a time
+    and has no reason to be bounded by what one live poll should collect.
+    """
     import feedparser  # lazy import — only used here
 
     feed = feedparser.parse(xml_bytes)
     items: list[RssItem] = []
+    effective_limit = settings.rss_max_items_per_fetch if limit is None else limit
 
-    for entry in feed.entries[: settings.rss_max_items_per_fetch]:
+    for entry in feed.entries[:effective_limit]:
         url: str = entry.get("link", "").strip()
         if not url:
             continue
@@ -360,7 +371,7 @@ async def fetch_rss_items(
 
     try:
         loop = asyncio.get_event_loop()
-        items = await loop.run_in_executor(None, _parse_feed_sync, xml_bytes, feed_url)
+        items = await loop.run_in_executor(None, parse_feed_items, xml_bytes, feed_url)
     except Exception as exc:
         log.warning("rss.feed_parse_failed", url=feed_url, error=str(exc))
         return []

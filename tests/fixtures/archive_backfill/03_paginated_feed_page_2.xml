@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Paginated Outlet</title>
+    <item>
+      <title>Teachers unions join the call</title>
+      <link>https://paged.example.in/2026/07/15/teachers-unions-join-the-call</link>
+      <description>Teachers unions in four states said they would join the call for an assembly outside the ministry, adding an organised constituency to a movement that had none.</description>
+      <pubDate>Wed, 15 Jul 2026 07:40:00 +0530</pubDate>
+    </item>
+    <item>
+      <title>A student body writes to the ministry</title>
+      <link>https://paged.example.in/2026/07/02/a-student-body-writes</link>
+      <description>The letter asked for a meeting within a fortnight and listed four grievances, three of them about examination scheduling and one about hostel fees.</description>
+      <pubDate>Thu, 02 Jul 2026 12:20:00 +0530</pubDate>
+    </item>
+  </channel>
+</rss>
