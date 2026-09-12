@@ -89,6 +89,7 @@ export default function OrganizationManagement({ embedded }: Props) {
               <th className="pb-2 font-medium">Name</th>
               <th className="pb-2 font-medium">Slug</th>
               <th className="pb-2 font-medium">Status</th>
+              <th className="pb-2 font-medium">Report audience</th>
               <th className="pb-2 font-medium">Created</th>
               <th className="pb-2 font-medium">Actions</th>
             </tr>
@@ -104,6 +105,9 @@ export default function OrganizationManagement({ embedded }: Props) {
                   }`}>
                     {org.is_active ? 'Active' : 'Inactive'}
                   </span>
+                </td>
+                <td className="py-2.5 text-text-muted text-xs">
+                  {org.report_audience || 'Deployment default'}
                 </td>
                 <td className="py-2.5 text-text-muted text-xs">{new Date(org.created_at).toLocaleDateString()}</td>
                 <td className="py-2.5">

@@ -271,7 +271,7 @@ The Replay integration test injects embeddings rather than waiting for the analy
 | Wayback rehydration discloses collection | the URLs being collected leave the deployment boundary | a setting, off-switchable, documented as a disclosure rather than a fallback |
 | An outlet changes its archive layout | discovery silently returns nothing for that outlet | unconfigured and empty results log with a reason; feed depth is measured rather than assumed |
 | A credibility number reads as an editorial judgement | a government customer asks what produced it and there is no answer | structural criteria only, versioned file the customer owns, ADR 0004 |
-| Recommended actions assume prosecution powers | output is mis-framed for a service that does not prosecute | #57, with the design questions recorded; the Intelligence Bureau persona is the lens that catches it in review meanwhile |
+| Recommended actions assume prosecution powers | output is mis-framed for a service that does not prosecute | audience per organisation, action sets in a versioned file the customer owns, no fallback to another audience's set, ADR 0006 |
 | Outbound fetch follows scraped content into the internal network | a collected page reaches postgres, redis or ollama | first-hop validation landed in #43; every-hop validation is #55 |
 
 ---

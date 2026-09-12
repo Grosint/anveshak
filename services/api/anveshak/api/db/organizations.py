@@ -20,18 +20,23 @@ SQL_CREATE_ORG = """
 """
 
 SQL_LIST_ORGS = """
-    SELECT id, name, slug, is_active, created_at, updated_at
+    SELECT id, name, slug, is_active, report_audience, created_at, updated_at
     FROM organizations
     ORDER BY created_at
 """
 
 SQL_GET_ORG = "SELECT * FROM organizations WHERE id = $1"
 
+# report_audience uses the same COALESCE shape as the other fields, so a PATCH
+# that omits it leaves it alone. Clearing it back to the deployment default is
+# therefore not expressible here, and does not need to be: an organisation that
+# has stated an audience states a different one rather than un-stating it.
 SQL_UPDATE_ORG = """
     UPDATE organizations
     SET name = COALESCE($2, name),
         is_active = COALESCE($3, is_active),
-        updated_at = $4
+        report_audience = COALESCE($4, report_audience),
+        updated_at = $5
     WHERE id = $1
 """
 
@@ -77,7 +82,13 @@ async def update_organization(
     org_id: str,
     name: Optional[str] = None,
     is_active: Optional[bool] = None,
+    report_audience: Optional[str] = None,
 ) -> None:
-    """Update organization fields."""
+    """Update organization fields.
+
+    report_audience decides how the reporter frames a report's recommended
+    actions (#57). The value is validated against the reporter's action sets
+    there, not here, because the API image does not carry that file.
+    """
     now = datetime.now(UTC)
-    await conn.execute(SQL_UPDATE_ORG, org_id, name, is_active, now)
+    await conn.execute(SQL_UPDATE_ORG, org_id, name, is_active, report_audience, now)

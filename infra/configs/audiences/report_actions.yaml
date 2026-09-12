@@ -1,0 +1,140 @@
+# Recommended actions per scam template, per report audience - issue #57.
+#
+# A report is addressed to a service, and the same evidence produces a
+# differently shaped report for each one. A state police cyber cell files an
+# FIR and requests a CDR. A domestic intelligence consumer has neither power:
+# its output is an assessment for a decision maker, so an action telling it to
+# file an FIR is mis-framed in the first line an officer reads.
+#
+# Three rules govern this file.
+#
+# 1. An action belongs to an audience, never to a template alone. The same
+#    matched template yields "request subscriber details" for a police cyber
+#    cell and "map the network behind the handles" for an intelligence
+#    consumer.
+#
+# 2. An audience with no action set for a matched template produces NO
+#    actions. It never falls back to another audience's set, because a
+#    silently borrowed prosecution step is the exact error this file exists to
+#    prevent. The reporter logs the reason instead.
+#
+# 3. Legal provisions are appended only for an audience that can act on them.
+#    `legal_provisions: own` prints them as the reader's own provisions,
+#    `attributed` marks them as the provisions another agency would proceed
+#    under, and `omitted` drops them.
+#
+# The actions themselves are curated and human-reviewed, never LLM-generated.
+# See .agents/skills/learned/references/template-driven-actions-not-llm.md and
+# docs/adr/0006-report-audience-action-sets.md.
+
+version: 1
+updated: 2026-09-12
+owner: customer
+
+# Used when an organisation states no audience. Prosecution keeps every report
+# generated before this file existed exactly as it was.
+default_audience: prosecution
+
+audiences:
+  - id: prosecution
+    label: Prosecution and enforcement
+    actions_heading: Recommended Actions
+    legal_provisions: own
+    templates:
+      mule_recruitment:
+        - Freeze identified bank accounts and UPI IDs under PMLA Section 17
+        - Request CDR (Call Detail Records) for associated phone numbers
+        - File STR (Suspicious Transaction Report) with FIU-IND
+      investment_fraud:
+        - Report identified accounts to SEBI for investigation under PFUTP Regulations
+        - Block fraudulent UPI IDs via NPCI dispute mechanism
+        - Issue investor advisory for identified schemes
+      maas:
+        - Freeze mule accounts identified in the network
+        - Coordinate with banks for KYC details of account holders
+        - File FIR under BNS 318 (cheating) and PMLA Section 3
+      digital_arrest:
+        - Block identified phone numbers via DoT (Department of Telecom)
+        - Report impersonation accounts to platform operators
+        - Issue public advisory about digital arrest scam pattern
+      job_fraud:
+        - Block identified recruitment portals/URLs
+        - Report fraudulent company registrations to MCA
+        - Request CDR for associated phone numbers
+      pump_and_dump:
+        - Report manipulated securities to SEBI surveillance division
+        - Flag identified social media accounts for coordinated promotion
+        - Request trading data for identified accounts from exchanges
+      fake_research_report:
+        - Report fraudulent research reports to SEBI
+        - Request takedown of hosting domains
+        - Issue advisory to registered market intermediaries
+      drug_sale:
+        - Request CDR and IP logs for identified phone numbers and handles
+        - Coordinate with NCB for controlled delivery operations
+        - File case under NDPS Act Sections 20, 22, 25
+      drug_delivery_recruitment:
+        - Identify and freeze payment channels (UPI, crypto wallets)
+        - Request subscriber details for identified Telegram handles
+        - Coordinate with local police for recruitment hub surveillance
+      fake_sim_sale:
+        - Report identified SIM sellers to DoT for TRAI compliance action
+        - Block identified phone numbers used for SIM activation
+        - File FIR under IT Act 66C (identity theft)
+      crypto_cashout:
+        - Report identified crypto wallet addresses to exchanges for freezing
+        - Trace blockchain transactions for identified wallets
+        - Coordinate with ED (Enforcement Directorate) for PMLA investigation
+
+  # An intelligence consumer does not arrest, charge or prosecute. Every action
+  # here is an assessment task, a warning, or a referral to the service that
+  # holds the power. See .agents/personas/persona-ib.md.
+  - id: advisory
+    label: Assessment for a government consumer
+    actions_heading: Assessment Priorities
+    legal_provisions: attributed
+    templates:
+      mule_recruitment:
+        - Map the recruitment network behind the identified accounts and estimate its reach
+        - Assess whether the recruitment is directed from outside the country
+        - Refer the identified accounts to the service that can act on them
+      investment_fraud:
+        - Assess the scale of exposure and the population being targeted
+        - Establish whether the scheme is operated from outside the country
+        - Brief the market regulator on the identified accounts and schemes
+      maas:
+        - Map the account network and identify who controls it
+        - Assess whether the service is shared across more than one criminal group
+        - Refer the mule network to the service that can act on the accounts
+      digital_arrest:
+        - Assess the call centre infrastructure and where it operates from
+        - Estimate the volume of targets and profile who is being contacted
+        - Recommend a public warning through the department responsible for it
+      job_fraud:
+        - Assess whether the recruitment feeds trafficking or overseas placement
+        - Map the geography of the recruiters and the destinations offered
+        - Brief the service responsible for the destination jurisdiction
+      pump_and_dump:
+        - Assess the coordination between the promoting accounts
+        - Establish whether the promotion originates outside the country
+        - Brief the market regulator on the coordinated accounts
+      fake_research_report:
+        - Assess the distribution reach of the reports and who consumes them
+        - Establish who authors and funds the reports
+        - Brief the market regulator on the identified domains
+      drug_sale:
+        - Map the supply network behind the identified handles
+        - Assess whether the supply route crosses a border
+        - Refer the identified handles to the service that can act on them
+      drug_delivery_recruitment:
+        - Assess the recruitment reach and profile who is being recruited
+        - Map the payment channels back to the people who control them
+        - Warn the affected jurisdiction ahead of the recruitment drive
+      fake_sim_sale:
+        - Assess how the SIMs are used downstream and by whom
+        - Establish whether activation depends on an insider at a point of sale
+        - Refer the sellers to the telecom regulator
+      crypto_cashout:
+        - Trace the wallet network and estimate the value moved through it
+        - Assess whether the cash-out route terminates outside the country
+        - Refer the wallets to the service that can approach the exchanges

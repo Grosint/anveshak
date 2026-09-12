@@ -174,18 +174,12 @@ class TestReportIdentifierDBFailure:
         or fail cleanly — not propagate unhandled exception."""
         ctx = _make_ctx()
         chunks = [{"id": "c1", "source_id": "src-1", "clean_text": "text", "url": "https://ex.com"}]
-        rc = _make_rc()
 
         with (
             patch("anveshak.reporter.worker.db") as mock_db,
             patch(
                 "anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock
             ) as mock_embed,
-            patch("anveshak.reporter.worker.assemble_context") as mock_ctx,
-            patch("anveshak.reporter.worker.render_prompt") as mock_prompt,
-            patch(
-                "anveshak.reporter.worker.call_ollama_with_retry", new_callable=AsyncMock
-            ) as mock_llm,
             patch(
                 "anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock
             ) as mock_bluf,
@@ -231,9 +225,6 @@ class TestReportIdentifierDBFailure:
             mock_db.set_report_failed = AsyncMock()
             mock_db.update_job_status = AsyncMock()
             mock_embed.return_value = [0.1] * 384
-            mock_ctx.return_value = ("context", 1, "2026-06-01")
-            mock_prompt.return_value = "prompt"
-            mock_llm.return_value = rc
             mock_bluf.return_value = None  # triggers fallback BLUF
             mock_bluf_prompt.return_value = "bluf prompt"
             mock_geo.return_value = []

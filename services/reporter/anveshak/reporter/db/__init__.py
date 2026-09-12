@@ -36,7 +36,18 @@ SQL_FETCH_REPORT = """
     GROUP BY r.id
 """
 
-SQL_FETCH_TOPIC = "SELECT * FROM topics WHERE id = $1"
+# The organisation's report audience rides along with the topic (#57), so
+# resolving it costs no extra round trip and no extra mock in every test that
+# drives generate_report. topics.org_id is NOT NULL, so the LEFT JOIN is
+# defensive rather than load-bearing; a NULL audience means the organisation
+# states none, which resolves to the configured default. Aliased, because
+# t.* would collide silently if topics ever grew a column of the same name.
+SQL_FETCH_TOPIC = """
+    SELECT t.*, o.report_audience AS org_report_audience
+    FROM topics t
+    LEFT JOIN organizations o ON o.id = t.org_id
+    WHERE t.id = $1
+"""
 
 SQL_FETCH_RAG_CHUNKS = """
     SELECT id,
@@ -166,7 +177,11 @@ SQL_FETCH_TOPIC_TEMPLATE_MATCHES = """
        OR ci.id IN (SELECT content_item_id FROM topic_content_items WHERE topic_id = $1))
       AND ci.labels->>'scam_template' IS NOT NULL
     GROUP BY ci.labels->>'scam_template', st.display, st.severity, st.legal_sections
-    ORDER BY COUNT(*) DESC
+    -- Template name breaks the tie. Without it two templates on the same match
+    -- count order arbitrarily, and the actions block they produce reorders
+    -- between two reports built from identical evidence, which a reader
+    -- diffing two immutable snapshots would read as a change.
+    ORDER BY COUNT(*) DESC, ci.labels->>'scam_template'
 """
 
 

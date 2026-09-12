@@ -5,6 +5,9 @@ export interface Organization {
   name: string
   slug: string
   is_active: boolean
+  // Which service this organisation's reports are addressed to (#57). Null
+  // means it states none, and the reporter uses the deployment default.
+  report_audience: string | null
   created_at: string
   updated_at: string
 }
@@ -17,6 +20,7 @@ export interface CreateOrgPayload {
 export interface UpdateOrgPayload {
   name?: string
   is_active?: boolean
+  report_audience?: string
 }
 
 export const organizationsApi = {

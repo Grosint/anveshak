@@ -40,6 +40,13 @@ configure_logging("reporter")
 configure_tracing("reporter")
 
 from . import db as db
+from .audience import (
+    DEFAULT_AUDIENCE,
+    LEGAL_ATTRIBUTED,
+    AudienceArg,
+    concrete_audience,
+    resolve_audience,
+)
 from .geocoder import build_geojson, extract_locations_from_text, geocode_locations
 from .llm import (
     BlufContent,
@@ -53,7 +60,9 @@ from .metrics import (
 )
 from .prompt_templates import render_assessment_prompt, render_bluf_prompt
 from .rag import (
+    ACTIONS_MARKER,
     build_recommended_actions,
+    format_legal_provisions,
     generate_query_embedding,
 )
 from .settings import settings as _default_settings
@@ -146,6 +155,16 @@ async def generate_report(ctx: dict, report_id: str, reference_time: str | None 
     keywords: list[str] = topic.get("keywords") or []
     credibility_min: float = float(report.get("credibility_min_filter", 30.0))
     report_type: str = report.get("report_type", "intelligence_brief")
+
+    # Who the report is addressed to (#57). The audience decides which action
+    # set the matched templates produce and whether legal provisions are the
+    # reader's own. It rides along on the topic row via the organisation.
+    audience = resolve_audience(topic.get("org_report_audience"))
+    log.info(
+        "reporter.audience_resolved",
+        report_id=report_id,
+        audience=audience.id if audience else None,
+    )
 
     # --- 2. Fetch data bundle (all structured data from SQL) ---
     data_bundle = await db.fetch_report_data_bundle(pool, topic_id, generated_at)
@@ -253,6 +272,7 @@ async def generate_report(ctx: dict, report_id: str, reference_time: str | None 
         identifiers=identifiers,
         template_matches=template_matches,
         report_type=report_type,
+        audience=audience,
     )
 
     # --- 10. Store (idempotent via generated_at IS NULL guard) ---
@@ -287,6 +307,13 @@ async def generate_report(ctx: dict, report_id: str, reference_time: str | None 
                 **data_bundle,
                 "identifiers": identifiers,
                 "template_matches": template_matches,
+                # The PDF renders the actions from the same call the markdown
+                # does, rather than parsing them back out of the markdown by
+                # heading. A heading the parser did not recognise used to drop
+                # curated actions into the LLM recommendations list, which is
+                # both the wrong framing and the wrong provenance.
+                "recommended_actions": build_recommended_actions(template_matches, audience),
+                "actions_heading": _actions_heading(audience),
             }
             pdf_path = await generate_pdf(report_id, pdf_data, s.pdf_output_dir)
             async with pool.acquire() as conn:
@@ -317,10 +344,72 @@ async def generate_report(ctx: dict, report_id: str, reference_time: str | None 
         log.info("reporter.report_already_generated", report_id=report_id)
 
 
+# ---------------------------------------------------------------------------
+# Audience-shaped report sections (#57)
+# ---------------------------------------------------------------------------
+
+
+def _actions_heading(audience: AudienceArg) -> str:
+    """Heading for the actions block, which the audience names.
+
+    A prosecuting service reads "Recommended Actions". An intelligence consumer
+    reads whatever its own entry calls the block, because the heading is the
+    first line an officer reads and a wrong one mis-frames everything under it.
+
+    Returns "" when no audience resolved, so no code here knows a heading by
+    name. That case renders nothing anyway, since an unresolved audience
+    produces no actions to head.
+    """
+    resolved = concrete_audience(audience)
+    return resolved.actions_heading if resolved else ""
+
+
+def _log_actions_absent(template_matches: list[dict[str, Any]], audience: AudienceArg) -> None:
+    """Say why a report with template matches carries no actions block.
+
+    Every upstream reason is already logged once per worker process, at the
+    load that found it. This is the line tied to the report being written, so
+    an analyst asking why one report has no actions greps that report and gets
+    an answer rather than silence.
+    """
+    resolved = concrete_audience(audience)
+    log.info(
+        "reporter.actions_block_absent",
+        audience=resolved.id if resolved else None,
+        templates=[m.get("template_name", "") for m in template_matches],
+        reason=(
+            "no audience resolved for this report"
+            if resolved is None
+            else "the audience has no action set for any matched template"
+        ),
+    )
+
+
+def _format_match_provisions(match: dict[str, Any], audience: AudienceArg) -> str:
+    """Legal provisions line under a template match, rendered for the audience.
+
+    Same rule as the actions block: a reader who cannot proceed under a section
+    is either not shown it or shown it attributed to the agency that can.
+    """
+    resolved = concrete_audience(audience)
+    if resolved is None:
+        return ""
+    provisions = format_legal_provisions(match, resolved)
+    if not provisions:
+        return ""
+    if resolved.legal_provisions == LEGAL_ATTRIBUTED:
+        return f"  {provisions}"
+    # Under the match itself the template is already named on the line above,
+    # so the sections stand alone rather than repeating "for <template>".
+    legal = match.get("legal_sections") or []
+    return f"  Legal provisions: {', '.join(legal)}"
+
+
 def _build_content_md(
     rc: Any,
     identifiers: list[dict[str, Any]] | None = None,
     template_matches: list[dict[str, Any]] | None = None,
+    audience: AudienceArg = DEFAULT_AUDIENCE,
 ) -> str:
     """Convert a ReportContent object to Markdown string.
 
@@ -356,20 +445,24 @@ def _build_content_md(
             severity = match.get("severity", "")
             confidence = float(match.get("confidence", 0) or 0)
             count = match.get("match_count", 0)
-            legal = match.get("legal_sections") or []
             lines.append(
                 f"**{display}** — Severity: {severity}, Confidence: {confidence:.0%}, Matches: {count}"
             )
-            if legal and isinstance(legal, list):
-                lines.append(f"  Legal provisions: {', '.join(legal)}")
+            provisions = _format_match_provisions(match, audience)
+            if provisions:
+                lines.append(provisions)
             lines.append("")
 
-        # Recommended actions
-        actions = build_recommended_actions(template_matches)
-        if actions:
-            lines.append("## Recommended Actions\n")
+        # Recommended actions, shaped for the audience the report is addressed to
+        actions = build_recommended_actions(template_matches, audience)
+        heading = _actions_heading(audience)
+        if actions and heading:
+            lines.append(ACTIONS_MARKER)
+            lines.append(f"## {heading}\n")
             for action in actions:
                 lines.append(f"- {action}")
+        else:
+            _log_actions_absent(template_matches, audience)
 
     lines.append("\n## Source Citations\n")
     for citation in rc.source_citations:
@@ -422,6 +515,7 @@ def _build_content_md_v2(
     identifiers: list[dict[str, Any]] | None = None,
     template_matches: list[dict[str, Any]] | None = None,
     report_type: str = "intelligence_brief",
+    audience: AudienceArg = DEFAULT_AUDIENCE,
 ) -> str:
     """Build data-driven markdown report from SQL data with minimal LLM narrative.
 
@@ -565,13 +659,17 @@ def _build_content_md_v2(
                 )
             lines.append("")
 
-            # Recommended Actions (derived from template matches)
-            actions = build_recommended_actions(template_matches)
-            if actions:
-                lines.append("## Recommended Actions\n")
+            # Recommended Actions (derived from template matches, per audience)
+            actions = build_recommended_actions(template_matches, audience)
+            heading = _actions_heading(audience)
+            if actions and heading:
+                lines.append(ACTIONS_MARKER)
+                lines.append(f"## {heading}\n")
                 for action in actions:
                     lines.append(f"- {action}")
                 lines.append("")
+            else:
+                _log_actions_absent(template_matches, audience)
 
     # --- Part III: Evidence Appendix (research_summary only) ---
     if is_full and evidence_items:

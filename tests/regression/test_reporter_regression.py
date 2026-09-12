@@ -327,7 +327,6 @@ class TestSourceSnapshotRegression:
             ),
         }
         chunks = [{"id": "c1", "source_id": "src-1", "clean_text": "t", "url": "u"}]
-        rc = _make_rc()
         snapshot = {"src-1": {"credibility_score": 85.0, "name": "Source One"}}
 
         with (
@@ -335,9 +334,8 @@ class TestSourceSnapshotRegression:
             patch(
                 "anveshak.reporter.worker.generate_query_embedding", new_callable=AsyncMock
             ) as me,
-            patch("anveshak.reporter.worker.assemble_context") as mc,
-            patch("anveshak.reporter.worker.render_prompt") as mp,
-            patch("anveshak.reporter.worker.call_ollama_with_retry", new_callable=AsyncMock) as ml,
+            patch("anveshak.reporter.worker.call_ollama_for_bluf", new_callable=AsyncMock) as mb,
+            patch("anveshak.reporter.worker.render_bluf_prompt") as mbp,
             patch("anveshak.reporter.worker.geocode_locations") as mg,
             patch("anveshak.reporter.worker.build_geojson") as mj,
             patch("anveshak.reporter.worker.extract_locations_from_text") as mx,
@@ -357,6 +355,17 @@ class TestSourceSnapshotRegression:
                     "keywords": [],
                 }
             )
+            mock_db.fetch_report_data_bundle = AsyncMock(
+                return_value={
+                    "topic_stats": {
+                        "content_count": 1,
+                        "source_count": 1,
+                        "cluster_count": 0,
+                        "signal_count": 0,
+                    },
+                    "clusters": [],
+                }
+            )
             mock_db.fetch_rag_chunks = AsyncMock(return_value=chunks)
             mock_db.fetch_sources_for_snapshot = AsyncMock(return_value=snapshot)
             mock_db.fetch_topic_location_entities = AsyncMock(return_value=[])
@@ -365,9 +374,8 @@ class TestSourceSnapshotRegression:
             mock_db.set_report_generated = AsyncMock(return_value=True)
             mock_db.update_job_status = AsyncMock()
             me.return_value = [0.1] * 384
-            mc.return_value = ("ctx", 1, "2026-06-01")
-            mp.return_value = "prompt"
-            ml.return_value = rc
+            mb.return_value = None  # triggers the template-driven BLUF fallback
+            mbp.return_value = "bluf prompt"
             mg.return_value = []
             mj.return_value = {"type": "FeatureCollection", "features": []}
             mx.return_value = []

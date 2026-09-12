@@ -356,6 +356,35 @@ class TestOrganizationDB:
         await update_organization(mock_conn, "org-1", name="NIA Updated", is_active=False)
         mock_conn.execute.assert_awaited_once()
 
+    @pytest.mark.asyncio
+    async def test_update_org_sets_the_report_audience(self):
+        """An org's report audience is settable through the API, not only by raw SQL (#57)."""
+        from services.api.anveshak.api.db.organizations import (
+            SQL_UPDATE_ORG,
+            update_organization,
+        )
+
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock(return_value="UPDATE 1")
+
+        await update_organization(mock_conn, "org-1", report_audience="advisory")
+
+        assert "report_audience" in SQL_UPDATE_ORG
+        args = mock_conn.execute.await_args[0]
+        assert "advisory" in args
+
+    def test_list_orgs_returns_the_report_audience(self):
+        """A super-admin can see which audience an org is on (#57)."""
+        from services.api.anveshak.api.db.organizations import SQL_LIST_ORGS
+
+        assert "report_audience" in SQL_LIST_ORGS
+
+    def test_update_request_accepts_a_report_audience(self):
+        from services.api.anveshak.api.routes.organizations import UpdateOrgRequest
+
+        assert UpdateOrgRequest(report_audience="advisory").report_audience == "advisory"
+        assert UpdateOrgRequest().report_audience is None
+
 
 # ===================================================================
 # 7. User creation with org_id

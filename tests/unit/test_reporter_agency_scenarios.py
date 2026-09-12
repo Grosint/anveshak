@@ -612,3 +612,85 @@ class TestMEAScenario:
         )
         assert "<!-- report-v2 -->" in md
         assert "## Bottom Line Up Front" in md
+
+
+class TestIntelligenceConsumerScenario:
+    """A domestic intelligence consumer: the same evidence, framed as an assessment.
+
+    Issue #57. The service does not arrest, charge or prosecute, so the actions
+    block is assessment tasks and referrals, and the legal provisions belong to
+    the agency that would proceed under them.
+    """
+
+    async def _report_for(self, audience: str | None) -> str:
+        topic_row = {
+            "id": "topic-ib",
+            "name": "Mule Recruitment Network",
+            "keywords": ["mule", "recruitment"],
+        }
+        if audience is not None:
+            topic_row["org_report_audience"] = audience
+        return await _run_generate_report(
+            _make_ctx(),
+            "rpt-ib",
+            report_row={
+                "id": "rpt-ib",
+                "topic_id": "topic-ib",
+                "report_type": "intelligence_brief",
+                "credibility_min_filter": 30.0,
+            },
+            topic_row=topic_row,
+            chunks=[_make_chunk()],
+            rc=_make_rc(),
+            identifiers=_POLICE_IDENTIFIERS,
+            template_matches=_POLICE_TEMPLATES,
+        )
+
+    @pytest.mark.asyncio
+    async def test_advisory_report_names_the_block_for_its_reader(self):
+        md = await self._report_for("advisory")
+        assert "## Assessment Priorities" in md
+        assert "## Recommended Actions" not in md
+
+    @pytest.mark.asyncio
+    async def test_advisory_report_recommends_no_power_it_does_not_have(self):
+        md = await self._report_for("advisory")
+        block = md.split("## Assessment Priorities")[1]
+        lowered = block.lower()
+        for phrase in ("file fir", "file an fir", "file str", "freeze"):
+            assert phrase not in lowered
+        assert "Map the recruitment network" in block
+
+    @pytest.mark.asyncio
+    async def test_advisory_report_attributes_legal_provisions_elsewhere(self):
+        md = await self._report_for("advisory")
+        assert "another agency would proceed under" in md
+        assert "Applicable legal provisions for" not in md
+        # The provisions are still shown, just not as the reader's own.
+        assert "PMLA Section 3" in md
+
+    @pytest.mark.asyncio
+    async def test_same_evidence_still_prosecutes_for_a_police_org(self):
+        """User story 2: the existing prosecution framing is untouched."""
+        md = await self._report_for("prosecution")
+        assert "## Recommended Actions" in md
+        assert "Freeze identified bank accounts and UPI IDs under PMLA Section 17" in md
+        assert "Applicable legal provisions for Mule Account Recruitment" in md
+
+    @pytest.mark.asyncio
+    async def test_an_org_that_states_no_audience_reads_as_before(self):
+        """Backward compatible: no audience on the organisation means prosecution."""
+        md = await self._report_for(None)
+        assert "## Recommended Actions" in md
+        assert "File FIR under BNS 318 (cheating) and PMLA Section 3" not in md
+        assert "Block identified phone numbers via DoT (Department of Telecom)" in md
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_audience_borrows_nobody_elses_actions(self):
+        """Deny by default: an audience the config does not define gets no actions."""
+        md = await self._report_for("interpol")
+        assert "## Recommended Actions" not in md
+        assert "## Assessment Priorities" not in md
+        assert "Freeze identified bank accounts" not in md
+        # The rest of the report is unaffected.
+        assert "### Scam Template Matches" in md

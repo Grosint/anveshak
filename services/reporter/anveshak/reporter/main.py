@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict
 from . import db as db_module
 from .metrics import REGISTRY as REPORTER_REGISTRY
 from .pdf import generate_pdf
+from .rag import ACTIONS_MARKER
 from .settings import settings
 
 log = structlog.get_logger(__name__)
@@ -223,6 +224,12 @@ async def get_report_pdf(report_id: str) -> Response:
             "identifiers": identifiers,
             "template_matches": template_matches,
         }
+        # The actions block comes from the stored markdown, which is the
+        # snapshot this PDF renders, not from a fresh lookup of the
+        # organisation's current audience (#57, rule 4).
+        heading, actions = extract_actions_from_md(content_md)
+        report_data["actions_heading"] = heading
+        report_data["recommended_actions"] = actions
     else:
         # v1: legacy LLM-dependent report
         report_data = {
@@ -296,6 +303,13 @@ def _enrich_report_data_from_md(report_data: dict, content_md: Optional[str]) ->
             current_section = "recommendations"
         elif "Source Citations" in stripped:
             current_section = "citations"
+        elif stripped.startswith("#"):
+            # Any other heading closes the section rather than leaving it open.
+            # The audience names the recommended-actions heading (#57), so a
+            # heading this parser does not know is expected, and without the
+            # reset its curated bullets land in the LLM recommendations list:
+            # wrong framing and wrong provenance in the same line.
+            current_section = None
         elif stripped.startswith("- "):
             item = stripped[2:]
             if current_section == "findings":
@@ -311,6 +325,48 @@ def _enrich_report_data_from_md(report_data: dict, content_md: Optional[str]) ->
     report_data["key_findings"] = findings
     report_data["recommendations"] = recs
     report_data["source_citations"] = citations
+    heading, actions = extract_actions_from_md(content_md)
+    report_data["actions_heading"] = heading
+    report_data["recommended_actions"] = actions
+
+
+def extract_actions_from_md(content_md: Optional[str]) -> tuple[str, list[str]]:
+    """Read the actions block back out of a stored report.
+
+    The heading is the audience's, so this cannot match on a fixed string. The
+    generator labels the block with ACTIONS_MARKER, and the block is the
+    heading after that marker plus the bullets under it.
+
+    A report whose audience produced no actions carries no marker, and this
+    returns nothing. Taking "the heading after the template matches" instead
+    would hand back the citations or the methodology section, and the PDF would
+    print those bullets as the report's recommended actions.
+
+    Read from the markdown rather than rebuilt from the templates, because the
+    markdown is the point-in-time snapshot (rule 4). Rebuilding would let an
+    organisation that changed its audience since generation produce a PDF that
+    disagrees with the report it is a rendering of.
+    """
+    if not content_md or ACTIONS_MARKER not in content_md:
+        return "", []
+
+    heading = ""
+    actions: list[str] = []
+    after_marker = False
+    for line in content_md.split("\n"):
+        stripped = line.strip()
+        if stripped == ACTIONS_MARKER:
+            after_marker = True
+            continue
+        if not after_marker:
+            continue
+        if stripped.startswith("#"):
+            if heading:
+                break
+            heading = stripped.lstrip("#").strip()
+        elif heading and stripped.startswith("- "):
+            actions.append(stripped[2:])
+    return heading, actions
 
 
 if __name__ == "__main__":

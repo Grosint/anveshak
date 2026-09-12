@@ -54,6 +54,9 @@ class ReporterSettings(BaseSettings):
     # Geocoder
     geocoder_fuzzy_threshold: int = 2
 
+    # Recommended actions per audience - the customer owns this file (#57)
+    report_audience_config_path: str = "/workspace/infra/configs/audiences/report_actions.yaml"
+
     port: int = 8005
     metrics_port: int = 8006  # Prometheus HTTP server for the ARQ reporter worker
     log_level: str = "INFO"

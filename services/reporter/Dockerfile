@@ -67,6 +67,11 @@ COPY --from=builder /workspace/services/reporter /workspace/services/reporter
 WORKDIR /workspace/services/reporter
 COPY services/reporter/templates/ templates/
 
+# Recommended actions per report audience (#57). The customer owns this file
+# and compose mounts it read-only over this copy; the copy is what makes the
+# container start without the mount.
+COPY infra/configs/audiences/report_actions.yaml /workspace/infra/configs/audiences/report_actions.yaml
+
 # Output directory (volume-mounted in compose)
 RUN mkdir -p /app/reports
 

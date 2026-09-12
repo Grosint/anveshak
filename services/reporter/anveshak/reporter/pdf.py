@@ -173,8 +173,8 @@ PDF_TEMPLATE_V1 = """\
 </table>
 {% endif %}
 
-{% if report_data.get('recommended_actions') %}
-<h2>Recommended Actions</h2>
+{% if report_data.get('recommended_actions') and report_data.get('actions_heading') %}
+<h2>{{ report_data.get('actions_heading') }}</h2>
 <ul>
 {% for action in report_data.get('recommended_actions', []) %}
   <li>{{ action }}</li>
@@ -617,6 +617,15 @@ PDF_TEMPLATE_V2 = (
   {% endfor %}
 </table>
 {% endif %}
+
+{% if rd.get('recommended_actions') and rd.get('actions_heading') %}
+<h2>{{ rd.get('actions_heading') }}</h2>
+<ul>
+{% for action in rd.get('recommended_actions', []) %}
+  <li>{{ action }}</li>
+{% endfor %}
+</ul>
+{% endif %}
 {% endif %}
 
 <!-- ══ PART III: EVIDENCE APPENDIX ══ -->
@@ -696,6 +705,15 @@ def render_pdf_html(report_data: dict[str, Any]) -> str:
     fields are present (topic_stats, sources, clusters). Falls back to
     v1 for legacy reports.
     """
+    if report_data.get("recommended_actions") and not report_data.get("actions_heading"):
+        # The audience names the actions block (#57). No heading means the
+        # audience did not resolve, and printing the actions under a heading
+        # invented here is how an assessment ends up reading as a case file.
+        log.warning(
+            "reporter.pdf_actions_dropped",
+            actions=len(report_data["recommended_actions"]),
+            reason="no actions_heading, so the audience for these actions is unknown",
+        )
     if report_data.get("topic_stats") or report_data.get("sources"):
         # v2 data-driven template
         return _COMPILED_V2.render(rd=report_data)

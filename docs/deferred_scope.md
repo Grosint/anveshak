@@ -56,19 +56,6 @@ Deferred because adding a fourth seam adds maintenance without covering a failur
 
 ## Epic #39 - Historic narrative Backfill and Replay
 
-### Recommended actions shaped for a service that does not prosecute
-
-Tracked as #57.
-
-`build_recommended_actions` in `services/reporter/anveshak/reporter/rag.py` maps a matched template to prosecution steps: file an FIR, request a CDR, cite an NDPS or IT Act section, refer to ED under PMLA.
-That is correct for the agencies the templates were written for, and wrong for a domestic intelligence consumer, which has none of those powers and produces an assessment rather than a case.
-
-Deferred from #53, which added the Intelligence Bureau persona and left the reporter untouched, because reshaping the block is a product decision about who a report is addressed to, not a wording change.
-The shape it needs is an audience on the report and an action set per audience, so an advisory-framed report and a prosecution-framed report come from the same evidence.
-
-Bring it back when a report is generated for a non-prosecuting consumer, which the demonstration in [demonstration_dataset_plan.md](demonstration_dataset_plan.md) is the first occasion for.
-The Intelligence Bureau persona is the review lens that catches it in the meantime.
-
 ### Personas beyond Intelligence Bureau
 
 #53 added one persona and stopped.

@@ -572,10 +572,61 @@ class TestPdfIdentifierSections:
             "source_citations": [],
             "labels": {"classification": "OPEN"},
             "recommended_actions": ["Freeze UPI ID scammer@paytm", "Request CDR for 9876543210"],
+            "actions_heading": "Recommended Actions",
         }
         html = render_pdf_html(report_data)
         assert "Recommended Actions" in html
         assert "Freeze UPI" in html
+
+    def test_pdf_drops_actions_with_no_audience_heading(self):
+        """No heading means no audience resolved, so the block is not invented (#57)."""
+        from anveshak.reporter.pdf import render_pdf_html
+
+        report_data = {
+            "topic_name": "Fraud Topic",
+            "report_type": "intelligence_brief",
+            "generated_at": "2026-06-11",
+            "confidence_score": 0.8,
+            "content_item_count": 10,
+            "executive_summary": "Summary",
+            "key_findings": ["F1"],
+            "recommendations": ["R1"],
+            "source_citations": [],
+            "labels": {"classification": "OPEN"},
+            "recommended_actions": ["Freeze UPI ID scammer@paytm"],
+        }
+        html = render_pdf_html(report_data)
+        assert "Freeze UPI" not in html
+
+    def test_v2_pdf_carries_the_audience_heading(self):
+        """The worker renders v2, so the actions must reach that template (#57)."""
+        from anveshak.reporter.pdf import render_pdf_html
+
+        report_data = {
+            "topic_name": "Fraud Topic",
+            "report_type": "intelligence_brief",
+            "generated_at": "2026-06-11",
+            "confidence_score": 0.8,
+            "content_item_count": 10,
+            "labels": {"classification": "OPEN"},
+            "bluf": "Bottom line.",
+            "topic_stats": {"name": "Fraud Topic", "content_count": 10, "source_count": 2},
+            "template_matches": [
+                {
+                    "template_name": "mule_recruitment",
+                    "template_display": "Mule Account Recruitment",
+                    "severity": "HIGH",
+                    "confidence": 0.8,
+                    "match_count": 3,
+                }
+            ],
+            "recommended_actions": ["Map the recruitment network behind the accounts"],
+            "actions_heading": "Assessment Priorities",
+        }
+        html = render_pdf_html(report_data)
+        assert "Assessment Priorities" in html
+        assert "Map the recruitment network" in html
+        assert "Recommended Actions" not in html
 
 
 # ---------------------------------------------------------------------------

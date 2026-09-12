@@ -15,6 +15,14 @@ from typing import Any
 import httpx
 import structlog
 
+from .audience import (
+    DEFAULT_AUDIENCE,
+    LEGAL_ATTRIBUTED,
+    LEGAL_OMITTED,
+    AudienceArg,
+    ReportAudience,
+    concrete_audience,
+)
 from .settings import settings
 
 log = structlog.get_logger(__name__)
@@ -157,73 +165,50 @@ def assemble_identifier_context(identifiers: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-# Recommended actions per template category/name
-_TEMPLATE_ACTIONS: dict[str, list[str]] = {
-    "mule_recruitment": [
-        "Freeze identified bank accounts and UPI IDs under PMLA Section 17",
-        "Request CDR (Call Detail Records) for associated phone numbers",
-        "File STR (Suspicious Transaction Report) with FIU-IND",
-    ],
-    "investment_fraud": [
-        "Report identified accounts to SEBI for investigation under PFUTP Regulations",
-        "Block fraudulent UPI IDs via NPCI dispute mechanism",
-        "Issue investor advisory for identified schemes",
-    ],
-    "maas": [
-        "Freeze mule accounts identified in the network",
-        "Coordinate with banks for KYC details of account holders",
-        "File FIR under BNS 318 (cheating) and PMLA Section 3",
-    ],
-    "digital_arrest": [
-        "Block identified phone numbers via DoT (Department of Telecom)",
-        "Report impersonation accounts to platform operators",
-        "Issue public advisory about digital arrest scam pattern",
-    ],
-    "job_fraud": [
-        "Block identified recruitment portals/URLs",
-        "Report fraudulent company registrations to MCA",
-        "Request CDR for associated phone numbers",
-    ],
-    "pump_and_dump": [
-        "Report manipulated securities to SEBI surveillance division",
-        "Flag identified social media accounts for coordinated promotion",
-        "Request trading data for identified accounts from exchanges",
-    ],
-    "fake_research_report": [
-        "Report fraudulent research reports to SEBI",
-        "Request takedown of hosting domains",
-        "Issue advisory to registered market intermediaries",
-    ],
-    "drug_sale": [
-        "Request CDR and IP logs for identified phone numbers and handles",
-        "Coordinate with NCB for controlled delivery operations",
-        "File case under NDPS Act Sections 20, 22, 25",
-    ],
-    "drug_delivery_recruitment": [
-        "Identify and freeze payment channels (UPI, crypto wallets)",
-        "Request subscriber details for identified Telegram handles",
-        "Coordinate with local police for recruitment hub surveillance",
-    ],
-    "fake_sim_sale": [
-        "Report identified SIM sellers to DoT for TRAI compliance action",
-        "Block identified phone numbers used for SIM activation",
-        "File FIR under IT Act 66C (identity theft)",
-    ],
-    "crypto_cashout": [
-        "Report identified crypto wallet addresses to exchanges for freezing",
-        "Trace blockchain transactions for identified wallets",
-        "Coordinate with ED (Enforcement Directorate) for PMLA investigation",
-    ],
-}
+# The actions block is the only report section whose heading the audience
+# names, so a reader of the stored markdown cannot find it by heading text.
+# This marker labels it, the way "<!-- report-v2 -->" labels the format.
+# Without it a report that carries no actions leaves the next section,
+# citations or methodology, sitting where the actions block would have been,
+# and a parser working by position renders those bullets as the report's
+# recommended actions.
+ACTIONS_MARKER = "<!-- recommended-actions -->"
 
 
-def build_recommended_actions(template_matches: list[dict[str, Any]]) -> list[str]:
-    """Generate recommended actions based on matched scam templates.
+# Recommended actions per matched template, per audience (#57)
+#
+# The action sets themselves live in a versioned file the customer owns, keyed
+# by audience and then by template. See audience.py for why, and
+# infra/configs/audiences/report_actions.yaml for the sets.
 
-    Returns a flat list of actionable recommendations derived from template-specific
-    action mappings. Includes legal section references from matched templates.
+
+def build_recommended_actions(
+    template_matches: list[dict[str, Any]],
+    audience: AudienceArg = DEFAULT_AUDIENCE,
+) -> list[str]:
+    """Generate recommended actions for the audience the report is addressed to.
+
+    Returns a flat list of actions drawn from the audience's action set for
+    each matched template, followed by that template's legal provisions when
+    the audience can act on them.
+
+    A caller that passes no audience gets the configured default, which ships
+    as the prosecution set, so it reads as it did before audiences existed. An
+    explicit None is an audience that resolved to nothing, and produces no
+    actions. An audience with no action set for a matched template contributes
+    nothing for that template and logs the reason, rather than falling back to
+    another audience's set.
     """
     if not template_matches:
+        return []
+
+    resolved = concrete_audience(audience)
+    if resolved is None:
+        log.warning(
+            "reporter.actions_skipped",
+            reason="no report audience resolved, so no action set applies",
+            templates=[m.get("template_name", "") for m in template_matches],
+        )
         return []
 
     actions: list[str] = []
@@ -231,19 +216,47 @@ def build_recommended_actions(template_matches: list[dict[str, Any]]) -> list[st
 
     for match in template_matches:
         name = match.get("template_name", "")
-        template_actions = _TEMPLATE_ACTIONS.get(name, [])
+        template_actions = resolved.template_actions.get(name)
+        if template_actions is None:
+            log.info(
+                "reporter.template_actions_absent",
+                audience=resolved.id,
+                template=name,
+                reason="this audience has no action set for this template",
+            )
+            template_actions = ()
         for action in template_actions:
             if action not in seen:
                 seen.add(action)
                 actions.append(action)
 
-        # Add legal section reference if available
-        legal = match.get("legal_sections") or []
-        if legal and isinstance(legal, list):
-            legal_str = ", ".join(legal)
-            ref = f"Applicable legal provisions for {match.get('template_display', name)}: {legal_str}"
-            if ref not in seen:
-                seen.add(ref)
-                actions.append(ref)
+        ref = format_legal_provisions(match, resolved)
+        if ref and ref not in seen:
+            seen.add(ref)
+            actions.append(ref)
 
     return actions
+
+
+def format_legal_provisions(
+    match: dict[str, Any],
+    audience: ReportAudience,
+) -> str:
+    """Render one matched template's legal provisions for this audience.
+
+    Returns "" when the match carries no provisions, or when the audience
+    cannot act on them and the configuration omits them. An audience that
+    cannot act on them but is shown them gets them attributed to the agency
+    that would, so an assessment never reads as a charge sheet.
+    """
+    legal = match.get("legal_sections") or []
+    if not legal or not isinstance(legal, list):
+        return ""
+    if audience.legal_provisions == LEGAL_OMITTED:
+        return ""
+
+    display = match.get("template_display") or match.get("template_name", "")
+    legal_str = ", ".join(legal)
+    if audience.legal_provisions == LEGAL_ATTRIBUTED:
+        return f"Legal provisions another agency would proceed under for {display}: {legal_str}"
+    return f"Applicable legal provisions for {display}: {legal_str}"

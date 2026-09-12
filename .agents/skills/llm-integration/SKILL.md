@@ -59,17 +59,26 @@ See: `.agents/skills/learned/references/factual-sections-alongside-llm.md`
 ## Template-Driven Actions, Not LLM-Generated
 
 Recommended actions (freeze accounts, request CDR, file FIR) = high-stakes.
-Map each scam template to curated, human-reviewed action list:
+Map each scam template to a curated, human-reviewed action list, per audience,
+in `infra/configs/audiences/report_actions.yaml`:
 
-```python
-_TEMPLATE_ACTIONS = {
-    "mule_recruitment": ["Freeze accounts under PMLA Section 17", "Request CDR", "File STR"],
-    "drug_sale": ["Request CDR/IP logs", "Coordinate NCB controlled delivery", "NDPS 20/22/25"],
-}
+```yaml
+audiences:
+  - id: prosecution          # files an FIR, requests a CDR
+    legal_provisions: own
+    templates:
+      drug_sale: ["Request CDR and IP logs", "Coordinate with NCB", "File under NDPS 20/22/25"]
+  - id: advisory             # assesses and refers, holds none of those powers
+    legal_provisions: attributed
+    templates:
+      drug_sale: ["Map the supply network", "Assess whether the route crosses a border"]
 ```
 
 Deterministic assembly from matched templates w/ dedup across overlapping matches.
 Legal references exact (not hallucinated), reviewed by domain experts once.
+Audience comes from `organizations.report_audience`; unset = file's `default_audience`.
+No fallback: an unknown audience, or one with no set for a matched template, yields
+NO actions and logs why. See ADR 0006.
 
 LLM-generated actions appropriate ONLY for generic strategic recommendations ("monitor this topic", "increase collection") — stay in `recommendations` field.
 Template-driven actions go in SEPARATE "Recommended Actions" section.

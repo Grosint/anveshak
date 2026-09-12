@@ -26,6 +26,11 @@ class UpdateOrgRequest(BaseModel):
     model_config = ConfigDict(strict=True)
     name: Optional[str] = None
     is_active: Optional[bool] = None
+    # Which service this organisation's reports are addressed to, which decides
+    # the recommended actions they carry (#57, ADR 0006). Free text, because
+    # the audiences are defined in a versioned file the customer owns and the
+    # reporter refuses one it does not recognise rather than substituting.
+    report_audience: Optional[str] = None
 
 
 @router.get("")
@@ -78,5 +83,11 @@ async def update_organization(
     org = await org_db.get_organization(db, org_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
-    await org_db.update_organization(db, org_id, name=req.name, is_active=req.is_active)
+    await org_db.update_organization(
+        db,
+        org_id,
+        name=req.name,
+        is_active=req.is_active,
+        report_audience=req.report_audience,
+    )
     return {"org_id": org_id, "updated": True}

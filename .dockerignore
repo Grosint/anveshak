@@ -51,6 +51,8 @@ infra/configs/
 !infra/configs/geocoder/
 !infra/configs/lexicons/
 !infra/configs/taxonomies/
+!infra/configs/credibility/
+!infra/configs/audiences/
 infra/compose*.yml
 
 # Models (downloaded at runtime, not baked in)
