@@ -37,6 +37,15 @@ Repo-wide rules are in [../AGENTS.md](../AGENTS.md).
 - Overlay compose files (`compose.vision.yml`, `compose.bridge.yml`) are ONLY for optional GPU or dev services that not every deployment needs
 - A feature whose env var exists only in an overlay is silently disabled on non-overlay deployments
 
+## Profiles
+
+- Observability (`prometheus`, `grafana`, `loki`, `promtail`, `alertmanager`, `cadvisor`, `postgres-exporter`, `redis-exporter`) carries `profiles: [observability]`, and tracing (`jaeger`) carries `profiles: [tracing]`
+- `make up-dev` starts the application stack alone, `make up-prod` adds the observability profile and `infra/compose.prod.yml`
+- `docker compose up --remove-orphans` does NOT stop a container whose profile is disabled, because the service still exists in the compose file.
+  `up-dev` therefore runs `rm -sf` over `OBS_SERVICES` by name first
+- `down`, `ps` and `logs` go through `COMPOSE_ALL`, which names every profile, so a container started under any profile is still visible and still stops
+- A core user-facing feature NEVER goes behind a profile, for the same reason it never goes in an overlay file
+
 ## Egress policy
 
 - The collectors fetch addresses that scraped content chose, so `infra/k3s/networkpolicy.yml` allows them `0.0.0.0/0` on ports 80 and 443 with the private ranges in `except`, and grants postgres, redis and ollama by pod selector instead

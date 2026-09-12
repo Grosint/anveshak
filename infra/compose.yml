@@ -169,7 +169,9 @@ services:
   ollama:
     image: ollama/ollama:latest
     restart: unless-stopped
-    mem_limit: 8g
+    # A ceiling, not a reservation. qwen2:7b needs roughly 4.4G resident.
+    # compose.prod.yml restores 8g, because a prod host runs a larger model.
+    mem_limit: 5g
     environment:
       OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-5m}
       OLLAMA_HOST: 0.0.0.0
@@ -585,6 +587,14 @@ services:
   analyse-worker:
     image: anveshak-analyst:latest
     restart: unless-stopped
+    # Must stay below the Docker VM's total RAM or this limit can never bind.
+    # Above it the host-wide OOM killer fires first and picks a fatter victim,
+    # usually postgres or ollama, leaving this worker alive and unattributed.
+    # All five models resident in one process measure 1010 MiB, not the ~6G the
+    # on-disk footprint suggests: NLLB is 4.7G on disk but safetensors maps it
+    # rather than copying. The headroom here is for max_jobs=4 concurrent
+    # inference activations on top of that, since every model loader is a
+    # module-level singleton that is never unloaded.
     mem_limit: 6g
     # Without a cpu bound this worker took 900% on a 12-core host: max_jobs=4
     # concurrent torch jobs each defaulting to os.cpu_count() threads.
@@ -736,7 +746,9 @@ services:
   analyse-vision-worker:
     image: anveshak-vision:latest
     restart: unless-stopped
-    mem_limit: 6g
+    # Capped below the Docker VM's total RAM so an overrun kills this
+    # container rather than the host. 2.8G of weights on disk, loaded lazily.
+    mem_limit: 3g
     environment:
       <<: *vision-env
       HF_HOME: /app/models
@@ -791,6 +803,8 @@ services:
   # ---------------------------------------------------------------------------
 
   loki:
+    profiles:
+      - observability
     image: grafana/loki:3.0.0
     restart: unless-stopped
     mem_limit: 512m
@@ -810,6 +824,8 @@ services:
       - anveshak-net
 
   promtail:
+    profiles:
+      - observability
     image: grafana/promtail:3.0.0
     restart: unless-stopped
     mem_limit: 128m
@@ -831,6 +847,8 @@ services:
   # ---------------------------------------------------------------------------
 
   postgres-exporter:
+    profiles:
+      - observability
     image: prometheuscommunity/postgres-exporter:latest
     restart: unless-stopped
     mem_limit: 64m
@@ -851,6 +869,8 @@ services:
       - anveshak-net
 
   redis-exporter:
+    profiles:
+      - observability
     image: oliver006/redis_exporter:latest
     restart: unless-stopped
     mem_limit: 64m
@@ -867,6 +887,8 @@ services:
       - anveshak-net
 
   prometheus:
+    profiles:
+      - observability
     image: prom/prometheus:latest
     restart: unless-stopped
     mem_limit: 512m
@@ -890,6 +912,8 @@ services:
       - anveshak-net
 
   alertmanager:
+    profiles:
+      - observability
     image: prom/alertmanager:latest
     restart: unless-stopped
     mem_limit: 128m
@@ -907,9 +931,14 @@ services:
       - anveshak-net
 
   grafana:
+    profiles:
+      - observability
     image: grafana/grafana:latest
     restart: unless-stopped
-    mem_limit: 256m
+    # 256m OOM-killed this container four times: provisioned dashboards plus
+    # the Loki and Prometheus datasources sit at roughly 318M resident, and
+    # measured 416M once running, which left 512m at 81 percent.
+    mem_limit: 768m
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
@@ -945,10 +974,40 @@ services:
   # ---------------------------------------------------------------------------
 
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    profiles:
+      - observability
+    # v0.49.1 emitted zero per-container series on Docker 29's containerd
+    # snapshotter. Its docker handler resolves each container's read-write layer
+    # through image/<driver>/layerdb, a layout that storage driver no longer
+    # writes, so every container failed to register and only cgroup slice
+    # aggregates reached Prometheus. v0.55.1 reads the snapshotter directly.
+    image: gcr.io/cadvisor/cadvisor:v0.55.1
     container_name: anveshak-cadvisor
     restart: unless-stopped
     privileged: true
+    # store_container_labels=false drops roughly 25 always-empty
+    # container_label_* labels from every series. It keeps id, name and image.
+    # docker_only=true drops the systemd slice cgroups that the Prometheus keep
+    # rule discards anyway.
+    command:
+      - --store_container_labels=false
+      - --docker_only=true
+      # Sample faster than the 30s scrape. allow_dynamic_housekeeping defaults
+      # to true and backs idle containers off toward max_housekeeping_interval
+      # (1m), so sampling AT 30s lets a scrape land on an unchanged counter and
+      # flatlines rate(). Cheap now that the disk collectors are off.
+      - --housekeeping_interval=15s
+      # This flag REPLACES cadvisor's default disable set rather than adding to
+      # it, so every default name must be repeated or that collector switches
+      # back ON. This list is cadvisor's own default plus disk and diskIO.
+      # The disk collectors walk /rootfs every housekeeping pass, and that
+      # dentry and inode cache was 186M of reclaimable kernel slab, enough to
+      # hit the cgroup ceiling 445 times in the first minute. Nothing in this
+      # repo reads container_fs_*.
+      # network stays ENABLED: anveshak_containers.json has four panels on
+      # container_network_*, and those counters come from the container netns
+      # rather than a filesystem walk, so they cost none of the slab above.
+      - --disable_metrics=advtcp,cpu_topology,cpuset,disk,diskIO,hugetlb,memory_numa,process,referenced_memory,resctrl,sched,tcp,udp
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -956,6 +1015,9 @@ services:
       - /var/lib/docker/:/var/lib/docker:ro
     ports:
       - "8080:8080"
+    # Measured 21M steady state with the disk collectors off, so 128m leaves
+    # roughly 6x headroom. Do not re-enable those collectors without raising
+    # this: with them on the same container sat at 245M of kernel slab.
     mem_limit: 128m
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]

@@ -6,7 +6,9 @@
 #   make setup            full first-run: syscheck -> build -> infra up -> migrate -> pull-models -> all up -> download-models -> seed -> validate
 #
 # LIFECYCLE:
-#   make up               start full stack including vision (no rebuild)
+#   make up               alias for up-dev
+#   make up-dev           application stack only, no observability (laptop default)
+#   make up-prod          application stack + observability + prod resource limits
 #   make up-vision        full stack + NVIDIA GPU overlay for vision
 #   make up-bridge        core + Drishti bridge overlay
 #   make down             stop all containers
@@ -69,6 +71,17 @@
 COMPOSE      := docker compose --env-file .env -p anveshak -f infra/compose.yml
 COMPOSE_VIS  := $(COMPOSE) -f infra/compose.vision.yml
 COMPOSE_BRG  := $(COMPOSE) -f infra/compose.bridge.yml
+# Observability (Prometheus, Grafana, Loki, Promtail, Alertmanager, cAdvisor,
+# exporters) sits behind the `observability` profile, so a developer laptop is
+# not asked to hold ~800 MB of monitoring it is not reading.
+COMPOSE_OBS  := $(COMPOSE) --profile observability
+COMPOSE_PROD := $(COMPOSE) -f infra/compose.prod.yml --profile observability
+# Every profile, for commands that must see containers regardless of how they
+# were started: down, ps, logs.
+COMPOSE_ALL  := $(COMPOSE) --profile observability --profile tracing
+# `up --remove-orphans` leaves profile-disabled containers running, since the
+# service still exists in the compose file, so up-dev stops these by name.
+OBS_SERVICES := loki promtail postgres-exporter redis-exporter prometheus alertmanager grafana cadvisor
 UV           := uv run
 
 # ANSI colour codes
@@ -89,7 +102,7 @@ _WARN  := $(_YEL)!$(_RST)
 _INFO  := $(_BLU)→$(_RST)
 _WORK  := $(_CYN)⟳$(_RST)
 
-.PHONY: all setup up up-vision up-bridge build build-nocache build-vision down restart \
+.PHONY: all setup up up-dev up-prod up-vision up-bridge build build-nocache build-vision down restart \
         ps logs init pull-models download-models migrate migrate-status migrate-hnsw \
         migrate-rollback seed-demo seed-demo-accounts seed-demo-check seed-demo-iaf \
         seed-demo-haryana \
@@ -242,13 +255,25 @@ build-vision:
 	@$(COMPOSE_VIS) build
 	$(call success,All images built (including vision))
 
-up:
-	$(call header,Starting Anveshak Core Stack)
+up: up-dev
+
+up-dev:
+	$(call header,Starting Anveshak — Application Stack (no observability))
 	$(call check_env,infra/compose.yml)
+	@$(COMPOSE_ALL) rm -sf $(OBS_SERVICES) >/dev/null 2>&1 || true
 	@$(COMPOSE) up -d --remove-orphans
-	$(call success,Core stack started)
+	$(call success,Application stack started)
+	$(call info,Observability is off. Run $(_BOLD)make up-prod$(_RST) for Prometheus/Grafana/Loki.)
 	@printf "\n  Run $(_BOLD)make ps$(_RST) to check health status\n"
 	@printf "  Run $(_BOLD)make health$(_RST) for quick health check\n\n"
+
+up-prod:
+	$(call header,Starting Anveshak — Full Stack + Observability)
+	$(call check_env,infra/compose.yml infra/compose.prod.yml)
+	@$(COMPOSE_PROD) up -d --remove-orphans
+	$(call success,Full stack started with observability)
+	@printf "\n  Prometheus: $(_CYN)http://localhost:9090$(_RST)\n"
+	@printf "  Grafana:    $(_CYN)http://localhost:3001$(_RST)\n\n"
 
 up-vision:
 	$(call header,Starting Anveshak + Vision GPU Overlay)
@@ -266,7 +291,7 @@ down:
 	$(call header,Stopping Anveshak)
 	@$(COMPOSE_BRG) down 2>/dev/null || true
 	@$(COMPOSE_VIS) down 2>/dev/null || true
-	@$(COMPOSE) down --remove-orphans
+	@$(COMPOSE_ALL) down --remove-orphans
 	$(call success,All containers stopped)
 
 restart:
@@ -276,14 +301,14 @@ restart:
 
 ps:
 	$(call header,Container Status)
-	@$(COMPOSE) ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || $(COMPOSE) ps
+	@$(COMPOSE_ALL) ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || $(COMPOSE_ALL) ps
 	@printf "\n"
 
 logs:
-	@$(COMPOSE) logs -f --tail=100
+	@$(COMPOSE_ALL) logs -f --tail=100
 
 logs-%:
-	@$(COMPOSE) logs -f --tail=100 $*
+	@$(COMPOSE_ALL) logs -f --tail=100 $*
 
 shell-%:
 	@$(COMPOSE) exec $* /bin/bash
@@ -820,6 +845,10 @@ lint-python:
 	$(call header,Linting Python)
 	@$(UV) ruff check services/ sdk/ tests/ scripts/
 
+lint-frontend:
+	$(call header,Linting Frontend)
+	@cd frontend && npx eslint .
+
 format:
 	$(call header,Formatting)
 	@$(UV) ruff format services/ sdk/ tests/ scripts/
@@ -845,10 +874,6 @@ clean-test-data:
 	@$(COMPOSE) exec -T postgres psql -U anveshak -d anveshak < scripts/cleanup_test_data.sql
 	$(call success,Test data removed)
 
-lint-frontend:
-	$(call header,Linting Frontend)
-	@cd frontend && npx eslint .
-
 # clean — Python caches only (safe, fast)
 clean:
 	$(call header,Cleaning Python Caches)
@@ -864,7 +889,7 @@ clean-containers:
 	$(call header,Stopping and Removing Containers)
 	@$(COMPOSE_BRG) down --remove-orphans 2>/dev/null || true
 	@$(COMPOSE_VIS) down --remove-orphans 2>/dev/null || true
-	@$(COMPOSE) down --remove-orphans
+	@$(COMPOSE_ALL) down --remove-orphans
 	$(call success,Containers removed (volumes preserved))
 
 # clean-volumes — stop + remove containers + all volumes (DATA LOSS)
@@ -873,7 +898,7 @@ clean-volumes:
 	$(call warn,This deletes PostgreSQL data$(,) Redis cache$(,) Ollama models$(,) and all other volumes)
 	@$(COMPOSE_BRG) down -v 2>/dev/null || true
 	@$(COMPOSE_VIS) down -v 2>/dev/null || true
-	@$(COMPOSE) down -v --remove-orphans
+	@$(COMPOSE_ALL) down -v --remove-orphans
 	$(call success,Containers + volumes removed)
 
 # clean-cache — Docker build cache prune
@@ -921,7 +946,7 @@ nuke:
 	$(call step,1/5,Stopping and removing containers + volumes)
 	@$(COMPOSE_BRG) down -v --remove-orphans 2>/dev/null || true
 	@$(COMPOSE_VIS) down -v --remove-orphans 2>/dev/null || true
-	@$(COMPOSE) down -v --remove-orphans 2>/dev/null || true
+	@$(COMPOSE_ALL) down -v --remove-orphans 2>/dev/null || true
 	$(call success,Containers and volumes removed)
 	$(call step,2/5,Removing all Anveshak images)
 	@docker images -q --filter reference='anveshak-*' 2>/dev/null | xargs docker rmi -f 2>/dev/null || true

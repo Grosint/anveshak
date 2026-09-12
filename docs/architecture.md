@@ -125,7 +125,7 @@ Anveshak runs as **23 containers** (+ 1 optional) on a single Docker network (`a
 |-----------|-------|------|--------|------|
 | `postgres` | pgvector/pgvector:pg16 | 5433→5432 | 1 GB | Primary database |
 | `redis` | redis:7-alpine | 6379 | 256 MB | Task queue + cache |
-| `ollama` | ollama/ollama | 11434 | 8 GB | Local LLM inference |
+| `ollama` | ollama/ollama | 11434 | 5 GB | Local LLM inference (prod overlay restores 8 GB) |
 | `api` | anveshak-api | 8000 | 512 MB | API gateway |
 | `scraper` | anveshak-scraper | 8001 | 768 MB | Web crawl scheduler |
 | `scraper-worker` | anveshak-scraper | — | 1 GB | Web crawl job executor |
@@ -136,19 +136,22 @@ Anveshak runs as **23 containers** (+ 1 optional) on a single Docker network (`a
 | `reporter-worker` | anveshak-reporter | 8006 | 1 GB | LLM report generator |
 | `vision-init` | anveshak-vision | — | 2 GB | Downloads ML models on first startup (runs once) |
 | `vision` | anveshak-vision | 8003 | 512 MB | Vision API (file storage + hashing) |
-| `vision-worker` | anveshak-vision | — | 6 GB | YOLO + CLIP + deepfake (ARQ) |
+| `vision-worker` | anveshak-vision | - | 3 GB | YOLO + CLIP + deepfake (ARQ) |
 | `frontend` | anveshak-frontend | 3000 | 256 MB | Analyst workbench UI |
 | `prometheus` | prom/prometheus | 9090 | 512 MB | Metrics collection |
-| `grafana` | grafana/grafana | 3001 | 256 MB | Dashboards |
+| `grafana` | grafana/grafana | 3001 | 768 MB | Dashboards |
 | `loki` | grafana/loki:3.0.0 | 3100 | 512 MB | Log aggregation |
 | `promtail` | grafana/promtail:3.0.0 | — | 128 MB | Log shipping |
 | `postgres-exporter` | postgres-exporter | 9187 | 64 MB | DB metrics |
 | `redis-exporter` | redis_exporter | 9121 | 64 MB | Cache metrics |
 | `alertmanager` | prom/alertmanager | 9093 | 128 MB | Alert delivery (webhook) |
-| `cadvisor` | cadvisor:v0.49.1 | 8080 | 256 MB | Container resource monitoring |
+| `cadvisor` | cadvisor:v0.55.1 | 8080 | 128 MB | Container resource monitoring |
 | `jaeger` | jaeger-all-in-one | 16686 | 512 MB | Tracing (opt-in) |
 
-**Total baseline memory:** ~22 GB (without vision overlay)
+**Total of all declared `mem_limit` values:** ~26 GB.
+This is a sum of ceilings, not a reservation, and it deliberately oversubscribes the host.
+Every limit is individually below total host RAM so that an overrun kills the offending container rather than letting the host OOM killer pick a fatter victim.
+Several other rows in this table disagree with `infra/compose.yml` and predate this note.
 
 ---
 
@@ -1893,11 +1896,20 @@ Data-dependent checks use WARN (not FAIL) on fresh deployments where no data has
 ```bash
 cp .env.example .env          # Configure secrets and model settings
                                # including every ANVESHAK_DEMO_* password
-make up                        # Start all 17 containers
+make up-dev                    # Start the application stack (no observability)
 make migrate                   # Run Alembic migrations
 make seed-demo                 # Seed the demonstration org, accounts and content (optional)
 make demo-detect               # Run detection over it - produces Clusters and Signals
 make ps                        # Check container health
+```
+
+`make up` is an alias for `make up-dev`.
+The observability stack - Prometheus, Grafana, Loki, Promtail, Alertmanager, cAdvisor and the two exporters - sits behind the Compose `observability` profile.
+It costs around 800 MB of container memory, which a developer laptop running the VM, the models and a browser does not have to spare.
+Start it with `make up-prod`, which also applies the production resource limits in `infra/compose.prod.yml`.
+
+```bash
+make up-prod                   # Application stack + observability + prod limits
 ```
 
 ### Production (k3s)

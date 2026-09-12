@@ -227,6 +227,23 @@ def test_check_grafana_healthy():
 
 
 @pytest.mark.unit
+def test_check_grafana_absent_is_optional():
+    """An unreachable Grafana means the observability profile is off, not a fault."""
+    with patch.object(
+        demo_check,
+        "http_get",
+        _make_http_get(
+            {
+                "localhost:3001": (0, {"error": "Connection refused"}),
+            }
+        ),
+    ):
+        c = demo_check.check_grafana()
+    assert c.passed
+    assert "up-prod" in c.detail
+
+
+@pytest.mark.unit
 def test_check_grafana_unhealthy():
     with patch.object(
         demo_check,

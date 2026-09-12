@@ -7,6 +7,7 @@ Run: make test-smoke
 from __future__ import annotations
 
 import json
+import urllib.error
 import urllib.request
 
 import pytest
@@ -54,14 +55,33 @@ def test_ollama_has_model():
     assert len(models) >= 1, "No Ollama models loaded"
 
 
+def _observability_up(url: str) -> bool:
+    """True when the observability profile is running.
+
+    `make up-dev` leaves Prometheus and Grafana down, so these endpoints are
+    absent by choice on a developer machine.
+    """
+    try:
+        with urllib.request.urlopen(url, timeout=2):
+            return True
+    except urllib.error.HTTPError:
+        return True
+    except Exception:
+        return False
+
+
 def test_prometheus_reachable():
     """Prometheus is scraping."""
+    if not _observability_up("http://localhost:9090/-/ready"):
+        pytest.skip("observability profile not running (make up-prod)")
     status, _ = _get("http://localhost:9090/-/ready")
     assert status == 200
 
 
 def test_grafana_healthy():
     """Grafana is running."""
+    if not _observability_up("http://localhost:3001/api/health"):
+        pytest.skip("observability profile not running (make up-prod)")
     status, body = _get("http://localhost:3001/api/health")
     assert status == 200
     assert body.get("database") == "ok"

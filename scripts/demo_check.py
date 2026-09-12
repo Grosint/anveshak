@@ -124,7 +124,9 @@ def demo_login(base: str) -> tuple[Check, str | None]:
     if not DEMO_PASS:
         # An empty password posts fine and comes back 401, which reads like a
         # broken API rather than a missing variable.
-        return Check("Step 3 — Demo login", False, "ANVESHAK_DEMO_ANALYST_PASSWORD is not set"), None
+        return Check(
+            "Step 3 — Demo login", False, "ANVESHAK_DEMO_ANALYST_PASSWORD is not set"
+        ), None
     try:
         data = json.dumps(
             {
@@ -275,7 +277,19 @@ def check_report(base: str, token: str) -> Check:
 
 
 def check_grafana() -> Check:
+    """Grafana health, optional.
+
+    The observability profile is off under `make up-dev`, so an unreachable
+    Grafana is a deployment choice rather than a fault. A Grafana that answers
+    but reports a broken database is still a failure.
+    """
     status, body = http_get("http://localhost:3001/api/health")
+    if status == 0:
+        return Check(
+            "Step 8 — Grafana health",
+            True,
+            "observability profile not running (make up-prod to enable)",
+        )
     passed = status == 200 and body.get("database") == "ok"
     return Check(
         "Step 8 — Grafana health",
