@@ -10,16 +10,21 @@ will occur and carries no probability that one will.
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from pathlib import Path
 
 import pytest
+from anveshak.analyst import mobilization
 from anveshak.analyst.mobilization import (
+    Lexicon,
+    LexiconPattern,
     build_description,
     extract_date,
     extract_place,
     find_calls_to_assemble,
     load_lexicon,
+    script_of_source,
 )
 from anveshak.analyst.settings import settings
 
@@ -333,3 +338,248 @@ class TestIndianMobilizationIdiom:
         """
         assert find_calls_to_assemble("Dilli Chalo on March 18.", language="en")
         assert find_calls_to_assemble("chalo yaar, we are late.", language="en") == []
+
+
+class TestScriptDecidesWhichPatternsAreTried:
+    """Issue #56.
+
+    Patterns were selected by the item's `language` label, and every
+    transliterated pattern in the lexicon is tagged `en`. Latin-script
+    Hinglish that the detector labelled `hi` therefore never reached the
+    patterns written for exactly that content.
+
+    Selection is by the script the text is written in, so a wrong label
+    costs nothing, while a pattern written in the other script is still
+    not tried.
+    """
+
+    def test_every_pattern_declares_the_script_it_is_written_in(self) -> None:
+        for pattern in load_lexicon().patterns:
+            assert pattern.script in {"latin", "devanagari"}, pattern.pattern_id
+
+    def test_a_devanagari_pattern_is_never_labelled_latin(self) -> None:
+        """The declared script has to be the one the regex is written in."""
+        for pattern in load_lexicon().patterns:
+            has_devanagari = any("ऀ" <= ch <= "ॿ" for ch in pattern.regex.pattern)
+            if has_devanagari:
+                assert pattern.script == "devanagari", pattern.pattern_id
+
+    @pytest.mark.parametrize(
+        ("text", "expected_id"),
+        [
+            ("Dilli Chalo on March 18. Buses leave at dawn.", "en_chalo"),
+            ("#dillichalo on March 18, buses from every district", "en_chalo_hashtag"),
+            ("Dilli kooch karenge, sab taiyar rahein.", "en_kooch"),
+            ("Call for a jail bharo from March 20.", "en_jail_bharo"),
+            ("Dharna outside the collectorate from tomorrow.", "en_dharna"),
+            ("Calling for a bandh across the district on Monday.", "en_bandh_call"),
+        ],
+    )
+    def test_a_transliterated_call_labelled_hindi_is_still_detected(
+        self, text: str, expected_id: str
+    ) -> None:
+        """The label says `hi`; the text is Latin script, so `en` patterns run."""
+        matched = find_calls_to_assemble(text, language="hi")
+        assert expected_id in {match.pattern_id for match in matched}
+
+    @pytest.mark.parametrize(
+        ("text", "expected_id"),
+        [
+            ("दिल्ली चलो। सभी जिलों से बसें रवाना होंगी।", "hi_chalo"),
+            ("सभी लोग कल सुबह कलेक्ट्रेट पर पहुंचें।", "hi_pahunche"),
+            ("कलेक्ट्रेट का घेराव करेंगे।", "hi_gherao"),
+        ],
+    )
+    def test_a_devanagari_call_labelled_english_is_still_detected(
+        self, text: str, expected_id: str
+    ) -> None:
+        matched = find_calls_to_assemble(text, language="en")
+        assert expected_id in {match.pattern_id for match in matched}
+
+    def test_only_the_patterns_of_the_script_present_are_tried(self) -> None:
+        """Not "try everything always", which would be a precision change."""
+        latin = find_calls_to_assemble(
+            "Everyone gather at the town square tomorrow.", language="hi"
+        )
+        assert latin
+        assert {match.script for match in latin} == {"latin"}
+
+        devanagari = find_calls_to_assemble("सभी लोग कल सुबह कलेक्ट्रेट पर पहुंचें।", language="en")
+        assert devanagari
+        assert {match.script for match in devanagari} == {"devanagari"}
+
+    def test_code_mixed_text_tries_both_scripts(self) -> None:
+        """One item, two scripts, and the call is in the transliterated half."""
+        matched = find_calls_to_assemble(
+            "किसान संगठन ने कहा: Dilli Chalo on March 18.", language="hi"
+        )
+        assert "en_chalo" in {match.pattern_id for match in matched}
+
+    def _lexicon_with(self, *extra: LexiconPattern) -> Lexicon:
+        real = load_lexicon()
+        return Lexicon(
+            version=real.version,
+            patterns=[*extra, *real.patterns],
+            place_markers=real.place_markers,
+        )
+
+    # Bengali is in neither list, and the danda is deliberately absent from
+    # this text: U+0964 sits in the Devanagari block and would make the
+    # script readable after all.
+    BENGALI = "সবাই আসুন"
+    _BENGALI_PATTERN = LexiconPattern(
+        pattern_id="test_latin",
+        language="en",
+        script="latin",
+        regex=re.compile("আসুন"),
+    )
+
+    def test_text_in_no_script_the_lexicon_covers_tries_every_pattern(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The property #33 wrote and this change must not weaken.
+
+        The needle is carried by a pattern declared `latin`, on text that
+        is not Latin, so only the fallback can find it.
+        """
+        monkeypatch.setattr(
+            mobilization, "load_lexicon", lambda: self._lexicon_with(self._BENGALI_PATTERN)
+        )
+        matched = find_calls_to_assemble(self.BENGALI, language="bn")
+        assert "test_latin" in {match.pattern_id for match in matched}
+
+    def test_an_unreadable_script_is_not_narrowed_by_a_scriptless_pattern(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """One `any` pattern must not hide the rest from unreadable text.
+
+        Falling back on an empty candidate list rather than on an empty
+        script set would do exactly that: the `any` pattern alone would be
+        tried, every other pattern skipped, and nothing logged.
+        """
+        anywhere = LexiconPattern(
+            pattern_id="test_any",
+            language="en",
+            script="any",
+            regex=re.compile(r"\d{1,2}:\d{2}"),
+        )
+        monkeypatch.setattr(
+            mobilization,
+            "load_lexicon",
+            lambda: self._lexicon_with(anywhere, self._BENGALI_PATTERN),
+        )
+        matched = find_calls_to_assemble(f"{self.BENGALI} 16:00", language="bn")
+        assert {"test_any", "test_latin"} <= {match.pattern_id for match in matched}
+
+    def test_the_language_label_changes_no_result(self) -> None:
+        """The non-selecting property, asserted rather than assumed."""
+        text = "किसान संगठन ने कहा: Dilli Chalo on March 18."
+        labels = [None, "en", "hi", "bn", "EN"]
+        results = [
+            sorted(match.pattern_id for match in find_calls_to_assemble(text, language=label))
+            for label in labels
+        ]
+        assert all(result == results[0] for result in results)
+        assert results[0]
+
+    @pytest.mark.parametrize(
+        ("text", "language"),
+        [
+            # Ordinary speech, carrying the label that used to hide it from
+            # the pattern written to reject it.
+            ("He said chalo, nothing will change.", "hi"),
+            ("The film Chalo Dilli was screened at the club.", "hi"),
+            ("चलो ठीक है, कल बात करते हैं।", "en"),
+            ("पुलिस ने कहा कि स्थिति नियंत्रण में है।", "en"),
+        ],
+    )
+    def test_a_wrong_label_does_not_cost_precision(self, text: str, language: str) -> None:
+        assert find_calls_to_assemble(text, language=language) == []
+
+    def test_a_place_is_extracted_from_a_mislabelled_item(self) -> None:
+        """Place markers are selected by script too, for the same reason."""
+        assert "Town Square" in (extract_place("Gather at Town Square", language="hi") or "")
+        place = extract_place("कलेक्ट्रेट पर पहुंचें", language="en")
+        assert place is not None
+        assert any("ऀ" <= ch <= "ॿ" for ch in place)
+
+
+@pytest.fixture
+def reloadable_lexicon():
+    """Read the lexicon from a written file rather than the shipped one."""
+    load_lexicon.cache_clear()
+    yield
+    load_lexicon.cache_clear()
+
+
+class TestACustomerEditedFileCannotDisableItselfSilently:
+    """The file is handed to the customer to edit, so an edit that would
+    stop a pattern from ever being tried has to say so."""
+
+    def _write(self, tmp_path: Path, body: str) -> Path:
+        path = tmp_path / "lexicon.yaml"
+        path.write_text(body)
+        return path
+
+    def test_an_unrecognised_script_falls_back_to_the_regex(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reloadable_lexicon: None
+    ) -> None:
+        """`script: hindi` names no script the text can carry.
+
+        Stored as written, the pattern is skipped on every item for the
+        life of the deployment and nothing says why.
+        """
+        path = self._write(
+            tmp_path,
+            "version: 9\n"
+            "patterns:\n"
+            "  - id: hi_test\n"
+            "    language: hi\n"
+            "    script: hindi\n"
+            "    regex: 'कूच करेंगे'\n",
+        )
+        monkeypatch.setattr(settings, "mobilization_lexicon_path", str(path))
+
+        patterns = load_lexicon().patterns
+        assert [p.script for p in patterns] == ["devanagari"]
+        assert find_calls_to_assemble("कूच करेंगे।", language="hi")
+
+    def test_a_marker_group_that_is_not_a_list_is_skipped(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reloadable_lexicon: None
+    ) -> None:
+        """A bare string would otherwise become one marker per character."""
+        path = self._write(
+            tmp_path,
+            "version: 9\n"
+            "patterns: []\n"
+            "place_markers:\n"
+            "  en: 'at'\n"
+            "  hi:\n"
+            "    - 'पर'\n",
+        )
+        monkeypatch.setattr(settings, "mobilization_lexicon_path", str(path))
+
+        assert load_lexicon().place_markers == {"devanagari": ["पर"]}
+
+
+class TestTheScriptOfAPatternIsReadFromWhatItMatches:
+    """Inference runs only on an entry that declares no script, which is
+    the least exercised path in a file the customer edits."""
+
+    @pytest.mark.parametrize(
+        ("source", "expected"),
+        [
+            (r"\bkooch\s+karenge\b", "latin"),
+            ("कूच\\s*करेंगे", "devanagari"),
+            # Regex syntax is Latin text describing something that is not
+            # Latin script, so it decides nothing.
+            (r"\d{4}-\d{2}-\d{2}", "any"),
+            (r"\d{1,2}:\d{2}", "any"),
+            # A Latin pattern carrying a Devanagari exclusion is Latin.
+            (r"(?<![\u0900-\u097F])Chalo", "latin"),
+            # A Devanagari range written as an escape is Devanagari.
+            (r"[\u0900-\u097F]{2,}", "devanagari"),
+        ],
+    )
+    def test_the_script_is_inferred_from_the_regex(self, source: str, expected: str) -> None:
+        assert script_of_source(source) == expected

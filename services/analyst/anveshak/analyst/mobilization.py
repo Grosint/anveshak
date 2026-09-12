@@ -39,10 +39,34 @@ from .signal_writer import SQL_INSERT_SIGNAL, BroadcastFn, is_duplicate_signal
 log = structlog.get_logger(__name__)
 
 
+SCRIPT_LATIN = "latin"
+SCRIPT_DEVANAGARI = "devanagari"
+# A pattern that is written in neither script, such as one made only of
+# digits and punctuation. It is tried on every text, since there is no
+# script it could be excluded by.
+SCRIPT_ANY = "any"
+_KNOWN_SCRIPTS = frozenset({SCRIPT_LATIN, SCRIPT_DEVANAGARI, SCRIPT_ANY})
+
+_RE_DEVANAGARI = re.compile(r"[\u0900-\u097F]")
+# Latin letters, including the accented forms a transliteration uses.
+_RE_LATIN = re.compile(r"[A-Za-z\u00C0-\u024F]")
+# A Devanagari codepoint written as an escape rather than as the character
+# itself, which is how a range appears inside a pattern.
+_RE_DEVANAGARI_ESCAPE = re.compile(r"\\u09[0-7][0-9A-Fa-f]")
+# `\d`, `\s`, `\b` and `\u0041` are Latin characters describing something
+# that is not Latin script. A pattern made of them belongs to no script and
+# has to be tried on every text, so they are removed before the scan.
+_RE_REGEX_ESCAPE = re.compile(r"\\(?:u[0-9A-Fa-f]{4}|x[0-9A-Fa-f]{2}|[A-Za-z])")
+
+
 @dataclass(frozen=True)
 class LexiconPattern:
     pattern_id: str
     language: str
+    # The script the pattern is written in, which is what decides whether it
+    # is tried. `language` remains as documentation of which language the
+    # phrase belongs to, and it selects nothing.
+    script: str
     regex: re.Pattern[str]
 
 
@@ -50,6 +74,8 @@ class LexiconPattern:
 class Lexicon:
     version: int
     patterns: list[LexiconPattern]
+    # Keyed by script rather than by language, for the same reason the
+    # patterns are.
     place_markers: dict[str, list[str]]
 
 
@@ -59,7 +85,39 @@ class Match:
 
     pattern_id: str
     language: str
+    script: str
     phrase: str
+
+
+def script_of_source(source: str) -> str:
+    """The script a pattern or a marker is written in.
+
+    Used when the lexicon entry does not declare one, so a customer who
+    edits the file and omits `script` still gets a pattern that is tried.
+    """
+    if _RE_DEVANAGARI.search(source):
+        return SCRIPT_DEVANAGARI
+    # A Latin pattern may carry a Devanagari exclusion written as an escape,
+    # so the literal characters above decide before the escapes below do.
+    if _RE_LATIN.search(_RE_REGEX_ESCAPE.sub("", source)):
+        return SCRIPT_LATIN
+    if _RE_DEVANAGARI_ESCAPE.search(source):
+        return SCRIPT_DEVANAGARI
+    return SCRIPT_ANY
+
+
+def scripts_in_text(text: str) -> set[str]:
+    """Every script the text is actually written in.
+
+    A set, because code-mixed content is normal here: a Devanagari post
+    that carries a transliterated slogan is the case this exists for.
+    """
+    present: set[str] = set()
+    if _RE_DEVANAGARI.search(text):
+        present.add(SCRIPT_DEVANAGARI)
+    if _RE_LATIN.search(text):
+        present.add(SCRIPT_LATIN)
+    return present
 
 
 def _resolve_lexicon_path() -> Optional[Path]:
@@ -119,10 +177,29 @@ def load_lexicon() -> Lexicon:
         # ordinary speech: the slogan is capitalised and the speech is not.
         flags = re.UNICODE if entry.get("case_sensitive") else re.IGNORECASE | re.UNICODE
         try:
+            declared = str(entry.get("script", "")).lower()
+            if declared not in _KNOWN_SCRIPTS:
+                inferred = script_of_source(entry["regex"])
+                # An unrecognised script is a value no text can carry, so
+                # keeping it would drop the pattern on every item forever
+                # with nothing in the logs. The regex decides instead, and
+                # the entry says so.
+                log.warning(
+                    "mobilization.pattern_script_inferred",
+                    pattern_id=entry.get("id"),
+                    declared=declared or None,
+                    script=inferred,
+                    reason=(
+                        "entry declares no usable script, so it was read off the regex; "
+                        f"declare one of {sorted(_KNOWN_SCRIPTS)}"
+                    ),
+                )
+                declared = inferred
             patterns.append(
                 LexiconPattern(
                     pattern_id=entry["id"],
                     language=entry["language"],
+                    script=declared,
                     regex=re.compile(entry["regex"], flags),
                 )
             )
@@ -139,19 +216,43 @@ def load_lexicon() -> Lexicon:
         patterns=len(patterns),
         path=str(path),
     )
+    # The file groups markers by language, which is how a person reads
+    # them. They are regrouped by script here, since that is what selects
+    # them, and two languages sharing a script share their markers.
+    markers_by_script: dict[str, list[str]] = defaultdict(list)
+    for language, group in (raw.get("place_markers", {}) or {}).items():
+        if not isinstance(group, list):
+            log.warning(
+                "mobilization.place_markers_invalid",
+                language=language,
+                reason="a marker group must be a list, so this group was skipped",
+            )
+            continue
+        for marker in group:
+            markers_by_script[script_of_source(str(marker))].append(str(marker))
+
     return Lexicon(
         version=int(raw.get("version", 0)),
         patterns=patterns,
-        place_markers=raw.get("place_markers", {}),
+        place_markers=dict(markers_by_script),
     )
 
 
 def find_calls_to_assemble(text: str, *, language: Optional[str]) -> list[Match]:
     """Return every lexicon hit in the text.
 
-    An unknown language tries every pattern. Detection must not depend on
-    language detection having been right, since a mislabelled item would
-    otherwise be silently skipped.
+    Patterns are selected by the script the text is written in, never by
+    the `language` label the detector produced (#56). Every transliterated
+    pattern in the lexicon is tagged `en`, and Latin-script Hinglish is
+    exactly the content a detector tends to label `hi`, so selecting on the
+    label hid those patterns from the content they were written for.
+
+    `language` is accepted and deliberately not used for selection. It is
+    logged when it disagrees with what actually matched, so the disagreement
+    is visible rather than assumed away.
+
+    Text in no recognised script tries every pattern, which is the property
+    #33 wrote for a mislabelled item and this change keeps.
     """
     if not text or not text.strip():
         return []
@@ -162,12 +263,21 @@ def find_calls_to_assemble(text: str, *, language: Optional[str]) -> list[Match]
     text = text[: settings.mobilization_max_text_chars]
 
     lexicon = load_lexicon()
-    candidates = [
-        pattern
-        for pattern in lexicon.patterns
-        if language is None or pattern.language == language.lower()
-    ]
-    if not candidates:
+    scripts = scripts_in_text(text)
+    if scripts:
+        candidates = [
+            pattern
+            for pattern in lexicon.patterns
+            if pattern.script in scripts or pattern.script == SCRIPT_ANY
+        ]
+    else:
+        # A script this file knows nothing about, Bengali or Tamil or an
+        # item of digits alone. Every pattern is tried, which is the
+        # property #33 wrote for content the labelling got wrong.
+        log.info(
+            "mobilization.unknown_script",
+            reason="the text is in no script the lexicon covers, so every pattern was tried",
+        )
         candidates = lexicon.patterns
 
     matches: list[Match] = []
@@ -178,9 +288,22 @@ def find_calls_to_assemble(text: str, *, language: Optional[str]) -> list[Match]
                 Match(
                     pattern_id=pattern.pattern_id,
                     language=pattern.language,
+                    script=pattern.script,
                     phrase=_surrounding_phrase(text, found.start(), found.end()),
                 )
             )
+
+    unreachable_by_label = sorted(
+        {match.pattern_id for match in matches if match.language != (language or "").lower()}
+    )
+    if language and unreachable_by_label:
+        log.info(
+            "mobilization.label_would_have_hidden_match",
+            label=language.lower(),
+            scripts=sorted(scripts),
+            pattern_ids=unreachable_by_label,
+            reason="selection is by script, so a pattern the label excludes was still tried",
+        )
     return matches
 
 
@@ -260,6 +383,10 @@ def extract_date(text: str, *, today: Optional[date] = None) -> Optional[date]:
     """
     if not text:
         return None
+    # The same bound the detection path applies, for the same reason: the
+    # item is untrusted scraped text and this runs on the signal engine's
+    # event loop.
+    text = text[: settings.mobilization_max_text_chars]
     reference = today or date.today()
     lowered = text.lower()
 
@@ -299,17 +426,30 @@ def extract_place(text: str, *, language: Optional[str]) -> Optional[str]:
     Deliberately shallow. It locates the words following a marker so the
     card has something to show; the matched phrase remains the evidence, and
     an analyst corrects the place when this gets it wrong.
+
+    Markers are selected by script, for the reason detection is (#56): an
+    item whose label contradicts its script would otherwise be read with
+    the wrong marker set and lose its place.
     """
     if not text:
         return None
 
     text = text[: settings.mobilization_max_text_chars]
     lexicon = load_lexicon()
-    markers = lexicon.place_markers.get((language or "en").lower(), [])
-    if not markers:
-        markers = [m for group in lexicon.place_markers.values() for m in group]
+    scripts = scripts_in_text(text)
 
-    for marker in sorted(markers, key=len, reverse=True):
+    # Code-mixed text carries markers from both scripts, and the English
+    # ones are the longer strings, so a length-ordered sweep would let the
+    # Latin footer of a Devanagari post name the place. The script the item
+    # is mostly written in goes first, and length orders within a script.
+    ordered_scripts = sorted(
+        scripts or set(lexicon.place_markers), key=lambda s: _script_weight(text, s), reverse=True
+    )
+    markers: list[str] = []
+    for script in [*ordered_scripts, SCRIPT_ANY]:
+        markers.extend(sorted(lexicon.place_markers.get(script, []), key=len, reverse=True))
+
+    for marker in markers:
         found = _place_pattern(marker).search(text)
         if found:
             place = found.group(1).strip(" .,।")
@@ -318,7 +458,19 @@ def extract_place(text: str, *, language: Optional[str]) -> Optional[str]:
     return None
 
 
-@lru_cache(maxsize=64)
+def _script_weight(text: str, script: str) -> int:
+    """How much of the text is written in this script."""
+    if script == SCRIPT_DEVANAGARI:
+        return len(_RE_DEVANAGARI.findall(text))
+    if script == SCRIPT_LATIN:
+        return len(_RE_LATIN.findall(text))
+    return 0
+
+
+# Unbounded rather than a literal, since the number of markers is whatever the
+# customer's file has. A bound smaller than that recompiles every marker on
+# every content item.
+@lru_cache(maxsize=None)
 def _place_pattern(marker: str) -> re.Pattern[str]:
     """Compile a place marker once rather than on every call."""
     if marker.isascii():

@@ -13,34 +13,42 @@
 # or a grievance: the signal fires on the act of convening, not on who is
 # convening or why.
 
-version: 2
-updated: 2026-09-11
+version: 3
+updated: 2026-09-12
 
 patterns:
   # --- English -------------------------------------------------------
   - id: en_gather_at
     language: en
+    script: latin
     regex: '\b(?:gather|assemble|converge|congregate)\s+(?:at|on|outside|near|in\s+front\s+of)\b'
   - id: en_join_us
     language: en
+    script: latin
     regex: '\b(?:join\s+us|come\s+out|turn\s+out|show\s+up)\s+(?:at|on|tomorrow|today|this)\b'
   - id: en_march
     language: en
+    script: latin
     regex: '\b(?:protest|candle)?\s?march\s+(?:to|from|at|on|towards)\b'
   - id: en_all_are_invited
     language: en
+    script: latin
     regex: '\ball\s+(?:are|is)\s+(?:invited|requested|welcome)\s+to\s+(?:join|attend|gather|assemble)\b'
   - id: en_reach_by_time
     language: en
+    script: latin
     regex: '\b(?:reach|be\s+present|assemble)\s+(?:at|by)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm|baje)\b'
   - id: en_bandh_call
     language: en
+    script: latin
     regex: '\b(?:call|calls|calling)\s+for\s+(?:a\s+)?(?:bandh|hartal|strike|shutdown|dharna|gherao)\b'
   - id: en_dharna
     language: en
+    script: latin
     regex: '\b(?:dharna|gherao|rasta\s+roko|chakka\s+jam)\b'
   - id: en_mass_gathering
     language: en
+    script: latin
     regex: '\b(?:maha)?(?:panchayat|rally|jansabha|sabha)\s+(?:at|on|in)\b'
 
   # Added in version 2, issue #50.
@@ -71,26 +79,31 @@ patterns:
   # cites the sentence it matched, so an analyst reads the context.
   - id: en_chalo
     language: en
+    script: latin
     case_sensitive: true
     regex: '\b[A-Z][a-z]{2,}\s*Chalo\b(?!\s+[A-Z])'
   # A hashtag is never ordinary speech, so this one folds case and catches
   # the lower-case and all-caps forms the slogan takes on social platforms.
   - id: en_chalo_hashtag
     language: en
+    script: latin
     regex: '#[a-z]{3,}\s?chalo\b'
   # "To set out for". Carries a verb, because the noun alone is a syllable
   # that occurs inside ordinary transliterated words.
   - id: en_kooch
     language: en
+    script: latin
     regex: '\bkooch\s+(?:karenge|karen|karo)\b'
   - id: en_human_chain
     language: en
+    script: latin
     regex: '\bhuman\s+chain\s+(?:at|on|from|outside|near|tomorrow|today)\b'
   # Courting arrest en masse. An assembly, and named as one. The noun
   # alone also names past agitations, so a call or a forward date carries
   # the pattern.
   - id: en_jail_bharo
     language: en
+    script: latin
     regex: '\b(?:call(?:s|ing)?\s+for\s+(?:a\s+)?jail\s+bharo|jail\s+bharo\s+(?:on|from|tomorrow|today))\b'
 
   # --- Hindi ---------------------------------------------------------
@@ -98,35 +111,45 @@ patterns:
   # the place and time usually precede it in Hindi word order.
   - id: hi_pahunche
     language: hi
+    script: devanagari
     regex: 'पहुं?चे[ंन]'
   - id: hi_ekatra
     language: hi
+    script: devanagari
     regex: 'एकत्र\s*(?:हों|होकर|होने)'
   - id: hi_ikattha
     language: hi
+    script: devanagari
     regex: 'इकट्ठा\s*(?:हों|होकर|होने)'
   - id: hi_juloos
     language: hi
+    script: devanagari
     regex: 'जुलूस\s*(?:निकाल|निकलेगा|निकालेंगे)'
   - id: hi_pradarshan
     language: hi
+    script: devanagari
     regex: '(?:विरोध\s*)?प्रदर्शन\s*(?:करने|होगा|करेंगे)'
   - id: hi_bandh_ka_ailan
     language: hi
+    script: devanagari
     regex: 'बंद\s*का\s*(?:ऐलान|आह्वान)'
   - id: hi_dharna
     language: hi
+    script: devanagari
     regex: 'धरना\s*(?:देंगे|दिया\s*जाएगा|प्रदर्शन)'
   # "Everyone come": the subject and the verb are often separated by a time
   # or a place, so they are not required to be adjacent.
   - id: hi_sabhi_aayen
     language: hi
+    script: devanagari
     regex: 'सभी(?:\s+\S+){0,4}\s*(?:आएं|आयें|आइए)'
   - id: hi_maha_panchayat
     language: hi
+    script: devanagari
     regex: 'महापंचायत\s*(?:में|का|होगी)'
   - id: hi_chakka_jam
     language: hi
+    script: devanagari
     regex: 'चक्का\s*जाम|रास्ता\s*रोको'
 
   # Added in version 2, issue #50. The Devanagari halves of the English
@@ -139,15 +162,18 @@ patterns:
   # exclusion placed before it would test the wrong word.
   - id: hi_chalo
     language: hi
+    script: devanagari
     regex: '(?<![\u0900-\u097F])(?!(?:अच्छा|ठीक|अब|फिर|हम|तुम|आप|मैं|कहा|बोले|चल)\s+चलो)[\u0900-\u097F]{2,}\s+चलो(?![\u0900-\u0963\u0966-\u097F])'
   - id: hi_kooch
     language: hi
+    script: devanagari
     regex: 'कूच\s*(?:करें|करेंगे)'
   # Surrounding a building or an official. The noun alone is also used to
   # report one that has already happened, so a forward-looking verb is
   # required.
   - id: hi_gherao
     language: hi
+    script: devanagari
     regex: 'घेराव\s*(?:करें|करेंगे|करने\s*का\s*(?:ऐलान|आह्वान))'
   # A withdrawn or postponed call is not a call, and the retraction is
   # normally in the same sentence as the announcement it retracts, so the
@@ -155,16 +181,19 @@ patterns:
   # वापस, which also begins वापसी and वापस लौटेंगे.
   - id: hi_hartal
     language: hi
+    script: devanagari
     regex: 'हड़ताल\s*(?:का\s*(?:ऐलान|आह्वान)|करेंगे|रहेगी)(?![^।]{0,40}(?:वापस\s*(?:ले|लिया|लेने)|स्थगित|रद्द))'
   # Imperative only. The infinitive उपस्थित होने is the wording of a court
   # summons to one person, which is not a public call to assemble.
   - id: hi_upasthit
     language: hi
+    script: devanagari
     regex: 'उपस्थित\s*(?:रहें|हों)'
   # Imperative only. शामिल होने is the past-narrative construction, as in
   # "after joining the protest, five were arrested".
   - id: hi_shamil
     language: hi
+    script: devanagari
     regex: 'शामिल\s*(?:हों|होकर|हो\s*जाएं)'
   # A procession being taken out. The nouns are ordinary on their own, one
   # of them is also a party wing, so a forward-looking verb carries the
@@ -173,17 +202,21 @@ patterns:
   # already been taken out.
   - id: hi_morcha_nikalna
     language: hi
+    script: devanagari
     regex: '(?:मोर्चा|रैली|पदयात्रा|यात्रा)\s*(?:निकालेंगे|निकालें|निकलेगी|निकालने\s*का\s*(?:ऐलान|आह्वान))'
   - id: hi_manav_shrinkhala
     language: hi
+    script: devanagari
     regex: 'मानव\s*श्रृंखला\s*(?:बनाएंगे|बनाई\s*जाएगी|बनेगी|बनाने\s*का\s*(?:ऐलान|आह्वान))'
   - id: hi_jail_bharo
     language: hi
+    script: devanagari
     regex: 'जेल\s*भरो\s*(?:का\s*(?:ऐलान|आह्वान)|आंदोलन\s*(?:करेंगे|शुरू\s*होगा))'
   # Future tense only. The same words in the past tense report a sit-in
   # that is already under way.
   - id: hi_dharne_par_baithenge
     language: hi
+    script: devanagari
     regex: 'धरने\s*पर\s*(?:बैठेंगे|बैठें)'
 
 # Place markers. A match here is only used to locate a candidate place name

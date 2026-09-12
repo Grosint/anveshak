@@ -9,7 +9,7 @@
 # its own priors. See README.md in this directory.
 
 provenance: synthetic
-version: 1
+version: 2
 examples:
   # --- positives, English ---------------------------------------------
   - text: "All are invited to join the gathering outside the collectorate on March 12 at 4pm."
@@ -142,9 +142,7 @@ examples:
 
   # --- hard negatives for the added idiom ------------------------------
   # Each one is the reportage form of a pattern above, in the script that
-  # pattern is written in: the noun is present and the call is not. A
-  # negative written in the other script exercises nothing, because
-  # detection selects patterns by language.
+  # pattern is written in: the noun is present and the call is not.
   - text: "He said chalo, nothing will change."
     language: en
     is_call_to_assemble: false
@@ -257,6 +255,71 @@ examples:
     expected_place: null
   - text: "हड़ताल का ऐलान स्थगित कर दिया गया।"
     language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+
+  # --- deliberately wrong language labels (issue #56) ------------------
+  # The `language` on every row above is hand-written and correct, so the
+  # numbers they produce describe detection given a correct label and say
+  # nothing about the label itself. A real detector labels Latin-script
+  # Hinglish `hi` routinely, and that is the content the transliterated
+  # patterns were written for.
+  #
+  # The label on each row below contradicts the script its text is written
+  # in. They are scored like any other row, so a return to selecting
+  # patterns by label shows up as lost recall here rather than nowhere.
+  - text: "Dilli Chalo on March 18. Buses leave at dawn."
+    language: hi
+    is_call_to_assemble: true
+    expected_date: "2026-03-18"
+    expected_place: null
+  - text: "Jail bharo from March 20. Volunteers will court arrest at the district jail."
+    language: hi
+    is_call_to_assemble: true
+    expected_date: "2026-03-20"
+    expected_place: null
+  - text: "Bengaluru kooch karenge, sab taiyar rahein."
+    language: hi
+    is_call_to_assemble: true
+    expected_date: null
+    expected_place: null
+  - text: "कल जुलूस निकालेंगे। सभी शामिल हों।"
+    language: en
+    is_call_to_assemble: true
+    expected_date: "2026-03-05"
+    expected_place: null
+  - text: "कूच करेंगे। सभी तैयार रहें।"
+    language: en
+    is_call_to_assemble: true
+    expected_date: null
+    expected_place: null
+  # Code-mixed, which is where a single label is wrong whichever one it is:
+  # the call lives in the transliterated half of a Devanagari post.
+  - text: "किसान संगठन ने कहा: Dilli Chalo on March 18."
+    language: hi
+    is_call_to_assemble: true
+    expected_date: "2026-03-18"
+    expected_place: null
+  # The negatives carry a wrong label too. Selecting by script must not buy
+  # its recall by trying every pattern on every item.
+  - text: "He said chalo, nothing will change."
+    language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "The film Chalo Dilli was screened at the club."
+    language: hi
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "चलो ठीक है, कल बात करते हैं।"
+    language: en
+    is_call_to_assemble: false
+    expected_date: null
+    expected_place: null
+  - text: "जेल भरो आंदोलन 1930 में शुरू हुआ था।"
+    language: en
     is_call_to_assemble: false
     expected_date: null
     expected_place: null

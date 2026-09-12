@@ -125,13 +125,13 @@ The GitHub issues are still open; the code is on the branch.
 | #50 | Mobilization lexicon version 2, Indian mobilization idiom | `infra/configs/lexicons/mobilization.yaml` | `30fd628` |
 | #51 | Per-outlet Source credibility rubric | `sdk/anveshak/source_rubric.py`, `infra/configs/credibility/source_rubric.yaml` | `e172db5` |
 | #53 | Intelligence Bureau persona, ADRs 0003 and 0004, these plan documents | `.agents/personas/persona-ib.md`, `docs/` | this step |
+| #56 | Mobilization patterns selected by the script of the text, not by the language label | `infra/configs/lexicons/mobilization.yaml`, `services/analyst/.../mobilization.py` | this step |
 
 Open, and not required by the demonstration:
 
 | Issue | Step | Why it is open |
 |-------|------|----------------|
 | #55 | Validate the outbound fetch destination at every hop | Redirects, the browser and DNS rebinding each get past a first-hop check. Shape depends on whether egress policy is available in k3s and Compose alike, so it is a design question before it is a code change |
-| #56 | Select mobilization patterns by script rather than by language label | Latin-script Hinglish labelled `hi` never reaches the transliterated patterns. #50 made it materially worse, and no current test or benchmark row can observe it, because every one carries a hand-written label |
 
 ---
 
@@ -170,7 +170,8 @@ Exit criteria: ADRs 0003 and 0004 written, the Intelligence Bureau persona disco
 ### Phase 7 - Follow-up defects
 Issues #55, #56.
 Neither blocks the demonstration.
-#55 is a security boundary question and #56 is a recall gap that the benchmark cannot currently see.
+#55 is a security boundary question.
+#56 is a recall gap the benchmark could not see, so closing it meant adding the rows that can: ten labelled examples whose `language` contradicts the script of their text.
 
 ---
 

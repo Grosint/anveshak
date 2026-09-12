@@ -143,7 +143,8 @@ This table is the prediction, and the run is the measurement.
 
 A Signal in this table that does not fire is investigated at the seam, and the finding is recorded in `docs/tuning_history.md` whether or not it changes a threshold.
 
-Two known limits that may show up here rather than as a defect: transliterated mobilization patterns are unreachable on an item the detector labels `hi`, which is #56, and the mobilization confirmation step ships disabled until its labelled set exists, so the lexicon runs alone.
+One known limit that may show up here rather than as a defect: the mobilization confirmation step ships disabled until its labelled set exists, so the lexicon runs alone.
+The other, transliterated patterns unreachable on an item the detector labels `hi`, was closed by #56: patterns are selected by the script of the text.
 
 ---
 
@@ -262,7 +263,7 @@ The Replay host needs `ENVIRONMENT=replay`, `VIRTUAL_CLOCK_ENABLED=true` and, fo
 | Concurrent Report generation times out on CPU | the three Report points fail late in the run | one generation at a time, as the demo seed pattern already requires |
 | The blocked-period content is placed without a citation | a fabricated timestamp inside a corpus that claims none | each hand-placed item carries the reporting or archive it came from, or it is not placed |
 | The dump reaches version control | a database dump of material about identifiable people enters every clone | exact-path ignore rule, verified before the freeze commit |
-| Hindi content is collected but read as English | the assessment describes half the discourse | language label checked per item at Phase 2 exit, and #56 is the known gap |
+| Hindi content is collected but read as English | the assessment describes half the discourse | language label checked per item at Phase 2 exit; mobilization detection reads the script rather than the label since #56, so a wrong label no longer hides a call |
 | Live collection runs during the demonstration | the demonstration stops being reproducible | the dataset is frozen, and live scraping is out of scope for the run |
 
 ---

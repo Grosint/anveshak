@@ -326,6 +326,56 @@ which stays disabled until a labelled set drawn from public reporting exists (#3
 
 ---
 
+## Mobilization Lexicon - Pattern Selection and Vocabulary Version
+
+**Parameter:** `version` in `infra/configs/lexicons/mobilization.yaml`, and the selection rule in `find_calls_to_assemble`
+**Change:** 2 -> **3**, and pattern selection moves from the item's `language` label to the script the text is written in
+**Date:** 2026-09-12
+**Issue:** #56, follow-up to #50
+
+**Evidence:**
+- Every transliterated pattern in the lexicon is tagged `en`, and selection was by the item's `language` label.
+Latin-script Hinglish that the detector labelled `hi` therefore never reached `en_chalo`, `en_chalo_hashtag`, `en_kooch`,
+`en_jail_bharo`, `en_dharna` or `en_bandh_call`, which is the content those patterns were written for.
+- Nothing could observe the gap: every unit test and every labelled row carried a hand-written, correct `language`,
+so the 1.00 precision recorded for version 2 described detection given a correct label and never the label itself.
+- Ten rows whose `language` deliberately contradicts the script of their text were added to the labelled set,
+in both directions and including one code-mixed item, taking it from 46 examples to 56.
+Both columns below are that same 56-example set, so the version 2 column is that version re-measured on it:
+
+| Metric | Version 2, selection by label | Version 3, selection by script |
+|--------|-------------------------------|--------------------------------|
+| Precision | 1.00 | 1.00 |
+| Recall | 0.75 | 1.00 |
+| Date and place accuracy | 0.78 | 0.83 |
+
+- The six recall misses are the six mislabelled positives, which is the gap by construction.
+Precision is the figure that carries information: the ten new rows include four mislabelled negatives,
+and selecting by script must not buy recall by trying every pattern on every item. It did not.
+- The vocabulary is unchanged. Not one pattern was added, removed or edited, and the version moved because
+each entry gained a `script` field and because the evidence on a fired signal has to distinguish the two selection rules.
+
+**Rationale:**
+- The script a text is written in is observable in the text. The language label is a model's output about it,
+and detection that depends on that output being right fails silently when it is wrong.
+- Selection is still narrow: a Devanagari pattern is not tried on Latin text, so the precision the version 2 negatives
+bought is intact. Code-mixed content tries both scripts, since one label is wrong for it whichever label it carries.
+- Text in no recognised script still tries every pattern, which is the property #33 wrote for a mislabelled item.
+- Place markers are selected by script for the same reason, or a mislabelled item would be read with the wrong marker set.
+On code-mixed text the markers of the script the item is mostly written in are tried first,
+since the English markers are the longer strings and a length-ordered sweep would let a Latin footer name the place of a Hindi call.
+- Text in a script the file does not cover, Bengali or Tamil or an item of digits alone, falls back to every pattern and logs that it did.
+The fallback tests the script set rather than the candidate list, or a single `script: any` entry in a customer's file
+would be the whole candidate list for such an item and hide every other pattern from it.
+- `language` stays on each entry and in the function signature. It documents which language a phrase belongs to,
+and a disagreement between the label and what matched is logged at INFO rather than being invisible.
+
+**Revert risk:** Returning to selection by label reinstates the gap above, measured here as recall 1.00 -> 0.75
+on a set where a quarter of the positives carry a wrong label.
+A real detector labels Latin-script Hinglish `hi` routinely, so the production loss is not bounded by that number.
+
+---
+
 ## Parameters NOT YET Changed (candidates for future tuning)
 
 | Parameter | Current | Candidate | Reason to consider |
