@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { screen, waitFor, within } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import TopicsDashboard from '../../pages/TopicsDashboard'
 import { renderWithProviders } from '../test-utils'
@@ -47,6 +47,10 @@ vi.mock('../../api/topics', () => ({
 }))
 
 vi.mock('../../contexts/AuthContext', () => ({
+  AuthProvider: ({ children }: any) => children,
+}))
+
+vi.mock('../../contexts/auth', () => ({
   useAuth: () => ({
     isAuthenticated: true,
     login: vi.fn(),
@@ -55,7 +59,6 @@ vi.mock('../../contexts/AuthContext', () => ({
     token: 'fake-token',
     secondsUntilExpiry: 3600,
   }),
-  AuthProvider: ({ children }: any) => children,
 }))
 
 describe('TopicsDashboard page', () => {

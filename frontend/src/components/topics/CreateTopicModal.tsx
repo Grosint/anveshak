@@ -137,7 +137,7 @@ export function CreateTopicModal({ open, onClose, onSubmit }: CreateTopicModalPr
         </>
       }
     >
-      <form id="create-topic-form" onSubmit={handleSubmit} className="space-y-4" noValidate>
+      <form id="create-topic-form" onSubmit={(e) => { void handleSubmit(e) }} className="space-y-4" noValidate>
         {/* Name */}
         <div>
           <label htmlFor="topic-name" className="block text-xs font-medium text-text-secondary mb-1.5">

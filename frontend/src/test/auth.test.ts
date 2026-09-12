@@ -3,7 +3,7 @@
  * Imports the REAL functions from AuthContext — no inline re-implementations.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { decodeJWT, isExpired } from '../contexts/AuthContext'
+import { decodeJWT, isExpired } from '../contexts/auth'
 
 function makeToken(payload: { sub: string; exp: number; iat: number }): string {
   const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))

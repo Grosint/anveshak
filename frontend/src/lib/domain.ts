@@ -30,6 +30,35 @@ export function isHandleIdentifier(entityType: string): boolean {
 
 // ── Signal severity ───────────────────────────────────────────────────────────────
 
+/**
+ * The fields every severity and title helper reads.
+ *
+ * Endpoints that select `signals.*` return the stored columns without the
+ * joined counts, so those two fields are optional and fall back to
+ * `evidence`. A full `Signal` satisfies this shape.
+ */
+export interface SignalLike {
+  signal_type: string
+  evidence: unknown
+  independent_source_count?: number | null
+  cluster_item_count?: number | null
+}
+
+/**
+ * Independent source count, from the joined column or from `evidence`.
+ *
+ * Returns null when neither carries it, so a call site can tell "not
+ * measured" apart from "measured zero".
+ */
+export function independentSourceCount(signal: SignalLike): number | null {
+  if (typeof signal.independent_source_count === 'number') {
+    return signal.independent_source_count
+  }
+  const evidence = (signal.evidence ?? {}) as Record<string, unknown>
+  const fromEvidence = evidence.independent_source_count
+  return typeof fromEvidence === 'number' ? fromEvidence : null
+}
+
 export function inferSeverity(signal: Signal): string {
   const isc = signal.independent_source_count ?? 0
   if (isc >= 3) return 'HIGH'
@@ -105,7 +134,7 @@ export function severityMeasurement(signal: Signal): SeverityMeasurement {
  * that an event will occur. Wording that survives scrutiny is wording an
  * analyst can check against the evidence on the card.
  */
-export function signalTitle(signal: Signal): string {
+export function signalTitle(signal: SignalLike): string {
   const evidence = (signal.evidence ?? {}) as Record<string, unknown>
   const num = (key: string): number | null => {
     const value = evidence[key]

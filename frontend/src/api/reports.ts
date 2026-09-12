@@ -29,7 +29,7 @@ export interface Report {
   time_window_end: string
   source_snapshot: Record<string, { name: string; credibility_score: number }> | null
   source_warnings: SourceWarning[]
-  geojson: unknown | null
+  geojson: unknown
   created_at: string
 }
 
@@ -69,7 +69,9 @@ export const reportsApi = {
       .then((r) => r.data),
 
   getGeojson: (reportId: string) =>
-    api.get(`/api/v1/reports/${reportId}/geojson`).then((r) => r.data),
+    api
+      .get<GeoJSON.FeatureCollection>(`/api/v1/reports/${reportId}/geojson`)
+      .then((r) => r.data),
 
   downloadPdf: async (reportId: string, filename = `report-${reportId}.pdf`) => {
     const res = await api.get(`/api/v1/reports/${reportId}/pdf`, { responseType: 'blob' })

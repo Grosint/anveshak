@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { signalsApi, SignalStatus } from '../api/signals'
 import { topicsApi } from '../api/topics'
-import { useWS } from '../contexts/WSContext'
+import { useWS } from '../contexts/ws'
 import { SignalCard } from '../components/signals/SignalCard'
 import { SignalTimeline } from '../components/signals/SignalTimeline'
 import { SignalGraph } from '../components/signals/SignalGraph'
@@ -84,29 +84,33 @@ export default function SignalsInbox() {
     queryFn: () => signalsApi.list(activeTab, since, until, page * PAGE_SIZE, PAGE_SIZE),
     refetchInterval: 30_000,
   })
-  const signals = signalsPage?.items ?? []
+  const signals = useMemo(() => signalsPage?.items ?? [], [signalsPage])
   const signalsTotal = signalsPage?.total ?? 0
 
   // Real-time: WS push → invalidate
   useEffect(() => {
     return subscribe((msg) => {
       if (msg.type === 'signal' || msg.type === 'signal_replay') {
-        qc.invalidateQueries({ queryKey: ['signals'] })
-        qc.invalidateQueries({ queryKey: ['signal-daily-counts'] })
+        void qc.invalidateQueries({ queryKey: ['signals'] })
+        void qc.invalidateQueries({ queryKey: ['signal-daily-counts'] })
         if (activeTab !== 'new') setNewCount((n) => n + 1)
       }
     })
   }, [subscribe, qc, activeTab])
 
-  useEffect(() => {
-    if (activeTab === 'new') setNewCount(0)
+  // Go back to the first page whenever the tab or the time range changes, and
+  // clear the unread badge on entering the New tab. React's "adjusting state
+  // when a prop changes" pattern, which avoids a cascading render.
+  const [lastQuery, setLastQuery] = useState({ activeTab, since, until })
+  if (
+    activeTab !== lastQuery.activeTab ||
+    since !== lastQuery.since ||
+    until !== lastQuery.until
+  ) {
+    setLastQuery({ activeTab, since, until })
     setPage(0)
-  }, [activeTab])
-
-  // Reset page when time range changes
-  useEffect(() => {
-    setPage(0)
-  }, [since, until])
+    if (activeTab !== lastQuery.activeTab && activeTab === 'new') setNewCount(0)
+  }
 
   // Optimistic acknowledge
   const acknowledge = useMutation({

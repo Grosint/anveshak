@@ -132,7 +132,7 @@ export function ContentCard({ item, onClick }: ContentCardProps) {
           </a>
           {isYouTubeVideo && (
             <button
-              onClick={handleAnalyseVideo}
+              onClick={(e) => { void handleAnalyseVideo(e) }}
               disabled={analyseStatus !== 'idle'}
               className="text-[10px] font-medium px-2 py-0.5 rounded border transition-colors disabled:opacity-50
                 text-anveshak-accent border-anveshak-accent/30 hover:bg-anveshak-accent/10"

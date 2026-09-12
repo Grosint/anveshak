@@ -97,9 +97,9 @@ class TestNoCommittedCredentials:
             if name == SELF:
                 continue
             text = (REPO_ROOT / name).read_text(encoding="utf-8")
-            assert any(
-                pattern.search(text) for pattern, _ in PATTERNS
-            ), f"{name} carries no credential literal - remove it from the exemption list"
+            assert any(pattern.search(text) for pattern, _ in PATTERNS), (
+                f"{name} carries no credential literal - remove it from the exemption list"
+            )
 
     def test_the_guard_would_catch_a_hash(self) -> None:
         # A pattern that matches nothing would pass this file silently.
@@ -122,6 +122,6 @@ class TestDemonstrationCredentialsAreDeclared:
         example = (REPO_ROOT / ".env.example").read_text(encoding="utf-8")
         for _role, _username_var, _default, password_var in ACCOUNT_SLOTS:
             line = next(ln for ln in example.splitlines() if ln.startswith(f"{password_var}="))
-            assert line.split("=", 1)[1].startswith(
-                "change-me"
-            ), f"{password_var} in .env.example must be a placeholder"
+            assert line.split("=", 1)[1].startswith("change-me"), (
+                f"{password_var} in .env.example must be a placeholder"
+            )

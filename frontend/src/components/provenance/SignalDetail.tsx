@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { signalsApi } from '../../api/signals'
 import { provenanceApi } from '../../api/provenance'
-import { useProvenance } from '../../contexts/ProvenanceContext'
+import { useProvenance } from '../../contexts/provenance'
 import { Spinner } from '../ui/Spinner'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
@@ -34,16 +34,16 @@ export default function SignalDetail({ signalId, topicId }: SignalDetailProps) {
   const ackMut = useMutation({
     mutationFn: signalsApi.acknowledge,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['signal', signalId] })
-      qc.invalidateQueries({ queryKey: ['signals-topic', topicId] })
+      void qc.invalidateQueries({ queryKey: ['signal', signalId] })
+      void qc.invalidateQueries({ queryKey: ['signals-topic', topicId] })
     },
   })
 
   const dismissMut = useMutation({
     mutationFn: signalsApi.dismiss,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['signal', signalId] })
-      qc.invalidateQueries({ queryKey: ['signals-topic', topicId] })
+      void qc.invalidateQueries({ queryKey: ['signal', signalId] })
+      void qc.invalidateQueries({ queryKey: ['signals-topic', topicId] })
     },
   })
 

@@ -61,6 +61,9 @@ services:
   # --- Inference (GPU) ---
 
   ollama:
+    # Restores the limit the base file carried before it was lowered to 5g to
+    # fit a 12GiB dev VM. A prod host runs a larger model, see hardware.md.
+    mem_limit: 8g
     volumes:
       - /data/ollama:/root/.ollama
     deploy:

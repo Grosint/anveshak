@@ -84,6 +84,18 @@ export interface EntityGraph {
   edge_count: number
 }
 
+/** How many location entities were extracted, and how many could be placed. */
+export interface LocationMetadata {
+  total_extracted: number
+  geocoded: number
+  unresolved: string[]
+}
+
+/** Geocoded location entities for a topic, with the geocoding tally. */
+export type LocationMap = GeoJSON.FeatureCollection & {
+  metadata?: LocationMetadata
+}
+
 export const intelligenceApi = {
   topicIntelligence: (topicId: string) =>
     api
@@ -99,7 +111,7 @@ export const intelligenceApi = {
 
   locationMap: (topicId: string, minMentions = 2, limit = 100) =>
     api
-      .get<GeoJSON.FeatureCollection & { metadata?: { total_extracted: number; geocoded: number; unresolved: string[] } }>(`/api/v1/topics/${topicId}/location-map-v2`, {
+      .get<LocationMap>(`/api/v1/topics/${topicId}/location-map-v2`, {
         params: { min_mentions: minMentions, limit },
       })
       .then((r) => r.data),

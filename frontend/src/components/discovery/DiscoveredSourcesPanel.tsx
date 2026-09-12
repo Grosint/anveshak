@@ -5,6 +5,8 @@ import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Spinner } from '../ui/Spinner'
 import { EmptyState } from '../ui/EmptyState'
+import { parseJsonObject } from '../../lib/json'
+import { asNumber, asText } from '../../lib/scalar'
 
 const methodLabels: Record<DiscoveryMethod, string> = {
   snowball: 'Cited by sources',
@@ -31,9 +33,10 @@ function DiscoveredCard({
   onDismiss: (id: string) => void
   isActioning: boolean
 }) {
-  const evidence = typeof item.evidence === 'string'
-    ? JSON.parse(item.evidence)
-    : item.evidence ?? {}
+  const evidence = parseJsonObject(item.evidence)
+  const reasoning = asText(evidence.reasoning)
+  const channelName = asText(evidence.channel_name)
+  const forwardCount = asNumber(evidence.forward_count)
 
   return (
     <div className="bg-anveshak-card border border-anveshak-border rounded-lg p-3 animate-fade-in">
@@ -52,12 +55,12 @@ function DiscoveredCard({
             {item.citation_count > 1 && `Cited ${item.citation_count} times`}
             {item.confidence_score != null && ` · Confidence: ${(item.confidence_score * 100).toFixed(0)}%`}
           </p>
-          {evidence.reasoning && (
-            <p className="text-xs text-text-secondary mt-1 italic">{evidence.reasoning}</p>
+          {reasoning && (
+            <p className="text-xs text-text-secondary mt-1 italic">{reasoning}</p>
           )}
-          {evidence.channel_name && (
+          {channelName && (
             <p className="text-xs text-text-secondary mt-1">
-              Channel: {evidence.channel_name} ({evidence.forward_count} forwards)
+              Channel: {channelName} ({forwardCount} forwards)
             </p>
           )}
         </div>
@@ -103,8 +106,8 @@ export function DiscoveredSourcesPanel({ topicId }: { topicId: string }) {
     onMutate: (id) => setActioningId(id),
     onSettled: () => {
       setActioningId(null)
-      queryClient.invalidateQueries({ queryKey: ['discovered', topicId] })
-      queryClient.invalidateQueries({ queryKey: ['sources'] })
+      void queryClient.invalidateQueries({ queryKey: ['discovered', topicId] })
+      void queryClient.invalidateQueries({ queryKey: ['sources'] })
     },
   })
 
@@ -113,7 +116,7 @@ export function DiscoveredSourcesPanel({ topicId }: { topicId: string }) {
     onMutate: (id) => setActioningId(id),
     onSettled: () => {
       setActioningId(null)
-      queryClient.invalidateQueries({ queryKey: ['discovered', topicId] })
+      void queryClient.invalidateQueries({ queryKey: ['discovered', topicId] })
     },
   })
 

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import api from '../../api/client'
+import { asText } from '../../lib/scalar'
 
 interface ExportButtonProps {
   /** Export endpoint path, e.g. '/api/v1/export/content' */
@@ -33,17 +34,17 @@ export default function ExportButton({
   const handleExport = async () => {
     setLoading(true)
     try {
-      const response = await api.get(endpoint, {
+      const response = await api.get<Blob>(endpoint, {
         params: { ...params, format },
         responseType: 'blob',
       })
 
-      const contentDisposition = response.headers['content-disposition']
-      const filename = contentDisposition
-        ? contentDisposition.split('filename="')[1]?.replace('"', '')
-        : `anveshak_export.${format}`
+      const contentDisposition = asText(response.headers['content-disposition'])
+      const filename =
+        contentDisposition.split('filename="')[1]?.replace('"', '') ??
+        `anveshak_export.${format}`
 
-      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const url = window.URL.createObjectURL(response.data)
       const link = document.createElement('a')
       link.href = url
       link.download = filename
@@ -60,7 +61,7 @@ export default function ExportButton({
 
   return (
     <button
-      onClick={handleExport}
+      onClick={() => { void handleExport() }}
       disabled={loading}
       className="export-btn"
       title={`Download ${format.toUpperCase()}`}

@@ -4,6 +4,7 @@ import { inferSeverity } from '../../lib/domain'
 import { SignalCard } from './SignalCard'
 import { Badge } from '../ui/Badge'
 import { format } from 'date-fns'
+import { parseJsonObject } from '../../lib/json'
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -22,11 +23,12 @@ const severityColor: Record<string, string> = {
 // ── Helpers ─────────────────────────────────────────────────────────────
 
 function getCollapsePrefs(): Record<string, boolean> {
-  try {
-    return JSON.parse(localStorage.getItem(COLLAPSE_STORAGE_KEY) || '{}')
-  } catch {
-    return {}
+  const stored = parseJsonObject(localStorage.getItem(COLLAPSE_STORAGE_KEY))
+  const prefs: Record<string, boolean> = {}
+  for (const [topicId, collapsed] of Object.entries(stored)) {
+    if (typeof collapsed === 'boolean') prefs[topicId] = collapsed
   }
+  return prefs
 }
 
 function setCollapsePref(topicId: string, collapsed: boolean): void {

@@ -82,6 +82,7 @@ async def _insert_with_baseline(
                 org_id=org_id,
             )
 
+
 SQL_GET_TOPIC_KEYWORDS = "SELECT keywords FROM topics WHERE id = $1"
 SQL_GET_DISCOVERED = "SELECT * FROM discovered_sources WHERE id = $1 AND topic_id = $2"
 

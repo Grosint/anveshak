@@ -31,14 +31,14 @@ export function Pagination({ page, pageSize, total, onPageChange }: PaginationPr
           ) : (
             <button
               key={p}
-              onClick={() => onPageChange(p as number)}
+              onClick={() => onPageChange(p)}
               className={`px-2 py-1 text-xs rounded transition-colors ${
                 p === page
                   ? 'bg-anveshak-accent text-white'
                   : 'text-text-secondary hover:text-text-primary hover:bg-anveshak-muted'
               }`}
             >
-              {(p as number) + 1}
+              {p + 1}
             </button>
           ),
         )}

@@ -4,7 +4,7 @@
  * Seam 1: WS message → queryClient.invalidateQueries → SignalsInbox re-render
  * Seam 2: Optimistic acknowledge → cache update → rollback on error
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, act, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
@@ -32,7 +32,7 @@ vi.mock('../../api/topics', () => ({
   },
 }))
 
-vi.mock('../../contexts/AuthContext', () => ({
+vi.mock('../../contexts/auth', () => ({
   useAuth: () => ({
     isAuthenticated: true,
     token: 'test-jwt',
@@ -70,6 +70,10 @@ function renderSignalsWithMockWS() {
 let wsSubscribeCallback: ((msg: any) => void) | null = null
 
 vi.mock('../../contexts/WSContext', () => ({
+  WSProvider: ({ children }: any) => children,
+}))
+
+vi.mock('../../contexts/ws', () => ({
   useWS: () => ({
     subscribe: (handler: any) => {
       wsSubscribeCallback = handler
@@ -77,7 +81,6 @@ vi.mock('../../contexts/WSContext', () => ({
     },
     status: 'connected',
   }),
-  WSProvider: ({ children }: any) => children,
 }))
 
 // ── Setup / Teardown ────────────────────────────────────────────────────
@@ -103,7 +106,7 @@ describe('Seam 1: WS → cache → SignalsInbox', () => {
       .mockResolvedValueOnce(paginated([]))
       .mockResolvedValueOnce(paginated([signal]))
 
-    const { queryClient } = renderSignalsWithMockWS()
+    renderSignalsWithMockWS()
 
     await waitFor(() => {
       expect(mockSignalsList).toHaveBeenCalledTimes(1)
@@ -169,7 +172,6 @@ describe('Seam 2: Optimistic mutation → cache', () => {
     })
 
     // Verify the signalsApi.list was called with the expected params
-    const { signalsApi } = await import('../../api/signals')
     expect(mockSignalsList).toHaveBeenCalledWith('new', expect.any(String), expect.any(String), 0, 50)
   })
 

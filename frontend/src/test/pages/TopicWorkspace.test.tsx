@@ -16,7 +16,7 @@ import TopicWorkspace from '../../pages/TopicWorkspace'
 const mockClose = vi.fn()
 const mockPush = vi.fn()
 
-vi.mock('../../contexts/ProvenanceContext', () => ({
+vi.mock('../../contexts/provenance', () => ({
   useProvenance: () => ({
     isOpen: false,
     stack: [],

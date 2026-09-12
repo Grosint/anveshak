@@ -9,7 +9,8 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, act } from '@testing-library/react'
-import { AuthProvider, useAuth } from '../../contexts/AuthContext'
+import { AuthProvider } from '../../contexts/AuthContext'
+import { useAuth } from '../../contexts/auth'
 
 function makeToken(sub: string, expInSeconds: number): string {
   const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))

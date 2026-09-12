@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios, { AxiosError } from 'axios'
 
 const api = axios.create({ baseURL: '/' })
 
@@ -14,7 +14,7 @@ api.interceptors.request.use((config) => {
 // Global 401 handler — clear token and redirect to login
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
+  (err: AxiosError) => {
     if (err.response?.status === 401) {
       localStorage.removeItem('anveshak_token')
       localStorage.removeItem('anveshak_session_id')

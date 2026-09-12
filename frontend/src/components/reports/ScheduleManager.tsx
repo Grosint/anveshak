@@ -5,6 +5,7 @@ import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { EmptyState } from '../ui/EmptyState'
 import { Modal } from '../ui/Modal'
+import { apiErrorDetail } from '../../lib/apiError'
 
 const REPORT_TYPES = [
   { value: 'intelligence_brief', label: 'Intelligence Brief' },
@@ -49,12 +50,12 @@ function EditScheduleModal({
   const update = useMutation({
     mutationFn: () => topicsApi.updateSchedule(topic!.id, cron || null, reportType),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['topics'] })
+      void qc.invalidateQueries({ queryKey: ['topics'] })
       setError('')
       onClose()
     },
-    onError: (err: any) => {
-      setError(err?.response?.data?.detail || 'Failed to update schedule')
+    onError: (err: unknown) => {
+      setError(apiErrorDetail(err, 'Failed to update schedule'))
     },
   })
 

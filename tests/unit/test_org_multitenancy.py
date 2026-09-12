@@ -624,6 +624,6 @@ class TestFrontendOrgId:
         contexts = REPO_ROOT / "frontend" / "src" / "contexts"
         sources = [p for p in (contexts / "AuthContext.tsx", contexts / "auth.ts") if p.exists()]
         assert sources, "no auth context module found under frontend/src/contexts"
-        assert any(
-            "org_id" in p.read_text() for p in sources
-        ), "the auth context JWTPayload must include org_id"
+        assert any("org_id" in p.read_text() for p in sources), (
+            "the auth context JWTPayload must include org_id"
+        )

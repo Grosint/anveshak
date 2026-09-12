@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -11,6 +11,7 @@ import { assessmentsApi, type SourceAssessment, type SourceStats } from '../../a
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { Spinner } from '../ui/Spinner'
+import { apiErrorDetail } from '../../lib/apiError'
 
 const PIE_COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4']
 const SENTIMENT_COLORS = { negative: '#ef4444', neutral: '#94a3b8', positive: '#22c55e' }
@@ -64,8 +65,7 @@ export default function SourceAssessmentPanel({
   }
 
   if (assessMut.isError) {
-    const errMsg = (assessMut.error as { response?: { data?: { detail?: string } } })
-      ?.response?.data?.detail || 'Failed to compute assessment'
+    const errMsg = apiErrorDetail(assessMut.error, 'Failed to compute assessment')
     return (
       <div className="p-6 space-y-4">
         <div className="flex items-center justify-between">
@@ -296,30 +296,29 @@ function AssessmentBriefSection({
   assessmentId: string
   briefMd: string | null
 }) {
-  const [polling, setPolling] = useState(false)
+  const [pollRequested, setPollRequested] = useState(false)
 
   const briefMut = useMutation({
     mutationFn: () => assessmentsApi.generateBrief(topicId, sourceId, assessmentId),
-    onSuccess: () => setPolling(true),
+    onSuccess: () => setPollRequested(true),
   })
 
-  // Poll for brief completion
+  // Poll for brief completion. React Query stops itself once the brief lands
+  // or the job fails, so no effect has to flip a flag back off.
   const { data: polledAssessment } = useQuery({
     queryKey: ['assessment-poll', assessmentId],
     queryFn: () => assessmentsApi.get(topicId, sourceId, assessmentId),
-    refetchInterval: polling ? 5000 : false,
-    enabled: polling,
+    enabled: pollRequested,
+    refetchInterval: (query) => {
+      const polled = query.state.data
+      if (polled?.brief_md || polled?.generation_status === 'failed') return false
+      return 5000
+    },
   })
-
-  // Stop polling when brief is ready or failed
-  useEffect(() => {
-    if (polledAssessment?.brief_md || polledAssessment?.generation_status === 'failed') {
-      setPolling(false)
-    }
-  }, [polledAssessment])
 
   const finalBrief = polledAssessment?.brief_md ?? briefMd
   const failed = polledAssessment?.generation_status === 'failed'
+  const polling = pollRequested && !finalBrief && !failed
 
   if (finalBrief) {
     return (

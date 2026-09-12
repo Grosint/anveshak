@@ -1,5 +1,5 @@
 import { format } from 'date-fns'
-import { useProvenance } from '../../contexts/ProvenanceContext'
+import { useProvenance } from '../../contexts/provenance'
 import { PlatformBadge } from '../content/PlatformBadge'
 import { deepfakeLabel } from '../../lib/domain'
 

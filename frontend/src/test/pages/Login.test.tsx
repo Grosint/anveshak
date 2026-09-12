@@ -16,6 +16,10 @@ vi.mock('axios', () => ({
 
 // Mock AuthContext
 vi.mock('../../contexts/AuthContext', () => ({
+  AuthProvider: ({ children }: any) => children,
+}))
+
+vi.mock('../../contexts/auth', () => ({
   useAuth: () => ({
     isAuthenticated: false,
     login: vi.fn(),
@@ -24,7 +28,6 @@ vi.mock('../../contexts/AuthContext', () => ({
     token: null,
     secondsUntilExpiry: null,
   }),
-  AuthProvider: ({ children }: any) => children,
 }))
 
 describe('Login page', () => {

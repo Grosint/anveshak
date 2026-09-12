@@ -4,6 +4,7 @@ import cytoscape from 'cytoscape'
 import { intelligenceApi } from '../../api/intelligence'
 import { identifiersApi, ClusterDetail } from '../../api/identifiers'
 import { Spinner } from '../ui/Spinner'
+import { asText } from '../../lib/scalar'
 
 const DrishtiPreview = lazy(() => import('./DrishtiPreview'))
 
@@ -320,28 +321,30 @@ export default function EntityGraph({ topicId, onClose }: Props) {
     })
 
     cyRef.current.on('tap', 'node', (evt) => {
-      const cy = cyRef.current!; const node = evt.target; const d = node.data()
+      const cy = cyRef.current!; const node = evt.target as cytoscape.NodeSingular
       cy.elements().addClass('dimmed'); node.removeClass('dimmed').addClass('highlighted-node'); node.neighborhood().removeClass('dimmed').addClass('highlighted')
       const neighbors: SelectedNodeInfo['neighbors'] = []
       node.connectedEdges().forEach((edge: cytoscape.EdgeSingular) => {
         const other = edge.source().id() === node.id() ? edge.target() : edge.source()
-        neighbors.push({ label: other.data('fullLabel') || other.data('label'), type: other.data('nodeType'), via: edge.data('label') })
+        const otherLabel = asText(other.data('label'))
+        neighbors.push({ label: asText(other.data('fullLabel')) || otherLabel, type: asText(other.data('nodeType')), via: asText(edge.data('label')) })
       })
-      setSelectedNode({ label: d.label, fullLabel: d.fullLabel || d.label, type: d.nodeType, group: d.nodeGroup, neighbors })
+      const label = asText(node.data('label'))
+      setSelectedNode({ label, fullLabel: asText(node.data('fullLabel')) || label, type: asText(node.data('nodeType')), group: asText(node.data('nodeGroup')), neighbors })
     })
 
     cyRef.current.on('tap', (evt) => {
       if (evt.target === cyRef.current) { cyRef.current!.elements().removeClass('dimmed highlighted highlighted-node'); setSelectedNode(null) }
     })
 
-    cyRef.current.on('mouseover', 'node', (e) => { e.target.style('border-width', 5); containerRef.current!.style.cursor = 'pointer' })
-    cyRef.current.on('mouseout', 'node', (e) => { if (!e.target.hasClass('highlighted-node')) e.target.style('border-width', 3); containerRef.current!.style.cursor = 'default' })
+    cyRef.current.on('mouseover', 'node', (e) => { (e.target as cytoscape.NodeSingular).style('border-width', 5); containerRef.current!.style.cursor = 'pointer' })
+    cyRef.current.on('mouseout', 'node', (e) => { const node = e.target as cytoscape.NodeSingular; if (!node.hasClass('highlighted-node')) node.style('border-width', 3); containerRef.current!.style.cursor = 'default' })
   }, [filteredElements, view])
 
   useEffect(() => {
     if (!isLoading && filteredElements.length > 0) renderGraph()
     return () => { cyRef.current?.destroy(); cyRef.current = null }
-  }, [isLoading, renderGraph])
+  }, [isLoading, renderGraph, filteredElements.length])
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }

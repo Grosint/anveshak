@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
-import { ProvenanceProvider, useProvenance, type ProvenanceStackEntry } from '../../contexts/ProvenanceContext'
+import { ProvenanceProvider } from '../../contexts/ProvenanceContext'
+import { useProvenance, type ProvenanceStackEntry } from '../../contexts/provenance'
 import { ProvenancePanel } from '../../components/provenance/ProvenancePanel'
 import { ProvenanceBreadcrumb } from '../../components/provenance/ProvenanceBreadcrumb'
 
@@ -51,7 +52,7 @@ function renderWithProviders(ui: React.ReactElement) {
 }
 
 // Helper component to trigger provenance actions from tests
-function PanelHarness({ autoOpen }: { autoOpen?: ProvenanceStackEntry }) {
+function PanelHarness() {
   const { push, pop, close, stack, isOpen, current } = useProvenance()
   return (
     <div>

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { useProvenance } from '../../contexts/ProvenanceContext'
+import { useProvenance } from '../../contexts/provenance'
 import { ProvenanceBreadcrumb } from './ProvenanceBreadcrumb'
 import { Spinner } from '../ui/Spinner'
 

@@ -4,7 +4,7 @@ Applies to `frontend/**/*.ts`, `frontend/**/*.tsx`, and `services/api/**/*.py`.
 Repo-wide rules are in [../AGENTS.md](../AGENTS.md).
 React, theming, and component patterns are in the `frontend-patterns` skill.
 
-5 learned instincts covering all data flowing between layers.
+8 notes covering data flowing between layers, plus how this code is structured and linted.
 
 ## SQL alias is the API contract
 
@@ -30,7 +30,10 @@ See: `.agents/skills/learned/references/mock-shape-unwrap-mismatch.md`
 
 JSONB columns arrive double-encoded as strings through multiple serialization layers:
 asyncpg, then dict, then JSON response, then frontend parse.
-Always parse defensively: `typeof val === 'string' ? JSON.parse(val) : val`
+Never call `JSON.parse` directly, since it returns `any` and defeats type checking.
+Use `parseJsonObject` from `src/lib/json.ts`, which unwraps the extra encoding layer
+and returns `Record<string, unknown>` for null, malformed JSON, and non-objects alike.
+Read individual fields out of it with `asText` or `asNumber` from `src/lib/scalar.ts`.
 See: `.agents/skills/learned/references/double-encoded-jsonb-frontend.md`
 
 ## Route param names must match exactly
@@ -38,6 +41,31 @@ See: `.agents/skills/learned/references/double-encoded-jsonb-frontend.md`
 A React Router `:trackerId` in the route definition must match `useParams<{ trackerId: string }>()`.
 A mismatch yields `undefined`, which disables queries and gives a blank page with no error.
 See: `.agents/skills/learned/references/react-router-param-name-match.md`
+
+## Failed API calls
+
+Every route in `services/api` reports a failure as `{"detail": "..."}`.
+Read it with `apiErrorDetail(error, fallback)` and `apiErrorStatus(error)` from
+`src/lib/apiError.ts` rather than reaching into `err.response.data.detail` inline.
+Both take `unknown`, because a rejected promise carries no type, and both read the
+error structurally, so a plain object from a test mock works the same as an `AxiosError`.
+
+## Context files export one thing
+
+A file that exports a provider component must export nothing else, or Vite's fast
+refresh falls back to a full page reload on every edit.
+Each context is therefore split in two: `contexts/AuthContext.tsx` holds `AuthProvider`
+alone, and `contexts/auth.ts` holds the context object, the `useAuth` hook and the
+plain helpers. Same shape for `ws`, `theme` and `provenance`.
+A test mocking a hook mocks the lowercase module (`contexts/auth`), not the provider file.
+
+## Linting
+
+`npx eslint .` in `frontend/`, or `make lint-frontend` from the repo root.
+The config is `frontend/eslint.config.mjs`, ESLint 10 flat config with type-aware
+`typescript-eslint` rules over `src/`, so a new `any` leaking out of an untyped API
+call is an error rather than a silent hole.
+Tests under `src/test/` sit outside `tsconfig.json`, so they get syntax-only linting.
 
 ## External library label names
 

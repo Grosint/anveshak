@@ -42,7 +42,7 @@ export function ManageSourcesModal({ open, onClose, topicId, topicName }: Manage
     queryFn: () => sourcesApi.list(0, 500),
     enabled: open,
   })
-  const allSources = allSourcesData?.items ?? []
+  const allSources = useMemo(() => allSourcesData?.items ?? [], [allSourcesData])
 
   const linkedIds = useMemo(
     () => new Set(linkedSources.map((s) => s.id)),
@@ -65,16 +65,16 @@ export function ManageSourcesModal({ open, onClose, topicId, topicName }: Manage
   const linkSource = useMutation({
     mutationFn: (sourceId: string) => topicsApi.linkSource(topicId, sourceId),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['topic-sources', topicId] })
-      qc.invalidateQueries({ queryKey: ['sources'] })
+      void qc.invalidateQueries({ queryKey: ['topic-sources', topicId] })
+      void qc.invalidateQueries({ queryKey: ['sources'] })
     },
   })
 
   const unlinkSource = useMutation({
     mutationFn: (sourceId: string) => topicsApi.unlinkSource(topicId, sourceId),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['topic-sources', topicId] })
-      qc.invalidateQueries({ queryKey: ['sources'] })
+      void qc.invalidateQueries({ queryKey: ['topic-sources', topicId] })
+      void qc.invalidateQueries({ queryKey: ['sources'] })
     },
   })
 

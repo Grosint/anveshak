@@ -28,7 +28,15 @@ RUN uv pip install --system /workspace/sdk/
 WORKDIR /workspace/services/analyst
 COPY services/analyst/pyproject.toml .
 COPY services/analyst/anveshak/ anveshak/
-RUN uv pip install --system .
+# Install torch CPU-only FIRST so uv doesn't pull CUDA wheels, matching
+# services/vision/Dockerfile. The default PyPI torch wheel now ships CUDA on
+# aarch64 too, so it drags in nvidia-cuda-runtime, nvidia-cudnn, nvidia-curand,
+# triton and friends: roughly 10 GB that cannot execute on a CPU host, and
+# enough on its own to fill the Docker VM disk mid-build. See hardware.md.
+RUN uv pip install --system \
+        torch \
+        --index-url https://download.pytorch.org/whl/cpu \
+    && uv pip install --system .
 
 # spaCy NLP models — installed at build time into site-packages.
 # Model names are configurable via env vars at runtime (settings.py),

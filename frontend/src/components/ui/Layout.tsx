@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Outlet, NavLink, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { useTheme } from '../../contexts/ThemeContext'
-import { useAuth } from '../../contexts/AuthContext'
-import { useWS } from '../../contexts/WSContext'
+import { useTheme } from '../../contexts/theme'
+import { useAuth } from '../../contexts/auth'
+import { useWS } from '../../contexts/ws'
 import { sourcesApi } from '../../api/sources'
 import IdentifierSearch from '../search/IdentifierSearch'
 
@@ -30,30 +30,30 @@ export default function Layout() {
   const { status: wsStatus } = useWS()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [searchInitialQuery, setSearchInitialQuery] = useState('')
+  // The search modal opens either from the toolbar and ⌘K, or from a
+  // `?search=` deep link. The URL stays the source of truth for the link case
+  // rather than being copied into state by an effect.
+  const [manualSearchQuery, setManualSearchQuery] = useState<string | null>(null)
+  const urlSearchQuery = searchParams.get('search')
+  const searchOpen = manualSearchQuery !== null || urlSearchQuery !== null
+  const searchInitialQuery = manualSearchQuery ?? urlSearchQuery ?? ''
+
+  const closeSearch = useCallback(() => {
+    setManualSearchQuery(null)
+    if (searchParams.has('search')) setSearchParams({}, { replace: true })
+  }, [searchParams, setSearchParams])
 
   // Global Cmd+K / Ctrl+K shortcut
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
-        setSearchOpen(true)
+        setManualSearchQuery('')
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
-
-  // Open search modal from URL param ?search=...
-  useEffect(() => {
-    const q = searchParams.get('search')
-    if (q) {
-      setSearchInitialQuery(q)
-      setSearchOpen(true)
-      setSearchParams({}, { replace: true })
-    }
-  }, [searchParams, setSearchParams])
 
   // Lightweight poll for down-source count — shown as red badge on Source Health nav item
   const { data: sourcesData } = useQuery({
@@ -112,7 +112,7 @@ export default function Layout() {
 
           {/* Global identifier search */}
           <button
-            onClick={() => setSearchOpen(true)}
+            onClick={() => setManualSearchQuery('')}
             className="flex items-center gap-3 px-3 py-2 rounded text-sm transition-colors text-text-secondary hover:bg-anveshak-muted hover:text-text-primary w-full"
             aria-label="Search identifiers"
           >
@@ -209,7 +209,7 @@ export default function Layout() {
       </main>
 
       {/* Global identifier search modal */}
-      <IdentifierSearch open={searchOpen} onClose={() => { setSearchOpen(false); setSearchInitialQuery('') }} initialQuery={searchInitialQuery} />
+      <IdentifierSearch open={searchOpen} onClose={closeSearch} initialQuery={searchInitialQuery} />
     </div>
   )
 }

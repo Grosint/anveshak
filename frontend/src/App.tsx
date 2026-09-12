@@ -1,6 +1,6 @@
 import React from 'react'
 import { Routes, Route, Navigate, useParams } from 'react-router-dom'
-import { useAuth } from './contexts/AuthContext'
+import { useAuth } from './contexts/auth'
 import { WSProvider } from './contexts/WSContext'
 import { ProvenanceProvider } from './contexts/ProvenanceContext'
 import Layout from './components/ui/Layout'

@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { topicsApi } from '../api/topics'
 import { contentApi, ContentFilters, ContentItem } from '../api/content'
 import { useInfiniteContent } from '../hooks/useInfiniteContent'
-import { useProvenance } from '../contexts/ProvenanceContext'
+import { useProvenance } from '../contexts/provenance'
 import { resolveWorkspaceView, WORKSPACE_VIEWS, WorkspaceView } from '../lib/domain'
 import { IntelligenceView } from '../components/intelligence'
 import { IdentifiersModal } from '../components/modals/IdentifiersModal'
@@ -108,7 +108,7 @@ export default function TopicWorkspace() {
     provenance.push({
       entityType: 'identifier',
       entityId: value,
-      topicId: topicId!,
+      topicId: topicId,
       label: value,
     })
   }

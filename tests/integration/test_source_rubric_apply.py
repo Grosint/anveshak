@@ -124,9 +124,7 @@ async def test_a_second_run_does_not_reset_a_score_behaviour_moved(
     await apply_rubric(db_pool, apply_changes=True, rebaseline=False)
 
     async with db_pool.acquire() as conn:
-        await conn.execute(
-            "UPDATE sources SET credibility_score = 41.0 WHERE id = $1", source_id
-        )
+        await conn.execute("UPDATE sources SET credibility_score = 41.0 WHERE id = $1", source_id)
 
     outcomes = await apply_rubric(db_pool, apply_changes=True, rebaseline=False)
 
@@ -152,9 +150,7 @@ async def test_rebaselining_writes_its_own_audited_row(db_pool, make_source, rub
     assert "Re-applied" in rows[1]["reason"]
 
 
-async def test_a_declared_outlet_with_no_source_is_reported_not_skipped(
-    db_pool, rubric_declaring
-):
+async def test_a_declared_outlet_with_no_source_is_reported_not_skipped(db_pool, rubric_declaring):
     """An outlet assessed but never registered is an operator mistake worth
     seeing, not a row to create."""
     handle = f"https://rubric-{uuid.uuid4().hex[:8]}.example.in/feed"
@@ -234,9 +230,7 @@ async def test_a_run_can_be_scoped_to_one_organisation(
     theirs = await make_source(name="Theirs", url_or_handle=handle, org_id=other_org)
     rubric_declaring(handle, ["named_editorial_responsibility"])
 
-    outcomes = await apply_rubric(
-        db_pool, apply_changes=True, rebaseline=False, org_id=other_org
-    )
+    outcomes = await apply_rubric(db_pool, apply_changes=True, rebaseline=False, org_id=other_org)
 
     assert [o.status for o in outcomes] == ["applied"]
     assert await _score(db_pool, theirs) == 60.0

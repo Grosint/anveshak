@@ -34,6 +34,10 @@ vi.mock('../../api/identifiers', () => ({
 
 // Mock contexts
 vi.mock('../../contexts/AuthContext', () => ({
+  AuthProvider: ({ children }: any) => children,
+}))
+
+vi.mock('../../contexts/auth', () => ({
   useAuth: () => ({
     isAuthenticated: true,
     login: vi.fn(),
@@ -42,15 +46,17 @@ vi.mock('../../contexts/AuthContext', () => ({
     token: 'fake-token',
     secondsUntilExpiry: 3600,
   }),
-  AuthProvider: ({ children }: any) => children,
 }))
 
 vi.mock('../../contexts/WSContext', () => ({
+  WSProvider: ({ children }: any) => children,
+}))
+
+vi.mock('../../contexts/ws', () => ({
   useWS: () => ({
     subscribe: (_cb: any) => () => {},
     status: 'disconnected',
   }),
-  WSProvider: ({ children }: any) => children,
 }))
 
 describe('Identifiers page (embedded mode — standalone route removed)', () => {

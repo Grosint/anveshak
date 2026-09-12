@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useQueries } from '@tanstack/react-query'
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts'
-import { sourcesApi, Source, CreateSourcePayload, UpdateSourcePayload, HealthStatus } from '../api/sources'
+import { sourcesApi, AuditEntry, Source, CreateSourcePayload, UpdateSourcePayload, HealthStatus } from '../api/sources'
 import { AddSourceModal } from '../components/sources/AddSourceModal'
 import { AuditLogTable } from '../components/sources/AuditLogTable'
 import { PlatformBadge } from '../components/content/PlatformBadge'
@@ -12,6 +12,7 @@ import { Pagination } from '../components/ui/Pagination'
 import { Spinner } from '../components/ui/Spinner'
 import { EmptyState } from '../components/ui/EmptyState'
 import { formatDistanceToNow } from 'date-fns'
+import { apiErrorDetail } from '../lib/apiError'
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -69,7 +70,7 @@ function FilterBar({ active, onChange, counts }: FilterBarProps) {
     <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by health status">
       {filters.map((f) => {
         const isActive = active === f.value
-        const count = f.value !== 'all' ? counts[f.value as HealthStatus] : undefined
+        const count = f.value !== 'all' ? counts[f.value] : undefined
         const isDown = f.value === 'down' && (counts.down ?? 0) > 0
         return (
           <button
@@ -180,7 +181,7 @@ function DeleteConfirm({ sourceName, contentCount, onConfirm, onCancel, isPendin
       <p className="text-sm font-medium text-signal-high">Delete "{sourceName}"?</p>
       {hasContent && (
         <p className="text-xs text-text-muted">
-          This source has <strong className="text-text-primary">{contentCount} content item{contentCount! > 1 ? 's' : ''}</strong>.
+          This source has <strong className="text-text-primary">{contentCount} content item{contentCount > 1 ? 's' : ''}</strong>.
           They will be orphaned (source_id set to null).
         </p>
       )}
@@ -209,7 +210,7 @@ type DetailTab = 'overview' | 'audit'
 interface DetailPanelProps {
   source: Source
   warningCount: number
-  auditLog: any[]
+  auditLog: AuditEntry[]
   isLoadingAudit: boolean
   detailTab: DetailTab
   setDetailTab: (t: DetailTab) => void
@@ -237,8 +238,8 @@ function DetailPanel({
   const [recheckError, setRecheckError] = useState<string | null>(null)
 
   const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ['sources'] })
-    qc.invalidateQueries({ queryKey: ['audit', source.id] })
+    void qc.invalidateQueries({ queryKey: ['sources'] })
+    void qc.invalidateQueries({ queryKey: ['audit', source.id] })
   }
 
   const updateCred = useMutation({
@@ -255,14 +256,14 @@ function DetailPanel({
   const deleteSrc = useMutation({
     mutationFn: (force: boolean) => sourcesApi.delete(source.id, force),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['sources'] })
+      void qc.invalidateQueries({ queryKey: ['sources'] })
       // parent will deselect because source is gone
     },
   })
 
   const recheck = useMutation({
     mutationFn: () => sourcesApi.checkHealth(source.id),
-    onSuccess: () => { setRecheckError(null); qc.invalidateQueries({ queryKey: ['sources'] }) },
+    onSuccess: () => { setRecheckError(null); void qc.invalidateQueries({ queryKey: ['sources'] }) },
     onError: (err: unknown) => setRecheckError(err instanceof Error ? err.message : 'Re-check failed'),
   })
 
@@ -290,10 +291,10 @@ function DetailPanel({
   async function handleDeleteConfirm(force: boolean) {
     try {
       await deleteSrc.mutateAsync(force)
-    } catch (err: any) {
+    } catch (err: unknown) {
       // 409 → parse content count from detail message
-      const detail: string = err?.response?.data?.detail ?? ''
-      const match = detail.match(/(\d+) content item/)
+      const detail = apiErrorDetail(err, '')
+      const match = /(\d+) content item/.exec(detail)
       if (match) setContentCount(parseInt(match[1], 10))
     }
   }
@@ -357,7 +358,7 @@ function DetailPanel({
         {detailTab === 'overview' && (
           <div className="space-y-6">
             {/* ── Edit name / URL */}
-            <form onSubmit={handleFieldsSave} className="space-y-3" aria-label="Edit source details">
+            <form onSubmit={(e) => { void handleFieldsSave(e) }} className="space-y-3" aria-label="Edit source details">
               <p className="text-sm font-medium text-text-secondary">Edit source</p>
               <div>
                 <label htmlFor="edit-name" className="block text-xs text-text-muted mb-1">Name</label>
@@ -393,7 +394,7 @@ function DetailPanel({
             <hr className="border-anveshak-border" />
 
             {/* ── Update credibility */}
-            <form onSubmit={handleCredUpdate} className="space-y-3" aria-label="Update credibility score">
+            <form onSubmit={(e) => { void handleCredUpdate(e) }} className="space-y-3" aria-label="Update credibility score">
               <p className="text-sm font-medium text-text-secondary">Update credibility score</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -466,7 +467,7 @@ function DetailPanel({
                 <DeleteConfirm
                   sourceName={source.name}
                   contentCount={contentCount}
-                  onConfirm={handleDeleteConfirm}
+                  onConfirm={(force) => { void handleDeleteConfirm(force) }}
                   onCancel={() => { setDeleteMode(false); setContentCount(null) }}
                   isPending={deleteSrc.isPending}
                 />

@@ -39,10 +39,11 @@ export function RecentActivityFeed({ data }: RecentActivityFeedProps) {
       <div className="space-y-0.5 max-h-72 overflow-y-auto">
         {data.map((item, i) => {
           const cfg = TYPE_CONFIG[item.type] ?? { icon: '•', color: 'text-text-muted' }
-          let timeAgo = ''
+          let timeAgo: string
           try {
             timeAgo = formatDistanceToNow(new Date(item.timestamp), { addSuffix: true })
-          } catch (_e: unknown) {
+          } catch {
+            // date-fns throws on an unparseable timestamp; show it verbatim.
             timeAgo = item.timestamp
           }
 

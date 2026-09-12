@@ -334,7 +334,7 @@ export function SignalGraph({ signalId, onClose }: SignalGraphProps) {
 
     // Click node → highlight neighbors + show detail
     cy.on('tap', 'node', (e) => {
-      const node = e.target
+      const node = e.target as cytoscape.NodeSingular
       const nodeData = data.nodes.find((n) => n.id === node.id())
       setSelectedNode(nodeData || null)
 
@@ -355,18 +355,20 @@ export function SignalGraph({ signalId, onClose }: SignalGraphProps) {
 
     // Hover glow + show label on content nodes
     cy.on('mouseover', 'node', (e) => {
-      e.target.style('border-width', 4)
-      e.target.style('border-color', '#e2e8f0')
-      e.target.style('text-opacity', 1)
+      const node = e.target as cytoscape.NodeSingular
+      node.style('border-width', 4)
+      node.style('border-color', '#e2e8f0')
+      node.style('text-opacity', 1)
       containerRef.current!.style.cursor = 'pointer'
     })
     cy.on('mouseout', 'node', (e) => {
-      if (!e.target.hasClass('highlighted-node')) {
-        e.target.style('border-width', 2)
-        e.target.style('border-color', '')
+      const node = e.target as cytoscape.NodeSingular
+      if (!node.hasClass('highlighted-node')) {
+        node.style('border-width', 2)
+        node.style('border-color', '')
         // Hide content labels again unless highlighted
-        if (e.target.data('nodeType') === 'content' && !e.target.hasClass('highlighted-node')) {
-          e.target.style('text-opacity', 0)
+        if (node.data('nodeType') === 'content' && !node.hasClass('highlighted-node')) {
+          node.style('text-opacity', 0)
         }
       }
       containerRef.current!.style.cursor = 'default'

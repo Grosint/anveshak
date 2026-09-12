@@ -25,8 +25,11 @@ vi.mock('../../pages/UserManagement', () => ({
 const mockUseAuth = vi.hoisted(() => vi.fn())
 
 vi.mock('../../contexts/AuthContext', () => ({
-  useAuth: mockUseAuth,
   AuthProvider: ({ children }: any) => children,
+}))
+
+vi.mock('../../contexts/auth', () => ({
+  useAuth: mockUseAuth,
 }))
 
 function setMockRole(role: string) {

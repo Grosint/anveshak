@@ -15,6 +15,13 @@ export interface ScamTemplate {
   linked_at?: string
 }
 
+/** Response from linking or unlinking a template and a topic. */
+export interface TemplateLinkResponse {
+  topic_id: string
+  template_id: string
+  status: 'linked' | 'unlinked'
+}
+
 export const templatesApi = {
   list: () =>
     api.get<ScamTemplate[]>('/api/v1/templates').then((r) => r.data),
@@ -26,8 +33,12 @@ export const templatesApi = {
     api.get<ScamTemplate[]>(`/api/v1/topics/${topicId}/templates`).then((r) => r.data),
 
   link: (topicId: string, templateId: string) =>
-    api.post(`/api/v1/topics/${topicId}/templates/${templateId}`).then((r) => r.data),
+    api
+      .post<TemplateLinkResponse>(`/api/v1/topics/${topicId}/templates/${templateId}`)
+      .then((r) => r.data),
 
   unlink: (topicId: string, templateId: string) =>
-    api.delete(`/api/v1/topics/${topicId}/templates/${templateId}`).then((r) => r.data),
+    api
+      .delete<TemplateLinkResponse>(`/api/v1/topics/${topicId}/templates/${templateId}`)
+      .then((r) => r.data),
 }

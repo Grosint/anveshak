@@ -30,7 +30,7 @@ export function useInfiniteContent(topicId: string, filters: ContentFilters = {}
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && query.hasNextPage && !query.isFetchingNextPage) {
-          query.fetchNextPage()
+          void query.fetchNextPage()
         }
       },
       { rootMargin: '200px' },

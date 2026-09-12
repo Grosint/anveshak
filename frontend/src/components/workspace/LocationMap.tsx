@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState, useCallback, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { intelligenceApi } from '../../api/intelligence'
+import { asNumber, asText } from '../../lib/scalar'
 import { Spinner } from '../ui/Spinner'
 import { EmptyState } from '../ui/EmptyState'
 import LocationPanel from '../map/LocationPanel'
@@ -12,12 +13,6 @@ const GeoMap = lazy(() => import('../map/GeoMap'))
 interface Props {
   topicId: string
   topicName?: string
-}
-
-interface LocationMetadata {
-  total_extracted: number
-  geocoded: number
-  unresolved: string[]
 }
 
 export default function LocationMap({ topicId, topicName }: Props) {
@@ -52,11 +47,11 @@ export default function LocationMap({ topicId, topicName }: Props) {
     createPinMutation.mutate({ lat, lng, label })
   }, [createPinMutation])
 
-  const geojson = data as (GeoJSON.FeatureCollection & { metadata?: LocationMetadata }) | undefined
-  const metadata = (data as any)?.metadata as LocationMetadata | undefined
+  const geojson = data
+  const metadata = data?.metadata
 
   const handleFeatureClick = useCallback((props: Record<string, unknown>) => {
-    setSelectedLocation(String(props.name ?? ''))
+    setSelectedLocation(asText(props.name))
   }, [])
 
   const handleFlyTo = useCallback((lng: number, lat: number) => {
@@ -71,8 +66,8 @@ export default function LocationMap({ topicId, topicName }: Props) {
 
   // Sort features by mention_count descending
   const sortedFeatures = [...geojson.features].sort((a, b) => {
-    const aCount = (a.properties as any)?.mention_count ?? 0
-    const bCount = (b.properties as any)?.mention_count ?? 0
+    const aCount = asNumber(a.properties?.mention_count)
+    const bCount = asNumber(b.properties?.mention_count)
     return bCount - aCount
   })
 

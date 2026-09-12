@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { organizationsApi, Organization, CreateOrgPayload } from '../api/organizations'
+import { apiErrorDetail } from '../lib/apiError'
 
 interface Props {
   embedded?: boolean
@@ -20,12 +21,12 @@ export default function OrganizationManagement({ embedded }: Props) {
   const createOrg = useMutation({
     mutationFn: (payload: CreateOrgPayload) => organizationsApi.create(payload),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['organizations'] })
+      void qc.invalidateQueries({ queryKey: ['organizations'] })
       setShowCreate(false)
       setNewName('')
       setError('')
     },
-    onError: (err: any) => setError(err?.response?.data?.detail || 'Failed to create organization'),
+    onError: (err: unknown) => setError(apiErrorDetail(err, 'Failed to create organization')),
   })
 
   const toggleActive = useMutation({

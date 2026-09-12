@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -23,7 +23,7 @@ export default function ReportsTab({ topicId }: ReportsTabProps) {
   const qc = useQueryClient()
   const [reportType, setReportType] = useState<ReportType>('intelligence_brief')
   const [windowHours, setWindowHours] = useState(72)
-  const [currentReportId, setCurrentReportId] = useState<string | null>(null)
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null)
 
   // Report history
   const { data: historyData, isLoading: loadingHistory } = useQuery({
@@ -32,6 +32,11 @@ export default function ReportsTab({ topicId }: ReportsTabProps) {
     enabled: !!topicId,
   })
   const history = historyData?.items ?? []
+
+  // With nothing picked, the tab shows the newest report that finished
+  // generating. Derived rather than set from an effect, so opening the tab
+  // costs one render.
+  const currentReportId = selectedReportId ?? history.find((h) => h.generated_at)?.id ?? null
 
   // Poll current report
   const { data: report } = useQuery<Report>({
@@ -48,8 +53,8 @@ export default function ReportsTab({ topicId }: ReportsTabProps) {
   const generate = useMutation({
     mutationFn: (payload: CreateReportPayload) => reportsApi.create(payload),
     onSuccess: (data) => {
-      setCurrentReportId(data.report_id)
-      qc.invalidateQueries({ queryKey: ['reports-history', topicId] })
+      setSelectedReportId(data.report_id)
+      void qc.invalidateQueries({ queryKey: ['reports-history', topicId] })
     },
   })
 
@@ -60,14 +65,6 @@ export default function ReportsTab({ topicId }: ReportsTabProps) {
       time_window_hours: windowHours,
     })
   }
-
-  // Auto-load latest report from history if none selected
-  useEffect(() => {
-    if (!currentReportId && history.length > 0) {
-      const latest = history.find((h) => h.generated_at)
-      if (latest) setCurrentReportId(latest.id)
-    }
-  }, [history, currentReportId])
 
   return (
     <div className="h-full flex flex-col">
@@ -127,7 +124,7 @@ export default function ReportsTab({ topicId }: ReportsTabProps) {
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => reportsApi.downloadPdf(report.id)}
+                onClick={() => { void reportsApi.downloadPdf(report.id) }}
               >
                 Download PDF
               </Button>
@@ -163,7 +160,7 @@ export default function ReportsTab({ topicId }: ReportsTabProps) {
                 {history.map((h) => (
                   <button
                     key={h.id}
-                    onClick={() => setCurrentReportId(h.id)}
+                    onClick={() => setSelectedReportId(h.id)}
                     className={`w-full text-left p-3 rounded-lg border transition-all ${
                       currentReportId === h.id
                         ? 'border-anveshak-accent/40 bg-anveshak-accent/5'

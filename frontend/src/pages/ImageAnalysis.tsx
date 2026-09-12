@@ -10,6 +10,7 @@ import { Spinner } from '../components/ui/Spinner'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { Button } from '../components/ui/Button'
+import { apiErrorDetail, apiErrorStatus } from '../lib/apiError'
 
 type Tab = 'deepfake' | 'yolo' | 'exif' | 'reverse'
 
@@ -82,8 +83,7 @@ export default function ImageAnalysis() {
       setJobId(res.job_id)
       setActiveTab('deepfake')
     } catch (err: unknown) {
-      const status = (err as { response?: { status?: number; data?: { detail?: string } } })?.response?.status
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      const status = apiErrorStatus(err)
 
       let message: string
       if (status === 413) {
@@ -91,11 +91,11 @@ export default function ImageAnalysis() {
       } else if (status === 503) {
         message = 'The vision service is unavailable. Ensure the vision container is running and healthy.'
       } else if (status === 400) {
-        message = detail ?? 'Invalid upload — check that the file is a supported image or video format.'
-      } else if (!status) {
+        message = apiErrorDetail(err, 'Invalid upload — check that the file is a supported image or video format.')
+      } else if (status === null) {
         message = 'Network error — check your connection and that the API is reachable.'
       } else {
-        message = detail ?? `Upload failed with status ${status}.`
+        message = apiErrorDetail(err, `Upload failed with status ${status}.`)
       }
       setErrorDialog({ title: 'Upload failed', message })
     } finally {
@@ -160,7 +160,7 @@ export default function ImageAnalysis() {
           )}
 
           {/* Drop zone */}
-          <DropZone onFile={handleFile} disabled={uploading} />
+          <DropZone onFile={(file) => { void handleFile(file) }} disabled={uploading} />
 
           {/* Recent analyses history */}
           {!jobId && recentJobs.length > 0 && (
@@ -312,7 +312,7 @@ export default function ImageAnalysis() {
                     {isProcessing ? (
                       <div className="flex justify-center py-8"><Spinner label="Extracting EXIF…" /></div>
                     ) : result?.exif_data ? (
-                      <ExifTable exif={result.exif_data as Record<string, unknown>} />
+                      <ExifTable exif={result.exif_data} />
                     ) : (
                       <p className="text-sm text-text-muted text-center py-8">No EXIF data extracted yet.</p>
                     )}

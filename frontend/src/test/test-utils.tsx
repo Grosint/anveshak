@@ -1,45 +1,12 @@
 /**
  * Shared test utilities — wraps components with required providers.
  *
- * Provides: AuthContext (configurable), WSContext (configurable),
- * React Router (MemoryRouter), React Query.
+ * Provides: React Router (MemoryRouter) and React Query.
  */
-import React, { ReactElement, createContext, useContext } from 'react'
+import React, { ReactElement } from 'react'
 import { render, RenderOptions } from '@testing-library/react'
 import { MemoryRouter, MemoryRouterProps } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-
-// ── Auth context mock ───────────────────────────────────────────────────
-
-interface MockAuthState {
-  isAuthenticated: boolean
-  user: { sub: string; exp: number; iat: number; role?: string } | null
-  token: string | null
-  secondsUntilExpiry: number | null
-  login: (token: string) => void
-  logout: () => void
-}
-
-const defaultAuthState: MockAuthState = {
-  isAuthenticated: true,
-  user: { sub: 'analyst-1', exp: Math.floor(Date.now() / 1000) + 3600, iat: Math.floor(Date.now() / 1000), role: 'analyst' },
-  token: 'fake-token',
-  secondsUntilExpiry: 3600,
-  login: () => {},
-  logout: () => {},
-}
-
-// ── WS context mock ────────────────────────────────────────────────────
-
-interface MockWSState {
-  subscribe: (handler: any) => () => void
-  status: 'connected' | 'disconnected' | 'connecting'
-}
-
-const defaultWSState: MockWSState = {
-  subscribe: () => () => {},
-  status: 'disconnected',
-}
 
 // ── Query client ────────────────────────────────────────────────────────
 
@@ -60,8 +27,6 @@ interface WrapperProps {
 
 interface CustomRenderOptions extends Omit<RenderOptions, 'wrapper'> {
   routerProps?: MemoryRouterProps
-  authState?: Partial<MockAuthState>
-  wsState?: Partial<MockWSState>
 }
 
 /**
@@ -86,7 +51,7 @@ export function renderWithProviders(
   ui: ReactElement,
   options: CustomRenderOptions = {},
 ) {
-  const { routerProps, authState, wsState, ...renderOptions } = options
+  const { routerProps, ...renderOptions } = options
   const queryClient = createTestQueryClient()
 
   function Wrapper({ children }: WrapperProps) {

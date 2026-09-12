@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../contexts/auth'
 
 // ── Animated brand mark ───────────────────────────────────────────────────────
 // Inline SVG so CSS animations (radar-scan dots, inner-ring breathe, amber
@@ -220,7 +220,7 @@ export default function Login() {
             </div>
 
             {/* ── Form ── */}
-            <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+            <form onSubmit={(e) => { void handleSubmit(e) }} className="space-y-5" noValidate>
 
               {/* Username */}
               <div>

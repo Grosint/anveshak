@@ -1,4 +1,7 @@
 import api from './client'
+import type { ContentItem } from './content'
+import type { AuditEntry, Source } from './sources'
+import type { PaginatedResponse } from './types'
 
 // ── Identifier Provenance ──────────────────────────────────────────────
 
@@ -206,16 +209,15 @@ export const provenanceApi = {
   // Source provenance: composed from existing endpoints
   sourceProvenance: async (sourceId: string, topicId: string): Promise<SourceProvenance> => {
     const [sourceRes, auditRes, contentRes] = await Promise.all([
-      api.get(`/api/v1/sources`, { params: { offset: 0, limit: 200 } }),
-      api.get(`/api/v1/sources/${sourceId}/audit-log`),
-      api.get(`/api/v1/topics/${topicId}/content`, {
+      api.get<PaginatedResponse<Source>>(`/api/v1/sources`, {
+        params: { offset: 0, limit: 200 },
+      }),
+      api.get<AuditEntry[]>(`/api/v1/sources/${sourceId}/audit-log`),
+      api.get<ContentItem[]>(`/api/v1/topics/${topicId}/content`, {
         params: { source_id: sourceId, limit: 5, sort_by: 'captured_at' },
       }),
     ])
-    const allSources = sourceRes.data?.items ?? sourceRes.data ?? []
-    const source = Array.isArray(allSources)
-      ? allSources.find((s: Record<string, unknown>) => s.id === sourceId)
-      : null
+    const source = sourceRes.data.items.find((s) => s.id === sourceId)
 
     return {
       id: sourceId,
@@ -223,9 +225,19 @@ export const provenanceApi = {
       platform: source?.platform ?? 'web',
       credibility_score: source?.credibility_score ?? 0,
       health_status: source?.health_status ?? 'unverified',
-      recent_content: (contentRes.data ?? []).slice(0, 5),
+      recent_content: contentRes.data.slice(0, 5).map((item) => ({
+        id: item.id,
+        title: item.title ?? null,
+        captured_at: item.captured_at,
+      })),
       topic_links: [],
-      audit_log: (auditRes.data ?? []).slice(0, 10),
+      audit_log: auditRes.data.slice(0, 10).map((entry) => ({
+        id: entry.id,
+        old_score: entry.old_score,
+        new_score: entry.new_score,
+        reason: entry.reason,
+        created_at: entry.created_at,
+      })),
     }
   },
 

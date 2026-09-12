@@ -40,6 +40,10 @@ vi.mock('../../api/reports', () => ({
 }))
 
 vi.mock('../../contexts/AuthContext', () => ({
+  AuthProvider: ({ children }: any) => children,
+}))
+
+vi.mock('../../contexts/auth', () => ({
   useAuth: () => ({
     isAuthenticated: true,
     login: vi.fn(),
@@ -48,7 +52,6 @@ vi.mock('../../contexts/AuthContext', () => ({
     token: 'fake-token',
     secondsUntilExpiry: 3600,
   }),
-  AuthProvider: ({ children }: any) => children,
 }))
 
 describe('ReportBuilder page', () => {

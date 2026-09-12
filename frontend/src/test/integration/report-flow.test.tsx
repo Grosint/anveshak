@@ -31,7 +31,7 @@ vi.mock('../../api/topics', () => ({
   },
 }))
 
-vi.mock('../../contexts/AuthContext', () => ({
+vi.mock('../../contexts/auth', () => ({
   useAuth: () => ({
     isAuthenticated: true,
     token: 'test-jwt',

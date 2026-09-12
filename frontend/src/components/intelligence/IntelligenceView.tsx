@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { intelligenceApi, IntelSignal, IntelCluster, IntelIdentifier, IntelLocation } from '../../api/intelligence'
 import { topicsApi } from '../../api/topics'
-import { useProvenance } from '../../contexts/ProvenanceContext'
+import { useProvenance } from '../../contexts/provenance'
 import { SignalCards } from './SignalCards'
 import { NarrativeCards } from './NarrativeCards'
 import { SentimentTimeline } from './SentimentTimeline'
@@ -49,7 +49,7 @@ export function IntelligenceView({
   const statusMut = useMutation({
     mutationFn: (newStatus: 'active' | 'paused') => topicsApi.updateStatus(topicId, newStatus),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['topics', topicId] })
+      void qc.invalidateQueries({ queryKey: ['topics', topicId] })
     },
   })
 

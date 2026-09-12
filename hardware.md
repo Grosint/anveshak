@@ -543,6 +543,33 @@ is an invariant test rather than a note.
 
 ---
 
+## Torch Wheel Variant - `analyst` and `vision` services
+
+Both services install torch from the PyTorch CPU index rather than from PyPI:
+
+```dockerfile
+RUN uv pip install --system torch --index-url https://download.pytorch.org/whl/cpu
+```
+
+The default PyPI torch wheel declares the CUDA runtime as hard dependencies.
+That was once an x86_64-only problem, but current torch ships CUDA-enabled aarch64 wheels too, so an ARM CPU-only host pulls them as well.
+Measured in this repo: `nvidia-cuda-runtime`, `nvidia-cudnn`, `nvidia-curand`, `nvidia-nvjitlink`, `nvidia-nvshmem-cu13` and `triton`, roughly 10 GB of wheels that cannot execute without a GPU.
+The analyst image reached 9.93 GB, most of it dead weight, and two consecutive builds died with `No space left on device` after filling a 60 GB Docker VM disk.
+
+This is a build-time packaging choice, not a runtime device string, so it does not weaken the hardware independence rule.
+`STANCE_DEVICE`, `HOSTILITY_DEVICE` and `VISION_DEVICE` still come from env vars.
+A CPU wheel raises `Torch not compiled with CUDA enabled` when one of them is set to `cuda`, which is the loud failure the rule wants, not a silent fallback to CPU.
+
+**Upgrade path (GPU):**
+- Change `--index-url` to the CUDA build matching the host driver, for example `https://download.pytorch.org/whl/cu124`, in `services/analyst/Dockerfile` and `services/vision/Dockerfile`
+- Rebuild both images
+- Then set the device env vars listed in the summary checklist below
+
+**Config change:** None.
+**Code change:** One line per Dockerfile, plus an image rebuild.
+
+---
+
 ## Summary Upgrade Checklist
 
 When production hardware (RTX 3080+, 32GB RAM) is available, update these env vars in .env:
@@ -589,6 +616,8 @@ ollama rm qwen2:7b
 ```
 
 Zero application code changes required for any of the above.
+The one exception is the torch wheel index, which is a build-time choice rather than an env var.
+See the Torch Wheel Variant section above.
 
 ---
 

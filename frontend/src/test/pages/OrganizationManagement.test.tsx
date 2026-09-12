@@ -9,7 +9,7 @@
  *   5. Layout shows org name below role
  */
 import { describe, it, expect, vi } from 'vitest'
-import { screen, waitFor } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import { Route, Routes } from 'react-router-dom'
 import { renderWithProviders } from '../test-utils'
 
@@ -25,22 +25,25 @@ vi.mock('../../pages/OrganizationManagement', () => ({
 }))
 
 vi.mock('../../pages/SourceManager', () => ({
-  default: (props: any) => <div data-testid="source-manager">SourceManager</div>,
+  default: () => <div data-testid="source-manager">SourceManager</div>,
 }))
 
 vi.mock('../../pages/UserManagement', () => ({
-  default: (props: any) => <div data-testid="user-management">UserManagement</div>,
+  default: () => <div data-testid="user-management">UserManagement</div>,
 }))
 
 vi.mock('../../components/audit/AuditTrailPage', () => ({
-  default: (props: any) => <div data-testid="audit-trail">AuditTrail</div>,
+  default: () => <div data-testid="audit-trail">AuditTrail</div>,
 }))
 
 const mockUseAuth = vi.hoisted(() => vi.fn())
 
 vi.mock('../../contexts/AuthContext', () => ({
-  useAuth: mockUseAuth,
   AuthProvider: ({ children }: any) => children,
+}))
+
+vi.mock('../../contexts/auth', () => ({
+  useAuth: mockUseAuth,
 }))
 
 function setMockUser(role: string, org_id: string | null = 'org-test') {

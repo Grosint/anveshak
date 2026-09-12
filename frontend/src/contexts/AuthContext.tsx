@@ -1,36 +1,5 @@
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
-
-interface JWTPayload {
-  sub: string
-  username?: string
-  role?: string
-  org_id?: string
-  exp: number
-  iat: number
-}
-
-interface AuthContextValue {
-  user: JWTPayload | null
-  token: string | null
-  isAuthenticated: boolean
-  /** Seconds until token expiry, null when not authenticated */
-  secondsUntilExpiry: number | null
-  login: (token: string) => void
-  logout: () => void
-}
-
-export function decodeJWT(token: string): JWTPayload | null {
-  try {
-    const payload = token.split('.')[1]
-    return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
-  } catch {
-    return null
-  }
-}
-
-export function isExpired(payload: JWTPayload): boolean {
-  return Date.now() / 1000 >= payload.exp
-}
+import { useState, useCallback, useEffect, ReactNode } from 'react'
+import { AuthContext, decodeJWT, isExpired, type JWTPayload } from './auth'
 
 function loadInitial(): { user: JWTPayload | null; token: string | null } {
   const token = localStorage.getItem('anveshak_token')
@@ -43,8 +12,6 @@ function loadInitial(): { user: JWTPayload | null; token: string | null } {
   return { user: payload, token }
 }
 
-const AuthContext = createContext<AuthContextValue | null>(null)
-
 /** Warn the analyst 5 minutes before token expires */
 const WARN_BEFORE_EXPIRY_S = 300
 
@@ -52,7 +19,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const initial = loadInitial()
   const [user, setUser] = useState<JWTPayload | null>(initial.user)
   const [token, setToken] = useState<string | null>(initial.token)
-  const [secondsUntilExpiry, setSecondsUntilExpiry] = useState<number | null>(
+  const [secondsUntilExpiry, setSecondsUntilExpiry] = useState<number | null>(() =>
     initial.user ? Math.max(0, initial.user.exp - Math.floor(Date.now() / 1000)) : null,
   )
   const [showExpiryWarning, setShowExpiryWarning] = useState(false)
@@ -134,10 +101,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       )}
     </AuthContext.Provider>
   )
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext)
-  if (!ctx) throw new Error('useAuth must be used inside AuthProvider')
-  return ctx
 }

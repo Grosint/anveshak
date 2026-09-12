@@ -7,37 +7,19 @@
  * Missed signals: `since` param sends last-disconnect ISO timestamp on reconnect
  */
 import {
-  createContext,
-  useContext,
   useEffect,
   useRef,
   useCallback,
   ReactNode,
 } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useAuth } from './AuthContext'
-
-export interface WSSignalMessage {
-  type: 'signal' | 'signal_replay'
-  signal_id: string
-  topic_id: string
-  cluster_id: string | null
-  signal_type: string
-  description?: string
-  severity?: string
-  created_at: string
-}
-
-type WSMessage = WSSignalMessage | { type: 'ping' }
-
-type MessageHandler = (msg: WSSignalMessage) => void
-
-interface WSContextValue {
-  subscribe: (handler: MessageHandler) => () => void
-  status: 'connected' | 'disconnected' | 'connecting'
-}
-
-const WSContext = createContext<WSContextValue | null>(null)
+import { useAuth } from './auth'
+import {
+  WSContext,
+  type MessageHandler,
+  type WSContextValue,
+  type WSMessage,
+} from './ws'
 
 function getSessionId(): string {
   let id = localStorage.getItem('anveshak_session_id')
@@ -67,6 +49,9 @@ export function WSProvider({ children }: { children: ReactNode }) {
   const disconnectedAt = useRef<string | undefined>(undefined)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const unmounted = useRef(false)
+  // Holds the current `connect` so the reconnect timer can call it without
+  // `connect` referring to itself while it is still being declared.
+  const connectRef = useRef<() => void>(() => undefined)
 
   const connect = useCallback(() => {
     if (!token || unmounted.current) return
@@ -92,10 +77,10 @@ export function WSProvider({ children }: { children: ReactNode }) {
       if (msg.type === 'ping') return
 
       // Invalidate signals query so SignalsInbox re-fetches
-      queryClient.invalidateQueries({ queryKey: ['signals'] })
+      void queryClient.invalidateQueries({ queryKey: ['signals'] })
 
       // Notify local subscribers
-      handlersRef.current.forEach((h) => h(msg as WSSignalMessage))
+      handlersRef.current.forEach((h) => h(msg))
     }
 
     ws.onclose = () => {
@@ -104,12 +89,16 @@ export function WSProvider({ children }: { children: ReactNode }) {
       disconnectedAt.current = new Date().toISOString()
       reconnectTimer.current = setTimeout(() => {
         retryDelay.current = Math.min(retryDelay.current * 2, 8000)
-        connect()
+        connectRef.current()
       }, retryDelay.current)
     }
 
     ws.onerror = () => ws.close()
   }, [token, queryClient])
+
+  useEffect(() => {
+    connectRef.current = connect
+  }, [connect])
 
   useEffect(() => {
     if (!isAuthenticated) return
@@ -137,10 +126,4 @@ export function WSProvider({ children }: { children: ReactNode }) {
   }
 
   return <WSContext.Provider value={ctx}>{children}</WSContext.Provider>
-}
-
-export function useWS() {
-  const ctx = useContext(WSContext)
-  if (!ctx) throw new Error('useWS must be inside WSProvider')
-  return ctx
 }

@@ -4,6 +4,10 @@ import Layout from '../../components/ui/Layout'
 import { renderWithProviders } from '../test-utils'
 
 vi.mock('../../contexts/AuthContext', () => ({
+  AuthProvider: ({ children }: any) => children,
+}))
+
+vi.mock('../../contexts/auth', () => ({
   useAuth: () => ({
     isAuthenticated: true,
     login: vi.fn(),
@@ -12,17 +16,22 @@ vi.mock('../../contexts/AuthContext', () => ({
     token: 'fake-token',
     secondsUntilExpiry: 3600,
   }),
-  AuthProvider: ({ children }: any) => children,
 }))
 
 vi.mock('../../contexts/WSContext', () => ({
-  useWS: () => ({ subscribe: () => () => {}, status: 'connected' }),
   WSProvider: ({ children }: any) => children,
 }))
 
+vi.mock('../../contexts/ws', () => ({
+  useWS: () => ({ subscribe: () => () => {}, status: 'connected' }),
+}))
+
 vi.mock('../../contexts/ThemeContext', () => ({
-  useTheme: () => ({ toggle: vi.fn(), isDark: true }),
   ThemeProvider: ({ children }: any) => children,
+}))
+
+vi.mock('../../contexts/theme', () => ({
+  useTheme: () => ({ toggle: vi.fn(), isDark: true }),
 }))
 
 vi.mock('../../api/sources', () => ({

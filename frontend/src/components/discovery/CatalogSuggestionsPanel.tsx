@@ -83,8 +83,8 @@ export function CatalogSuggestionsPanel({ topicId }: { topicId: string }) {
     onMutate: (entryId) => setApprovingId(entryId),
     onSettled: () => {
       setApprovingId(null)
-      queryClient.invalidateQueries({ queryKey: ['catalog-suggestions', topicId] })
-      queryClient.invalidateQueries({ queryKey: ['sources'] })
+      void queryClient.invalidateQueries({ queryKey: ['catalog-suggestions', topicId] })
+      void queryClient.invalidateQueries({ queryKey: ['sources'] })
     },
   })
 

@@ -1,7 +1,7 @@
-import React, { lazy, Suspense } from 'react'
+import React, { lazy, Suspense, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { provenanceApi } from '../../api/provenance'
-import { useProvenance } from '../../contexts/ProvenanceContext'
+import { useProvenance } from '../../contexts/provenance'
 import { Spinner } from '../ui/Spinner'
 import { Badge } from '../ui/Badge'
 import { EmptyState } from '../ui/EmptyState'
@@ -19,6 +19,9 @@ interface ClusterDetailProps {
 
 export default function ClusterDetail({ clusterId, topicId }: ClusterDetailProps) {
   const { push } = useProvenance()
+  // Age is measured against the moment the panel opened, so the rate does not
+  // shift under the analyst on an unrelated re-render.
+  const [openedAt] = useState(() => Date.now())
 
   const { data, isLoading } = useQuery({
     queryKey: ['provenance', 'cluster', clusterId, topicId],
@@ -32,7 +35,7 @@ export default function ClusterDetail({ clusterId, topicId }: ClusterDetailProps
   const sourceSpread = data.source_spread ?? []
   const growth24h = data.growth_24h ?? 0
   const itemsPerDay = data.item_count > 0 && data.created_at
-    ? (data.item_count / Math.max(1, (Date.now() - new Date(data.created_at).getTime()) / 86400000)).toFixed(1)
+    ? (data.item_count / Math.max(1, (openedAt - new Date(data.created_at).getTime()) / 86400000)).toFixed(1)
     : null
 
   return (
@@ -182,7 +185,7 @@ function CaseActions({ clusterId, linkedTracker }: {
     onSuccess: () => {
       setShowConclude(false)
       setClosingSummary('')
-      queryClient.invalidateQueries({ queryKey: ['provenance', 'cluster'] })
+      void queryClient.invalidateQueries({ queryKey: ['provenance', 'cluster'] })
     },
   })
 

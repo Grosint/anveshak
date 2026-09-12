@@ -1,4 +1,4 @@
-import type { ProvenanceStackEntry, ProvenanceEntityType } from '../../contexts/ProvenanceContext'
+import type { ProvenanceStackEntry, ProvenanceEntityType } from '../../contexts/provenance'
 
 const TYPE_LABELS: Record<ProvenanceEntityType, string> = {
   identifier: 'Identifier',

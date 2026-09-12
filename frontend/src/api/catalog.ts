@@ -33,7 +33,8 @@ export interface DiscoveredSource {
   id: string
   topic_id: string
   domain_or_handle: string
-  platform: Platform | string
+  /** A `Platform` value for known platforms, free text for anything new. */
+  platform: string
   discovery_method: DiscoveryMethod
   citation_count: number
   confidence_score: number | null

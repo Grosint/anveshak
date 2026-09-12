@@ -129,8 +129,8 @@ export default function CandidateInbox() {
         name: candidate.cluster_label ?? undefined,
       }),
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['candidate-topics'] })
-      queryClient.invalidateQueries({ queryKey: ['topics'] })
+      void queryClient.invalidateQueries({ queryKey: ['candidate-topics'] })
+      void queryClient.invalidateQueries({ queryKey: ['topics'] })
       navigate(`/topics/${result.topic_id}`)
     },
     onSettled: () => setBusyId(null),

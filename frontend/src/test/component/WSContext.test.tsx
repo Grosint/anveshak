@@ -7,7 +7,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { WSProvider, useWS } from '../../contexts/WSContext'
+import { WSProvider } from '../../contexts/WSContext'
+import { useWS } from '../../contexts/ws'
 
 // ── Mock WebSocket ──────────────────────────────────────────────────────
 
@@ -60,7 +61,7 @@ const mockAuth = {
   isAuthenticated: true,
 }
 
-vi.mock('../../contexts/AuthContext', () => ({
+vi.mock('../../contexts/auth', () => ({
   useAuth: () => mockAuth,
 }))
 

@@ -37,14 +37,24 @@ export default function IdentifierSearch({ open, onClose, initialQuery = '' }: I
   const inputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
 
-  // Focus input when modal opens; prefill with initialQuery if provided
-  useEffect(() => {
+  // Prefill the form when the modal opens, or when the caller hands it a new
+  // query while it is already open. React's "adjusting state when a prop
+  // changes" pattern, which avoids the cascading render an effect would cause.
+  const [lastOpened, setLastOpened] = useState({ open, initialQuery })
+  if (open !== lastOpened.open || (open && initialQuery !== lastOpened.initialQuery)) {
+    setLastOpened({ open, initialQuery })
     if (open) {
       setQuery(initialQuery)
       setTypeFilter('')
-      setTimeout(() => inputRef.current?.focus(), 50)
     }
-  }, [open, initialQuery])
+  }
+
+  // Focus is a DOM side effect, so it stays in an effect.
+  useEffect(() => {
+    if (!open) return
+    const id = setTimeout(() => inputRef.current?.focus(), 50)
+    return () => clearTimeout(id)
+  }, [open])
 
   // Escape to close
   useEffect(() => {

@@ -17,7 +17,7 @@ vi.mock('../../api/actors', () => ({
 }))
 
 const push = vi.fn()
-vi.mock('../../contexts/ProvenanceContext', () => ({
+vi.mock('../../contexts/provenance', () => ({
   useProvenance: () => ({ push }),
 }))
 

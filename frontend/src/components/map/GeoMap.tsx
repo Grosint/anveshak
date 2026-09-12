@@ -8,6 +8,7 @@
 import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import { asNumber, asText } from '../../lib/scalar'
 
 // MapLibre can't resolve CSS var() — hardcode hex matching theme tokens
 const MAP_COLORS = {
@@ -33,8 +34,7 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
 const DEFAULT_TILE_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
 
 function getTileStyleUrl(): string {
-  const w = window as any
-  return w.__ANVESHAK_MAP_TILE_URL__ || DEFAULT_TILE_STYLE
+  return window.__ANVESHAK_MAP_TILE_URL__ ?? DEFAULT_TILE_STYLE
 }
 
 // India sovereign boundary overlay — correct borders per Survey of India
@@ -45,8 +45,9 @@ async function loadIndiaBoundary(): Promise<GeoJSON.FeatureCollection> {
   if (cachedBoundary) return cachedBoundary
   const resp = await fetch('/geo/india-sovereign-boundary.geojson')
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-  cachedBoundary = await resp.json()
-  return cachedBoundary!
+  const boundary = (await resp.json()) as GeoJSON.FeatureCollection
+  cachedBoundary = boundary
+  return boundary
 }
 
 function formatTimeAgo(iso: string | null): string {
@@ -337,27 +338,27 @@ const GeoMap = forwardRef<GeoMapHandle, GeoMapProps>(function GeoMap(
 
       // ── Cluster click → zoom ──
       map.on('click', 'clusters', (e) => {
-        const features = map!.queryRenderedFeatures(e.point, { layers: ['clusters'] })
-        const clusterId = features[0]?.properties?.cluster_id
-        if (clusterId == null) return
-        const source = map!.getSource('locations') as maplibregl.GeoJSONSource
-        source.getClusterExpansionZoom(clusterId).then((zoom) => {
+        const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] })
+        const clusterId: unknown = features[0]?.properties?.cluster_id
+        if (typeof clusterId !== 'number') return
+        const source = map.getSource('locations') as maplibregl.GeoJSONSource
+        void source.getClusterExpansionZoom(clusterId).then((zoom) => {
           const geom = features[0].geometry
           if (geom.type !== 'Point') return
-          map!.easeTo({ center: geom.coordinates as [number, number], zoom })
+          map.easeTo({ center: geom.coordinates as [number, number], zoom })
         })
       })
 
       // ── Hover tooltip on unclustered points ──
       map.on('mouseenter', 'unclustered-point', (e) => {
-        map!.getCanvas().style.cursor = 'pointer'
+        map.getCanvas().style.cursor = 'pointer'
         const feature = e.features?.[0]
         if (!feature || feature.geometry.type !== 'Point') return
         const props = feature.properties as Record<string, unknown>
-        const name = props?.name ?? 'Unknown'
-        const type = ENTITY_TYPE_LABELS[(props?.entity_type as string) ?? ''] ?? ''
-        const mentions = props?.mention_count ?? 0
-        const sources = props?.source_count ?? 0
+        const name = asText(props?.name, 'Unknown')
+        const type = ENTITY_TYPE_LABELS[asText(props?.entity_type)] ?? ''
+        const mentions = asNumber(props?.mention_count)
+        const sources = asNumber(props?.source_count)
 
         hoverPopupRef.current?.remove()
         hoverPopupRef.current = new maplibregl.Popup({
@@ -374,11 +375,11 @@ const GeoMap = forwardRef<GeoMapHandle, GeoMapProps>(function GeoMap(
             `<br/><span style="color:${MAP_COLORS.popupMuted};">${mentions} mentions · ${sources} sources</span>` +
             `</div>`
           )
-          .addTo(map!)
+          .addTo(map)
       })
 
       map.on('mouseleave', 'unclustered-point', () => {
-        map!.getCanvas().style.cursor = ''
+        map.getCanvas().style.cursor = ''
         hoverPopupRef.current?.remove()
         hoverPopupRef.current = null
       })
@@ -389,12 +390,12 @@ const GeoMap = forwardRef<GeoMapHandle, GeoMapProps>(function GeoMap(
         if (!feature || feature.geometry.type !== 'Point') return
         const coords = feature.geometry.coordinates.slice() as [number, number]
         const props = feature.properties as Record<string, unknown>
-        const name = String(props?.name ?? 'Unknown')
-        const entityType = String(props?.entity_type ?? 'GPE')
+        const name = asText(props?.name, 'Unknown')
+        const entityType = asText(props?.entity_type, 'GPE')
         const typeLabel = ENTITY_TYPE_LABELS[entityType] ?? entityType
-        const mentions = Number(props?.mention_count ?? 0)
-        const sources = Number(props?.source_count ?? 0)
-        const latest = formatTimeAgo(props?.latest_mention as string | null)
+        const mentions = asNumber(props?.mention_count)
+        const sources = asNumber(props?.source_count)
+        const latest = formatTimeAgo(asText(props?.latest_mention) || null)
 
         // Remove hover popup when click popup opens
         hoverPopupRef.current?.remove()
@@ -422,15 +423,15 @@ const GeoMap = forwardRef<GeoMapHandle, GeoMapProps>(function GeoMap(
             `</div>` +
             `</div>`
           )
-          .addTo(map!)
+          .addTo(map)
 
         // Notify parent
-        onFeatureClick?.(props as Record<string, unknown>)
+        onFeatureClick?.(props)
       })
 
       // Cluster hover cursor
-      map.on('mouseenter', 'clusters', () => { map!.getCanvas().style.cursor = 'pointer' })
-      map.on('mouseleave', 'clusters', () => { map!.getCanvas().style.cursor = '' })
+      map.on('mouseenter', 'clusters', () => { map.getCanvas().style.cursor = 'pointer' })
+      map.on('mouseleave', 'clusters', () => { map.getCanvas().style.cursor = '' })
 
       // ── Fit bounds ──
       if (geojson.features.length > 0) {
@@ -447,9 +448,11 @@ const GeoMap = forwardRef<GeoMapHandle, GeoMapProps>(function GeoMap(
     }
 
     if (map.isStyleLoaded()) {
-      addLayers().catch(console.warn)
+      void addLayers().catch(console.warn)
     } else {
-      map.once('load', () => addLayers().catch(console.warn))
+      // maplibre types `once` as `this | Promise<any>` even when a listener is
+      // given, where it only ever returns the map. `void` drops the phantom promise.
+      void map.once('load', () => { void addLayers().catch(console.warn) })
     }
   }, [geojson, sizeProperty, onFeatureClick])
 
@@ -525,7 +528,7 @@ const GeoMap = forwardRef<GeoMapHandle, GeoMapProps>(function GeoMap(
       setPinMode(false)
       map.getCanvas().style.cursor = ''
     }
-    map.once('click', handler)
+    void map.once('click', handler)
     return () => {
       map.off('click', handler)
       map.getCanvas().style.cursor = ''
@@ -583,7 +586,7 @@ const GeoMap = forwardRef<GeoMapHandle, GeoMapProps>(function GeoMap(
             Save PNG
           </button>
           <button
-            onClick={handleCopyPng}
+            onClick={() => { void handleCopyPng() }}
             className="px-3 py-1.5 text-text-muted hover:text-text-primary transition-colors border-t border-anveshak-border text-left"
             title="Copy map to clipboard"
           >

@@ -86,7 +86,7 @@ export default function ReportBuilder() {
     queryFn: () => reportsApi.listForTopic(selectedTopicId),
     enabled: !!selectedTopicId && activeTab === 'history',
   })
-  const history = historyData?.items ?? []
+  const history = useMemo(() => historyData?.items ?? [], [historyData])
 
   // GeoJSON (only fetched when GIS tab opens and report is done)
   const { data: geojson } = useQuery({
@@ -102,7 +102,7 @@ export default function ReportBuilder() {
       setCurrentReportId(data.report_id)
       setGenerationStartedAt(new Date().toISOString())
       setActiveTab('report')
-      qc.invalidateQueries({ queryKey: ['reports-history', selectedTopicId] })
+      void qc.invalidateQueries({ queryKey: ['reports-history', selectedTopicId] })
     },
   })
 
@@ -290,7 +290,7 @@ export default function ReportBuilder() {
             </div>
 
             <Button
-              onClick={handleGenerate}
+              onClick={() => { void handleGenerate() }}
               loading={generate.isPending}
               disabled={!selectedTopicId || isGenerating || !rangeReady}
             >
@@ -327,7 +327,7 @@ export default function ReportBuilder() {
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={() => reportsApi.downloadPdf(currentReportId)}
+                      onClick={() => { void reportsApi.downloadPdf(currentReportId) }}
                     >
                       Download PDF
                     </Button>
@@ -485,7 +485,7 @@ export default function ReportBuilder() {
                               {r.generated_at && (
                                 <button
                                   type="button"
-                                  onClick={(e) => { e.stopPropagation(); reportsApi.downloadPdf(r.id) }}
+                                  onClick={(e) => { e.stopPropagation(); void reportsApi.downloadPdf(r.id) }}
                                   className="p-1 rounded hover:bg-anveshak-accent/10 text-text-muted hover:text-anveshak-accent transition-colors"
                                   aria-label="Download PDF"
                                   title="Download PDF"

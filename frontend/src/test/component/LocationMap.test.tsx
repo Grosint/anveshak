@@ -7,12 +7,12 @@
  * dark tiles and clustering config.
  */
 import { describe, it, expect, vi } from 'vitest'
-import { screen, within } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import { renderWithProviders } from '../test-utils'
 
 // Mock GeoMap since MapLibre needs WebGL
 vi.mock('../../components/map/GeoMap', () => ({
-  default: ({ geojson, onFeatureClick }: any) => (
+  default: ({ geojson }: any) => (
     <div data-testid="geo-map" data-features={geojson?.features?.length ?? 0}>
       mock-map
     </div>
@@ -56,7 +56,7 @@ vi.mock('../../api/intelligence', () => ({
   },
 }))
 
-vi.mock('../../contexts/AuthContext', () => ({
+vi.mock('../../contexts/auth', () => ({
   useAuth: () => ({
     isAuthenticated: true,
     login: vi.fn(),
@@ -67,7 +67,7 @@ vi.mock('../../contexts/AuthContext', () => ({
   }),
 }))
 
-vi.mock('../../contexts/WSContext', () => ({
+vi.mock('../../contexts/ws', () => ({
   useWS: () => ({ subscribe: () => () => {}, status: 'connected' }),
 }))
 

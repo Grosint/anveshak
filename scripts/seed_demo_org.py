@@ -375,8 +375,7 @@ def database_url(env: Mapping[str, str]) -> str:
     port = env.get("POSTGRES_PORT", DEFAULT_DB_PORT)
     database = env.get("POSTGRES_DB", DEFAULT_DB_NAME)
     return (
-        f"postgresql://{quote(user, safe='')}:{quote(password, safe='')}"
-        f"@{host}:{port}/{database}"
+        f"postgresql://{quote(user, safe='')}:{quote(password, safe='')}@{host}:{port}/{database}"
     )
 
 

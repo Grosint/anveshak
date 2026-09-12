@@ -3,8 +3,11 @@ import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { systemApi, AuditTrailEntry } from '../../api/system'
 import { topicsApi } from '../../api/topics'
-import { useAuth } from '../../contexts/AuthContext'
+import { useAuth } from '../../contexts/auth'
 import { Pagination } from '../ui/Pagination'
+import { apiErrorDetail, apiErrorStatus } from '../../lib/apiError'
+import { parseJsonObject } from '../../lib/json'
+import { asText } from '../../lib/scalar'
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -12,22 +15,6 @@ const PAGE_SIZE = 25
 
 type SortField = 'created_at' | 'username' | 'action' | 'resource_type' | 'resource_id'
 type SortDir = 'asc' | 'desc'
-
-/** Backend returns details as double-encoded JSON string — parse to object. */
-function parseDetails(raw: unknown): Record<string, unknown> {
-  if (!raw) return {}
-  if (typeof raw === 'object' && !Array.isArray(raw)) return raw as Record<string, unknown>
-  if (typeof raw === 'string') {
-    try {
-      const parsed = JSON.parse(raw)
-      if (typeof parsed === 'string') {
-        try { return JSON.parse(parsed) } catch { return {} }
-      }
-      return typeof parsed === 'object' && parsed !== null ? parsed : {}
-    } catch { return {} }
-  }
-  return {}
-}
 
 const RESOURCE_TYPES = [
   { value: '', label: 'All' },
@@ -74,7 +61,7 @@ function exportCsv(entries: AuditTrailEntry[]) {
     e.action,
     e.resource_type,
     e.resource_id,
-    JSON.stringify(parseDetails(e.details)),
+    JSON.stringify(parseJsonObject(e.details)),
     e.ip_address || '',
   ])
 
@@ -144,7 +131,7 @@ export default function AuditTrailPage({ embedded = false }: Props) {
     enabled: canQuery,
   })
 
-  const entries = auditData?.items ?? []
+  const entries = useMemo(() => auditData?.items ?? [], [auditData])
   const totalEntries = auditData?.total ?? 0
 
   // Unique action types for filter chips
@@ -179,8 +166,8 @@ export default function AuditTrailPage({ embedded = false }: Props) {
         av = a.username || a.user_id
         bv = b.username || b.user_id
       } else {
-        av = String((a as unknown as Record<string, unknown>)[sortField] ?? '')
-        bv = String((b as unknown as Record<string, unknown>)[sortField] ?? '')
+        av = asText((a as unknown as Record<string, unknown>)[sortField])
+        bv = asText((b as unknown as Record<string, unknown>)[sortField])
       }
       const cmp = av.localeCompare(bv)
       return sortDir === 'asc' ? cmp : -cmp
@@ -319,9 +306,9 @@ export default function AuditTrailPage({ embedded = false }: Props) {
 
         {error && (
           <p className="text-sm text-red-400 py-12 text-center">
-            {(error as any)?.response?.status === 403
+            {apiErrorStatus(error) === 403
               ? 'Select a resource type or ID above to view audit entries.'
-              : `Failed to load audit trail: ${(error as any)?.response?.data?.detail || (error as Error).message}`}
+              : `Failed to load audit trail: ${apiErrorDetail(error, error.message)}`}
           </p>
         )}
 
@@ -389,7 +376,7 @@ export default function AuditTrailPage({ embedded = false }: Props) {
                     {entry.resource_id}
                   </td>
                   <td className="py-3 px-3">
-                    <DetailsButton details={parseDetails(entry.details)} action={entry.action} onClick={() => setSelectedEntry(entry)} />
+                    <DetailsButton details={parseJsonObject(entry.details)} action={entry.action} onClick={() => setSelectedEntry(entry)} />
                   </td>
                   <td className="py-3 px-3 text-text-muted font-mono text-[11px] text-right">
                     {entry.ip_address || '—'}
@@ -424,7 +411,7 @@ function DetailsButton({ details, action, onClick }: { details: Record<string, u
     const oldScore = Number(details.old_score)
     const newScore = Number(details.new_score)
     const delta = newScore - oldScore
-    const reason = String(details.reason || '')
+    const reason = asText(details.reason)
     return (
       <button onClick={onClick} className="text-left cursor-pointer hover:bg-white/5 rounded px-1 -mx-1 transition-colors">
         <span className="text-text-secondary text-[11px]">{oldScore.toFixed(0)}</span>
@@ -459,7 +446,7 @@ function DetailsButton({ details, action, onClick }: { details: Record<string, u
 
 
 function DetailsModal({ entry, onClose }: { entry: AuditTrailEntry; onClose: () => void }) {
-  const details = useMemo(() => parseDetails(entry.details), [entry.details])
+  const details = useMemo(() => parseJsonObject(entry.details), [entry.details])
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"

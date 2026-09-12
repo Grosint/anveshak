@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { provenanceApi } from '../../api/provenance'
-import { useProvenance } from '../../contexts/ProvenanceContext'
+import { useProvenance } from '../../contexts/provenance'
 import { Spinner } from '../ui/Spinner'
 import { Badge } from '../ui/Badge'
 import { isHandleIdentifier } from '../../lib/domain'

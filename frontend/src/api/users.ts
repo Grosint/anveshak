@@ -24,7 +24,7 @@ export const usersApi = {
     api.post<{ user_id: string }>('/api/v1/users', payload).then((r) => r.data),
 
   delete: (userId: string) =>
-    api.delete(`/api/v1/users/${userId}`).then((r) => r.data),
+    api.delete<{ deleted: boolean }>(`/api/v1/users/${userId}`).then((r) => r.data),
 
   updateRole: (userId: string, role: 'viewer' | 'analyst' | 'admin') =>
     api.patch<{ user_id: string; role: string }>(

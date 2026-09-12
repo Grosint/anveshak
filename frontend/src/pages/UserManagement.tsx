@@ -1,13 +1,14 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { usersApi, User } from '../api/users'
+import { usersApi, CreateUserPayload, User } from '../api/users'
 import { organizationsApi } from '../api/organizations'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../contexts/auth'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Spinner } from '../components/ui/Spinner'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Modal } from '../components/ui/Modal'
+import { apiErrorDetail, apiErrorStatus } from '../lib/apiError'
 
 type Role = 'viewer' | 'analyst' | 'admin'
 type SortField = 'username' | 'role' | 'created_at'
@@ -45,15 +46,15 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
   const create = useMutation({
     mutationFn: usersApi.create,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['users'] })
+      void qc.invalidateQueries({ queryKey: ['users'] })
       setUsername(''); setPassword(''); setRole('analyst'); setOrgId(''); setError('')
       onClose()
     },
-    onError: (err: any) => setError(err?.response?.data?.detail || 'Failed to create user'),
+    onError: (err: unknown) => setError(apiErrorDetail(err, 'Failed to create user')),
   })
 
   const handleCreate = () => {
-    const payload: any = { username, password, role }
+    const payload: CreateUserPayload = { username, password, role }
     if (isSuperAdmin && orgId) payload.org_id = orgId
     create.mutate(payload)
   }
@@ -115,8 +116,8 @@ function EditRoleModal({ user, onClose }: { user: User | null; onClose: () => vo
 
   const update = useMutation({
     mutationFn: () => usersApi.updateRole(user!.id, role),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); setError(''); onClose() },
-    onError: (err: any) => setError(err?.response?.data?.detail || 'Failed to update role'),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['users'] }); setError(''); onClose() },
+    onError: (err: unknown) => setError(apiErrorDetail(err, 'Failed to update role')),
   })
 
   if (!user) return null
@@ -162,7 +163,7 @@ function DeleteConfirmModal({ user, onClose }: { user: User | null; onClose: () 
       return { prev }
     },
     onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(['users'], ctx.prev) },
-    onSettled: () => { qc.invalidateQueries({ queryKey: ['users'] }); onClose() },
+    onSettled: () => { void qc.invalidateQueries({ queryKey: ['users'] }); onClose() },
   })
 
   if (!user) return null
@@ -211,7 +212,7 @@ export default function UserManagement({ embedded = false }: { embedded?: boolea
   })
 
   // 403 = user's token doesn't have admin role (may need re-login)
-  const is403 = (error as any)?.response?.status === 403
+  const is403 = apiErrorStatus(error) === 403
 
   // Client-side filter → sort → paginate
   const processed = useMemo(() => {
@@ -394,7 +395,7 @@ export default function UserManagement({ embedded = false }: { embedded?: boolea
                   <tr key={user.id} className="border-b border-anveshak-border last:border-0 hover:bg-anveshak-muted/30 transition-colors">
                     <td className="px-4 py-3 text-text-primary font-medium">{user.username}</td>
                     <td className="px-4 py-3">
-                      <Badge variant={ROLE_BADGE[user.role as Role] ?? 'default'}>
+                      <Badge variant={ROLE_BADGE[user.role] ?? 'default'}>
                         {user.role}
                       </Badge>
                     </td>

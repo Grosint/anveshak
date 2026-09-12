@@ -13,6 +13,9 @@ dependencies = [
     "spacy>=3.7",
     "langdetect>=1.0",
     "sentence-transformers>=2.7,<4.0",
+    # Declared rather than left transitive so the CPU wheel pin in the
+    # Dockerfile has something to pin. See hardware.md.
+    "torch>=2.2",
     "transformers>=4.41,<5.0",
     "sentencepiece>=0.2",
     "sacremoses>=0.1",

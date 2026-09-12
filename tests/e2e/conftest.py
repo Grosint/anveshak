@@ -27,7 +27,9 @@ DEMO_PASSWORD = os.environ.get("ANVESHAK_DEMO_ANALYST_PASSWORD", "")
 if not DEMO_PASSWORD:
     # Without it every test in this layer fails as HTTP 401, which hides
     # the cause behind a login failure.
-    pytest.skip("ANVESHAK_DEMO_ANALYST_PASSWORD is not set - see .env.example", allow_module_level=True)
+    pytest.skip(
+        "ANVESHAK_DEMO_ANALYST_PASSWORD is not set - see .env.example", allow_module_level=True
+    )
 
 # Seeded demo IDs (from seed_demo.sql)
 DEMO_TOPIC_UAV = "b0000000-0000-0000-0000-000000000002"

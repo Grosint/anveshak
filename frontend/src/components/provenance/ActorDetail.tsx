@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { actorsApi } from '../../api/actors'
-import { useProvenance } from '../../contexts/ProvenanceContext'
+import { useProvenance } from '../../contexts/provenance'
 import { Badge } from '../ui/Badge'
 import { EmptyState } from '../ui/EmptyState'
 import { Spinner } from '../ui/Spinner'

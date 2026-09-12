@@ -1,4 +1,6 @@
 import api from './client'
+import type { SignalStatus } from './signals'
+import type { ReportStatus, ReportType } from './reports'
 import type { PaginatedResponse } from './types'
 
 export interface Tracker {
@@ -48,6 +50,47 @@ export interface TrackerNote {
   created_at: string
 }
 
+/**
+ * A signal linked to a tracker.
+ *
+ * The endpoint selects `signals.*` plus the two join columns, so this carries
+ * the stored columns only. Derived fields such as severity and independent
+ * source count live in `evidence` or are computed in `lib/domain.ts`.
+ */
+export interface TrackerSignal {
+  id: string
+  topic_id: string
+  signal_type: string
+  description: string
+  evidence: unknown
+  status: SignalStatus
+  cluster_id: string | null
+  delivered_at: string | null
+  created_at: string
+  updated_at: string
+  labels: Record<string, unknown>
+  linked_at: string
+  linked_by: string | null
+}
+
+/** A report generated for a tracker, as returned by the tracker reports list. */
+export interface TrackerReport {
+  id: string
+  topic_id: string
+  tracker_id: string
+  report_type: ReportType
+  generated_at: string | null
+  confidence_score: number | null
+  content_item_count: number | null
+  created_at: string
+  generation_status: ReportStatus
+}
+
+/** Mutation endpoints that acknowledge without returning a resource. */
+export interface AcknowledgedResponse {
+  status: string
+}
+
 export interface TrackerAuditEntry {
   id: string
   tracker_id: string
@@ -81,16 +124,22 @@ export const trackersApi = {
       .then((r) => r.data),
 
   updateStatus: (id: string, data: { status: string; closing_summary?: string }) =>
-    api.patch(`/api/v1/trackers/${id}/status`, data).then((r) => r.data),
+    api
+      .patch<AcknowledgedResponse>(`/api/v1/trackers/${id}/status`, data)
+      .then((r) => r.data),
 
   updatePriority: (id: string, data: { priority: string }) =>
-    api.patch(`/api/v1/trackers/${id}/priority`, data).then((r) => r.data),
+    api
+      .patch<AcknowledgedResponse>(`/api/v1/trackers/${id}/priority`, data)
+      .then((r) => r.data),
 
   assign: (id: string, data: { assigned_to?: string }) =>
-    api.patch(`/api/v1/trackers/${id}/assign`, data).then((r) => r.data),
+    api
+      .patch<AcknowledgedResponse>(`/api/v1/trackers/${id}/assign`, data)
+      .then((r) => r.data),
 
   update: (id: string, data: { title?: string; external_case_ref?: string }) =>
-    api.patch(`/api/v1/trackers/${id}`, data).then((r) => r.data),
+    api.patch<AcknowledgedResponse>(`/api/v1/trackers/${id}`, data).then((r) => r.data),
 
   listContent: (id: string, params?: { limit?: number; offset?: number }) =>
     api
@@ -101,16 +150,24 @@ export const trackersApi = {
     api.get<TrackerContentItem[]>(`/api/v1/trackers/${id}/pending`).then((r) => r.data),
 
   confirmItem: (id: string, itemId: string) =>
-    api.post(`/api/v1/trackers/${id}/content/${itemId}/confirm`).then((r) => r.data),
+    api
+      .post<AcknowledgedResponse>(`/api/v1/trackers/${id}/content/${itemId}/confirm`)
+      .then((r) => r.data),
 
   rejectItem: (id: string, itemId: string) =>
-    api.post(`/api/v1/trackers/${id}/content/${itemId}/reject`).then((r) => r.data),
+    api
+      .post<AcknowledgedResponse>(`/api/v1/trackers/${id}/content/${itemId}/reject`)
+      .then((r) => r.data),
 
   confirmAll: (id: string) =>
-    api.post(`/api/v1/trackers/${id}/content/confirm-all`).then((r) => r.data),
+    api
+      .post<AcknowledgedResponse>(`/api/v1/trackers/${id}/content/confirm-all`)
+      .then((r) => r.data),
 
   addContent: (id: string, itemId: string) =>
-    api.post(`/api/v1/trackers/${id}/content/${itemId}`).then((r) => r.data),
+    api
+      .post<AcknowledgedResponse>(`/api/v1/trackers/${id}/content/${itemId}`)
+      .then((r) => r.data),
 
   addNote: (id: string, data: { body: string }) =>
     api.post<TrackerNote>(`/api/v1/trackers/${id}/notes`, data).then((r) => r.data),
@@ -119,10 +176,12 @@ export const trackersApi = {
     api.get<TrackerNote[]>(`/api/v1/trackers/${id}/notes`).then((r) => r.data),
 
   listSignals: (id: string) =>
-    api.get(`/api/v1/trackers/${id}/signals`).then((r) => r.data),
+    api.get<TrackerSignal[]>(`/api/v1/trackers/${id}/signals`).then((r) => r.data),
 
   linkSignal: (id: string, signalId: string) =>
-    api.post(`/api/v1/trackers/${id}/signals/${signalId}`).then((r) => r.data),
+    api
+      .post<AcknowledgedResponse>(`/api/v1/trackers/${id}/signals/${signalId}`)
+      .then((r) => r.data),
 
   listAuditLog: (id: string, params?: { limit?: number; offset?: number }) =>
     api
@@ -130,7 +189,7 @@ export const trackersApi = {
       .then((r) => r.data),
 
   listReports: (id: string) =>
-    api.get(`/api/v1/trackers/${id}/reports`).then((r) => r.data),
+    api.get<TrackerReport[]>(`/api/v1/trackers/${id}/reports`).then((r) => r.data),
 
   generateReport: (
     id: string,

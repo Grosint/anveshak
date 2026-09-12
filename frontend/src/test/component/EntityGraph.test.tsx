@@ -52,7 +52,7 @@ vi.mock('../../api/identifiers', () => ({
   },
 }))
 
-vi.mock('../../contexts/AuthContext', () => ({
+vi.mock('../../contexts/auth', () => ({
   useAuth: () => ({
     isAuthenticated: true, login: vi.fn(), logout: vi.fn(),
     user: { sub: 'a', role: 'analyst', exp: Date.now() / 1000 + 3600, iat: Date.now() / 1000 },
@@ -60,7 +60,7 @@ vi.mock('../../contexts/AuthContext', () => ({
   }),
 }))
 
-vi.mock('../../contexts/WSContext', () => ({
+vi.mock('../../contexts/ws', () => ({
   useWS: () => ({ subscribe: () => () => {}, status: 'connected' }),
 }))
 

@@ -4,7 +4,7 @@
  * Seam 7: useQueries → warning counts mapped by array index (R10)
  * Seam 9: Source delete 409 → regex parse of content count (R9)
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
@@ -31,7 +31,7 @@ vi.mock('../../api/sources', () => ({
   },
 }))
 
-vi.mock('../../contexts/AuthContext', () => ({
+vi.mock('../../contexts/auth', () => ({
   useAuth: () => ({
     isAuthenticated: true,
     token: 'test-jwt',

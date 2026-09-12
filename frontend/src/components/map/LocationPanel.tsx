@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query'
 import { intelligenceApi } from '../../api/intelligence'
 import { Badge } from '../ui/Badge'
 import { Spinner } from '../ui/Spinner'
+import { asNumber, asText } from '../../lib/scalar'
 
 const ENTITY_TYPE_LABELS: Record<string, string> = {
   GPE: 'Country / State',
@@ -106,7 +107,7 @@ export default function LocationPanel({
   const handleItemClick = (feature: GeoJSON.Feature) => {
     if (feature.geometry.type !== 'Point') return
     const [lng, lat] = feature.geometry.coordinates
-    const name = String((feature.properties as any)?.name ?? '')
+    const name = asText(feature.properties?.name)
     onSelectLocation(name)
     onFlyTo(lng, lat)
   }
@@ -126,11 +127,11 @@ export default function LocationPanel({
         </div>
 
         {features.map((feature, i) => {
-          const props = feature.properties as Record<string, any>
-          const name = props?.name ?? 'Unknown'
-          const entityType = props?.entity_type ?? 'GPE'
-          const mentions = props?.mention_count ?? 0
-          const sources = props?.source_count ?? 0
+          const props = feature.properties
+          const name = asText(props?.name, 'Unknown')
+          const entityType = asText(props?.entity_type, 'GPE')
+          const mentions = asNumber(props?.mention_count)
+          const sources = asNumber(props?.source_count)
           const isSelected = selectedLocation === name
           const timeline = timelineByName[name] ?? []
 
