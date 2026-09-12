@@ -53,7 +53,9 @@
 #   make demo-detect      run detection over the seeded corpus
 #
 # QUALITY:
-#   make lint             ruff check
+#   make lint             ruff check + eslint
+#   make lint-python      ruff check
+#   make lint-frontend    eslint
 #   make format           ruff format + fix
 #   make typecheck        pyright
 #   make security-scan    bandit scan
@@ -97,7 +99,7 @@ _WORK  := $(_CYN)⟳$(_RST)
         test-ci test-all test-nightly \
         demo-check demo-detect validate validate-vision health syscheck \
         corpus-plan corpus-build demo-assert replay-freeze replay-restore \
-        lint format typecheck security-scan \
+        lint lint-python lint-frontend format typecheck security-scan \
         clean clean-containers clean-volumes clean-cache purge nuke \
         verify-labels verify-reports verify-env check-env-sync shell-% \
         benchmark benchmark-clean benchmark-skip-analyse \
@@ -811,8 +813,11 @@ benchmark-skip-analyse:
 # Code quality
 # ---------------------------------------------------------------------------
 
-lint:
-	$(call header,Linting)
+lint: lint-python lint-frontend
+	$(call success,Lint clean)
+
+lint-python:
+	$(call header,Linting Python)
 	@$(UV) ruff check services/ sdk/ tests/ scripts/
 
 format:
@@ -839,6 +844,10 @@ clean-test-data:
 	$(call header,Cleaning Test Data from Database)
 	@$(COMPOSE) exec -T postgres psql -U anveshak -d anveshak < scripts/cleanup_test_data.sql
 	$(call success,Test data removed)
+
+lint-frontend:
+	$(call header,Linting Frontend)
+	@cd frontend && npx eslint .
 
 # clean — Python caches only (safe, fast)
 clean:
