@@ -596,3 +596,107 @@ class TestOrderingIsByPropagation:
 
         counts = [c["independent_source_count"] for c in listed]
         assert counts == sorted(counts, reverse=True)
+
+
+class TestAcceptingThroughTheRoute:
+    """The accept route itself, over HTTP, against the real schema.
+
+    The test above this one re-implements the route's steps in a different
+    order, so it passed while every real accept returned 500: the route wrote
+    candidate_topics.promoted_topic_id before the Topic that column references
+    existed. A foreign key is checked by PostgreSQL, never by a mock, so the
+    seam only shows when the route drives the database. See the wiring note in
+    .agents/skills/learned/references/agent-wiring-check-after-green.md.
+    """
+
+    @pytest.fixture
+    async def client(self, db_pool):
+        import httpx
+        from anveshak.api.auth.jwt import get_current_user
+        from anveshak.api.db.pool import get_db
+        from anveshak.api.main import app
+
+        async def _override_get_db():
+            async with db_pool.acquire() as conn:
+                yield conn
+
+        async def _override_user() -> dict:
+            return {"sub": "integration-analyst", "role": "admin", "org_id": TEST_ORG_ID}
+
+        app.dependency_overrides[get_db] = _override_get_db
+        app.dependency_overrides[get_current_user] = _override_user
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://accept") as http:
+            yield http
+        app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(get_current_user, None)
+
+    async def _pending_candidate(self, db_pool, watch_space, make_source, seed: int) -> str:
+        from anveshak.analyst.detection import detect_candidate_topics
+
+        sources = [await make_source(name=f"Test Source route {seed} {i}") for i in range(3)]
+        await _make_cluster(
+            db_pool,
+            watch_space,
+            seed=seed,
+            item_count=settings.promotion_min_item_count + 5,
+            source_ids=sources,
+        )
+        # Two passes: the persistence gate counts detection passes, not clusters.
+        await detect_candidate_topics(db_pool)
+        await detect_candidate_topics(db_pool)
+
+        async with db_pool.acquire() as conn:
+            return await conn.fetchval(
+                "SELECT id FROM candidate_topics WHERE watch_space_id = $1 AND status = 'pending'",
+                watch_space,
+            )
+
+    async def test_accepting_over_http_creates_the_topic(
+        self, client, db_pool, watch_space, make_source
+    ):
+        candidate_id = await self._pending_candidate(db_pool, watch_space, make_source, 1201)
+
+        response = await client.post(
+            f"/api/v1/candidate-topics/{candidate_id}/accept",
+            json={"name": "Promoted over HTTP", "keywords": ["tension"]},
+        )
+
+        assert response.status_code == 201, response.text
+        body = response.json()
+
+        async with db_pool.acquire() as conn:
+            decided = await conn.fetchrow(
+                "SELECT status, promoted_topic_id FROM candidate_topics WHERE id = $1",
+                candidate_id,
+            )
+            topic = await conn.fetchrow(
+                "SELECT name, parent_topic_id FROM topics WHERE id = $1", body["topic_id"]
+            )
+            linked = await conn.fetchval(
+                "SELECT COUNT(*) FROM topic_content_items WHERE topic_id = $1", body["topic_id"]
+            )
+
+        assert decided["status"] == "accepted"
+        # The column the foreign key guards: the claim and the Topic agree.
+        assert decided["promoted_topic_id"] == body["topic_id"]
+        assert topic["name"] == "Promoted over HTTP"
+        assert topic["parent_topic_id"] == watch_space
+        assert linked == body["content_items_linked"] > 0
+
+    async def test_accepting_twice_over_http_creates_one_topic(
+        self, client, db_pool, watch_space, make_source
+    ):
+        candidate_id = await self._pending_candidate(db_pool, watch_space, make_source, 1202)
+
+        first = await client.post(f"/api/v1/candidate-topics/{candidate_id}/accept", json={})
+        second = await client.post(f"/api/v1/candidate-topics/{candidate_id}/accept", json={})
+
+        assert first.status_code == 201, first.text
+        assert second.status_code == 409, second.text
+
+        async with db_pool.acquire() as conn:
+            topics = await conn.fetchval(
+                "SELECT COUNT(*) FROM topics WHERE parent_topic_id = $1", watch_space
+            )
+        assert topics == 1

@@ -24,6 +24,8 @@ GPU upgrade: facebook/nllb-200-1.3B or facebook/nllb-200-3.3B — see hardware.m
 
 from __future__ import annotations
 
+from typing import Any
+
 import structlog
 
 from .settings import settings
@@ -53,7 +55,7 @@ _NLLB_TGT_CODE = "eng_Latn"  # English (Latin script) — always the target
 _pipeline = None
 
 
-def _get_pipeline():
+def _get_pipeline() -> Any:
     """Lazy-load the NLLB translation pipeline."""
     global _pipeline
     if _pipeline is not None:
@@ -72,15 +74,20 @@ def _get_pipeline():
     log.info(
         "translation.loading_model",
         model=settings.translation_model,
+        device=settings.translation_device,
         torch_threads=settings.torch_num_threads,
     )
     _pipeline = hf_pipeline(
         "translation",
         model=settings.translation_model,
-        device=-1,  # -1 = CPU; override via TRANSLATION_DEVICE in future
+        device=settings.translation_device,
         max_length=settings.translation_max_tokens,
     )
-    log.info("translation.model_loaded", model=settings.translation_model)
+    log.info(
+        "translation.model_loaded",
+        model=settings.translation_model,
+        device=settings.translation_device,
+    )
     return _pipeline
 
 
@@ -185,6 +192,7 @@ def translate_to_english(text: str, src_lang: str) -> str | None:
             "translation.failed",
             lang=src_lang,
             model=settings.translation_model,
+            device=settings.translation_device,
             error=str(exc)[:200],
         )
         return None

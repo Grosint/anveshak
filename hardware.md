@@ -8,17 +8,83 @@ The AGENTS.md hardware independence rule requires all settings to be env-var dri
 
 | Tier | Hardware | Cost | Throughput |
 |------|----------|------|------------|
-| CPU-only (dev/testing) | 16-core, 32GB RAM, 512GB NVMe | ~₹80K | ~50 articles/day translated, 5min/report |
+| CPU-only (dev/testing) | 16-core, 32GB RAM, 512GB NVMe | ~₹80K | ~1.5K articles/day at 50% non-English, 5min/report |
 | Demo/eval (recommended) | RTX 3080 (10GB), 32GB RAM, 1TB NVMe | ~₹1.5–2L | ~2K articles/day, 30s/report |
 | IAF production | RTX 4090 (24GB), 64GB RAM, 2TB NVMe | ~₹3–4L | ~10K articles/day, 10s/report, 72b LLM |
 
-**Critical CPU-only constraints (measured 2026-04-17):**
-- Analyst worker needs **6GB RAM** (3 spaCy models + sentence-transformers + NLLB-200)
-- Analyst scheduler needs only **512MB RAM** (no ML models — just asyncpg + numpy + hdbscan)
-- NLLB translation: **~4 min per article on CPU** — production bottleneck for >50 articles/day
+**Critical CPU-only constraints (measured 2026-04-17, two figures re-measured 2026-09-15):**
+- Analyst worker needs **12GB RAM on CPU**, not 6GB. See the re-measurement below.
+- Analyst scheduler needs only **512MB RAM** (no ML models, just asyncpg + numpy + hdbscan)
+- NLLB translation: **45 to 70s per article on CPU**, not 4 minutes. See the re-measurement below.
 - NLLB model cold-load: ~25s on CPU (cached in Docker volume after first load)
-- `TRANSLATION_MAX_CHARS=1500` required on CPU (Chinese chars ≈ 1 token, NLLB max 1024)
+- `TRANSLATION_MAX_CHARS=1500` required on CPU (Chinese chars are about 1 token, NLLB max 1024)
 - GPU eliminates all above constraints; `TRANSLATION_MAX_CHARS=5000` safe on GPU
+
+### Re-measurement 2026-09-15
+
+Two figures in this file were wrong in opposite directions, and both were found by triaging a stalled pipeline rather than by a benchmark.
+Superseded values are kept here rather than deleted, because the original measurement was correct for the configuration it was taken on.
+
+**Translation speed was pessimistic by roughly 4x.**
+The 4-minute figure was measured before `TRANSLATION_MAX_CHARS=1500` and before the 480-token encoder clamp existed.
+Both truncate the input, so the generation is far shorter than the one that was originally timed.
+Measured on the development deployment, Hindi articles through the full `analyse_content` job:
+
+```
+45.23s ← a6b02913b46d4e43a04ceb473dbc6e59:analyse_content  (hi, translated=True)
+69.83s ← 23c2a5b69f9e44a99d6bfd4307784536:analyse_content  (hi, translated=True)
+ 1.10s ← 82ffda528c6841dca2831bf44cc340f4:analyse_content  (en, 199 entities)
+ 0.18s ← 71c0989b616241df8364ea8d9de35a74:analyse_content  (en)
+```
+
+English is two orders of magnitude cheaper because it skips NLLB entirely.
+`needs_translation()` tests membership in `_NLLB_SRC_CODES`, and `en` is not a key: English is the target language, never a source.
+So the CPU throughput ceiling is set by the non-English fraction, not by total volume.
+
+The practical consequence is that the "~50 articles/day" headline for the CPU tier is too low by about 4x.
+A correctly configured CPU worker handles roughly **1,500 to 2,000 articles/day at a 50% non-English mix**.
+That is still far below production volume, so the conclusion that production needs a GPU is unchanged.
+Only the size of the gap was wrong.
+
+**Analyst worker memory was optimistic, and the 6g limit does not hold.**
+The original figure of `1.5 GiB idle / 5.6 GiB with NLLB` fits under `mem_limit: 6g` on paper.
+In practice the worker was OOM-killed 12 times in 15 hours, each kill losing its in-flight jobs:
+
+```
+Memory cgroup out of memory: Killed process 67657 (python) anon-rss:6270008kB
+oom-kill:constraint=CONSTRAINT_MEMCG,...,oom_memcg=/docker/85e664f389b7...  (anveshak-analyse-worker-1)
+```
+
+The missing term is allocator retention.
+Torch and glibc do not return freed inference activations to the OS, so the idle baseline creeps upward over a worker's life rather than returning to 1.5 GiB.
+Measured idle, queue empty, 0.37% CPU, on a worker that had been running for minutes:
+
+```
+anveshak-analyse-worker-1   2.994GiB / 6GiB   0.37%
+```
+
+Usable headroom on a worked worker is therefore about 3 GB, not the 4.5 GB the original figure implies, and `max_jobs=4` concurrent activations overrun it.
+
+This failure is almost invisible from the outside, which is why it ran for 21 hours before anyone looked.
+`docker inspect` reported `exit=0 OOM=false`, because Docker only sets its `OOMKilled` flag when PID 1 is the victim and here the kernel killed a worker process inside the container.
+`restart: unless-stopped` then brought it straight back, the ARQ heartbeat resumed, and `failed_jobs` stayed empty because a `SIGKILL` cannot write a dead letter row.
+The container read `healthy` throughout while 6,573 jobs went nowhere.
+
+**Resolved 2026-09-15: `mem_limit` raised to `12g`.**
+`infra/compose.yml` now reads `mem_limit: ${ANALYST_MEM_LIMIT:-12g}` on `analyse-worker`, which covers the 3.0 GiB baseline plus roughly 1.6 GiB per concurrent job at `ANALYST_MAX_JOBS=4`.
+
+The alternative was to hold `6g` and drop `ANALYST_MAX_JOBS` to 1.
+`ANALYST_MAX_JOBS=2` was rejected: it only clears `6g` if the worker is restarted at the same moment, because the restart is what resets the allocator baseline, and a correct setting that depends on an operator remembering to restart is not a correct setting.
+
+`tests/unit/test_analyst_memory_invariant.py` now pins the two values against each other, so neither can be tuned back into the failing pair.
+The formula it encodes is `3.0 + 1.6 x ANALYST_MAX_JOBS` GiB, both terms measured rather than estimated.
+
+`ANALYST_MEM_LIMIT` exists because the limit must also stay **below the Docker VM's total RAM**.
+A limit above it can never bind, and the host-wide OOM killer then fires first and picks a fatter victim, usually postgres or ollama, leaving the worker alive and the kill unattributed.
+The development laptop's Colima VM has 11934 MB, so `12g` does not bind there and that host must set `ANALYST_MEM_LIMIT` lower **and** lower `ANALYST_MAX_JOBS` to match.
+A production node built to the sizing below has 64 GB and needs no override.
+
+On GPU the question disappears: the activations that overrun the cgroup move to VRAM, and `6g` becomes correct again.
 
 ---
 
@@ -29,7 +95,7 @@ The analyst service is split into two containers from the same Docker image:
 | Container | Role | Memory | Scaling |
 |-----------|------|--------|---------|
 | `analyst-scheduler` | Clustering, signals, convergence, orphan sweep | 124 MiB (limit: 512m) | Always 1 instance |
-| `analyst-worker` | NLP, embedding, label gen, credibility, backfill | 1.5 GiB idle / 5.6 GiB with NLLB (limit: 6g) | `ANALYST_WORKER_REPLICAS` (default: 1) |
+| `analyst-worker` | NLP, embedding, label gen, credibility, backfill | 3.0 GiB idle after work / 6.3 GiB peak at `max_jobs=4` (limit: `${ANALYST_MEM_LIMIT:-12g}`, raised from 6g, see Re-measurement) | `ANALYST_WORKER_REPLICAS` (default: 1) |
 
 **Scaling guide:**
 
@@ -448,13 +514,15 @@ For OCR on scanned PDFs (image-only pages), add Tesseract + pytesseract.
 **Current implementation:**
 - Model: `facebook/nllb-200-distilled-600M` (~2.4GB, CPU-capable)
 - Languages: 200+ — zh, hi, ar, ur, ru all handled by single model
-- Speed: **~4 min per article on CPU** (measured: 1500 Chinese chars → 1065 English chars)
+- Speed: **45 to 70s per article on CPU** (measured 2026-09-15 on Hindi, end to end through `analyse_content`)
+- Superseded: "~4 min per article", measured 2026-04-17 before the char and token clamps existed
 - Model cold-load: ~25s on CPU from HF cache volume
 - Max input: `TRANSLATION_MAX_CHARS=1500` (Chinese chars ≈ 1 token each, NLLB max 1024 tokens)
 - Translates non-English `clean_text` → English `translated_text` before NLP/embedding
 - All downstream NLP, clustering, RAG, and reports operate on English text
-- **Memory:** analyst container needs **6GB RAM** minimum (3 spaCy + embeddings + NLLB)
-- **Bottleneck:** CPU translation is the slowest step; >50 articles/day requires GPU
+- **Memory:** analyst container needs **12GB RAM on CPU** at `ANALYST_MAX_JOBS=4`. The 6GB figure OOM-killed the worker 12 times in 15 hours. See Re-measurement 2026-09-15.
+- **Bottleneck:** CPU translation is the slowest step, and it sits on the embedding critical path rather than beside it. `all-MiniLM-L6-v2` has an English WordPiece vocabulary, so a non-English item cannot be embedded until it has been translated, and clustering, signals, relevance and candidate promotion all wait behind that. See [ADR 0007](docs/adr/0007-language-packs.md).
+- **Device:** `TRANSLATION_DEVICE` (added 2026-09-15). Was a hardcoded `device=-1` in both `translation.py` and `download_models.py`, which made this whole section unreachable by env var. Both sites now read the setting, and `analyse-init` is given the var alongside `STANCE_DEVICE` and `HOSTILITY_DEVICE`: pre-caching on a different device than the worker loads on raises nothing.
 
 **Upgrade when available:**
 - Model: `facebook/nllb-200-1.3B` (~5.2GB, ~3s/article on GPU)
@@ -467,9 +535,21 @@ For OCR on scanned PDFs (image-only pages), add Tesseract + pytesseract.
 ```
 TRANSLATION_MODEL=facebook/nllb-200-distilled-600M  →  TRANSLATION_MODEL=facebook/nllb-200-1.3B
 TRANSLATION_MAX_CHARS=1500                          →  TRANSLATION_MAX_CHARS=5000
+TRANSLATION_DEVICE=cpu                              →  TRANSLATION_DEVICE=cuda
 ```
 
-**Code change:** Zero. `analyst/translation.py` reads `settings.translation_model`.
+`TRANSLATION_DEVICE` takes the transformers device strings, so `cuda:1` names a card on a multi-GPU host.
+
+**Code change:** Zero. `analyst/translation.py` and `analyst/download_models.py` both read `settings.translation_device`.
+
+Both images pin the CPU torch wheel, so `cuda` raises `Torch not compiled with CUDA enabled` until they are rebuilt against a CUDA index.
+That error does not stop the worker.
+`_get_pipeline()` is called inside the `try` in `translate_to_english`, so the item logs `translation.failed`, `jobs.py` logs `analyst.translation_failed_fallback`, and the pipeline continues with untranslated text.
+Every subsequent item repeats the failed model load, because `_pipeline` stays `None` and nothing caches the failure.
+So a device set ahead of the image rebuild degrades the corpus quietly rather than failing the deployment.
+Verify a device change by reading `translation.failed`, not by watching for a crash.
+A startup preflight that loads the pipeline once at worker start would make this loud, and is not implemented yet.
+See Torch Wheel Variant.
 
 ---
 
@@ -570,6 +650,100 @@ A CPU wheel raises `Torch not compiled with CUDA enabled` when one of them is se
 
 ---
 
+## Production Node Sizing (2026-09-15)
+
+Derived from the re-measurement above rather than from the tier table at the top of this file.
+The tier table sizes a class of machine; this section sizes the one node a deployment actually buys.
+
+### Why the GPU decision is architectural, not a throughput preference
+
+Translation is on the embedding critical path.
+A non-English item cannot be embedded until NLLB has rendered it into English, because `all-MiniLM-L6-v2` reads an English WordPiece vocabulary, and NLLB generates autoregressively.
+So the whole downstream pipeline, clustering through candidate promotion, waits on a 600M-parameter generation for every non-English item.
+
+For an Indian-language OSINT deployment that is the majority of the corpus.
+Measured on the development deployment's largest Topic: `hi=436, en=426`.
+At that mix a CPU node tops out near 1,500 to 2,000 articles/day, against a production target of 10K.
+
+This is the reason a GPU is mandatory rather than merely faster.
+It is also the reason [ADR 0007](docs/adr/0007-language-packs.md) treats the embedding model and its calibrated thresholds as one versioned pack: a multilingual embedding model would take translation off the critical path entirely and change this sizing.
+
+### Recommended node
+
+Single node, on-premise.
+Architectural rule 10 forbids a cloud LLM with real intel data, so this is an appliance rather than a cloud shape.
+
+| | Spec | Reason |
+|---|---|---|
+| GPU | 1x L4 24GB (rack) or RTX 4090 24GB (appliance) | See VRAM budget below |
+| CPU | 16 cores | Playwright, postgres, and the 90% of report generation that is SQL rather than LLM |
+| RAM | 64 GB | Container limits already sum to ~27 GB, leaving nothing for postgres page cache on a 32 GB host |
+| Storage | 2 TB NVMe, database on a volume separate from Docker | See storage budget below |
+
+### VRAM budget, and why not to buy for a 72b model
+
+`docs/gpu_reference.md` already contains the decision:
+
+| GPU | Ollama model | Remaining for everything else |
+|---|---|---|
+| 24 GB | `qwen3:32b` (~22 GB) | ~2 GB, tight |
+| 24 GB | `qwen3:14b` (~11 GB) | ~13 GB, comfortable |
+
+Take the comfortable row.
+`qwen3:72b` needs ~48 GB, which forces a dual-GPU or A100 build, and the LLM is not the quality bottleneck: report generation is roughly 90% SQL and 10% LLM.
+Spending the VRAM on translation buys more than spending it on a larger language model.
+
+The 13 GB that `qwen3:14b` leaves covers the analyst stack with room:
+
+| Model | VRAM at fp16 |
+|---|---|
+| `facebook/nllb-200-1.3B` | ~2.6 GB |
+| `MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7` (stance) | ~0.6 GB |
+| `textdetox/xlmr-large-toxicity-classifier` (hostility) | ~2.2 GB |
+| `BAAI/bge-large-en-v1.5` (embeddings) | ~1.3 GB |
+| Total | ~7 GB |
+
+Expected effect on the bottleneck: translation falls from 45 to 70s per article to roughly 3s, so the CPU ceiling of ~1,500/day becomes ~10,000/day, and `TRANSLATION_MAX_CHARS` can go from 1500 to 5000.
+That last change matters for quality as well as speed: the 1500-char clamp currently truncates long articles, so part of the measured CPU speed is work not being done.
+
+### Memory limits to change
+
+Current `mem_limit` values in `infra/compose.yml` sum to ~23.9 GB for the application stack and ~26.7 GB with the observability profile.
+Three are wrong, each with evidence from a real failure rather than from a model:
+
+| Container | Now | Change to | Evidence |
+|---|---|---|---|
+| `analyse-worker` | ~~6g~~ 12g | done 2026-09-15; revert to 6g once on GPU | `anon-rss:6270008kB` at kill, 12 kills in 15 hours |
+| `scrape-web-worker` | 3g | 6g | 2.469 GiB resident at 82% of limit, 6 `headless_shell` OOM kills |
+| `postgres` | 1g | 8g | The HNSW graph is resident, and `HNSW_M=32` is the production target |
+
+64 GB of host RAM also buys `ANALYST_WORKER_REPLICAS=2` to 4, which `compose.yml` already supports with zero code change.
+
+### Storage budget
+
+Measured on the development deployment:
+
+| Item | Size |
+|---|---|
+| Docker images | 24.8 GB |
+| `anveshak_analyst_models` volume | 6.75 GB |
+| `anveshak_ollama_models` volume | 4.43 GB |
+| `anveshak_vision_models` volume | 2.96 GB |
+| Database | 153 MB at ~2,400 content items |
+
+The database works out to about 64 KB per content item including the 384-dimension vector and its indexes.
+Upgrading to `bge-large-en-v1.5` takes the vector from 384 to 1024 dimensions, so budget ~100 KB per item.
+One million items is then ~100 GB before the HNSW graph.
+
+2 TB, because the fixed costs are larger than the table suggests.
+CUDA torch wheels take the images to roughly 40 GB, GPU models to roughly 20 GB (`qwen3:14b` at 9 GB, NLLB-1.3B at 5.2 GB), and on top of those sit the database, YouTube video at `YOUTUBE_MAX_VIDEO_SIZE_MB=500` per file, and the JSONL archives written before any retention purge.
+
+Put the database on its own volume.
+A Docker image pull must not be able to fill the disk postgres is writing to.
+This has already happened once: two consecutive builds died with `No space left on device` after filling a 60 GB Docker VM disk. See Torch Wheel Variant.
+
+---
+
 ## Summary Upgrade Checklist
 
 When production hardware (RTX 3080+, 32GB RAM) is available, update these env vars in .env:
@@ -584,8 +758,10 @@ SPACY_ZH_MODEL=zh_core_web_trf
 OLLAMA_MODEL=qwen2.5:72b
 OLLAMA_KEEP_ALIVE=-1
 
-# Translation — upgrade to higher-quality model
+# Translation — upgrade to higher-quality model, and move it off the CPU
 TRANSLATION_MODEL=facebook/nllb-200-1.3B
+TRANSLATION_DEVICE=cuda
+TRANSLATION_MAX_CHARS=5000
 
 # Vision — enable GPU + better models
 VISION_DEVICE=cuda

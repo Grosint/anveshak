@@ -96,14 +96,17 @@ async def accept_candidate(
     # candidate points at and a 409 suggesting nothing happened.
     #
     # The claim goes first, so nothing is built until this request owns the
-    # decision.
+    # decision. It cannot carry promoted_topic_id yet: that column references
+    # topics, and PostgreSQL checks the constraint on the statement rather
+    # than at commit, so the claim would fail against a Topic this request has
+    # not inserted. The pointer is written once the Topic exists, inside the
+    # same transaction, so a failure in between leaves neither.
     async with db.transaction():
         decided = await candidates_db.set_candidate_status(
             db,
             candidate_id,
             org_id=org_id,
             status="accepted",
-            promoted_topic_id=topic_id,
         )
         if decided is None:
             raise HTTPException(status_code=409, detail="Candidate topic already decided")
@@ -124,6 +127,10 @@ async def accept_candidate(
             org_id=org_id,
             # Lineage: the Watch Space that found it stays visible on the Topic.
             parent_topic_id=candidate["watch_space_id"],
+        )
+
+        await candidates_db.attach_promoted_topic(
+            db, candidate_id, org_id=org_id, topic_id=topic_id
         )
 
         # Populate from content already collected, so the Topic arrives with

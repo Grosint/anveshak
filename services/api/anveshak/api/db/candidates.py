@@ -73,6 +73,17 @@ SQL_SET_STATUS = """
     RETURNING id, status
 """
 
+# Written after the Topic row exists, because promoted_topic_id carries a
+# foreign key into topics and PostgreSQL checks it on the statement rather
+# than at commit. Claiming and pointing are therefore two writes: the claim
+# takes the decision, this records where the decision led.
+SQL_ATTACH_PROMOTED_TOPIC = """
+    UPDATE candidate_topics
+    SET promoted_topic_id = $3, updated_at = NOW()
+    WHERE id = $1 AND org_id = $2 AND status = 'accepted'
+    RETURNING id
+"""
+
 # The content behind a candidate: the cluster's own items. Used to populate
 # an accepted Topic without waiting for new collection.
 SQL_CLUSTER_CONTENT_IDS = """
@@ -127,6 +138,19 @@ async def set_candidate_status(
     """
     row = await conn.fetchrow(SQL_SET_STATUS, candidate_id, org_id, status, promoted_topic_id)
     return dict(row) if row else None
+
+
+async def attach_promoted_topic(
+    conn: DBConnection, candidate_id: str, *, org_id: str, topic_id: str
+) -> Optional[str]:
+    """Point an accepted candidate at the Topic it produced.
+
+    Separate from the claim because promoted_topic_id references topics and
+    the constraint is checked immediately, so the Topic has to exist first.
+    Both writes belong to one transaction, so a caller that fails between
+    them leaves neither.
+    """
+    return await conn.fetchval(SQL_ATTACH_PROMOTED_TOPIC, candidate_id, org_id, topic_id)
 
 
 async def cluster_content_ids(

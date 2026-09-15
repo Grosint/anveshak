@@ -54,7 +54,11 @@ def main() -> None:
         log.info("download_models.translation", model=settings.translation_model)
         from transformers import pipeline
 
-        pipeline("translation", model=settings.translation_model, device=-1)
+        pipeline(
+            "translation",
+            model=settings.translation_model,
+            device=settings.translation_device,
+        )
         log.info("download_models.translation_done")
     else:
         log.info("download_models.translation_skipped", reason="disabled")

@@ -23,10 +23,29 @@ class AnalystSettings(BaseSettings):
     # which overruns the model's 512 position limit and sends generation into a
     # degenerate regime that never terminates. Must stay below the model limit.
     translation_max_input_tokens: int = 480
+    # Device the NLLB pipeline is built on. Rule 6: never a literal in
+    # service code. Accepts the transformers device strings, so "cuda:1"
+    # names a card on a multi-GPU host.
+    #
+    # Setting this to cuda on a CPU-only torch wheel does NOT stop the worker.
+    # _get_pipeline() is called inside the try in translate_to_english, so the
+    # RuntimeError is caught, the item logs translation.failed, and jobs.py
+    # falls back to untranslated text. Every item then repeats the failed load,
+    # because _pipeline stays None and nothing caches the failure. The symptom
+    # is a corpus quietly embedded in its own script, not an outage. Check
+    # translation.failed before trusting a device change. See hardware.md.
+    translation_device: str = "cpu"
     # Threads per torch op. Torch defaults to os.cpu_count(), so max_jobs
     # concurrent analyse jobs oversubscribe every core (4 jobs x 12 threads on
     # 12 cores). Hardware-controlled, see hardware.md.
     torch_num_threads: int = 2
+    # Concurrent ARQ jobs in one analyst worker. Hardware-controlled, because
+    # it is the term that decides peak memory: the resident models are a fixed
+    # cost and every concurrent job adds its own inference activations on top.
+    # A host whose mem_limit this overruns does not slow down, it OOMs and the
+    # container restarts mid-job, which loses the chained work the job had not
+    # enqueued yet. See hardware.md.
+    analyst_max_jobs: int = 4
 
     # Embeddings — hardware-controlled, see hardware.md
     embedding_model: str = "all-MiniLM-L6-v2"

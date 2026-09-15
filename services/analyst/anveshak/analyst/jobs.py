@@ -786,7 +786,7 @@ class WorkerSettings:
     on_shutdown = on_shutdown
     on_job_result = on_job_result
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
-    max_jobs = 4
+    max_jobs = settings.analyst_max_jobs
     job_timeout = 300  # increased from 180s — translation adds ~30s per article on CPU
     # ARQ's default is 3600s, so a wedged worker stays "healthy" for an hour.
     # The container healthcheck reads this key's presence, so the interval is

@@ -511,6 +511,10 @@ services:
       <<: *common-env
       TRANSLATION_ENABLED: ${TRANSLATION_ENABLED:-true}
       TRANSLATION_MODEL: ${TRANSLATION_MODEL:-facebook/nllb-200-distilled-600M}
+      # Must match analyse-worker too. Pre-caching on a different device than
+      # the worker loads on downloads the right weights to the wrong place and
+      # raises nothing, exactly as STANCE_DEVICE and HOSTILITY_DEVICE below.
+      TRANSLATION_DEVICE: ${TRANSLATION_DEVICE:-cpu}
       # Must match analyse-worker, or init pre-caches a model the worker never loads.
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
       STANCE_MODEL: ${STANCE_MODEL:-MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7}
@@ -592,10 +596,27 @@ services:
     # usually postgres or ollama, leaving this worker alive and unattributed.
     # All five models resident in one process measure 1010 MiB, not the ~6G the
     # on-disk footprint suggests: NLLB is 4.7G on disk but safetensors maps it
-    # rather than copying. The headroom here is for max_jobs=4 concurrent
+    # rather than copying. The headroom here was sized for max_jobs=4 concurrent
     # inference activations on top of that, since every model loader is a
     # module-level singleton that is never unloaded.
-    mem_limit: 6g
+    #
+    # That sizing did not hold on CPU, measured 2026-09-15: at 6g the worker was
+    # OOM-killed 12 times in 15 hours at anon-rss 6270008kB. The missing term is
+    # allocator retention. Torch and glibc do not return freed activations, so
+    # the idle baseline creeps from 1.0 to 3.0 GiB over a worker's life and the
+    # headroom the old limit assumed was spent before the first job ran.
+    #
+    # 12g covers the 3.0 GiB baseline plus 1.6 GiB per concurrent job at
+    # ANALYST_MAX_JOBS=4. tests/unit/test_analyst_memory_invariant.py pins the
+    # two together so neither can be tuned into the failing pair again.
+    # On GPU the activations move to VRAM and 6g is correct again.
+    #
+    # Override on a host with less RAM than this: the first line of this comment
+    # is not advice. A limit above the VM's total RAM can never bind, and the
+    # host-wide OOM killer then picks a fatter victim instead, usually postgres
+    # or ollama. Lower ANALYST_MAX_JOBS to match when you lower this.
+    # See hardware.md, Re-measurement 2026-09-15.
+    mem_limit: ${ANALYST_MEM_LIMIT:-12g}
     # Without a cpu bound this worker took 900% on a 12-core host: max_jobs=4
     # concurrent torch jobs each defaulting to os.cpu_count() threads.
     cpus: ${ANALYST_WORKER_CPUS:-4}
@@ -612,7 +633,9 @@ services:
       TRANSLATION_MAX_CHARS: ${TRANSLATION_MAX_CHARS:-1500}
       TRANSLATION_MAX_TOKENS: ${TRANSLATION_MAX_TOKENS:-512}
       TRANSLATION_MAX_INPUT_TOKENS: ${TRANSLATION_MAX_INPUT_TOKENS:-480}
+      TRANSLATION_DEVICE: ${TRANSLATION_DEVICE:-cpu}
       TORCH_NUM_THREADS: ${TORCH_NUM_THREADS:-2}
+      ANALYST_MAX_JOBS: ${ANALYST_MAX_JOBS:-4}
       NER_CONFIDENCE_THRESHOLD: ${NER_CONFIDENCE_THRESHOLD:-0.75}
       ENTITY_SIMILARITY_THRESHOLD: ${ENTITY_SIMILARITY_THRESHOLD:-0.85}
       CLUSTERING_SIMILARITY_THRESHOLD: ${CLUSTERING_SIMILARITY_THRESHOLD:-0.55}

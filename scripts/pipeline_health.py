@@ -42,15 +42,20 @@ WORKER_CONTAINERS = {
     "scrape-web-worker": {"stage": 1, "role": "Web/RSS/darkweb scraping"},
     "analyse-worker": {"stage": 2, "role": "NLP, embedding, identifiers, quality scoring"},
     "analyse-scheduler": {"stage": 3, "role": "Clustering, signals, convergence, orphan sweep"},
+    "analyse-vision-worker": {"stage": 4, "role": "Deepfake and image analysis"},
     "report-worker": {"stage": 5, "role": "LLM report generation"},
 }
 
-# ARQ queues and their thresholds
-# ARQ default queue is "arq:queue" (social), named queues for scraper/analyst
+# ARQ queues and their thresholds. Every service names its own queue, so a
+# depth here belongs to exactly one worker. Keep this in step with the
+# queue_name on each WorkerSettings; a queue missing from this map is a stage
+# that can back up unwatched.
 ARQ_QUEUES = {
-    "arq:queue": {"warn": 50, "critical": 200, "stage": 1, "label": "social (default)"},
+    "arq:social": {"warn": 50, "critical": 200, "stage": 1, "label": "social"},
     "arq:scraper": {"warn": 30, "critical": 100, "stage": 1, "label": "scraper"},
     "arq:analyst": {"warn": 50, "critical": 200, "stage": 2, "label": "analyst"},
+    "arq:vision": {"warn": 30, "critical": 100, "stage": 4, "label": "vision"},
+    "arq:reporter": {"warn": 10, "critical": 30, "stage": 5, "label": "reporter"},
 }
 
 # Source staleness thresholds (seconds)

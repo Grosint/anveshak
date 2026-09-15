@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import urllib.error
 import urllib.parse
@@ -21,6 +22,7 @@ from dataclasses import dataclass
 
 # Demonstration credentials come from the environment - issue #41.
 # scripts/seed_demo_org.py seeds these; nothing here carries a password.
+REDIS_CONTAINER = os.environ.get("ANVESHAK_REDIS_CONTAINER", "anveshak-redis-1")
 DEMO_USER = os.environ.get("ANVESHAK_DEMO_ANALYST_USERNAME", "demo@anveshak.local")
 DEMO_PASS = os.environ.get("ANVESHAK_DEMO_ANALYST_PASSWORD", "")
 
@@ -68,7 +70,6 @@ def check_services() -> list[Check]:
         ("Scraper", "http://localhost:8001/health"),
         ("Social", "http://localhost:8002/health"),
         ("Analyst", "http://localhost:8007/health"),
-        ("Reporter", "http://localhost:8005/health"),
     ]
     for name, url in services:
         status, body = http_get(url)
@@ -84,7 +85,49 @@ def check_services() -> list[Check]:
                 ),
             )
         )
+    checks.append(_check_reporter_heartbeat())
     return checks
+
+
+# The reporter is a pure ARQ worker. It publishes 8006 for Prometheus, which
+# answers 200 on every path, and 8005 is not published at all, so neither port
+# can say whether the worker is alive. Its heartbeat key is the same thing the
+# compose healthcheck reads through sdk/arq_health.sh.
+REPORTER_HEARTBEAT_KEY = "arq:reporter:health-check"
+REPORTER_HEARTBEAT_MAX_AGE_S = 60
+
+
+def _check_reporter_heartbeat() -> Check:
+    name = "Step 1 — Reporter worker"
+    try:
+        raw = subprocess.run(
+            [
+                "docker",
+                "exec",
+                REDIS_CONTAINER,
+                "redis-cli",
+                "GET",
+                REPORTER_HEARTBEAT_KEY,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return Check(name, False, f"could not read {REPORTER_HEARTBEAT_KEY}: {exc}")
+
+    if raw.returncode != 0:
+        return Check(name, False, f"redis-cli failed: {raw.stderr.strip() or 'no output'}")
+
+    beat = raw.stdout.strip()
+    if not beat:
+        return Check(name, False, f"no heartbeat at {REPORTER_HEARTBEAT_KEY}")
+
+    # ARQ writes the key with a TTL, so a value present at all is a beat inside
+    # that TTL. Report what it says, since the ongoing/queued counts are the
+    # thing an operator wants before a demonstration.
+    return Check(name, True, beat)
 
 
 # ---------------------------------------------------------------------------
@@ -124,9 +167,10 @@ def demo_login(base: str) -> tuple[Check, str | None]:
     if not DEMO_PASS:
         # An empty password posts fine and comes back 401, which reads like a
         # broken API rather than a missing variable.
-        return Check(
-            "Step 3 — Demo login", False, "ANVESHAK_DEMO_ANALYST_PASSWORD is not set"
-        ), None
+        return (
+            Check("Step 3 — Demo login", False, "ANVESHAK_DEMO_ANALYST_PASSWORD is not set"),
+            None,
+        )
     try:
         data = json.dumps(
             {

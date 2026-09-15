@@ -696,7 +696,8 @@ demo-detect: venv-check
 
 demo-check:
 	$(call header,Demo Readiness Check)
-	@$(UV) python scripts/demo_check.py
+	@test -f .env || { printf "  $(_FAIL) .env not found - run: cp .env.example .env\n"; exit 1; }
+	@set -a; . ./.env; set +a; $(UV) python scripts/demo_check.py
 
 # ---------------------------------------------------------------------------
 # Demonstration corpus, Replay assertions and the freeze - issue #54
