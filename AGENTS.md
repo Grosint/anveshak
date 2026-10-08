@@ -17,7 +17,7 @@ Directory-specific rules live in nested `AGENTS.md` files and take precedence wi
 
 Deeper procedural knowledge is packaged as Agent Skills in `.agents/skills/`.
 Each skill declares in its `description` when it applies, so load one when the task matches rather than reading them all.
-The `learned` skill indexes 182 notes on specific failure modes; other skills and these rules cite it by path.
+The `learned` skill indexes 183 notes on specific failure modes; other skills and these rules cite it by path.
 
 ## Architectural rules, always enforce
 
