@@ -142,7 +142,7 @@
       "id": 7,
       "description": "Analyst quality gate outcomes (gates 5-8).",
       "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["sum"]}, "tooltip": {"mode": "multi"}},
-      "title": "Analyst Gates (5-8)",
+      "title": "Analyst Gates (5-7)",
       "type": "timeseries",
       "targets": [
         {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "increase(analyst_content_skipped_quality_total[5m])", "legendFormat": "{{gate}}", "refId": "A"}

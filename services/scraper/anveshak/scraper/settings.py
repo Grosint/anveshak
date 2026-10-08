@@ -33,6 +33,14 @@ class ScraperSettings(BaseSettings):
     media_max_size_mb: int = 50  # per-file download cap
     media_download_enabled: bool = True  # set False to disable media ingestion
 
+    # Content quality gate. The scraper's own copy of the analyst's
+    # content_min_words, and the two must stay equal: an invariant test in
+    # tests/unit/test_word_counter.py asserts it, because the scraper's verdict
+    # is persisted as content_quality while the analyst's only skips embedding.
+    # Words, not characters: a character floor only measures content volume in
+    # Latin script. See sdk/anveshak/text.py.
+    content_min_words: int = 8  # min words in clean_text to call it good
+
     # Prometheus metrics HTTP server port (8A.17)
     metrics_port: int = 8001  # matches SCRAPER_PORT in compose.yml
 

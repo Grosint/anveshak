@@ -35,6 +35,15 @@ class ReporterSettings(BaseSettings):
 
     # LLM retry / timeout
     ollama_report_timeout_s: int = 300
+    # The RAG query embedding is served by the analyst service, which during a
+    # Replay is saturated embedding content on CPU. A hardcoded 30 seconds here
+    # killed a Replay at stage 11 of 17 with httpx.ReadTimeout after 31.10s, and
+    # ollama_report_timeout_s never got the chance to matter.
+    # This is the READ budget only. A generous read budget is for a service that
+    # is slow; it must not also be the connect budget, or a dead analyst
+    # container holds a worker slot for the full duration instead of failing.
+    rag_embed_timeout_s: int = 120
+    rag_embed_connect_timeout_s: float = 5.0
     ollama_retry_max: int = 2
 
     # Circuit breaker — prevents thundering herd during Ollama outages

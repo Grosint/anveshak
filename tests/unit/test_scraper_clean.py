@@ -749,3 +749,28 @@ class TestScoreContentQualityNavGarbage:
         )
         cleaned = clean_extracted_text(raw)
         assert "arrow-down" not in cleaned
+
+
+class TestScoreContentQualityScriptFairness:
+    """The scraper holds a second copy of the analyst's script-blind gate.
+
+    It did not bite the Cockroach Janta Party Replay only because the corpus
+    import path runs through services/social/anveshak/social/ingest.py, which
+    never scores quality at all. Any Hindi item arriving through the RSS or
+    web path would have been marked low_quality for being compact.
+    """
+
+    # Verbatim from corpora/synthetic_cockroach_janta_party.jsonl.
+    HINDI_ITEMS = [
+        "रांची पुलिस ने CJP मार्च की अनुमति देने से इनकार कर दिया। संगठन ने कहा कि वह मार्च करेगा।",
+        "पुलिस ने लाठीचार्ज किया, कई कार्यकर्ता घायल हुए। यह शर्मनाक है, बैठे हुए छात्रों पर लाठी चलाई गई।",
+        "लाठीचार्ज की न्यायिक जांच के आदेश दिए गए हैं। जांच रिपोर्ट तीन महीने में देनी होगी।",
+    ]
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("text", HINDI_ITEMS)
+    def test_compact_hindi_article_is_good(self, text: str):
+        assert len(text) < 100, "fixture must stay under the old character floor"
+        quality, gate = score_content_quality(text, text)
+        assert quality == "good", f"rejected at gate {gate!r}: {text}"
+        assert gate == "passed"

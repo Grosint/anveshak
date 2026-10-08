@@ -171,7 +171,29 @@ async def generate_report(ctx: dict, report_id: str, reference_time: str | None 
     log.info("reporter.data_bundle_fetched", report_id=report_id, topic_id=topic_id)
 
     # --- 3. Generate query embedding (still needed for RAG chunks) ---
-    query_embedding = await generate_query_embedding(topic_name, keywords)
+    # Marked failed before re-raising. Without this, an embed timeout leaves
+    # generated_at NULL and generation_error NULL, which the API reads as
+    # "queued" (services/api/anveshak/api/routes/reports.py), so an analyst
+    # watches a dead report stay queued forever. BaseException rather than
+    # Exception because ARQ cancels on job_timeout with CancelledError, which
+    # is exactly the case that needs to be visible.
+    try:
+        query_embedding = await generate_query_embedding(topic_name, keywords)
+    except BaseException as exc:
+        log.warning(
+            "reporter.query_embedding_failed",
+            report_id=report_id,
+            topic_id=topic_id,
+            error=str(exc),
+        )
+        await db.set_report_failed(
+            pool,
+            report_id,
+            "Could not reach the analyst embedding service to build the report's "
+            "retrieval query. The analyst service may be busy or down; retry the "
+            "report once it is healthy.",
+        )
+        raise
 
     # --- 4. Fetch RAG chunks ---
     tracker_id = report.get("tracker_id")
@@ -1018,7 +1040,17 @@ class WorkerSettings:
     on_startup = startup
     on_shutdown = shutdown
     on_job_result = on_job_result
-    job_timeout = 600  # 8C.4 — Ollama report generation ceiling (600s for CPU inference)
+    # 8C.4 - one attempt's ceiling on CPU. Derived rather than a literal,
+    # because the two timeouts it has to cover are configuration: the RAG query
+    # embedding runs first, then the LLM call, inside this one job. A literal
+    # 600 silently became too small the moment rag_embed_timeout_s went from a
+    # hardcoded 30 to 120, since 120 + 540 in the deployed compose is 660, and
+    # ARQ would have cancelled a job whose own timeouts were both still within
+    # budget. The 60s headroom covers the SQL bundle, PDF render and DB writes.
+    # Per attempt, not per job: max_tries=2 above gives each retry its own.
+    job_timeout = (
+        _default_settings.rag_embed_timeout_s + _default_settings.ollama_report_timeout_s + 60
+    )
     keep_result = 3600  # 8C.6 — keep results 1h for UI polling
     # ARQ's default is 3600s, so a wedged worker stays "healthy" for an hour.
     # The container healthcheck reads this key's presence, so the interval is

@@ -276,3 +276,60 @@ class TestGenerateQueryEmbedding:
         payload = call_kwargs.kwargs.get("json") or call_kwargs[1].get("json")
         assert "UAV incidents" in payload["texts"][0]
         assert "drone" in payload["texts"][0]
+
+
+class TestRagEmbedTimeout:
+    """The embed call's timeout is configuration, not a literal (rule 6).
+
+    A hardcoded 30 seconds killed the Cockroach Janta Party Replay at stage 11
+    of 17 with httpx.ReadTimeout after 31.10 seconds: the analyst service was
+    saturated embedding content on CPU, and the reporter's correctly configured
+    540-second LLM timeout never got the chance to matter.
+    """
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_client_built_from_settings(self):
+        from anveshak.reporter import rag
+        from anveshak.reporter.settings import settings
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {"embeddings": [[0.1, 0.2]]}
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = mock_response
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+
+        with patch.object(rag.httpx, "AsyncClient", return_value=mock_client) as mock_ctor:
+            await rag.generate_query_embedding("topic", ["kw"])
+
+        timeout = mock_ctor.call_args.kwargs["timeout"]
+        assert timeout.read == settings.rag_embed_timeout_s
+        # Connect is deliberately NOT the read budget: a dead analyst must fail
+        # fast, while a slow one gets the full read window.
+        assert timeout.connect == settings.rag_embed_connect_timeout_s
+        assert timeout.connect < timeout.read
+
+    @pytest.mark.unit
+    def test_default_outlasts_a_saturated_cpu_embed(self):
+        from anveshak.reporter.settings import settings
+
+        assert settings.rag_embed_timeout_s >= 120
+
+    @pytest.mark.unit
+    def test_embed_budget_fits_inside_the_arq_job_timeout(self):
+        """The embed and the LLM call share one ARQ job, so their sum must fit.
+
+        Threshold invariant per AGENTS.md: a timeout that exceeds the job
+        ceiling is cancelled by ARQ while both of its own limits still look
+        correct, which is the hardest kind of timeout bug to read from logs.
+        """
+        from anveshak.reporter.settings import settings
+        from anveshak.reporter.worker import WorkerSettings
+
+        assert (
+            settings.rag_embed_timeout_s + settings.ollama_report_timeout_s
+            < WorkerSettings.job_timeout
+        )

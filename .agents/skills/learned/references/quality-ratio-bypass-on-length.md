@@ -17,7 +17,7 @@ Add a length bypass in `score_content_quality()`:
 _RATIO_BYPASS_MIN_CHARS = 500
 
 def score_content_quality(raw_text, clean_text):
-    if not clean_text or len(clean_text) < _MIN_CLEAN_CHARS:  # Gate 1: too short
+    if not clean_text or count_words(clean_text) < settings.content_min_words:  # Gate 1: too short
         return "low_quality"
     if is_paywall_page(raw_text) or is_paywall_page(clean_text):  # Gate 2: paywall
         return "low_quality"
@@ -50,6 +50,14 @@ def test_paywall_with_long_text_still_rejected():
 ## Why 500 chars
 
 500 chars ≈ 3-4 paragraphs of text. Below 500, the ratio check is a useful signal (very short text from a heavy page is likely a nav fragment). Above 500, the text is substantial enough that the ratio is irrelevant.
+
+## Gate 1 counts words, not characters
+
+The ratio bypass above is a character threshold on purpose: it is a statement about how much
+HTML a page served, which is a character-level fact. Gate 1 is not. It asks whether the page
+carries an article's worth of content, and that is measured in words, because Devanagari says
+in roughly half the characters what Latin script needs 100 for. See
+`quality-gate-unicode-ranges.md` and `sdk/anveshak/text.py`.
 
 ## See also
 

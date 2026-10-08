@@ -205,7 +205,18 @@ class AnalystSettings(BaseSettings):
     credibility_contradiction_min_items: int = 5  # source must have >= N items to be evaluated
 
     # Content quality gate — skip embedding for boilerplate/nav text
-    content_min_length: int = 100  # min clean_text chars to embed
+    # Words, not characters: a character floor only measures volume in Latin
+    # script and rejected compact Hindi an English equal cleared.
+    # 8, not 12: a word floor is not automatically script-neutral either. A
+    # one-sentence Telugu item counts 8 words and a Tamil one 9, because
+    # Dravidian agglutination packs into one word what English spreads over
+    # three. Measured over the golden corpus, a floor of 8, 10, 12 or 15 all
+    # drop zero items, so the floor is chosen at the bottom of that range:
+    # silently dropping real content is the failure this gate exists to avoid,
+    # and content_min_unique_word_ratio plus content_max_punctuation_ratio are
+    # what actually catch boilerplate. tests/unit/test_word_counter.py pins
+    # every supported language above this floor.
+    content_min_words: int = 8  # min words in clean_text to embed
     content_min_unique_word_ratio: float = 0.4  # unique words / total words
     content_max_punctuation_ratio: float = 0.3  # punctuation chars / total chars
 

@@ -313,8 +313,23 @@ class TestAnalyseContentWithTranslation:
     @pytest.mark.asyncio
     async def test_english_content_skips_translation(self):
         """analyse_content does NOT call translate_to_english for English content."""
-        english_text = "The PLA conducted military drills near Taiwan today."
-        fake_row = {"id": "test-en-001", "clean_text": english_text}
+        # Long enough to clear the content quality gate. The original fixture was
+        # 52 characters, which the gate's old 100-character floor rejected, so
+        # analyse_content returned before the translation branch and the
+        # assertion below passed without ever exercising it.
+        english_text = (
+            "The PLA conducted military drills near Taiwan today. "
+            "The exercises involved naval and air assets operating together."
+        )
+        fake_row = {
+            "id": "test-en-001",
+            "clean_text": english_text,
+            "topic_id": "topic-en-test",
+            "topic_name": "Taiwan Strait",
+            "topic_keywords": ["PLA", "drills", "Taiwan"],
+            "topic_relevance_threshold": None,
+            "platform": "web",
+        }
 
         mock_conn = AsyncMock()
         mock_conn.fetchrow = AsyncMock(return_value=fake_row)
@@ -337,17 +352,22 @@ class TestAnalyseContentWithTranslation:
             patch("anveshak.analyst.jobs.translate_to_english") as mock_translate,
             patch("anveshak.analyst.jobs.is_model_loaded", return_value=True),
             patch("anveshak.analyst.jobs.parse_entities", return_value=[]),
-            patch("anveshak.analyst.jobs.encode_text", return_value=[0.1] * 384),
+            patch("anveshak.analyst.jobs.encode_text", return_value=[0.1] * 384) as mock_encode,
+            patch("anveshak.analyst.jobs.build_topic_query_embedding", return_value=[0.1] * 384),
             patch("anveshak.analyst.jobs.settings") as mock_settings,
         ):
             mock_settings.translation_enabled = True
             mock_settings.translation_model = "facebook/nllb-200-distilled-600M"
+            mock_settings.minhash_num_perm = 128
 
             from anveshak.analyst.jobs import analyse_content
 
             await analyse_content(ctx, "test-en-001")
 
         mock_translate.assert_not_called()
+        # The item must actually have been processed, or the assertion above is
+        # vacuous: a rejected item never reaches the translation branch either.
+        mock_encode.assert_called()
 
 
 # ---------------------------------------------------------------------------

@@ -4,15 +4,21 @@ Prevents junk content from entering the embedding → clustering → signal
 pipeline, which avoids false-positive signals from navigation menus,
 cookie banners, and repetitive boilerplate.
 
+Every check here is script-neutral. The length gate counts words rather than
+characters, because a character floor is a volume proxy that only holds for
+Latin script and silently rejected compact Hindi that an English equivalent
+cleared. The word counter lives in anveshak.text, shared with the scraper's
+gate so the two cannot drift apart.
+
 All thresholds are configurable via environment variables (see settings.py).
 """
 
 from __future__ import annotations
 
-import re
 import string
 
 import structlog
+from anveshak.text import extract_words
 
 from .settings import settings
 
@@ -25,28 +31,28 @@ def is_quality_content(text: str) -> tuple[bool, str]:
     """Return (passed, gate) indicating whether text passes quality checks.
 
     passed: True if content is good for embedding, False if rejected.
-    gate: which check determined the outcome — 'too_short', 'few_words',
-          'unique_ratio', 'punctuation', or 'passed'.
+    gate: which check determined the outcome - 'too_short', 'unique_ratio',
+          'punctuation', or 'passed'.
 
     Checks:
-      1. Minimum length (default 100 chars)
+      1. Minimum word count (default 8) - one gate on volume, not two
       2. Unique word ratio — catches repeated nav menus
       3. Punctuation ratio — catches link-heavy / separator-heavy text
     """
     stripped = text.strip()
 
-    # Check 1: minimum length
-    if len(stripped) < settings.content_min_length:
+    # Check 1: minimum content volume, measured in words so that every script
+    # is held to the same standard.
+    words = extract_words(stripped)
+    # Wordless input is rejected structurally, not via the configurable floor,
+    # so that CONTENT_MIN_WORDS=0 degrades the gate rather than raising
+    # ZeroDivisionError on the ratios below and failing the whole ARQ job.
+    if not words:
+        return (False, "too_short")
+    if len(words) < settings.content_min_words:
         return (False, "too_short")
 
     # Check 2: unique word ratio (catches "Business Tech Lifestyle Business Tech Lifestyle...")
-    # CJK characters are single-char words; Latin/Cyrillic/Arabic/Devanagari/Bengali require 2+ chars
-    words = re.findall(
-        r"[a-zA-Z\u0400-\u04ff\u0600-\u06ff\u0900-\u097f\u0980-\u09ff]{2,}|[\u4e00-\u9fff\u3400-\u4dbf]",
-        stripped.lower(),
-    )
-    if len(words) < 5:
-        return (False, "few_words")
     unique_ratio = len(set(words)) / len(words)
     if unique_ratio < settings.content_min_unique_word_ratio:
         return (False, "unique_ratio")

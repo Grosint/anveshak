@@ -885,10 +885,10 @@ Topic keywords: ["BrahMos", "LAC", "India-China border"]
   Stored in content_items.topic_relevance_score (float 0.0–1.0)
          │
          ▼
-  Gate 11 filters articles below the per-topic auto-calibrated threshold
+  Gate 10 filters articles below the per-topic auto-calibrated threshold
 ```
 
-An article about "India deploys BrahMos along LAC" scores high (~0.7+). An article about "Cricket World Cup" scraped from the same NDTV RSS feed scores low (~0.1) and is filtered out by Gate 11.
+An article about "India deploys BrahMos along LAC" scores high (~0.7+). An article about "Cricket World Cup" scraped from the same NDTV RSS feed scores low (~0.1) and is filtered out by Gate 10.
 
 **Key files:** `services/analyst/anveshak/analyst/relevance.py` — `compute_topic_relevance()`, `build_topic_query_embedding()`
 
@@ -1024,7 +1024,7 @@ topics ─────────────┬──────────�
 
 ## Content Quality Gates
 
-Content passes through **11 gates** across 4 pipeline stages before it can influence analyst-facing outputs (signals, clusters, reports). Each gate catches a different class of noise. The gates are organized into 4 stages, each running in a different container.
+Content passes through **10 gates** across 4 pipeline stages before it can influence analyst-facing outputs (signals, clusters, reports). Each gate catches a different class of noise. The gates are organized into 4 stages, each running in a different container.
 
 ### Full Pipeline — Every Filter, In Order
 
@@ -1042,7 +1042,7 @@ SCRAPER CONTAINER                 ANALYST CONTAINER              ANALYST CONTAIN
          ▼
 ┌─ score_content_quality() ─┐
 │                           │
-│ Gate 1: < 100 chars       │
+│ Gate 1: < 8 words         │
 │ Gate 2: paywall (3+ hits) │
 │ Gate 3: nav-icon (40%+)   │
 │ Gate 4: len >= 500 bypass │
@@ -1062,11 +1062,10 @@ SCRAPER CONTAINER                 ANALYST CONTAINER              ANALYST CONTAIN
                                            ▼
                                   ┌─ is_quality_content() ──┐
                                   │                         │
-                                  │ Gate 5: < 100 chars     │
-                                  │ Gate 6: < 5 words       │
-                                  │ Gate 7: unique word     │
+                                  │ Gate 5: < 8 words       │
+                                  │ Gate 6: unique word     │
                                   │         ratio < 0.4     │
-                                  │ Gate 8: punctuation     │
+                                  │ Gate 7: punctuation     │
                                   │         ratio > 0.3     │
                                   │                         │
                                   │ If FAIL: return early   │
@@ -1093,14 +1092,14 @@ SCRAPER CONTAINER                 ANALYST CONTAINER              ANALYST CONTAIN
                                                                        ▼
                                                               ┌─ SQL WHERE clauses ────┐
                                                               │                        │
-                                                              │ Gate 9:  embedding     │
+                                                              │ Gate 8:  embedding     │
                                                               │          IS NOT NULL    │
                                                               │                        │
-                                                              │ Gate 10: content_      │
+                                                              │ Gate 9:  content_      │
                                                               │          quality !=    │
                                                               │          'low_quality'  │
                                                               │                        │
-                                                              │ Gate 11: relevance_    │
+                                                              │ Gate 10: relevance_    │
                                                               │          score >=      │
                                                               │          threshold     │
                                                               │                        │
@@ -1115,21 +1114,20 @@ SCRAPER CONTAINER                 ANALYST CONTAINER              ANALYST CONTAIN
                                                               (ISC >= threshold)
 ```
 
-### All 11 Gates — Summary Table
+### All 10 Gates — Summary Table
 
 | # | Gate | Container | What it does | Persisted? |
 |---|------|-----------|-------------|------------|
-| 1 | Min length < 100 chars | Scraper | Rejects tiny fragments | Yes: `content_quality = 'low_quality'` |
+| 1 | Min length < 8 words | Scraper | Rejects tiny fragments | Yes: `content_quality = 'low_quality'` |
 | 2 | Paywall (3+ indicator phrases) | Scraper | Rejects subscription walls | Yes: `content_quality = 'low_quality'` |
 | 3 | Nav-icon (40%+ icon words) | Scraper | Rejects scraped UI labels | Yes: `content_quality = 'low_quality'` |
 | 4 | Ratio < 0.08 (bypassed if >= 500 chars) | Scraper | Rejects extreme boilerplate | Yes: `content_quality = 'low_quality'` |
-| 5 | Min length < 100 chars | Analyst worker | Redundant with Gate 1, catches edge cases | No — returns early, no embedding |
-| 6 | < 5 words | Analyst worker | Rejects non-text content | No — returns early, no embedding |
-| 7 | Unique word ratio < 0.4 | Analyst worker | Rejects repeated nav menus | No — returns early, no embedding |
-| 8 | Punctuation ratio > 0.3 | Analyst worker | Rejects link/separator soup | No — returns early, no embedding |
-| 9 | `embedding IS NOT NULL` | Clustering SQL | Only cluster embedded items | N/A (read filter) |
-| 10 | `content_quality != 'low_quality'` | Clustering SQL | Skip scraper-flagged junk | N/A (read filter) |
-| 11 | `relevance_score >= threshold` | Clustering SQL | Skip off-topic content | N/A (read filter) |
+| 5 | Min length < 8 words | Analyst worker | Redundant with Gate 1, catches edge cases | No — returns early, no embedding |
+| 6 | Unique word ratio < 0.4 | Analyst worker | Rejects repeated nav menus | No — returns early, no embedding |
+| 7 | Punctuation ratio > 0.3 | Analyst worker | Rejects link/separator soup | No — returns early, no embedding |
+| 8 | `embedding IS NOT NULL` | Clustering SQL | Only cluster embedded items | N/A (read filter) |
+| 9 | `content_quality != 'low_quality'` | Clustering SQL | Skip scraper-flagged junk | N/A (read filter) |
+| 10 | `relevance_score >= threshold` | Clustering SQL | Skip off-topic content | N/A (read filter) |
 
 ### How items flow through the gates
 
@@ -1149,7 +1147,7 @@ SCRAPER CONTAINER                 ANALYST CONTAINER              ANALYST CONTAIN
 
 | Gate | Check | Threshold | Purpose |
 |------|-------|-----------|---------|
-| 1 | `len(clean_text) < 100` | 100 chars | Minimum content length |
+| 1 | `count_words(clean_text) < content_min_words` | 8 words | Minimum content volume, counted in words so every script is held to one standard |
 | 2 | `is_paywall_page()` | 3+ indicator phrases | Login/subscription wall detection |
 | 3 | `is_nav_icon_garbage()` | 40%+ nav-icon vocabulary | Scraped UI element names (icon alt-text, aria-labels) |
 | 4 | `len(clean_text) >= 500` → bypass ratio; else `ratio < 0.08` | 500 chars / 0.08 ratio | Boilerplate detection with length bypass for real articles from HTML-heavy sites |
@@ -1160,7 +1158,7 @@ Gate 4 detail: Modern news sites serve 20-90KB of HTML for a 3-5KB article. The 
 
 The `COALESCE` ensures backward compatibility — items ingested before the `content_quality` column was added (NULL values) are treated as `'good'`.
 
-### Stage B: Analyst-Side Quality (Gates 5-8)
+### Stage B: Analyst-Side Quality (Gates 5-7)
 
 **Set by:** `is_quality_content()` in `services/analyst/anveshak/analyst/content_quality.py`, called inside the `analyse_content` ARQ job before embedding.
 
@@ -1170,24 +1168,27 @@ The `COALESCE` ensures backward compatibility — items ingested before the `con
 
 | Gate | Check | Threshold | Configurable via |
 |------|-------|-----------|-----------------|
-| 5 | `len(text) < content_min_length` | 100 chars | `CONTENT_MIN_LENGTH` env var |
-| 6 | Word count < 5 | 5 words | Hardcoded |
-| 7 | Unique word ratio < threshold | 0.4 | `CONTENT_MIN_UNIQUE_WORD_RATIO` env var |
-| 8 | Punctuation ratio > threshold | 0.3 | `CONTENT_MAX_PUNCTUATION_RATIO` env var |
+| 5 | `count_words(text) < content_min_words` | 8 words | `CONTENT_MIN_WORDS` env var |
+| 6 | Unique word ratio < threshold | 0.4 | `CONTENT_MIN_UNIQUE_WORD_RATIO` env var |
+| 7 | Punctuation ratio > threshold | 0.3 | `CONTENT_MAX_PUNCTUATION_RATIO` env var |
 
-**Why both Stage A and Stage B exist:** Stage A runs in the scraper container and uses raw_text vs clean_text ratio — a structural signal. Stage B runs in the analyst container and uses linguistic signals (word diversity, punctuation density). An item can pass Stage A (long enough, not a paywall, acceptable ratio) but fail Stage B (e.g., a 10KB navigation page with repeated menu items has low unique word ratio). Defense in depth — two independent quality checks in different containers.
+Gate 5 counts words, not characters, and the counter in `sdk/anveshak/text.py` is shared with Gate 1. A character floor measures content volume in Latin script only: Devanagari carries the same meaning in roughly half the characters, so a 100-character floor rejected complete Hindi news sentences of 19 words while passing the English sentences that said the same thing. The old second threshold on the same dimension (word count < 5) is gone, because two thresholds on one dimension let the stricter one hide the other.
 
-### Stage C: Clustering SQL Filters (Gates 9-11)
+A word floor is not automatically script-neutral either, which is why the floor is 8 rather than a rounder number. Dravidian agglutination packs into one word what English spreads over three, so a one-sentence Telugu item counts 8 words and a Tamil one 9. Measured over the golden corpus, floors of 8, 10, 12 and 15 all drop zero items, so the floor sits at the bottom of that range: silently dropping real content is the failure this gate exists to prevent, and the unique-word and punctuation ratios are what actually catch boilerplate. `sdk/anveshak/text.py` counts one character per word for scripts with no word separator (CJK, kana, Thai, Lao, Myanmar, Khmer), so a short item in those scripts clears the floor on less content; `tests/unit/test_content_quality.py` pins that residue rather than leaving it to be discovered.
+
+**Why both Stage A and Stage B exist:** Stage A runs in the scraper container and uses raw_text vs clean_text ratio — a structural signal. Stage B runs in the analyst container and uses linguistic signals (word diversity, punctuation density). An item can pass Stage A (enough words, not a paywall, acceptable ratio) but fail Stage B (e.g., a 10KB navigation page with repeated menu items has low unique word ratio). Defense in depth — two independent quality checks in different containers.
+
+### Stage C: Clustering SQL Filters (Gates 8-10)
 
 **Applied at:** query time in the clustering SQL (`services/analyst/anveshak/analyst/clustering.py`), all 4 SQL queries.
 
 | Gate | SQL clause | Purpose |
 |------|-----------|---------|
-| 9 | `AND ci.embedding IS NOT NULL` | Only cluster items that were successfully embedded |
-| 10 | `AND COALESCE(ci.content_quality, 'good') != 'low_quality'` | Exclude scraper-flagged junk |
-| 11 | `AND (ci.topic_relevance_score IS NULL OR ci.topic_relevance_score >= $threshold)` | Exclude off-topic content |
+| 8 | `AND ci.embedding IS NOT NULL` | Only cluster items that were successfully embedded |
+| 9 | `AND COALESCE(ci.content_quality, 'good') != 'low_quality'` | Exclude scraper-flagged junk |
+| 10 | `AND (ci.topic_relevance_score IS NULL OR ci.topic_relevance_score >= $threshold)` | Exclude off-topic content |
 
-Gate 11 uses a **per-topic auto-calibrated threshold** (not a single global number):
+Gate 10 uses a **per-topic auto-calibrated threshold** (not a single global number):
 - The analyst-scheduler runs `relevance_calibration_loop` every 6 hours
 - For each topic, computes **PERCENTILE_CONT(0.25)** of the `topic_relevance_score` distribution
 - Clamps to [floor=0.08, ceiling=0.50], skips topics with < 20 scored items
@@ -1212,11 +1213,11 @@ The `IS NULL` clause ensures backward compatibility — items not yet scored are
 
 | Consumer | Stage A (Scraper Quality) | Stage B (Analyst Quality) | Stage C (Clustering SQL) | Stage D (Display) |
 |----------|:---:|:---:|:---:|:---:|
-| Clustering (Leiden) | Gate 10 | Gate 9 (indirect) | Gates 9-11 | — |
+| Clustering (Leiden) | Gate 9 | Gate 8 (indirect) | Gates 8-10 | — |
 | Signal engine | via clustering | via clustering | via clustering | — |
-| Cluster labelling (Ollama) | Gate 10 | Gate 9 (indirect) | — | — |
-| API content list | Gate 10 | Gate 9 (indirect) | Gate 11 | Yes |
-| RAG context (reports) | — | — | Gate 11 (`credibility_min`) | — |
+| Cluster labelling (Ollama) | Gate 9 | Gate 8 (indirect) | — | — |
+| API content list | Gate 9 | Gate 8 (indirect) | Gate 10 | Yes |
+| RAG context (reports) | — | — | Gate 10 (`credibility_min`) | — |
 | Semantic search | — | — | — | — (similarity-ranked) |
 
 ### Why every stage is necessary
@@ -1976,7 +1977,7 @@ These rules are enforced by code, tests, and CI. They are non-negotiable.
 | Labels are never Optional | `verify_labels.py` script, unit tests on every Pydantic model |
 | Reports are immutable | `generated_at` set once, `WHERE generated_at IS NULL` guard in worker |
 | Content is deduplicated | `UNIQUE(content_hash)`, `ON CONFLICT DO NOTHING` on every insert |
-| 11 content quality gates across 4 stages | Stage A (scraper quality, 4 gates) + Stage B (analyst quality, 4 gates) + Stage C (clustering SQL, 3 gates) + Stage D (display filters) |
+| 10 content quality gates across 4 stages | Stage A (scraper quality, 4 gates) + Stage B (analyst quality, 3 gates) + Stage C (clustering SQL, 3 gates) + Stage D (display filters) |
 | Low-quality content excluded from clustering | `COALESCE(content_quality, 'good') != 'low_quality'` in all 4 clustering SQL queries |
 | Near-duplicates excluded from ISC | `dedup.py` filters before `count_independent_sources()` in clustering |
 | Deepfake scores are float 0.0-1.0 | Type system, never `bool` — analyst decides threshold |

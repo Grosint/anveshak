@@ -38,7 +38,14 @@ async def generate_query_embedding(
     This gives pgvector something meaningful to rank chunks against.
     """
     query_text = " ".join([topic_name] + keywords)
-    async with httpx.AsyncClient(timeout=30) as client:
+    # Per-phase, not one scalar. A scalar applies the read budget to connect as
+    # well, so an analyst container that is down holds this worker slot for the
+    # full read timeout rather than failing in seconds.
+    timeout = httpx.Timeout(
+        settings.rag_embed_timeout_s,
+        connect=settings.rag_embed_connect_timeout_s,
+    )
+    async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.post(
             f"{settings.analyst_service_url}/internal/embed",
             json={"texts": [query_text]},

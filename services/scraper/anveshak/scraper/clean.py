@@ -13,6 +13,10 @@ from __future__ import annotations
 import hashlib
 import re
 
+from anveshak.text import count_words
+
+from .settings import settings
+
 # ---------------------------------------------------------------------------
 # Regex patterns — compiled once at module load
 # ---------------------------------------------------------------------------
@@ -482,7 +486,6 @@ def is_paywall_page(text: str) -> bool:
 # Quality scoring + clean_hash
 # ---------------------------------------------------------------------------
 
-_MIN_CLEAN_CHARS = 100
 _MIN_QUALITY_RATIO = 0.08  # lowered from 0.15 — rescues real articles from HTML-heavy sites
 _RATIO_BYPASS_MIN_CHARS = 500  # bypass ratio check if clean_text is substantial
 
@@ -505,12 +508,15 @@ def score_content_quality(raw_text: str, clean_text: str) -> tuple[str, str]:
           'nav_icon', 'ratio', 'bypass', or 'passed'
 
     A page where 92%+ of content is stripped as boilerplate is not useful.
-    A page with <100 chars of clean text has no real article content.
+    A page carrying fewer than content_min_words words of clean text has no
+    real article content. Words, not characters: a character floor measures
+    volume in Latin script only, so it rejected compact Hindi articles that
+    carried 16 or more words. See anveshak.text.
     A page that is a paywall/login wall is not useful.
     A page with >=500 chars of clean text is accepted regardless of ratio —
     real articles from HTML-heavy sites can have very low clean/raw ratios.
     """
-    if not clean_text or len(clean_text) < _MIN_CLEAN_CHARS:
+    if not clean_text or count_words(clean_text) < settings.content_min_words:
         return ("low_quality", "too_short")
 
     if is_paywall_page(raw_text) or is_paywall_page(clean_text):

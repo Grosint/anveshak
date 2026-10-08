@@ -211,10 +211,20 @@ def test_worker_settings_have_keep_result():
 def test_worker_settings_have_job_timeout():
     """8C.4 / 8C.5 — WorkerSettings job timeouts are correctly set."""
     from anveshak.analyst.jobs import WorkerSettings as AnalystWorker
+
+    # 8C.4 - the reporter's ceiling is derived from the two timeouts it has to
+    # cover, so assert the invariant rather than the number. A literal here let
+    # rag_embed_timeout_s grow past the budget without failing any test.
+    from anveshak.reporter.settings import settings as reporter_settings
     from anveshak.reporter.worker import WorkerSettings as ReporterWorker
     from anveshak.scraper.jobs import WorkerSettings as ScraperWorker
 
-    assert ReporterWorker.job_timeout == 600  # 8C.4 — LLM report generation ceiling on CPU
+    one_attempt = reporter_settings.rag_embed_timeout_s + reporter_settings.ollama_report_timeout_s
+    assert ReporterWorker.job_timeout > one_attempt, (
+        f"job_timeout={ReporterWorker.job_timeout} cannot cover one attempt's "
+        f"embed plus LLM budget of {one_attempt}s; ARQ would cancel a job whose "
+        "own timeouts are both still within their limits"
+    )
     assert (
         AnalystWorker.job_timeout == 300
     )  # 8C.2 — increased from 180s: NLLB translation adds ~30s per article on CPU
