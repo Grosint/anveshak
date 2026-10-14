@@ -195,6 +195,9 @@ reports/*.pdf
 reports/*.geojson
 output/
 generated/
+# The frontend API types are generated but committed: the drift checks in
+# tests/contracts and src/test/contracts compare against the committed copy.
+!frontend/src/api/generated/
 
 
 # =============================================================================

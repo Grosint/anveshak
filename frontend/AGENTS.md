@@ -4,7 +4,7 @@ Applies to `frontend/**/*.ts`, `frontend/**/*.tsx`, and `services/api/**/*.py`.
 Repo-wide rules are in [../AGENTS.md](../AGENTS.md).
 React, theming, and component patterns are in the `frontend-patterns` skill.
 
-8 notes covering data flowing between layers, plus how this code is structured and linted.
+9 notes covering data flowing between layers, plus how this code is structured and linted.
 
 ## SQL alias is the API contract
 
@@ -18,6 +18,14 @@ Checklist for SQL alias changes:
 3. When renaming, update the SELECT alias, HAVING, and ORDER BY, meaning all references
 
 See: `.agents/skills/learned/references/sql-alias-frontend-contract.md`
+
+## Generated API types
+
+A route that declares a Pydantic `response_model` gets its frontend type from `src/api/generated/schema.ts`, never from a hand-written interface.
+Alias it in the route's `src/api/*.ts` module, as `src/api/tipline.ts` does with `components['schemas']['TiplineIngestResponse']`.
+After changing an API model, run `make gen-api-types` and commit both files in `src/api/generated/`.
+`tests/contracts/test_openapi_schema_committed.py` fails when `openapi.json` is stale, and `src/test/contracts/generated-schema.test.ts` fails when `schema.ts` is stale.
+`src/test/contracts/` is type-checked by `tsconfig.contracts.json` during `npm run build`, so a typed fixture there turns a renamed field into a build error.
 
 ## Mock shape must match unwrapped return
 

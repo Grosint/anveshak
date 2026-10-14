@@ -60,6 +60,8 @@
 #   make lint-frontend    eslint
 #   make format           ruff format + fix
 #   make typecheck        pyright
+#   make typecheck-frontend  tsc over the app and the API contract tests
+#   make gen-api-types    regenerate frontend API types from the API's OpenAPI schema
 #   make security-scan    bandit scan
 #
 # =============================================================================
@@ -112,7 +114,7 @@ _WORK  := $(_CYN)⟳$(_RST)
         test-ci test-all test-nightly \
         demo-check demo-detect validate validate-vision health syscheck \
         corpus-plan corpus-build demo-assert replay-freeze replay-restore \
-        lint lint-python lint-frontend format typecheck security-scan \
+        lint lint-python lint-frontend format typecheck typecheck-frontend gen-api-types security-scan \
         clean clean-containers clean-volumes clean-cache purge nuke \
         verify-labels verify-reports verify-env check-env-sync shell-% \
         benchmark benchmark-clean benchmark-skip-analyse \
@@ -616,6 +618,7 @@ test-full: venv-check
 	$(call header,Full Test Suite + Coverage Gate (pre-release))
 	@$(MAKE) --no-print-directory test
 	@$(MAKE) --no-print-directory test-frontend
+	@$(MAKE) --no-print-directory typecheck-frontend
 	@$(UV) pytest tests/unit/ tests/contracts/ tests/integration/ \
 		--cov=services --cov=sdk \
 		--cov-report=term-missing --cov-report=html:htmlcov \
@@ -859,6 +862,20 @@ format:
 typecheck:
 	$(call header,Type Checking)
 	@$(UV) pyright
+
+typecheck-frontend:
+	$(call header,Type Checking Frontend)
+	@cd frontend && npm run --silent typecheck
+
+# Regenerate the frontend API types from the API service's OpenAPI schema.
+# The schema is read from the FastAPI app object, so no stack needs to be up.
+# Commit both files: tests/contracts and the frontend contract suite fail when
+# either one is stale against the Pydantic models.
+gen-api-types: venv-check
+	$(call header,Generating Frontend API Types)
+	@$(UV) --package anveshak-api python scripts/export_openapi.py
+	@cd frontend && npm run --silent gen:api
+	$(call success,API types regenerated - commit frontend/src/api/generated/)
 
 security-scan:
 	$(call header,Security Scan)

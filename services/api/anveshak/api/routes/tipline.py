@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 import re
 import uuid
-from typing import Optional
+from typing import Literal, Optional
 
 import structlog
 from anveshak.db import DBConnection
@@ -61,7 +61,7 @@ class TiplineIngestResponse(BaseModel):
 
     id: str
     content_hash: str
-    status: str  # "queued" | "duplicate"
+    status: Literal["queued", "duplicate"]
     duplicate: bool
 
 

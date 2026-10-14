@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "npm run typecheck && vite build",
+    "typecheck": "tsc && tsc -p tsconfig.contracts.json",
+    "gen:api": "openapi-typescript src/api/generated/openapi.json -o src/api/generated/schema.ts",
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "vitest run",
@@ -46,6 +48,7 @@
     "eslint-plugin-react-refresh": "^0.5.6",
     "globals": "^17.12.0",
     "jsdom": "^24.1.0",
+    "openapi-typescript": "^7.13.0",
     "postcss": "^8.4.0",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.4.0",
